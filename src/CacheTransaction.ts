@@ -3,8 +3,8 @@ import {
   InvalidateModifier, Modifier,
   ModifierDetails,
   ReadFieldOptions,
-} from '@apollo/client/cache/core/types/common';
-import { Cache as CacheInterface, Reference, makeReference, isReference, StoreObject, StoreValue } from '@apollo/client';
+} from 'msand-apollo-client/cache/core/types/common';
+import { Cache as CacheInterface, Reference, makeReference, isReference, StoreObject, StoreValue } from 'msand-apollo-client';
 import isEqual from '@wry/equality';
 
 import { ApolloTransaction } from './apollo/Transaction';

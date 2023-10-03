@@ -1,6 +1,6 @@
-import { addTypenameToDocument } from '@apollo/client/utilities';
+import { addTypenameToDocument } from 'msand-apollo-client/utilities';
 import isEqual from '@wry/equality';
-import { TypePolicies } from '@apollo/client';
+import { TypePolicies } from 'msand-apollo-client';
 
 import { ApolloTransaction } from '../apollo/Transaction';
 import { CacheSnapshot } from '../CacheSnapshot';

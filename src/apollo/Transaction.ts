@@ -1,4 +1,4 @@
-import { Cache, Transaction } from '@apollo/client';
+import { Cache, Transaction } from 'msand-apollo-client';
 import lodashIsEqual = require('lodash.isequal');
 
 import { CacheTransaction } from '../CacheTransaction';

@@ -1,7 +1,7 @@
 // noinspection GraphQLUnresolvedReference
 
 import gql from 'graphql-tag';
-import { MissingFieldError, Reference } from '@apollo/client';
+import { MissingFieldError, Reference } from 'msand-apollo-client';
 
 import { Hermes } from '../../../src';
 

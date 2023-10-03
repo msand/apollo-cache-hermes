@@ -9,7 +9,7 @@ import type {
   SelectionSetNode,
   ValueNode,
 } from 'graphql';
-import { getOperationDefinition, FragmentMap } from '@apollo/client/utilities';
+import { getOperationDefinition, FragmentMap } from 'msand-apollo-client/utilities';
 import invariant from 'ts-invariant';
 
 import { JsonValue } from '../primitive';

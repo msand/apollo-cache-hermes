@@ -1,6 +1,6 @@
 import lodashSet = require('lodash.set');
 import lodashFindIndex = require('lodash.findindex');
-import { isReference } from '@apollo/client';
+import { isReference } from 'msand-apollo-client';
 
 import { CacheSnapshot } from '../CacheSnapshot';
 import { CacheContext } from '../context';

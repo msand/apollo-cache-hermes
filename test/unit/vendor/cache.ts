@@ -2,7 +2,7 @@
 
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import gql, { disableFragmentWarnings } from 'graphql-tag';
-import { Cache, isReference, makeReference, Reference, TypePolicies } from '@apollo/client';
+import { Cache, isReference, makeReference, Reference, TypePolicies } from 'msand-apollo-client';
 import { expectTypeOf } from 'expect-type';
 import { DocumentNode } from 'graphql';
 

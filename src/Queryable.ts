@@ -1,4 +1,4 @@
-import { Cache } from '@apollo/client';
+import { Cache } from 'msand-apollo-client';
 
 import { JsonObject, JsonValue } from './primitive';
 import { RawOperation } from './schema';

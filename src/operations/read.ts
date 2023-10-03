@@ -1,7 +1,7 @@
-import { FieldFunctionOptions } from '@apollo/client/cache/inmemory/policies';
-import { isReference, makeReference, Reference, StoreValue } from '@apollo/client';
-import { StoreObject } from '@apollo/client/utilities';
-import { ReadFieldOptions } from '@apollo/client/cache/core/types/common';
+import { FieldFunctionOptions } from 'msand-apollo-client/cache/inmemory/policies';
+import { isReference, makeReference, Reference, StoreValue } from 'msand-apollo-client';
+import { StoreObject } from 'msand-apollo-client/utilities';
+import { ReadFieldOptions } from 'msand-apollo-client/cache/core/types/common';
 import type { DocumentNode } from 'graphql';
 
 import { CacheContext } from '../context';

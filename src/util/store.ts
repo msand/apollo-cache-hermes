@@ -2,7 +2,7 @@
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { Kind, ValueNode, VariableNode } from 'graphql';
 import { InvariantError } from 'ts-invariant';
-import { VariableValue } from '@apollo/client/utilities';
+import { VariableValue } from 'msand-apollo-client/utilities';
 
 // Note: These functions were originally a part of apollo-utilities, but were
 // removed 87c7a2bc as they were unused within the apollo-client project.

@@ -1,4 +1,4 @@
-import { Cache } from '@apollo/client';
+import { Cache } from 'msand-apollo-client';
 import isEqual from '@wry/equality';
 
 import { CacheContext } from '../context';

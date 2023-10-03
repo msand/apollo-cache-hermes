@@ -1,8 +1,8 @@
 import isEqual from '@wry/equality';
-import { FieldFunctionOptions, FieldPolicy, FieldReadFunction, TypePolicy } from '@apollo/client/cache/inmemory/policies';
-import { isReference, makeReference, Reference, StoreValue } from '@apollo/client';
-import { ReadFieldOptions } from '@apollo/client/cache/core/types/common';
-import { StoreObject } from '@apollo/client/utilities';
+import { FieldFunctionOptions, FieldPolicy, FieldReadFunction, TypePolicy } from 'msand-apollo-client/cache/inmemory/policies';
+import { isReference, makeReference, Reference, StoreValue } from 'msand-apollo-client';
+import { ReadFieldOptions } from 'msand-apollo-client/cache/core/types/common';
+import { StoreObject } from 'msand-apollo-client/utilities';
 
 import { CacheContext } from '../context';
 import { InvalidPayloadError, OperationError } from '../errors';
