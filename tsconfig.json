@@ -1,12 +1,11 @@
 {
   "compilerOptions": {
     "declaration": true,
-    "downlevelIteration": true,
     "importHelpers": true,
     "inlineSourceMap": true,
     "lib": [
       "dom",
-      "es2015",
+      "es2017",
       "esnext.asynciterable",
       "scripthost"
     ],
@@ -22,6 +21,6 @@
     "pretty": true,
     "strict": true,
     "suppressImplicitAnyIndexErrors": true,
-    "target": "es5"
+    "target": "ES2017"
   }
 }
