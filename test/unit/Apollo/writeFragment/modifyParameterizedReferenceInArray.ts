@@ -1,10 +1,10 @@
+import { expect } from 'chai';
 import gql from 'graphql-tag';
 
-import { Hermes } from '../../../../src/apollo/Hermes';
-import { EntitySnapshot } from '../../../../src/nodes/EntitySnapshot';
-import { ParameterizedValueSnapshot } from '../../../../src/nodes/ParameterizedValueSnapshot';
+import { Hermes } from '../../../../src';
+import { EntitySnapshot, ParameterizedValueSnapshot } from '../../../../src/nodes';
 import { nodeIdForParameterizedValue } from '../../../../src/operations/SnapshotEditor';
-import { strictConfig } from '../../../helpers/context';
+import { strictConfig } from '../../../helpers';
 
 describe(`writeFragment with paramterized references in an array`, () => {
 

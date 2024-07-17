@@ -1111,7 +1111,7 @@ describe('reading from the store', () => {
       cache.readQuery({
         query: rulerQuery,
       })
-    ).toEqual(lastDiff.result); // TODO toBe
+    ).toBe(lastDiff.result);
 
     jestExpect(
       cache.evict({
@@ -1494,7 +1494,7 @@ describe('reading from the store', () => {
     jestExpect(abResult1).toEqual(abData1);
     jestExpect(aResult1).toMatchObject({ a: abData1.a });
     jestExpect(bResult1).toMatchObject({ b: abData1.b });
-    // jestExpect(abResult1.b).toBe(bResult1.b); TODO
+    jestExpect(abResult1.b).toBe(bResult1.b);
 
     const aData2 = {
       a: 'ayy'.split(''),
@@ -1507,14 +1507,14 @@ describe('reading from the store', () => {
 
     const aResult2 = read(aQuery);
     const abResult2 = read(abQuery);
-    // const bResult2 = read(bQuery);
+    const bResult2 = read(bQuery);
 
     jestExpect(aResult2).toMatchObject(aData2);
     jestExpect(abResult2).toEqual({ ...abData1, ...aData2 });
     jestExpect(aResult2.a).toBe(abResult2.a);
-    // jestExpect(bResult2.b).toBe(bResult1.b); todo
-    // jestExpect(abResult2.b).toBe(bResult2.b);
-    // jestExpect(abResult2.b).toBe(bResult1.b);
+    jestExpect(bResult2.b).toBe(bResult1.b);
+    jestExpect(abResult2.b).toBe(bResult2.b);
+    jestExpect(abResult2.b).toBe(bResult1.b);
 
     const bData3 = {
       b: {

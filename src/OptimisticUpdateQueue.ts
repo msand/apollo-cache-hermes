@@ -60,7 +60,8 @@ export class OptimisticUpdateQueue {
         } else if ('delete' in delta) {
           editor.delete(delta.delete);
         } else if ('id' in delta) {
-          editor.modify(delta.id, delta.payload, delta.deleted);
+          const seenObjects = new Set<object | null>();
+          editor.modify(delta.id, delta.payload, delta.deleted, seenObjects);
         }
       }
     }

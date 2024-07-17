@@ -1,6 +1,7 @@
+import { expect } from 'chai';
 import gql from 'graphql-tag';
 
-import { CacheContext } from '../../../../src/context/CacheContext';
+import { CacheContext } from '../../../../src/context';
 
 describe(`context.CacheContext`, () => {
   describe(`parseQuery`, () => {

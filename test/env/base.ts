@@ -8,9 +8,8 @@ import chaiJestDiff from 'chai-jest-diff';
 // transition, Jasmine and chai will be run in parallel using jestExpect for
 // Jasmine, and the default expect for chai.  Once complete, Jasmine will
 // replace the chai global.expect.
+// @ts-ignore
 global.jestExpect = global.expect;
-// We prefer Chai's `expect` interface.
-global.expect = chai.expect;
 
 // Give us all the info!
 chai.config.truncateThreshold = 0;

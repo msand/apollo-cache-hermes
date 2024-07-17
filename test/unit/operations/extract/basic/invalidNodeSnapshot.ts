@@ -1,6 +1,6 @@
 import { GraphSnapshot } from '../../../../../src/GraphSnapshot';
 import { NodeSnapshot } from '../../../../../src/nodes';
-import { extract } from '../../../../../src/operations/extract';
+import { extract } from '../../../../../src/operations';
 import { JsonValue } from '../../../../../src/primitive';
 import { createStrictCacheContext } from '../../../../helpers';
 

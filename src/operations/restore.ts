@@ -177,5 +177,5 @@ function tryRestoreSparseArray(data: NestedValue<JsonValue | undefined>, possibl
     return;
   }
 
-  tryRestoreSparseArray(data[prop], possibleSparseArrayPaths, idx + 1);
+  tryRestoreSparseArray((data as JsonObject)[prop], possibleSparseArrayPaths, idx + 1);
 }

@@ -1,9 +1,9 @@
+import { expect } from 'chai';
 import { DocumentNode } from 'graphql';
 import gql from 'graphql-tag';
 
 import { buildRawOperationFromQuery } from '../../../src/apollo/util';
-import { CacheContext } from '../../../src/context';
-import { QueryInfo } from '../../../src/context/QueryInfo';
+import { CacheContext, QueryInfo } from '../../../src/context';
 import { strictConfig } from '../../helpers';
 
 describe(`context.QueryInfo`, () => {

@@ -1,3 +1,5 @@
+import { expect } from 'chai';
+
 import { Cache } from '../../../../src';
 import { query } from '../../../helpers';
 

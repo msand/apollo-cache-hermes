@@ -29,6 +29,12 @@ function isInvalidateModifier(value: any): value is InvalidateModifier {
   return value === INVALIDATE;
 }
 
+type Node<TSerialized> = {
+  node: any,
+  previous: JsonValue | undefined,
+  updater: CacheContext.EntityUpdater<TSerialized>,
+};
+
 /**
  * Collects a set of edits against a version of the cache, eventually committing
  * them in the form of a new cache snapshot.
@@ -85,11 +91,11 @@ export class CacheTransaction<TSerialized> implements Queryable {
    * any previous optimistic values.  Otherwise, edits will be made to the
    * baseline state (and any optimistic updates will be replayed over it).
    */
-  write(query: RawOperation, payload: JsonObject): void {
+  write(query: RawOperation, payload: JsonObject): Reference | undefined {
     if (this._optimisticChangeId) {
-      this._writeOptimistic(query, payload);
+      return this._writeOptimistic(query, payload);
     } else {
-      this._writeBaseline(query, payload);
+      return this._writeBaseline(query, payload);
     }
   }
 
@@ -157,7 +163,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
     if (!Object.keys(entityUpdaters).length) return;
 
     // Capture a static set of nodes, as the updaters may add to _editedNodeIds.
-    const nodesToEmit = [];
+    const nodesToEmit: Node<TSerialized>[] = [];
     for (const nodeId of this._editedNodeIds) {
       const node = this.getCurrentNodeSnapshot(nodeId);
       const previous = this.getPreviousNodeSnapshot(nodeId);
@@ -199,13 +205,15 @@ export class CacheTransaction<TSerialized> implements Queryable {
   private _writeBaseline(query: RawOperation, payload: JsonObject) {
     const current = this._snapshot;
 
-    const { snapshot: baseline, editedNodeIds, writtenQueries } = write(this._context, current.baseline, query, payload);
+    const { snapshot: baseline, editedNodeIds, writtenQueries, ref } = write(this._context, current.baseline, query, payload);
     addToSet(this._editedNodeIds, editedNodeIds);
     addToSet(this._writtenQueries, writtenQueries);
 
     const optimistic = this._buildOptimisticSnapshot(baseline);
 
     this._snapshot = new CacheSnapshot(baseline, optimistic, current.optimisticQueue);
+
+    return ref;
   }
 
   /**
@@ -227,14 +235,16 @@ export class CacheTransaction<TSerialized> implements Queryable {
   private _writeOptimistic(query: RawOperation, payload: JsonObject) {
     this._deltas.push({ query, payload });
 
-    const { snapshot: optimistic, editedNodeIds, writtenQueries } = write(this._context, this._snapshot.optimistic, query, payload);
+    const { snapshot: optimistic, editedNodeIds, writtenQueries, ref } = write(this._context, this._snapshot.optimistic, query, payload);
     addToSet(this._writtenQueries, writtenQueries);
     addToSet(this._editedNodeIds, editedNodeIds);
 
     this._snapshot = new CacheSnapshot(this._snapshot.baseline, optimistic, this._snapshot.optimisticQueue);
+
+    return ref;
   }
 
-  modify<Entity>(options: CacheInterface.ModifyOptions<Entity>): boolean {
+  modify<Entity extends Record<string, unknown>>(options: CacheInterface.ModifyOptions<Entity>): boolean {
     const graphSnapshot = options.optimistic ? this._snapshot.optimistic : this._snapshot.baseline;
 
     const id = 'id' in options ? options.id : 'ROOT_QUERY';
@@ -248,14 +258,15 @@ export class CacheTransaction<TSerialized> implements Queryable {
 
     function readFromSnapshot(obj: Readonly<NodeSnapshot>, key: string) {
       const data = obj.data;
-      const datum = data && typeof data === 'object' && key in data ? data[key] : undefined;
+      const datum = data && typeof data === 'object' && key in data ? (data as JsonObject)[key] : undefined;
       if (datum != null) {
         return [{ d: datum, k: null }];
       }
-      const nodes = [];
+      const nodes: { d: any, k: string }[] = [];
       for (const out of obj.outbound ?? []) {
-        if (out.path[0] === key) {
-          nodes.push({ d: graphSnapshot.getNodeData(out.id), k: out.id });
+        const k = out.id;
+        if (k === key || out.path[0] === key) {
+          nodes.push({ d: graphSnapshot.getNodeData(k), k });
         }
       }
       if (nodes.length) {
@@ -335,7 +346,6 @@ export class CacheTransaction<TSerialized> implements Queryable {
       },
     };
 
-    const allowRef = false;
     const data = node.data ?? {};
     const keys = Object.keys(data);
     const payload: JsonObject = { };
@@ -363,10 +373,10 @@ export class CacheTransaction<TSerialized> implements Queryable {
       for (const key of keys) {
         for (const { d, k } of readFromSnapshot(node, key)) {
           const storeFieldName = k ?? key;
-          const useRef = k?.includes('❖') && allowRef;
-          const copyOrCurrent = useRef ? { __ref: k } : Array.isArray(d)
+          const useRef = k?.includes('❖');
+          const copyOrCurrent = Array.isArray(d)
             ? Array.prototype.slice.call(d)
-            : typeof d === 'object'
+            : useRef ? { __ref: k } : typeof d === 'object'
               ? { ...d }
               : d;
           details.fieldName = key;
@@ -397,14 +407,15 @@ export class CacheTransaction<TSerialized> implements Queryable {
         modified = true;
       }
     } else {
-      for (const key of Object.keys(options.fields)) {
+      for (const key of Object.keys(options.fields) as (string & keyof Entity)[]) {
         const field = options.fields[key];
+        if (!field) continue;
         for (const { d, k } of readFromSnapshot(node, key)) {
           const storeFieldName = k ?? key;
-          const useRef = k?.includes('❖') && allowRef;
-          const copyOrCurrent = useRef ? { __ref: k } : Array.isArray(d)
+          const useRef = k?.includes('❖');
+          const copyOrCurrent = Array.isArray(d)
             ? Array.prototype.slice.call(d)
-            : typeof d === 'object'
+            : useRef ? { __ref: k } : typeof d === 'object'
               ? { ...d }
               : d;
           details.fieldName = key;
@@ -423,7 +434,10 @@ export class CacheTransaction<TSerialized> implements Queryable {
             dirty.add(storeFieldName);
             invalidated = true;
           } else if (value !== copyOrCurrent || (!useRef && !isEqual(value, d))) {
-            payload[key] = isReference(value) ? getSnapshot(value.__ref).data : value;
+            const nextValue = isReference(value) ? getSnapshot(value.__ref).data : value;
+            if (nextValue !== undefined) {
+              payload[key] = nextValue as JsonValue;
+            }
             modified = true;
           }
         }
@@ -443,10 +457,11 @@ export class CacheTransaction<TSerialized> implements Queryable {
 
     const editor = new SnapshotEditor(this._context, graphSnapshot);
     const empty = new Set<string>();
+    const seenObjects = new Set<object | null>();
     for (const [mergeId, snapshot] of Object.entries(tempStore)) {
       const mergePayload = snapshot.data;
       if (mergePayload && typeof mergePayload === 'object' && !Array.isArray(mergePayload)) {
-        editor.modify(mergeId, mergePayload, empty);
+        editor.modify(mergeId, mergePayload, empty, seenObjects);
       }
     }
     if (allDeleted) {
@@ -455,7 +470,8 @@ export class CacheTransaction<TSerialized> implements Queryable {
         this._deltas.push({ delete: id });
       }
     } else {
-      editor.modify(id, payload, deleted);
+      const seenObjects = new Set<object | null>();
+      editor.modify(id, payload, deleted, seenObjects);
       if (options.optimistic) {
         this._deltas.push({ id, payload, deleted });
       }
@@ -484,10 +500,11 @@ export class CacheTransaction<TSerialized> implements Queryable {
     const current = this._snapshot;
     const editor = new SnapshotEditor(this._context, current.baseline);
     const empty = new Set<string>();
+    const seenObjects = new Set<object | null>();
     for (const [id, snapshot] of Object.entries(tempStore)) {
       const payload = snapshot.data;
       if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
-        editor.modify(id, payload, empty);
+        editor.modify(id, payload, empty, seenObjects);
       }
     }
     const newSnapshot = editor.commit();

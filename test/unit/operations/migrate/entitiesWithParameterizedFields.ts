@@ -1,7 +1,7 @@
 import * as _ from 'lodash';
 
 import { CacheSnapshot } from '../../../../src/CacheSnapshot';
-import { CacheContext } from '../../../../src/context/CacheContext';
+import { CacheContext } from '../../../../src/context';
 import { migrate, read, MigrationMap, QueryResult } from '../../../../src/operations';
 import { OptimisticUpdateQueue } from '../../../../src/OptimisticUpdateQueue';
 import { createGraphSnapshot, strictConfig, query } from '../../../helpers';

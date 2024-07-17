@@ -1,4 +1,4 @@
-import { extract } from '../../../../../src/operations/extract';
+import { extract } from '../../../../../src/operations';
 import { nodeIdForParameterizedValue } from '../../../../../src/operations/SnapshotEditor';
 import { Serializable, StaticNodeId } from '../../../../../src/schema';
 import { createGraphSnapshot, createStrictCacheContext } from '../../../../helpers';

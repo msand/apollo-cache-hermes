@@ -77,6 +77,7 @@ export namespace CacheContext {
      * within the cache; everything else is not.
      */
     entityIdForNode?: EntityIdMapper;
+    dataIdFromObject?: EntityIdMapper;
 
     /**
      * Transformation function to be run on entity nodes that change during
@@ -201,7 +202,7 @@ export class CacheContext<TSerialized = GraphSnapshot> {
     // Infer dev mode from NODE_ENV, by convention.
     const nodeEnv = typeof process !== 'undefined' ? process.env.NODE_ENV : 'development';
 
-    this.entityIdForValue = _makeEntityIdMapper(config.entityIdForNode, config.typePolicies);
+    this.entityIdForValue = _makeEntityIdMapper((config.entityIdForNode ?? config.dataIdFromObject), config.typePolicies);
     this.entityTransformer = config.entityTransformer;
     this.freezeSnapshots = 'freeze' in config ? !!config.freeze : nodeEnv !== 'production';
 
@@ -305,7 +306,7 @@ export function _makeEntityIdMapper(
         if (typeof __typename === 'string' && __typename in typePolicies) {
           const keyFields = typePolicies[__typename].keyFields;
           if (Array.isArray(keyFields)) {
-            const keys = {};
+            const keys: Record<string, unknown> = {};
             for (const key of keyFields) {
               const value = node[key];
               if (value === undefined) {

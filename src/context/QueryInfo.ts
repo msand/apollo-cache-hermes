@@ -47,7 +47,7 @@ export class QueryInfo<TSerialized = GraphSnapshot> {
    *
    * Variables not present in this map are considered required.
    */
-  public readonly variableDefaults: { [Key: string]: JsonValue }
+  public readonly variableDefaults: { [Key: string]: JsonValue };
 
   constructor(context: CacheContext<TSerialized>, raw: RawOperation) {
     this.document = raw.document;

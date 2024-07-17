@@ -27,8 +27,8 @@ export function write<TSerialized>(
   // convenient to follow the builder function instead - it'd end up passing
   // around a context object anyway.
   const editor = new SnapshotEditor(context, snapshot);
-  const { warnings } = editor.mergePayload(raw, payload, prune);
-  const newSnapshot = editor.commit();
+  const { warnings, ref } = editor.mergePayload(raw, payload, prune);
+  const newSnapshot = editor.commit(ref);
 
   if (context.tracer.writeEnd) {
     context.tracer.writeEnd(context.parseOperation(raw), { payload, newSnapshot, warnings }, tracerContext);

@@ -1,3 +1,5 @@
+import { expect } from 'chai';
+
 import { CacheContext } from '../../../../src/context';
 import { GraphSnapshot } from '../../../../src/GraphSnapshot';
 import { read, write } from '../../../../src/operations';

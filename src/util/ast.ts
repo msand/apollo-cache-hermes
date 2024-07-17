@@ -55,7 +55,7 @@ export function variablesInOperation(operation: OperationDefinitionNode): Set<st
  * Returns the default values of all variables in the operation.
  */
 export function variableDefaultsInOperation(operation: OperationDefinitionNode): { [Key: string]: JsonValue } {
-  const defaults = {};
+  const defaults: { [Key: string]: JsonValue } = {};
   if (operation.variableDefinitions) {
     for (const definition of operation.variableDefinitions) {
       if (definition.type.kind === 'NonNullType') continue; // Required.

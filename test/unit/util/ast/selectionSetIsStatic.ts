@@ -1,3 +1,4 @@
+import { expect } from 'chai';
 import gql from 'graphql-tag';
 
 import { selectionSetIsStatic } from '../../../../src';

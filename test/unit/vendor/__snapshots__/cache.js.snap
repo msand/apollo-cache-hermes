@@ -1,32 +1,32 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`Cache writeFragment will write some deeply nested data into the store at any id (1/2) 1`] = `
-Object {
-  "bar": Object {
-    "data": Object {
+{
+  "bar": {
+    "data": {
       "i": 7,
       "id": "bar",
     },
-    "inbound": Array [
-      Object {
+    "inbound": [
+      {
         "id": "foo",
-        "path": Array [
+        "path": [
           "h",
         ],
       },
     ],
     "type": 0,
   },
-  "foo": Object {
-    "data": Object {
+  "foo": {
+    "data": {
       "__typename": "Foo",
       "e": 4,
       "h": undefined,
     },
-    "outbound": Array [
-      Object {
+    "outbound": [
+      {
         "id": "bar",
-        "path": Array [
+        "path": [
           "h",
         ],
       },
@@ -37,36 +37,36 @@ Object {
 `;
 
 exports[`Cache writeFragment will write some deeply nested data into the store at any id (1/2) 2`] = `
-Object {
-  "bar": Object {
-    "data": Object {
+{
+  "bar": {
+    "data": {
       "i": 7,
       "id": "bar",
       "j": 8,
       "k": 9,
     },
-    "inbound": Array [
-      Object {
+    "inbound": [
+      {
         "id": "foo",
-        "path": Array [
+        "path": [
           "h",
         ],
       },
     ],
     "type": 0,
   },
-  "foo": Object {
-    "data": Object {
+  "foo": {
+    "data": {
       "__typename": "Foo",
       "e": 4,
       "f": 5,
       "g": 6,
       "h": undefined,
     },
-    "outbound": Array [
-      Object {
+    "outbound": [
+      {
         "id": "bar",
-        "path": Array [
+        "path": [
           "h",
         ],
       },
@@ -77,37 +77,37 @@ Object {
 `;
 
 exports[`Cache writeFragment will write some deeply nested data into the store at any id (1/2) 3`] = `
-Object {
-  "bar": Object {
-    "data": Object {
+{
+  "bar": {
+    "data": {
       "__typename": "Bar",
       "i": 10,
       "id": "bar",
       "j": 8,
       "k": 9,
     },
-    "inbound": Array [
-      Object {
+    "inbound": [
+      {
         "id": "foo",
-        "path": Array [
+        "path": [
           "h",
         ],
       },
     ],
     "type": 0,
   },
-  "foo": Object {
-    "data": Object {
+  "foo": {
+    "data": {
       "__typename": "Foo",
       "e": 4,
       "f": 5,
       "g": 6,
       "h": undefined,
     },
-    "outbound": Array [
-      Object {
+    "outbound": [
+      {
         "id": "bar",
-        "path": Array [
+        "path": [
           "h",
         ],
       },
@@ -118,37 +118,37 @@ Object {
 `;
 
 exports[`Cache writeFragment will write some deeply nested data into the store at any id (1/2) 4`] = `
-Object {
-  "bar": Object {
-    "data": Object {
+{
+  "bar": {
+    "data": {
       "__typename": "Bar",
       "i": 10,
       "id": "bar",
       "j": 11,
       "k": 12,
     },
-    "inbound": Array [
-      Object {
+    "inbound": [
+      {
         "id": "foo",
-        "path": Array [
+        "path": [
           "h",
         ],
       },
     ],
     "type": 0,
   },
-  "foo": Object {
-    "data": Object {
+  "foo": {
+    "data": {
       "__typename": "Foo",
       "e": 4,
       "f": 5,
       "g": 6,
       "h": undefined,
     },
-    "outbound": Array [
-      Object {
+    "outbound": [
+      {
         "id": "bar",
-        "path": Array [
+        "path": [
           "h",
         ],
       },
@@ -159,37 +159,37 @@ Object {
 `;
 
 exports[`Cache writeFragment will write some deeply nested data into the store at any id (1/2) 5`] = `
-Object {
-  "bar": Object {
-    "data": Object {
+{
+  "bar": {
+    "data": {
       "__typename": "Bar",
       "i": 7,
       "id": "bar",
       "j": 8,
       "k": 9,
     },
-    "inbound": Array [
-      Object {
+    "inbound": [
+      {
         "id": "foo",
-        "path": Array [
+        "path": [
           "h",
         ],
       },
     ],
     "type": 0,
   },
-  "foo": Object {
-    "data": Object {
+  "foo": {
+    "data": {
       "__typename": "Foo",
       "e": 4,
       "f": 5,
       "g": 6,
       "h": undefined,
     },
-    "outbound": Array [
-      Object {
+    "outbound": [
+      {
         "id": "bar",
-        "path": Array [
+        "path": [
           "h",
         ],
       },
@@ -200,37 +200,37 @@ Object {
 `;
 
 exports[`Cache writeFragment will write some deeply nested data into the store at any id (1/2) 6`] = `
-Object {
-  "bar": Object {
-    "data": Object {
+{
+  "bar": {
+    "data": {
       "__typename": "Bar",
       "i": 10,
       "id": "bar",
       "j": 11,
       "k": 12,
     },
-    "inbound": Array [
-      Object {
+    "inbound": [
+      {
         "id": "foo",
-        "path": Array [
+        "path": [
           "h",
         ],
       },
     ],
     "type": 0,
   },
-  "foo": Object {
-    "data": Object {
+  "foo": {
+    "data": {
       "__typename": "Foo",
       "e": 4,
       "f": 5,
       "g": 6,
       "h": undefined,
     },
-    "outbound": Array [
-      Object {
+    "outbound": [
+      {
         "id": "bar",
-        "path": Array [
+        "path": [
           "h",
         ],
       },
@@ -241,32 +241,32 @@ Object {
 `;
 
 exports[`Cache writeFragment will write some deeply nested data into the store at any id (2/2) 1`] = `
-Object {
-  "bar": Object {
-    "data": Object {
+{
+  "bar": {
+    "data": {
       "i": 7,
       "id": "bar",
     },
-    "inbound": Array [
-      Object {
+    "inbound": [
+      {
         "id": "foo",
-        "path": Array [
+        "path": [
           "h",
         ],
       },
     ],
     "type": 0,
   },
-  "foo": Object {
-    "data": Object {
+  "foo": {
+    "data": {
       "__typename": "Foo",
       "e": 4,
       "h": undefined,
     },
-    "outbound": Array [
-      Object {
+    "outbound": [
+      {
         "id": "bar",
-        "path": Array [
+        "path": [
           "h",
         ],
       },
@@ -277,36 +277,36 @@ Object {
 `;
 
 exports[`Cache writeFragment will write some deeply nested data into the store at any id (2/2) 2`] = `
-Object {
-  "bar": Object {
-    "data": Object {
+{
+  "bar": {
+    "data": {
       "i": 7,
       "id": "bar",
       "j": 8,
       "k": 9,
     },
-    "inbound": Array [
-      Object {
+    "inbound": [
+      {
         "id": "foo",
-        "path": Array [
+        "path": [
           "h",
         ],
       },
     ],
     "type": 0,
   },
-  "foo": Object {
-    "data": Object {
+  "foo": {
+    "data": {
       "__typename": "Foo",
       "e": 4,
       "f": 5,
       "g": 6,
       "h": undefined,
     },
-    "outbound": Array [
-      Object {
+    "outbound": [
+      {
         "id": "bar",
-        "path": Array [
+        "path": [
           "h",
         ],
       },
@@ -317,37 +317,37 @@ Object {
 `;
 
 exports[`Cache writeFragment will write some deeply nested data into the store at any id (2/2) 3`] = `
-Object {
-  "bar": Object {
-    "data": Object {
+{
+  "bar": {
+    "data": {
       "__typename": "Bar",
       "i": 10,
       "id": "bar",
       "j": 8,
       "k": 9,
     },
-    "inbound": Array [
-      Object {
+    "inbound": [
+      {
         "id": "foo",
-        "path": Array [
+        "path": [
           "h",
         ],
       },
     ],
     "type": 0,
   },
-  "foo": Object {
-    "data": Object {
+  "foo": {
+    "data": {
       "__typename": "Foo",
       "e": 4,
       "f": 5,
       "g": 6,
       "h": undefined,
     },
-    "outbound": Array [
-      Object {
+    "outbound": [
+      {
         "id": "bar",
-        "path": Array [
+        "path": [
           "h",
         ],
       },
@@ -358,37 +358,37 @@ Object {
 `;
 
 exports[`Cache writeFragment will write some deeply nested data into the store at any id (2/2) 4`] = `
-Object {
-  "bar": Object {
-    "data": Object {
+{
+  "bar": {
+    "data": {
       "__typename": "Bar",
       "i": 10,
       "id": "bar",
       "j": 11,
       "k": 12,
     },
-    "inbound": Array [
-      Object {
+    "inbound": [
+      {
         "id": "foo",
-        "path": Array [
+        "path": [
           "h",
         ],
       },
     ],
     "type": 0,
   },
-  "foo": Object {
-    "data": Object {
+  "foo": {
+    "data": {
       "__typename": "Foo",
       "e": 4,
       "f": 5,
       "g": 6,
       "h": undefined,
     },
-    "outbound": Array [
-      Object {
+    "outbound": [
+      {
         "id": "bar",
-        "path": Array [
+        "path": [
           "h",
         ],
       },
@@ -399,37 +399,37 @@ Object {
 `;
 
 exports[`Cache writeFragment will write some deeply nested data into the store at any id (2/2) 5`] = `
-Object {
-  "bar": Object {
-    "data": Object {
+{
+  "bar": {
+    "data": {
       "__typename": "Bar",
       "i": 7,
       "id": "bar",
       "j": 8,
       "k": 9,
     },
-    "inbound": Array [
-      Object {
+    "inbound": [
+      {
         "id": "foo",
-        "path": Array [
+        "path": [
           "h",
         ],
       },
     ],
     "type": 0,
   },
-  "foo": Object {
-    "data": Object {
+  "foo": {
+    "data": {
       "__typename": "Foo",
       "e": 4,
       "f": 5,
       "g": 6,
       "h": undefined,
     },
-    "outbound": Array [
-      Object {
+    "outbound": [
+      {
         "id": "bar",
-        "path": Array [
+        "path": [
           "h",
         ],
       },
@@ -440,37 +440,37 @@ Object {
 `;
 
 exports[`Cache writeFragment will write some deeply nested data into the store at any id (2/2) 6`] = `
-Object {
-  "bar": Object {
-    "data": Object {
+{
+  "bar": {
+    "data": {
       "__typename": "Bar",
       "i": 10,
       "id": "bar",
       "j": 11,
       "k": 12,
     },
-    "inbound": Array [
-      Object {
+    "inbound": [
+      {
         "id": "foo",
-        "path": Array [
+        "path": [
           "h",
         ],
       },
     ],
     "type": 0,
   },
-  "foo": Object {
-    "data": Object {
+  "foo": {
+    "data": {
       "__typename": "Foo",
       "e": 4,
       "f": 5,
       "g": 6,
       "h": undefined,
     },
-    "outbound": Array [
-      Object {
+    "outbound": [
+      {
         "id": "bar",
-        "path": Array [
+        "path": [
           "h",
         ],
       },
@@ -481,55 +481,55 @@ Object {
 `;
 
 exports[`Hermes#modify should allow invalidation using details.INVALIDATE 1`] = `
-Object {
-  "Author:{\\"name\\":\\"Maria Dahvana Headley\\"}": Object {
-    "data": Object {
+{
+  "Author:{"name":"Maria Dahvana Headley"}": {
+    "data": {
       "__typename": "Author",
       "name": "Maria Dahvana Headley",
     },
-    "inbound": Array [
-      Object {
-        "id": "Book:{\\"isbn\\":\\"0374110034\\"}",
-        "path": Array [
+    "inbound": [
+      {
+        "id": "Book:{"isbn":"0374110034"}",
+        "path": [
           "author",
         ],
       },
     ],
     "type": 0,
   },
-  "Book:{\\"isbn\\":\\"0374110034\\"}": Object {
-    "data": Object {
+  "Book:{"isbn":"0374110034"}": {
+    "data": {
       "__typename": "Book",
       "author": undefined,
       "isbn": "0374110034",
       "title": "Beowulf: A New Translation",
     },
-    "inbound": Array [
-      Object {
+    "inbound": [
+      {
         "id": "ROOT_QUERY",
-        "path": Array [
+        "path": [
           "currentlyReading",
         ],
       },
     ],
-    "outbound": Array [
-      Object {
-        "id": "Author:{\\"name\\":\\"Maria Dahvana Headley\\"}",
-        "path": Array [
+    "outbound": [
+      {
+        "id": "Author:{"name":"Maria Dahvana Headley"}",
+        "path": [
           "author",
         ],
       },
     ],
     "type": 0,
   },
-  "ROOT_QUERY": Object {
-    "data": Object {
+  "ROOT_QUERY": {
+    "data": {
       "currentlyReading": undefined,
     },
-    "outbound": Array [
-      Object {
-        "id": "Book:{\\"isbn\\":\\"0374110034\\"}",
-        "path": Array [
+    "outbound": [
+      {
+        "id": "Book:{"isbn":"0374110034"}",
+        "path": [
           "currentlyReading",
         ],
       },
@@ -540,70 +540,70 @@ Object {
 `;
 
 exports[`TypedDocumentNode<Data, Variables> should determine Data and Variables types of {write,read}{Query,Fragment} 1`] = `
-Object {
-  "Author:{\\"name\\":\\"John C. Mitchell\\"}": Object {
-    "data": Object {
+{
+  "Author:{"name":"John C. Mitchell"}": {
+    "data": {
       "__typename": "Author",
       "name": "John C. Mitchell",
     },
-    "inbound": Array [
-      Object {
-        "id": "Book:{\\"isbn\\":\\"0262133210\\"}",
-        "path": Array [
+    "inbound": [
+      {
+        "id": "Book:{"isbn":"0262133210"}",
+        "path": [
           "author",
         ],
       },
     ],
     "type": 0,
   },
-  "Book:{\\"isbn\\":\\"0262133210\\"}": Object {
-    "data": Object {
+  "Book:{"isbn":"0262133210"}": {
+    "data": {
       "__typename": "Book",
       "author": undefined,
       "isbn": "0262133210",
       "title": "Foundations for Programming Languages",
     },
-    "inbound": Array [
-      Object {
-        "id": "ROOT_QUERY❖[\\"book\\"]❖{\\"isbn\\":\\"0262133210\\"}",
-        "path": Array [],
+    "inbound": [
+      {
+        "id": "ROOT_QUERY❖["book"]❖{"isbn":"0262133210"}",
+        "path": [],
       },
     ],
-    "outbound": Array [
-      Object {
-        "id": "Author:{\\"name\\":\\"John C. Mitchell\\"}",
-        "path": Array [
+    "outbound": [
+      {
+        "id": "Author:{"name":"John C. Mitchell"}",
+        "path": [
           "author",
         ],
       },
     ],
     "type": 0,
   },
-  "ROOT_QUERY": Object {
-    "outbound": Array [
-      Object {
-        "id": "ROOT_QUERY❖[\\"book\\"]❖{\\"isbn\\":\\"0262133210\\"}",
-        "path": Array [
+  "ROOT_QUERY": {
+    "outbound": [
+      {
+        "id": "ROOT_QUERY❖["book"]❖{"isbn":"0262133210"}",
+        "path": [
           "book",
         ],
       },
     ],
     "type": 0,
   },
-  "ROOT_QUERY❖[\\"book\\"]❖{\\"isbn\\":\\"0262133210\\"}": Object {
+  "ROOT_QUERY❖["book"]❖{"isbn":"0262133210"}": {
     "data": null,
-    "inbound": Array [
-      Object {
+    "inbound": [
+      {
         "id": "ROOT_QUERY",
-        "path": Array [
+        "path": [
           "book",
         ],
       },
     ],
-    "outbound": Array [
-      Object {
-        "id": "Book:{\\"isbn\\":\\"0262133210\\"}",
-        "path": Array [],
+    "outbound": [
+      {
+        "id": "Book:{"isbn":"0262133210"}",
+        "path": [],
       },
     ],
     "type": 1,
@@ -612,118 +612,118 @@ Object {
 `;
 
 exports[`TypedDocumentNode<Data, Variables> should determine Data and Variables types of {write,read}{Query,Fragment} 2`] = `
-Object {
-  "Author:{\\"name\\":\\"Harold Abelson\\"}": Object {
-    "data": Object {
+{
+  "Author:{"name":"Harold Abelson"}": {
+    "data": {
       "__typename": "Author",
       "name": "Harold Abelson",
     },
-    "inbound": Array [
-      Object {
-        "id": "Book:{\\"isbn\\":\\"0262510871\\"}",
-        "path": Array [
+    "inbound": [
+      {
+        "id": "Book:{"isbn":"0262510871"}",
+        "path": [
           "author",
         ],
       },
     ],
     "type": 0,
   },
-  "Author:{\\"name\\":\\"John C. Mitchell\\"}": Object {
-    "data": Object {
+  "Author:{"name":"John C. Mitchell"}": {
+    "data": {
       "__typename": "Author",
       "name": "John C. Mitchell",
     },
-    "inbound": Array [
-      Object {
-        "id": "Book:{\\"isbn\\":\\"0262133210\\"}",
-        "path": Array [
+    "inbound": [
+      {
+        "id": "Book:{"isbn":"0262133210"}",
+        "path": [
           "author",
         ],
       },
     ],
     "type": 0,
   },
-  "Book:{\\"isbn\\":\\"0262133210\\"}": Object {
-    "data": Object {
+  "Book:{"isbn":"0262133210"}": {
+    "data": {
       "__typename": "Book",
       "author": undefined,
       "isbn": "0262133210",
       "title": "Foundations for Programming Languages",
     },
-    "inbound": Array [
-      Object {
-        "id": "ROOT_QUERY❖[\\"book\\"]❖{\\"isbn\\":\\"0262133210\\"}",
-        "path": Array [],
+    "inbound": [
+      {
+        "id": "ROOT_QUERY❖["book"]❖{"isbn":"0262133210"}",
+        "path": [],
       },
     ],
-    "outbound": Array [
-      Object {
-        "id": "Author:{\\"name\\":\\"John C. Mitchell\\"}",
-        "path": Array [
+    "outbound": [
+      {
+        "id": "Author:{"name":"John C. Mitchell"}",
+        "path": [
           "author",
         ],
       },
     ],
     "type": 0,
   },
-  "Book:{\\"isbn\\":\\"0262510871\\"}": Object {
-    "data": Object {
+  "Book:{"isbn":"0262510871"}": {
+    "data": {
       "__typename": "Book",
       "author": undefined,
       "isbn": "0262510871",
       "title": "Structure and Interpretation of Computer Programs",
     },
-    "inbound": Array [
-      Object {
+    "inbound": [
+      {
         "id": undefined,
-        "path": Array [],
+        "path": [],
       },
     ],
-    "outbound": Array [
-      Object {
-        "id": "Author:{\\"name\\":\\"Harold Abelson\\"}",
-        "path": Array [
+    "outbound": [
+      {
+        "id": "Author:{"name":"Harold Abelson"}",
+        "path": [
           "author",
         ],
       },
     ],
     "type": 0,
   },
-  "ROOT_QUERY": Object {
-    "outbound": Array [
-      Object {
-        "id": "ROOT_QUERY❖[\\"book\\"]❖{\\"isbn\\":\\"0262133210\\"}",
-        "path": Array [
+  "ROOT_QUERY": {
+    "outbound": [
+      {
+        "id": "ROOT_QUERY❖["book"]❖{"isbn":"0262133210"}",
+        "path": [
           "book",
         ],
       },
     ],
     "type": 0,
   },
-  "ROOT_QUERY❖[\\"book\\"]❖{\\"isbn\\":\\"0262133210\\"}": Object {
+  "ROOT_QUERY❖["book"]❖{"isbn":"0262133210"}": {
     "data": null,
-    "inbound": Array [
-      Object {
+    "inbound": [
+      {
         "id": "ROOT_QUERY",
-        "path": Array [
+        "path": [
           "book",
         ],
       },
     ],
-    "outbound": Array [
-      Object {
-        "id": "Book:{\\"isbn\\":\\"0262133210\\"}",
-        "path": Array [],
+    "outbound": [
+      {
+        "id": "Book:{"isbn":"0262133210"}",
+        "path": [],
       },
     ],
     "type": 1,
   },
-  "undefined": Object {
+  "undefined": {
     "data": null,
-    "outbound": Array [
-      Object {
-        "id": "Book:{\\"isbn\\":\\"0262510871\\"}",
-        "path": Array [],
+    "outbound": [
+      {
+        "id": "Book:{"isbn":"0262510871"}",
+        "path": [],
       },
     ],
     "type": 0,

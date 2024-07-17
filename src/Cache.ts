@@ -178,15 +178,19 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     return () => this._removeObserver(observer);
   }
 
-  modify<Entity>(options: CacheInterface.ModifyOptions<Entity>): boolean {
+  modify<Entity extends Record<string, unknown>>(options: CacheInterface.ModifyOptions<Entity>): boolean {
     return this.transaction(options.broadcast ?? true, t => t.modify(options));
   }
 
   /**
    * Writes values for a selection to the cache.
    */
-  write(query: RawOperation, payload: JsonObject, broadcast: boolean | undefined = true): void {
-    this.transaction(broadcast, t => t.write(query, payload));
+  write(query: RawOperation, payload: JsonObject, broadcast: boolean | undefined = true): Reference | undefined {
+    let ref;
+    this.transaction(broadcast, (t) => {
+      ref = t.write(query, payload);
+    });
+    return ref;
   }
 
   /**
@@ -365,7 +369,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
 
     const graphSnapshot = optimistic ? snapshot.optimistic : snapshot.baseline;
     for (const observer of this._observers) {
-      observer.consumeChanges<TSerialized>(graphSnapshot, editedNodeIds, this._cacheInstance!, onWatchUpdated);
+      observer.consumeChanges(graphSnapshot, editedNodeIds, this._cacheInstance!, onWatchUpdated);
     }
 
     this._context.dirty.clear();

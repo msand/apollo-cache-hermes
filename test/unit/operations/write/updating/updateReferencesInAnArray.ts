@@ -1,6 +1,6 @@
 import { CacheContext } from '../../../../../src/context';
 import { GraphSnapshot } from '../../../../../src/GraphSnapshot';
-import { write } from '../../../../../src/operations/write';
+import { write } from '../../../../../src/operations';
 import { JsonArray } from '../../../../../src/primitive';
 import { RawOperation, StaticNodeId } from '../../../../../src/schema';
 import { query, silentConfig, strictConfig } from '../../../../helpers';

@@ -9,7 +9,7 @@ import { InvalidEnvironmentError } from './errors';
  * sure that everything is in a happy state, and complain otherwise.
  */
 export function assertValidEnvironment() {
-  const missingBehavior = [];
+  const missingBehavior: string[] = [];
   if (!_isSymbolPolyfilled()) missingBehavior.push('Symbol');
   if (!_isSetPolyfilled()) missingBehavior.push('Set');
   if (!_isMapPolyfilled()) missingBehavior.push('Map');

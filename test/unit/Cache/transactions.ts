@@ -1,4 +1,6 @@
-import { Cache } from '../../../src/Cache';
+import { expect } from 'chai';
+
+import { Cache } from '../../../src';
 import { StaticNodeId } from '../../../src/schema';
 import { query } from '../../helpers';
 
@@ -13,7 +15,7 @@ describe(`transactions`, () => {
     }
   }`);
 
-  let cache: Cache, debug: jest.Mock<any>, info: jest.Mock<any>, warn: jest.Mock<any>;
+  let cache: Cache, debug: jest.Mock, info: jest.Mock, warn: jest.Mock;
   beforeEach(() => {
     debug = jest.fn();
     info = jest.fn();
@@ -51,6 +53,57 @@ describe(`transactions`, () => {
 
     expect(cache.getEntity(QueryRootId)).to.deep.eq({
       foo: { bar: 2, baz: 'hi' },
+    });
+    expect(cache.getSnapshot().baseline).to.deep.eq(cache.getSnapshot().optimistic);
+  });
+
+  it(`can modify circular structures`, () => {
+    const bar: any = { b: 1 };
+    const foo = { bar, f: 2 };
+    bar.foo = foo;
+    const simpleQuery = query(`{
+      bar {
+        b
+        foo {
+          f
+          bar {
+            b
+          }
+        }
+      }
+    }`);
+    cache.transaction(true, (transaction) => {
+      transaction.write(simpleQuery, { bar });
+    });
+    expect(cache.getEntity(QueryRootId)).to.deep.eq({ bar });
+    cache.transaction(true, (transaction) => {
+      transaction.modify({
+        fields: {
+          bar: (current: any) => {
+            current.b = (current.b ?? 0) + 1;
+            return current;
+          },
+        },
+      });
+    });
+
+    expect(cache.getEntity(QueryRootId)).to.deep.eq({
+      bar: { ...bar, 'b': 2 },
+    });
+    cache.transaction(true, (transaction) => {
+      transaction.modify({
+        fields: {
+          bar: (current: any) => {
+            const foo = current.foo;
+            current.foo = { ...foo, f: (foo.f ?? 0) + 1 };
+            return current;
+          },
+        },
+      });
+    });
+
+    expect(cache.getEntity(QueryRootId)).to.deep.eq({
+      bar: { 'b': 2, foo: { ...foo, f: 3 } },
     });
     expect(cache.getSnapshot().baseline).to.deep.eq(cache.getSnapshot().optimistic);
   });

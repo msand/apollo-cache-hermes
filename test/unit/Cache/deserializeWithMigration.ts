@@ -1,4 +1,6 @@
-import { Cache } from '../../../src/Cache';
+import { expect } from 'chai';
+
+import { Cache } from '../../../src';
 import { JsonValue } from '../../../src/primitive';
 import { query, strictConfig } from '../../helpers';
 

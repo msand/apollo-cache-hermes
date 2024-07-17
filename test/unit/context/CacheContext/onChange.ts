@@ -1,6 +1,8 @@
+import { expect } from 'chai';
+
 import { Cache } from '../../../../src';
 import { GraphSnapshot } from '../../../../src/GraphSnapshot';
-import { EntitySnapshot } from '../../../../src/nodes/EntitySnapshot';
+import { EntitySnapshot } from '../../../../src/nodes';
 import { OptimisticUpdateQueue } from '../../../../src/OptimisticUpdateQueue';
 import { StaticNodeId } from '../../../../src/schema';
 import { query, strictConfig } from '../../../helpers';

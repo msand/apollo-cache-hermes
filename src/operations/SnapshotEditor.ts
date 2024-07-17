@@ -32,6 +32,7 @@ export interface EditedSnapshot<TSerialized = GraphSnapshot> {
   snapshot: GraphSnapshot;
   editedNodeIds: Set<NodeId>;
   writtenQueries: Set<OperationInstance<TSerialized>>;
+  ref: Reference | undefined;
 }
 
 /**
@@ -95,7 +96,7 @@ export class SnapshotEditor<TSerialized> {
    * Merge a GraphQL payload (query/fragment/etc) into the snapshot, rooted at
    * the node identified by `rootId`.
    */
-  mergePayload(query: RawOperation, payload: JsonObject, prune: boolean): { warnings?: string[] } {
+  mergePayload(query: RawOperation, payload: JsonObject, prune: boolean): { warnings?: string[], ref: NodeId | undefined } {
     const parsed = this._context.parseOperation(query);
 
     // We collect all warnings associated with this operation to avoid
@@ -107,7 +108,7 @@ export class SnapshotEditor<TSerialized> {
     // once all new nodes have been built (and we can guarantee that we're
     // referencing the correct version).
     const referenceEdits: ReferenceEdit[] = [];
-    this._mergeSubgraph(referenceEdits, warnings, parsed.rootId, [] /* prefixPath */, [] /* path */, parsed.parsedQuery, payload, prune);
+    const ref = this._mergeSubgraph(referenceEdits, warnings, parsed.rootId, [] /* prefixPath */, [] /* path */, parsed.parsedQuery, payload, prune);
 
     // Now that we have new versions of every edited node, we can point all the
     // edited references to the correct nodes.
@@ -123,7 +124,7 @@ export class SnapshotEditor<TSerialized> {
     this._writtenQueries.add(parsed);
 
     // Don't emit empty arrays for easy testing upstream.
-    return warnings.length ? { warnings } : {};
+    return warnings.length ? { warnings, ref } : { ref };
   }
 
   /**
@@ -182,12 +183,12 @@ export class SnapshotEditor<TSerialized> {
       return;
     }
 
-    const visiblePayload = {};
-    const visiblePrevious = {};
+    const visiblePayload: Record<string, unknown> = {};
+    const visiblePrevious: Record<string, unknown> = {};
     if (payload) {
       for (const key in parsed) {
         const value = payload[key];
-        const previous = previousValue?.[key];
+        const previous = (previousValue as JsonObject)?.[key];
 
         visiblePayload[key] = value;
         visiblePrevious[key] = previous;
@@ -272,11 +273,12 @@ export class SnapshotEditor<TSerialized> {
         return undefined;
       }
       if (key in data) {
-        return data[key];
+        return (data as JsonObject)[key];
       }
       for (const out of obj.outbound ?? []) {
-        if (out.path[0] === key) {
-          return this._getNodeData(out.id);
+        const k = out.id;
+        if (k === key || out.path[0] === key) {
+          return this._getNodeData(k);
         }
       }
       if (containerId === 'ROOT_QUERY' && key === '__typename') {
@@ -287,7 +289,7 @@ export class SnapshotEditor<TSerialized> {
 
     const readField = (
       fieldNameOrOptions: string | ReadFieldOptions,
-      from: StoreObject | Reference = { __ref: containerId } as StoreObject
+      from: StoreObject | Reference = { __ref: containerId } as Reference
     ) => {
       if (!from) {
         return undefined;
@@ -456,6 +458,7 @@ export class SnapshotEditor<TSerialized> {
         }
       }
     }
+    return payloadId;
   }
 
   /**
@@ -541,10 +544,10 @@ export class SnapshotEditor<TSerialized> {
    * Modify a GraphQL payload (query/fragment/etc) into the snapshot, rooted at
    * the node identified by `rootId`.
    */
-  modify(rootId: NodeId, payload: JsonObject, deleted: Set<string>): { warnings?: string[] } {
+  modify(rootId: NodeId, payload: JsonObject, deleted: Set<string>, seenObjects: Set<object | null>): { warnings?: string[] } {
     const warnings: string[] = [];
     const referenceEdits: ReferenceEdit[] = [];
-    this._modifySubgraph(referenceEdits, warnings, rootId, [] /* prefixPath */, [] /* path */, payload, deleted);
+    this._modifySubgraph(referenceEdits, warnings, rootId, [] /* prefixPath */, [] /* path */, payload, deleted, seenObjects);
     this._mergeReferenceEdits(referenceEdits);
     return warnings.length ? { warnings } : {};
   }
@@ -560,6 +563,7 @@ export class SnapshotEditor<TSerialized> {
     path: PathPart[],
     payload: JsonValue | undefined,
     deleted: Set<string>,
+    seenObjects: Set<object | null>,
   ) {
     // Don't trust our inputs; we can receive values that aren't JSON
     // serializable via optimistic updates.
@@ -572,6 +576,11 @@ export class SnapshotEditor<TSerialized> {
       const message = `Received a ${typeof payload} value, but expected an object/array/null`;
       throw new InvalidPayloadError(message, prefixPath, containerId, path, payload);
     }
+
+    if (seenObjects.has(payload)) {
+      return;
+    }
+    seenObjects.add(payload);
 
     // TODO(ianm): We're doing this a lot.  How much is it impacting perf?
     const previousValue = this._getPreviousValue(containerId, path);
@@ -586,7 +595,7 @@ export class SnapshotEditor<TSerialized> {
         throw new InvalidPayloadError(`Unsupported transition from a list to a non-list value`, prefixPath, containerId, path, payload);
       }
 
-      this._modifyArraySubgraph(referenceEdits, warnings, containerId, prefixPath, path, payload, previousValue);
+      this._modifyArraySubgraph(referenceEdits, warnings, containerId, prefixPath, path, payload, previousValue, seenObjects);
       return;
     }
 
@@ -724,6 +733,7 @@ export class SnapshotEditor<TSerialized> {
             [],
             deepGet(fieldValue, field.path.slice(1)),
             new Set(),
+            seenObjects,
           );
         }
         if (parameterizedFields.some(field => field.path.length === 1)) {
@@ -739,7 +749,7 @@ export class SnapshotEditor<TSerialized> {
       // directly written via _setValue.  This allows us to perform minimal
       // edits to the graph.
       if (typeof node === 'object') {
-        this._modifySubgraph(referenceEdits, warnings, containerIdForField, fieldPrefixPath, fieldPath, fieldValue, new Set());
+        this._modifySubgraph(referenceEdits, warnings, containerIdForField, fieldPrefixPath, fieldPath, fieldValue, new Set(), seenObjects);
 
       // We've hit a leaf field.
       //
@@ -803,6 +813,7 @@ export class SnapshotEditor<TSerialized> {
     path: PathPart[],
     payload: JsonArray | Nil,
     previousValue: JsonArray | Nil,
+    seenObjects: Set<object | null>,
   ) {
     if (isNil(payload)) {
       // Note that we mark this as an edit, as this method is only ever called
@@ -847,7 +858,7 @@ export class SnapshotEditor<TSerialized> {
       }
 
       if (typeof childPayload === 'object') {
-        this._modifySubgraph(referenceEdits, warnings, containerId, prefixPath, [...path, i], childPayload, new Set());
+        this._modifySubgraph(referenceEdits, warnings, containerId, prefixPath, [...path, i], childPayload, new Set(), seenObjects);
       } else {
         this._setValue(containerId, [...path, i], childPayload);
       }
@@ -920,7 +931,7 @@ export class SnapshotEditor<TSerialized> {
   /**
    * Commits the transaction, returning a new immutable snapshot.
    */
-  commit(): EditedSnapshot<TSerialized> {
+  commit(ref?: NodeId | undefined): EditedSnapshot<TSerialized> {
     // At this point, every node that has had any of its properties change now
     // exists in _newNodes.  In order to preserve immutability, we need to walk
     // all nodes that transitively reference an edited node, and update their
@@ -936,6 +947,7 @@ export class SnapshotEditor<TSerialized> {
       snapshot,
       editedNodeIds: this._editedNodeIds,
       writtenQueries: this._writtenQueries,
+      ref: ref ? makeReference(ref) : undefined,
     };
   }
 

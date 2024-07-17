@@ -121,7 +121,7 @@ export function safeStringify(value: JsonObject) {
     } catch (error) {
       try {
         if (typeof value === 'object') {
-          const obj = {};
+          const obj: Record<string, unknown> = {};
           Object.entries(value).forEach(([key, val]) => {
             obj[key] = val == null ? val : Array.isArray(val) ? '[...]' : typeof val === 'object' ? '{...}' : val;
           });

@@ -1,7 +1,8 @@
+import { expect } from 'chai';
 import gql from 'graphql-tag';
 
-import { Hermes } from '../../../../src/apollo/Hermes';
-import { strictConfig } from '../../../helpers/context';
+import { Hermes } from '../../../../src';
+import { strictConfig } from '../../../helpers';
 
 describe(`writeFragment with parameterized references within arrays`, () => {
 

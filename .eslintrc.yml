@@ -44,18 +44,18 @@ rules:
 
   # Best Practices
 
-  class-methods-use-this: error
+  #class-methods-use-this: error
   curly: [error, multi-line]
   dot-location: [error, property]
   eqeqeq: [error, allow-null]
   no-eval: error
-  no-extend-native: error
+  #no-extend-native: error
   no-floating-decimal: error
   no-implied-eval: error
   no-labels: error
-  no-lone-blocks: error
+  #no-lone-blocks: error
   no-new-func: error
-  no-new-wrappers: error
+  #no-new-wrappers: error
   no-octal-escape: error
   no-proto: error
   no-return-await: error
@@ -66,7 +66,7 @@ rules:
   no-useless-call: error
   no-useless-concat: error
   no-useless-return: error
-  no-void: error
+  #no-void: error
   no-with: error
   radix: [error, as-needed]
   wrap-iife: [error, outside]
@@ -74,9 +74,9 @@ rules:
 
   # Variables
 
-  no-catch-shadow: error
+  #no-catch-shadow: error
   no-label-var: error
-  no-shadow: error
+  #no-shadow: error
   no-shadow-restricted-names: error
   no-undef-init: error
 
@@ -92,7 +92,7 @@ rules:
   array-bracket-spacing: error
   block-spacing: error
   brace-style: [error, 1tbs]
-  camelcase: error
+  #camelcase: error
   comma-dangle: [error, {
     arrays: always-multiline,
     objects: always-multiline,
@@ -104,21 +104,21 @@ rules:
   comma-style: error
   computed-property-spacing: error
   eol-last: error
-  func-call-spacing: error
-  func-names: [error, as-needed]
-  func-style: [error, declaration, { allowArrowFunctions: true }]
-  id-blacklist: [error, err, cb, fn]
+  #func-call-spacing: error
+  #func-names: [error, as-needed]
+  #func-style: [error, declaration, { allowArrowFunctions: true }]
+  #id-blacklist: [ error, err, cb, fn ]
   indent: [error, 2, { SwitchCase: 1 }]
   jsx-quotes: [error, prefer-single]
   key-spacing: [error, { mode: minimum }]
   keyword-spacing: error
   linebreak-style: error
   lines-between-class-members: [error, always, { exceptAfterSingleLine: true }]
-  max-len: [error, { code: 140, comments: 80, tabWidth: 2, ignoreUrls: true }]
-  new-cap: error
+  max-len: [error, { code: 500, comments: 500, tabWidth: 2, ignoreUrls: true }]
+  #new-cap: error
   newline-per-chained-call: [error, { ignoreChainWithDepth: 3 }]
-  no-array-constructor: error
-  no-bitwise: error
+  #no-array-constructor: error
+  #no-bitwise: error
   no-lonely-if: error
   no-mixed-operators: error
   no-multiple-empty-lines: [error, { max: 1 }]
@@ -160,11 +160,11 @@ rules:
   prefer-const: error
   prefer-destructuring: [error, { array: false }]
   prefer-numeric-literals: error
-  prefer-rest-params: error
+  #prefer-rest-params: error
   prefer-spread: error
   prefer-template: error
   rest-spread-spacing: error
-  symbol-description: error
+  #symbol-description: error
   template-curly-spacing: error
   yield-star-spacing: error
 
@@ -183,7 +183,7 @@ rules:
   # Helpful Warnings
   # TODO: Until it has TypeScript support…
   # import/export: error
-  import/no-deprecated: error
+  #import/no-deprecated: error
   import/no-extraneous-dependencies: [error, { devDependencies: false }]
   import/no-mutable-exports: error
   import/no-useless-path-segments: error
@@ -202,7 +202,7 @@ rules:
     groups: [[builtin, external], [internal], [parent], [sibling, index]],
     newlines-between: always,
   }]
-  import/no-default-export: error
+  #import/no-default-export: error
 
   # https://github.com/nzakas/eslint-plugin-typescript#supported-rules
 
@@ -217,9 +217,10 @@ rules:
   }]
   '@typescript-eslint/naming-convention': [
     error,
-    { selector: typeLike, format: [PascalCase] },
-    { selector: memberLike, modifiers: [private], format: [camelCase], leadingUnderscore: require },
-    { selector: interface, format: [PascalCase], custom: { regex: '^I[A-Z]', match: false } }
+    { selector: typeLike, format: [PascalCase, camelCase] },
+    { selector: objectLiteralProperty, format: null, leadingUnderscore: allowDouble },
+    { selector: memberLike, modifiers: [private], format: [camelCase], leadingUnderscore: allow },
+    { selector: interface, format: [PascalCase, camelCase] }
   ]
   '@typescript-eslint/consistent-type-assertions': error
   '@typescript-eslint/triple-slash-reference': [error, { path: never, types: never, lib: never }]
@@ -237,4 +238,4 @@ rules:
   jest/no-focused-tests: error
   jest/no-identical-title: error
   jest/no-test-prefixes: error
-  jest/valid-describe: error
+  #jest/valid-describe: error

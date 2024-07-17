@@ -191,7 +191,7 @@ export function areChildrenDynamic(children?: ParsedQueryWithVariables) {
 function _buildFieldArgs(variables: Set<string>, argumentsNode?: readonly ArgumentNode[]) {
   if (!argumentsNode) return undefined;
 
-  const args = {};
+  const args: JsonObject = {};
   for (const arg of argumentsNode) {
     // Mapped name of argument to it JS value
     args[arg.name.value] = _valueFromNode(variables, arg.value);
@@ -263,14 +263,14 @@ function _mergeNodes<TArgTypes>(path: string[], target: ParsedQueryNode<TArgType
  *
  * This requires that all variables used are provided in `variables`.
  */
-export function expandVariables(parsed: ParsedQueryWithVariables, variables: JsonObject | undefined): ParsedQuery {
+export function expandVariables(parsed: ParsedQueryWithVariables, variables: JsonObject | undefined): ParsedQuery<JsonScalar> {
   return _expandVariables(parsed, variables)!;
 }
 
 export function _expandVariables(parsed?: ParsedQueryWithVariables, variables?: JsonObject) {
   if (!parsed) return undefined;
 
-  const newMap = {};
+  const newMap: ParsedQuery<JsonScalar> = {};
   for (const key in parsed) {
     const node = parsed[key];
     if (node.args || node.hasParameterizedChildren) {
@@ -282,7 +282,7 @@ export function _expandVariables(parsed?: ParsedQueryWithVariables, variables?: 
       );
     // No variables to substitute for this subtree.
     } else {
-      newMap[key] = node;
+      newMap[key] = node as ParsedQueryNode;
     }
   }
 
@@ -311,7 +311,7 @@ export function _expandArgument(
   } else if (Array.isArray(arg)) {
     return arg.map(v => _expandArgument(v, variables));
   } else if (isObject(arg)) {
-    const expanded = {};
+    const expanded: JsonValue = {};
     for (const key in arg) {
       expanded[key] = _expandArgument(arg[key], variables);
     }

@@ -67,16 +67,14 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
 
   write(options: Cache.WriteOptions): Reference | undefined {
     const rawOperation = buildRawOperationFromQuery(options.query, options.variables as JsonObject, options.dataId);
-    this._queryable.write(rawOperation, options.result, options.broadcast);
-
-    return makeReference(rawOperation.rootId);
+    const ref = this._queryable.write(rawOperation, options.result, options.broadcast);
+    return ref ?? makeReference(rawOperation.rootId);
   }
 
   writeQuery<TData = any, TVariables = any>(options: Cache.WriteQueryOptions<TData, TVariables>): Reference | undefined {
     const rawOperation = buildRawOperationFromQuery(options.query, options.variables as any, options.id);
-    this._queryable.write(rawOperation, options.data as any, options.broadcast);
-
-    return makeReference(rawOperation.rootId);
+    const ref = this._queryable.write(rawOperation, options.data as any, options.broadcast);
+    return ref ?? makeReference(rawOperation.rootId);
   }
 
   writeFragment<TData = any, TVariables = any>(options: Cache.WriteFragmentOptions<TData, TVariables>): Reference | undefined {
@@ -87,16 +85,15 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
       options.variables as any,
       options.fragmentName,
     );
-    this._queryable.write(rawOperation, options.data as any, options.broadcast);
-
-    return makeReference(rawOperation.rootId);
+    const ref = this._queryable.write(rawOperation, options.data as any, options.broadcast);
+    return ref ?? makeReference(rawOperation.rootId);
   }
 
   transformDocument(doc: DocumentNode): DocumentNode {
     return this._queryable.transformDocument(doc);
   }
 
-  transformForLink(document: DocumentNode): DocumentNode { // eslint-disable-line class-methods-use-this
+  transformForLink(document: DocumentNode): DocumentNode {
     // @static directives are for the cache only.
     return removeDirectivesFromDocument(
       [{ name: 'static' }],

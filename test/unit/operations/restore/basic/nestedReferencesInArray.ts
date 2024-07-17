@@ -1,6 +1,6 @@
-import { CacheContext } from '../../../../../src/context/CacheContext';
+import { CacheContext } from '../../../../../src/context';
 import { GraphSnapshot } from '../../../../../src/GraphSnapshot';
-import { EntitySnapshot } from '../../../../../src/nodes/EntitySnapshot';
+import { EntitySnapshot } from '../../../../../src/nodes';
 import { restore } from '../../../../../src/operations';
 import { JsonObject } from '../../../../../src/primitive';
 import { StaticNodeId, Serializable } from '../../../../../src/schema';

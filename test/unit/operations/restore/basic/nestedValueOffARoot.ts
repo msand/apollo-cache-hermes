@@ -1,5 +1,5 @@
 import { GraphSnapshot } from '../../../../../src/GraphSnapshot';
-import { EntitySnapshot } from '../../../../../src/nodes/EntitySnapshot';
+import { EntitySnapshot } from '../../../../../src/nodes';
 import { restore } from '../../../../../src/operations';
 import { StaticNodeId, Serializable } from '../../../../../src/schema';
 import { createGraphSnapshot, createStrictCacheContext } from '../../../../helpers';

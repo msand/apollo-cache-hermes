@@ -1,6 +1,7 @@
+import { expect } from 'chai';
 import gql from 'graphql-tag';
 
-import { Hermes }  from '../../../src/apollo/Hermes';
+import { Hermes }  from '../../../src';
 import { StaticNodeId } from '../../../src/schema';
 import { strictConfig } from '../../helpers';
 

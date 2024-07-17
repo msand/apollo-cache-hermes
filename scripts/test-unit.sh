@@ -7,7 +7,7 @@ source ./scripts/include/node.sh
 FILES=("${OPTIONS_ARGS[@]}")
 if [[ "${#FILES[@]}" == "0" ]]; then
   FILES+=($(
-    find ./test/unit \
+    find ./test \
       \( -name "*.ts" -not -name "*.d.ts" \) \
       -or -name "*.tsx"
   ))
@@ -17,13 +17,16 @@ fi
 # compiled sources under the covers.
 for i in "${!FILES[@]}"; do
   file="${FILES[$i]}"
-  if [[ "${file##*.}" == "ts" ]]; then
+  if [[ "${file##*.}" == "ts" ]] && [[ "${file##*/}" != "jest.config.ts" ]]; then
     FILES[$i]="${file%.*}.js"
+  fi
+  if [[ "${file##*.}" == "tsx" ]]; then
+    FILES[$i]="${file%.*}.jsx"
   fi
 done
 
 OPTIONS=(
-  --config ./test/unit/jest.json
+  --config ./test/unit/jest.config.js
 )
 DEBUGGING=false
 
