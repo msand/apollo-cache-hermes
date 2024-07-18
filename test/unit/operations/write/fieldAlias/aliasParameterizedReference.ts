@@ -1,9 +1,8 @@
 import { CacheContext } from '../../../../../src/context';
 import { GraphSnapshot } from '../../../../../src/GraphSnapshot';
-import { EntitySnapshot } from '../../../../../src/nodes/EntitySnapshot';
-import { ParameterizedValueSnapshot } from '../../../../../src/nodes/ParameterizedValueSnapshot';
+import { EntitySnapshot, ParameterizedValueSnapshot } from '../../../../../src/nodes';
 import { nodeIdForParameterizedValue } from '../../../../../src/operations/SnapshotEditor';
-import { write } from '../../../../../src/operations/write';
+import { write } from '../../../../../src/operations';
 import { StaticNodeId } from '../../../../../src/schema';
 import { query, strictConfig } from '../../../../helpers';
 

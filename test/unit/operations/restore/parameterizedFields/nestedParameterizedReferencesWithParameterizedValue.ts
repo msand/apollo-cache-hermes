@@ -97,8 +97,9 @@ describe(`operations.restore`, () => {
 
       jestExpect(parameterizedNode.inbound).toEqual([{ id: QueryRootId, path: ['one', 'two'] }]);
       jestExpect(parameterizedNode.outbound).toEqual([{ id: '31', path: ['three'] }]);
-      jestExpect(parameterizedNode.data).not.toBe(undefined);
-      jestExpect(parameterizedNode.data!['three']).toBe(entityData);
+      const data = parameterizedNode.data;
+      jestExpect(data).not.toBe(undefined);
+      jestExpect(typeof data === 'object' && !Array.isArray(data) && data!['three' as string]).toBe(entityData);
     });
 
   });

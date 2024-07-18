@@ -60,7 +60,6 @@ export class ConsoleTracer<TSerialized> implements Tracer<void> {
     }
   }
 
-  // eslint-disable-next-line class-methods-use-this
   protected formatOperation(action: string, operation: OperationInstance<TSerialized>) {
     const { operationType, operationName } = operation.info;
     return `${action}(${operationType} ${operationName})`;

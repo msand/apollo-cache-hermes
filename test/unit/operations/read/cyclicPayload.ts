@@ -54,6 +54,7 @@ describe(`operations.read`, () => {
         buzz: null,
         foo,
       };
+      // @ts-ignore
       foo['bar'] = bar;
 
       jestExpect(readResult.result).toEqual({ foo, baz: null });

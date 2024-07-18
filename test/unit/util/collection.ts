@@ -1,4 +1,6 @@
-import { lazyImmutableDeepSet } from '../../../src/util/collection';
+import { expect } from 'chai';
+
+import { lazyImmutableDeepSet } from '../../../src/util';
 
 describe(`util.collection`, () => {
   describe('lazyImmutableDeepSet', () => {

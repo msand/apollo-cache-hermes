@@ -1,6 +1,7 @@
+import { expect } from 'chai';
 import gql from 'graphql-tag';
 
-import { Hermes }  from '../../../src/apollo/Hermes';
+import { Hermes }  from '../../../src';
 import { strictConfig } from '../../helpers';
 
 describe(`transform document before writeQuery`, () => {

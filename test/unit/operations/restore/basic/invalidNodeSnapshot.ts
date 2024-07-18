@@ -17,6 +17,7 @@ describe(`operations.restore`, () => {
             data: { },
           },
           '1': {
+            // @ts-ignore
             type: -1,
             data: {
               INVALID: 42,

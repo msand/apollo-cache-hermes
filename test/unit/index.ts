@@ -1,3 +1,5 @@
+import { expect } from 'chai';
+
 import { Hermes, Cache } from '../../src';
 
 describe(`apollo-cache-hermes`, () => {

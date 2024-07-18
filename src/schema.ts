@@ -88,13 +88,6 @@ export namespace Serializable {
     [key: string]: Serializable.NodeSnapshot;
   }
 
-  export interface NodeSnapshot {
-    type: Serializable.NodeSnapshotType;
-    inbound?: NodeReference[];
-    outbound?: NodeReference[];
-    data?: NestedValue<JsonValue | undefined>;
-  }
-
   /**
    * Type of NodeSnapshot. We need this so that when deserialize, we can
    * correct create NodeSnapshot.
@@ -103,6 +96,13 @@ export namespace Serializable {
   export const enum NodeSnapshotType {
     EntitySnapshot = 0,
     ParameterizedValueSnapshot = 1,
+  }
+
+  export interface NodeSnapshot {
+    type: Serializable.NodeSnapshotType;
+    inbound?: NodeReference[];
+    outbound?: NodeReference[];
+    data?: NestedValue<JsonValue | undefined>;
   }
 }
 

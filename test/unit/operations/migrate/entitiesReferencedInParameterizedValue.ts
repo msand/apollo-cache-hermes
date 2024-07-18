@@ -1,5 +1,5 @@
 import { CacheSnapshot } from '../../../../src/CacheSnapshot';
-import { CacheContext } from '../../../../src/context/CacheContext';
+import { CacheContext } from '../../../../src/context';
 import { extract, migrate } from '../../../../src/operations';
 import { nodeIdForParameterizedValue } from '../../../../src/operations/SnapshotEditor';
 import { OptimisticUpdateQueue } from '../../../../src/OptimisticUpdateQueue';

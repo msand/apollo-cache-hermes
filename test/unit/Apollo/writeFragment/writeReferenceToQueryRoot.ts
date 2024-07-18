@@ -1,10 +1,11 @@
+import { expect } from 'chai';
 import gql from 'graphql-tag';
 
-import { Hermes } from '../../../../src/apollo/Hermes';
+import { Hermes } from '../../../../src';
 import { GraphSnapshot } from '../../../../src/GraphSnapshot';
-import { EntitySnapshot } from '../../../../src/nodes/EntitySnapshot';
+import { EntitySnapshot } from '../../../../src/nodes';
 import { StaticNodeId } from '../../../../src/schema';
-import { strictConfig } from '../../../helpers/context';
+import { strictConfig } from '../../../helpers';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 

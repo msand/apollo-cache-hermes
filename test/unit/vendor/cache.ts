@@ -2681,7 +2681,7 @@ describe('Hermes#modify', () => {
 
     const resultAfterAuthorInvalidation = read();
     expect(resultAfterAuthorInvalidation).toEqual(initialResult);
-    // expect(resultAfterAuthorInvalidation).toBe(initialResult); TODO
+    expect(resultAfterAuthorInvalidation).toBe(initialResult);
 
     expect(
       cache.modify({
@@ -2698,17 +2698,14 @@ describe('Hermes#modify', () => {
 
     const resultAfterBookInvalidation = read();
     expect(resultAfterBookInvalidation).toEqual(resultAfterAuthorInvalidation);
-    // TODO
-    // expect(resultAfterBookInvalidation).toBe(resultAfterAuthorInvalidation);
+    expect(resultAfterBookInvalidation).toBe(resultAfterAuthorInvalidation);
     expect(resultAfterBookInvalidation.currentlyReading.author).toEqual({
       __typename: 'Author',
       name: 'Maria Dahvana Headley',
     });
-    /* TODO
     expect(resultAfterBookInvalidation.currentlyReading.author).toBe(
       resultAfterAuthorInvalidation.currentlyReading.author
     );
-    */
   });
 
   it('should allow deletion using details.DELETE', () => {
@@ -3196,7 +3193,7 @@ describe('Hermes#modify', () => {
     cache.modify({
       fields: {
         comments(comments: readonly Reference[], { readField }) {
-          // expect(Object.isFrozen(comments)).toBe(true);
+          // expect(Object.isFrozen(comments)).toBe(true); TODO
           expect(comments.length).toBe(3);
           const filtered = comments.filter((comment) => {
             return readField('id', comment) !== 'c1';
@@ -3667,11 +3664,11 @@ describe('Hermes#modify', () => {
         fields: {
           book(
             book: Reference,
-            // eslint-disable-next-line no-shadow
-            { fieldName, storeFieldName, isReference, readField, DELETE }
+
+            { fieldName, storeFieldName, isReference: isRef, readField, DELETE }
           ) {
             expect(fieldName).toBe('book');
-            expect(isReference(book)).toBe(true);
+            expect(isRef(book)).toBe(true);
             expect(typeof readField('title', book)).toBe('string');
             expect(readField('__typename', book)).toBe('Book');
             expect(
@@ -3953,7 +3950,6 @@ describe('Hermes#modify', () => {
       ).toBe(false);
     }
 
-    // eslint-disable-next-line no-void
     check(void 0);
     check(false);
     check(null);
@@ -4063,6 +4059,7 @@ describe('TypedDocumentNode<Data, Variables>', () => {
     });
 
     if (ffplQueryResult === null) throw new Error('null result');
+    // expect(ffplQueryResult.book.isbn).toBeUndefined(); TODO
     expect(ffplQueryResult.book.author.name).toBe(jcmAuthor.name);
     expect(ffplQueryResult).toMatchObject({
       book: {
@@ -4110,6 +4107,7 @@ describe('TypedDocumentNode<Data, Variables>', () => {
       },
     });
     if (sicpReadResult === null) throw new Error('null result');
+    // expect(sicpReadResult.book.isbn).toBeUndefined(); TODO
     expect(sicpReadResult.book.title).toBe(sicpBook.title);
     expect(sicpReadResult.book.author.name).toBe(sicpBook.author.name);
     expect(sicpReadResult).toMatchObject({
@@ -4146,10 +4144,10 @@ describe('TypedDocumentNode<Data, Variables>', () => {
           expectTypeOf(value).toEqualTypeOf<string>();
           return INVALIDATE;
         },
-        // eslint-disable-next-line no-shadow
-        author: (value, { DELETE, isReference }) => {
+
+        author: (value, { DELETE, isReference: isRef }) => {
           expectTypeOf(value).toEqualTypeOf<Reference | Book['author']>();
-          if (isReference(value)) {
+          if (isRef(value)) {
             expectTypeOf(value).toEqualTypeOf<Reference>();
           } else {
             expectTypeOf(value).toEqualTypeOf<Book['author']>();

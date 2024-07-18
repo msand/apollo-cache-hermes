@@ -29,11 +29,11 @@ export class ApolloTransaction<TSerialized> extends ApolloQueryable<TSerialized>
     super();
   }
 
-  reset(): Promise<void> { // eslint-disable-line class-methods-use-this
+  reset(): Promise<void> {
     throw new Error(`reset() is not allowed within a transaction`);
   }
 
-  removeOptimistic(_id: string): void { // eslint-disable-line class-methods-use-this
+  removeOptimistic(_id: string): void {
     throw new Error(`removeOptimistic() is not allowed within a transaction`);
   }
 
@@ -41,19 +41,19 @@ export class ApolloTransaction<TSerialized> extends ApolloQueryable<TSerialized>
     transaction(this);
   }
 
-  recordOptimisticTransaction(_transaction: Transaction<TSerialized>, _id: string): void { // eslint-disable-line class-methods-use-this
+  recordOptimisticTransaction(_transaction: Transaction<TSerialized>, _id: string): void {
     throw new Error(`recordOptimisticTransaction() is not allowed within a transaction`);
   }
 
-  watch(_query: Cache.WatchOptions): () => void { // eslint-disable-line class-methods-use-this
+  watch(_query: Cache.WatchOptions): () => void {
     throw new Error(`watch() is not allowed within a transaction`);
   }
 
-  restore(): any { // eslint-disable-line class-methods-use-this
+  restore(): any {
     throw new Error(`restore() is not allowed within a transaction`);
   }
 
-  extract(): any { // eslint-disable-line class-methods-use-this
+  extract(): any {
     throw new Error(`extract() is not allowed within a transaction`);
   }
 

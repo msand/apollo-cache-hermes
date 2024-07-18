@@ -3,7 +3,8 @@ set -e
 
 FILES_TO_REMOVE=($(
   find . \
-    \( -name "*.d.ts" -or -name "*.js" -or -name "*.js.map" \) \
+    \( -name "*.js" -or -name "*.js.map" -or -name "*.ts.map" \) \
+    -not -path "./*.config.js" \
     -not -path "./scripts/*" \
     -not -path "./coverage/*" \
     -not -path "./node_modules/*" \

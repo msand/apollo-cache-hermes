@@ -1,7 +1,8 @@
 import { SelectionSetNode } from 'graphql';
 import gql from 'graphql-tag';
+import { expect } from 'chai';
 
-import { CacheContext } from '../../../../src/context/CacheContext';
+import { CacheContext } from '../../../../src/context';
 import { silentConfig, strictConfig } from '../../../helpers';
 
 describe(`context.CacheContext`, () => {

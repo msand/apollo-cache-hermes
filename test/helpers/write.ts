@@ -1,7 +1,7 @@
-import { CacheContext } from '../../src/context/CacheContext';
+import { CacheContext } from '../../src/context';
 import { GraphSnapshot } from '../../src/GraphSnapshot';
 import { EditedSnapshot } from '../../src/operations/SnapshotEditor';
-import { write } from '../../src/operations/write';
+import { write } from '../../src/operations';
 import { JsonObject } from '../../src/primitive';
 import { NodeId } from '../../src/schema';
 

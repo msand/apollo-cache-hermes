@@ -1,4 +1,4 @@
-import { CacheContext } from '../../../../src/context/CacheContext';
+import { CacheContext } from '../../../../src/context';
 import { GraphSnapshot } from '../../../../src/GraphSnapshot';
 import { extract, prune } from '../../../../src/operations';
 import { createGraphSnapshot, createStrictCacheContext, query } from '../../../helpers';

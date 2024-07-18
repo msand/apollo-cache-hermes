@@ -203,11 +203,12 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
       return undefined;
     }
     if (key in data) {
-      return data[key];
+      return (data as JsonObject)[key];
     }
     for (const out of obj.outbound ?? []) {
-      if (out.path[0] === key) {
-        return snapshot.getNodeData(out.id);
+      const k = out.id;
+      if (k === key || out.path[0] === key) {
+        return snapshot.getNodeData(k);
       }
     }
     if (isRoot && key === '__typename') {
@@ -216,9 +217,10 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
     return undefined;
   }
 
+  let readFallbackObject: undefined | StoreObject;
   const readField = (
     fieldNameOrOptions: string | ReadFieldOptions,
-    from: StoreObject | Reference = rootSnapshot.data as StoreObject
+    from: StoreObject | Reference = rootSnapshot.data as StoreObject ?? readFallbackObject
   ) => {
     if (!from) {
       return undefined;
@@ -275,7 +277,8 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
         const nodeSnapshot = ensureNewSnapshot(entityId);
         nodeSnapshot.data = { ...nodeSnapshot.data as {}, ...value };
       }
-      return entityId ? makeReference(entityId) : undefined;
+      const ref = entityId ?? value;
+      return typeof ref === 'string' ? makeReference(ref) : undefined;
     },
     variables: query.variables,
   };
@@ -309,9 +312,31 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
 
       if (node.args) {
         let childId = nodeIdForParameterizedValue(containerId, [...path, fieldName], node.args);
-        let childSnapshot = snapshot.getNodeSnapshot(childId);
-        if (!childSnapshot) {
+        let childSnapshot: Readonly<NodeSnapshot> | undefined;
 
+        if (typePolicies) {
+          const fieldPolicy = typePolicies[fieldName];
+          const readFn = fieldPolicy && (typeof fieldPolicy === 'object' ? fieldPolicy.read : fieldPolicy);
+          if (readFn) {
+            readOptions.fieldName = fieldName;
+            readOptions.storeFieldName = key;
+            readOptions.args = node.args;
+            readFallbackObject = value;
+            const readResult = readFn(undefined, readOptions);
+            if (isReference(readResult)) {
+              const ref = readResult.__ref;
+              childSnapshot = getSnapshot(ref);
+            } else {
+              child = readResult;
+            }
+          }
+        }
+
+        if (!childSnapshot) {
+          childSnapshot = snapshot.getNodeSnapshot(childId);
+        }
+
+        if (!childSnapshot) {
           // Should we fall back to a redirect?
           const redirect: CacheContext.ResolverRedirect | undefined = deepGet(context.resolverRedirects, [typeName, fieldName]) as any;
           if (redirect) {
@@ -319,23 +344,9 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
             if (!isNil(childId)) {
               childSnapshot = snapshot.getNodeSnapshot(childId);
             }
-          } else if (typePolicies) {
-            const fieldPolicy = typePolicies[fieldName];
-            const readFn = fieldPolicy && (typeof fieldPolicy === 'object' ? fieldPolicy.read : fieldPolicy);
-            if (readFn) {
-              readOptions.fieldName = fieldName;
-              readOptions.storeFieldName = key;
-              readOptions.args = node.args;
-              const readResult = readFn(undefined, readOptions);
-              if (isReference(readResult)) {
-                const ref = readResult.__ref;
-                childSnapshot = getSnapshot(ref);
-              } else {
-                child = readResult;
-              }
-            }
           }
         }
+
         dynamicNodeIds.add(childId);
 
         // Still no snapshot? Ok we're done here.
@@ -355,6 +366,7 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
           readOptions.fieldName = fieldName;
           readOptions.storeFieldName = key;
           readOptions.args = node.args ?? null;
+          readFallbackObject = value;
           child = readFn(child, readOptions);
         }
       }
@@ -429,7 +441,7 @@ function _flattenGraphQLObject(value: UnknownGraphQLObject, path: PathPart[]): F
   if (value === null) return [];
   if (!Array.isArray(value)) return [{ value, path }];
 
-  const flattened = [];
+  const flattened: FlattenedGraphQLObject[] = [];
 
   for (let i = 0; i < value.length; i++) {
     const item = value[i];
@@ -446,14 +458,14 @@ function _recursivelyWrapValue<T extends JsonValue, TSerialized>(value: T | unde
     return _wrapValue(value, context);
   }
 
-  const newValue = [];
+  const newValue: JsonValue[] = [];
   // Note that we're careful to iterate over all indexes, in case this is a
   // sparse array.
   for (let i = 0; i < value.length; i++) {
     newValue[i] = _recursivelyWrapValue(value[i], context);
   }
 
-  return newValue as T;
+  return newValue as unknown as T;
 }
 
 function _wrapValue<T extends JsonValue, TSerialized>(value: T | undefined, context: CacheContext<TSerialized>): T {

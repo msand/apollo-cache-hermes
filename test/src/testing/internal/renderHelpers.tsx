@@ -1,0 +1,70 @@
+import * as React from 'react';
+import type { ReactElement } from 'react';
+import { render } from '@testing-library/react';
+import type { Queries, RenderOptions, queries } from '@testing-library/react';
+import { ApolloClient, ApolloProvider } from '@apollo/client';
+
+import type { MockedProviderProps } from '../react/MockedProvider';
+import { MockedProvider } from '../react/MockedProvider';
+
+export interface RenderWithClientOptions<
+  Q extends Queries = typeof queries,
+  Container extends Element | DocumentFragment = HTMLElement,
+  BaseElement extends Element | DocumentFragment = Container,
+> extends RenderOptions<Q, Container, BaseElement> {
+  client: ApolloClient<any>;
+}
+
+export function renderWithClient<
+  Q extends Queries = typeof queries,
+  Container extends Element | DocumentFragment = HTMLElement,
+  BaseElement extends Element | DocumentFragment = Container,
+>(
+  ui: ReactElement,
+  {
+    client,
+    wrapper: Wrapper = React.Fragment,
+    ...renderOptions
+  }: RenderWithClientOptions<Q, Container, BaseElement>
+) {
+  return render(ui, {
+    ...renderOptions,
+    wrapper: ({ children }) => {
+      return (
+        <ApolloProvider client={client}>
+          <Wrapper>{children}</Wrapper>
+        </ApolloProvider>
+      );
+    },
+  });
+}
+
+export interface RenderWithMocksOptions<
+  Q extends Queries = typeof queries,
+  Container extends Element | DocumentFragment = HTMLElement,
+  BaseElement extends Element | DocumentFragment = Container,
+> extends RenderOptions<Q, Container, BaseElement>,
+    MockedProviderProps<any> {}
+
+export function renderWithMocks<
+  Q extends Queries = typeof queries,
+  Container extends Element | DocumentFragment = HTMLElement,
+  BaseElement extends Element | DocumentFragment = Container,
+>(
+  ui: ReactElement,
+  {
+    wrapper: Wrapper = React.Fragment,
+    ...renderOptions
+  }: RenderWithMocksOptions<Q, Container, BaseElement>
+) {
+  return render(ui, {
+    ...renderOptions,
+    wrapper: ({ children }) => {
+      return (
+        <MockedProvider {...renderOptions}>
+          <Wrapper>{children}</Wrapper>
+        </MockedProvider>
+      );
+    },
+  });
+}

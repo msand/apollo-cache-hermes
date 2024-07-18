@@ -1,26 +1,32 @@
 {
   "compilerOptions": {
-    "declaration": true,
+    "noImplicitAny": false,
+    "strictNullChecks": true,
+    "noUnusedParameters": false,
+    "noUnusedLocals": false,
+    "skipLibCheck": true,
+    "moduleResolution": "node",
     "importHelpers": true,
+    "declaration": true,
+    "declarationMap": true,
+    "target": "es2017",
+    "module": "commonjs",
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
     "inlineSourceMap": true,
     "lib": [
       "dom",
       "es2017",
       "esnext.asynciterable",
+      "ES2021.WeakRef",
       "scripthost"
     ],
-    "module": "commonjs",
-    "moduleResolution": "node",
-    "esModuleInterop": true,
     "newLine": "LF",
-    "noImplicitAny": true,
-    "noImplicitReturns": true,
+    "noImplicitReturns": false,
     "noImplicitThis": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
     "pretty": true,
+    "jsx": "react",
     "strict": true,
-    "suppressImplicitAnyIndexErrors": true,
-    "target": "ES2017"
+    "types": ["jest", "node", "./matchers.d.ts"]
   }
 }

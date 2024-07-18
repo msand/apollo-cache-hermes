@@ -1,11 +1,11 @@
 import { addTypenameToDocument } from 'msand-apollo-client/utilities';
 import * as _ from 'lodash';
+import { expect } from 'chai';
 
 import { CacheContext } from '../../../../src/context';
 import { GraphSnapshot } from '../../../../src/GraphSnapshot';
-import { read } from '../../../../src/operations/read';
+import { read, write } from '../../../../src/operations';
 import { nodeIdForParameterizedValue } from '../../../../src/operations/SnapshotEditor';
-import { write } from '../../../../src/operations/write';
 import { JsonObject } from '../../../../src/primitive';
 import { NodeId, RawOperation, StaticNodeId } from '../../../../src/schema';
 import { query, strictConfig } from '../../../helpers';
@@ -62,7 +62,7 @@ describe(`context.CacheContext`, () => {
           }
         }`);
 
-        function mixinHelperMethods(obj: object, proto: object | null): void {
+        function mixinHelperMethods(obj: Record<string, unknown>, proto: object | null): void {
           if (obj['__typename'] === 'viewer') {
             const newPrototype = _.clone(Object.getPrototypeOf(obj));
             Object.assign(newPrototype, proto);
@@ -386,7 +386,7 @@ describe(`context.CacheContext`, () => {
           }
         }`, { id: '4' });
 
-        function mixinHelperMethods(obj: object, proto: object | null): void {
+        function mixinHelperMethods(obj: Record<string, unknown>, proto: object | null): void {
           if (obj['__typename'] === 'viewer') {
             const newPrototype = _.clone(Object.getPrototypeOf(obj));
             Object.assign(newPrototype, proto);

@@ -1,3 +1,5 @@
+import { expect } from 'chai';
+
 import { query, strictConfig } from '../../helpers';
 import { Cache } from '../../../src';
 import { RawOperation } from '../../../src/schema';

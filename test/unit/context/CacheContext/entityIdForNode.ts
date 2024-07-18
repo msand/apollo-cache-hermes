@@ -1,4 +1,6 @@
-import { CacheContext } from '../../../../src/context/CacheContext';
+import { expect } from 'chai';
+
+import { CacheContext } from '../../../../src/context';
 
 describe(`context.CacheContext`, () => {
   describe(`entityIdForNode`, () => {
@@ -42,7 +44,7 @@ describe(`context.CacheContext`, () => {
 
     describe(`custom mapper`, () => {
 
-      let context: CacheContext, mapper: jest.Mock<any>;
+      let context: CacheContext, mapper: jest.Mock;
       beforeAll(() => {
         mapper = jest.fn();
         context = new CacheContext({

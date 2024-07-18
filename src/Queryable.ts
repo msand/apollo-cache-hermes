@@ -1,4 +1,5 @@
 import { Cache } from 'msand-apollo-client';
+import { Reference } from 'msand-apollo-client/utilities';
 
 import { JsonObject, JsonValue } from './primitive';
 import { RawOperation } from './schema';
@@ -29,9 +30,9 @@ export interface Queryable {
   /**
    * Writes values for a selection to the cache.
    */
-  write(query: RawOperation, payload: JsonObject, broadcast: boolean | undefined): void;
+  write(query: RawOperation, payload: JsonObject, broadcast: boolean | undefined): Reference | undefined;
 
-  modify<Entity>(options: Cache.ModifyOptions<Entity>): boolean;
+  modify<Entity extends Record<string, unknown>>(options: Cache.ModifyOptions<Entity>): boolean;
 
   evict(options: Cache.EvictOptions): boolean;
 }

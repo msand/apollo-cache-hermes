@@ -30,10 +30,14 @@ export class QueryObserver<TSerialized> {
     this._context = context;
     this._query = query;
     this._options = options;
-    this._result = read(context, query, snapshot, Object.create(null), context.strict);
     if (options.immediate) {
+      this._result = read(context, query, snapshot, Object.create(null), context.strict);
       options.lastDiff = this._result;
       this._update();
+    } else {
+      this._result = {
+        complete: false,
+      };
     }
   }
 
@@ -41,7 +45,7 @@ export class QueryObserver<TSerialized> {
    * We expect the cache to tell us whenever there is a new snapshot, and which
    * nodes have changed.
    */
-  consumeChanges<TSerialized>(
+  consumeChanges(
     snapshot: GraphSnapshot,
     changedNodeIds: Set<NodeId>,
     cacheInstance: Hermes<TSerialized>,

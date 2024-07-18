@@ -1,6 +1,6 @@
 import * as util from 'util';
 
-import { CacheContext } from '../../src/context/CacheContext';
+import { CacheContext } from '../../src/context';
 
 export const strictConfig: CacheContext.Configuration = {
   freeze: true,

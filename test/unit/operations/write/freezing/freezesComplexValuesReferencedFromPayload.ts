@@ -1,6 +1,6 @@
 import { CacheContext } from '../../../../../src/context';
 import { GraphSnapshot } from '../../../../../src/GraphSnapshot';
-import { write } from '../../../../../src/operations/write';
+import { write } from '../../../../../src/operations';
 import { query, strictConfig } from '../../../../helpers';
 
 describe(`operations.write`, () => {

@@ -1,4 +1,4 @@
-import { CacheContext } from '../../src/context/CacheContext';
+import { CacheContext } from '../../src/context';
 import { GraphSnapshot } from '../../src/GraphSnapshot';
 import { JsonObject } from '../../src/primitive';
 import { NodeId } from '../../src/schema';

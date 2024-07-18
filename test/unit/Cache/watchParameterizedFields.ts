@@ -1,3 +1,4 @@
+import { expect } from 'chai';
 import { Cache as CacheInterface } from 'msand-apollo-client';
 
 import { query, strictConfig } from '../../helpers';
