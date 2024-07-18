@@ -1,8 +1,8 @@
 import {
   Transaction,
   Cache as CacheInterface,
-} from 'msand-apollo-client';
-import { Reference, StoreObject } from 'msand-apollo-client/utilities';
+} from '@apollo/client';
+import { Reference, StoreObject } from '@apollo/client/utilities';
 
 import { CacheContext } from '../context';
 import { Cache, MigrationMap } from '../Cache';

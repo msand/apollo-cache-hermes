@@ -1,7 +1,7 @@
 // noinspection GraphQLUnresolvedReference
 
 import gql from 'graphql-tag';
-import { Cache, isReference, MissingFieldError, Reference } from 'msand-apollo-client';
+import { Cache, isReference, MissingFieldError, Reference } from '@apollo/client';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 
 import { Hermes } from '../../../src';

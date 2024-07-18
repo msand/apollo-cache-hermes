@@ -1,5 +1,5 @@
-import { Cache as CacheInterface } from 'msand-apollo-client';
-import { Reference, StoreObject } from 'msand-apollo-client/utilities';
+import { Cache as CacheInterface } from '@apollo/client';
+import { Reference, StoreObject } from '@apollo/client/utilities';
 
 import { CacheSnapshot } from './CacheSnapshot';
 import { CacheTransaction } from './CacheTransaction';

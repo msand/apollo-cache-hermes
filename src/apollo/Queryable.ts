@@ -1,5 +1,5 @@
-import { ApolloCache, Cache, Reference, makeReference } from 'msand-apollo-client';
-import { removeDirectivesFromDocument } from 'msand-apollo-client/utilities';
+import { ApolloCache, Cache, Reference, makeReference } from '@apollo/client';
+import { removeDirectivesFromDocument } from '@apollo/client/utilities';
 
 import { UnsatisfiedCacheError } from '../errors';
 import { JsonObject } from '../primitive';

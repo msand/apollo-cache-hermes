@@ -1,5 +1,5 @@
-import { Cache } from 'msand-apollo-client';
-import { Reference } from 'msand-apollo-client/utilities';
+import { Cache } from '@apollo/client';
+import { Reference } from '@apollo/client/utilities';
 
 import { JsonObject, JsonValue } from './primitive';
 import { RawOperation } from './schema';
