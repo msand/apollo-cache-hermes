@@ -263,7 +263,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
         return [{ d: datum, k: null }];
       }
       const nodes: { d: any, k: string }[] = [];
-      for (const out of obj.outbound ?? []) {
+      for (const out of obj.outbound?.values() ?? []) {
         const k = out.id;
         if (k === key || out.path[0] === key) {
           nodes.push({ d: graphSnapshot.getNodeData(k), k });

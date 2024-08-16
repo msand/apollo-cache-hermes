@@ -83,7 +83,7 @@ export class ApolloTransaction<TSerialized> extends ApolloQueryable<TSerialized>
       return;
     }
 
-    for (const { id: outboundId, path } of currentContainerNode.outbound) {
+    for (const { id: outboundId, path } of currentContainerNode.outbound.values()) {
       if (lodashIsEqual(pathToParameterizedField, path)) {
         const fieldArguments = getOriginalFieldArguments(outboundId);
         if (fieldArguments) {

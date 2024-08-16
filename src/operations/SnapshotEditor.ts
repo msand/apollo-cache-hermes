@@ -54,6 +54,15 @@ interface ReferenceEdit {
 // https://github.com/nzakas/eslint-plugin-typescript/issues/69
 export type NodeSnapshotMap = { [Key in NodeId]?: NodeSnapshot };
 
+function filterIter<T>(values: IterableIterator<T> | undefined, predicate: (T) => boolean) {
+  const result: T[] = [];
+  if (!values) return result;
+  for (const e of values) {
+    if (predicate(e)) result.push(e);
+  }
+  return result;
+}
+
 /**
  * Builds a set of changes to apply on top of an existing `GraphSnapshot`.
  *
@@ -275,7 +284,7 @@ export class SnapshotEditor<TSerialized> {
       if (key in data) {
         return (data as JsonObject)[key];
       }
-      for (const out of obj.outbound ?? []) {
+      for (const out of obj.outbound?.values() ?? []) {
         const k = out.id;
         if (k === key || out.path[0] === key) {
           return this._getNodeData(k);
@@ -720,7 +729,7 @@ export class SnapshotEditor<TSerialized> {
       const fieldPrefixPath = prefixPath;
       const fieldPath = [...path, payloadName];
 
-      const parameterizedFields = nodeSnapshot?.outbound?.filter(ref => ref.path[0] === payloadName);
+      const parameterizedFields = filterIter(nodeSnapshot?.outbound?.values(), (ref => ref.path[0] === payloadName));
       if (parameterizedFields?.length) {
         for (const field of parameterizedFields) {
           // The values of a parameterized field are explicit nodes in the graph
@@ -792,7 +801,7 @@ export class SnapshotEditor<TSerialized> {
     if (value === undefined) {
       if (node) {
         const pathLength = path.length;
-        for (const out of node.outbound ?? []) {
+        for (const out of node.outbound?.values() ?? []) {
           if (out.path.length !== pathLength) continue;
           if (path.some((part, i) => part !== out.path[i])) continue;
           return this._getNodeData(out.id);
@@ -871,7 +880,7 @@ export class SnapshotEditor<TSerialized> {
   private _removeArrayReferences(referenceEdits: ReferenceEdit[], containerId: NodeId, prefix: PathPart[], afterIndex: number) {
     const container = this._getNodeSnapshot(containerId);
     if (!container || !container.outbound) return;
-    for (const reference of container.outbound) {
+    for (const reference of container.outbound?.values() ?? []) {
       if (!pathBeginsWith(reference.path, prefix)) continue;
       const index = reference.path[prefix.length];
       if (typeof index !== 'number') continue;
@@ -990,7 +999,7 @@ export class SnapshotEditor<TSerialized> {
       if (!(snapshot instanceof EntitySnapshot)) continue;
       if (!snapshot || !snapshot.inbound) continue;
 
-      for (const { id, path } of snapshot.inbound) {
+      for (const { id, path } of snapshot.inbound.values()) {
         this._setValue(id, path, snapshot.data, false);
         if (this._rebuiltNodeIds.has(id)) continue;
 
@@ -1014,7 +1023,7 @@ export class SnapshotEditor<TSerialized> {
       this._editedNodeIds.add(nodeId);
 
       if (!node.outbound) continue;
-      for (const { id, path } of node.outbound) {
+      for (const { id, path } of node.outbound.values()) {
         const reference = this._ensureNewSnapshot(id);
         if (removeNodeReference('inbound', reference, nodeId, path)) {
           queue.push(id);

@@ -24,3 +24,5 @@ export function createGraphSnapshot(
     cacheContext
   ).snapshot;
 }
+
+export const mapToEntries = <K, V>(map: Map<K, V> | undefined): V[] | undefined => map && Array.from(map.values());

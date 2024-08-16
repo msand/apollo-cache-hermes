@@ -35,11 +35,11 @@ export function extract<TSerialized>(graphSnapshot: GraphSnapshot, cacheContext:
     const serializedEntity: Serializable.NodeSnapshot = { type };
 
     if (outbound) {
-      serializedEntity.outbound = outbound;
+      serializedEntity.outbound = Array.from(outbound.values());
     }
 
     if (inbound) {
-      serializedEntity.inbound = inbound;
+      serializedEntity.inbound = Array.from(inbound.values());
     }
 
     // Extract data value
@@ -82,7 +82,7 @@ function extractSerializableData(graphSnapshot: GraphSnapshot, nodeSnapshot: Nod
   let extractedData: JsonValue | null = nodeSnapshot.data;
 
   // Set all the outbound path (e.g reference) to undefined.
-  for (const outbound of nodeSnapshot.outbound) {
+  for (const outbound of nodeSnapshot.outbound.values()) {
     // Only reference to EntitySnapshot is recorded in the data property
     // So we didn't end up set the value to be 'undefined' in the output
     // in every case

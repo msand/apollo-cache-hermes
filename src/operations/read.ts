@@ -205,7 +205,7 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
     if (key in data) {
       return (data as JsonObject)[key];
     }
-    for (const out of obj.outbound ?? []) {
+    for (const out of obj.outbound?.values() ?? []) {
       const k = out.id;
       if (k === key || out.path[0] === key) {
         return snapshot.getNodeData(k);

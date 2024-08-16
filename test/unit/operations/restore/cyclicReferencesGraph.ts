@@ -2,7 +2,7 @@ import { GraphSnapshot } from '../../../../src/GraphSnapshot';
 import { EntitySnapshot } from '../../../../src/nodes';
 import { restore } from '../../../../src/operations';
 import { StaticNodeId, Serializable } from '../../../../src/schema';
-import { createGraphSnapshot, createStrictCacheContext } from '../../../helpers';
+import { createGraphSnapshot, createStrictCacheContext, mapToEntries } from '../../../helpers';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
@@ -88,8 +88,8 @@ describe(`operations.restore`, () => {
 
       const fooData = restoreGraphSnapshot.getNodeData('1');
 
-      jestExpect(rootGraphSnapshot.inbound).toBe(undefined);
-      jestExpect(rootGraphSnapshot.outbound).toEqual([{ id: '1', path: ['foo'] }]);
+      jestExpect(mapToEntries(rootGraphSnapshot.inbound)).toBe(undefined);
+      jestExpect(mapToEntries(rootGraphSnapshot.outbound)).toEqual([{ id: '1', path: ['foo'] }]);
       jestExpect(rootData.foo).toBe(fooData);
     });
 
@@ -98,11 +98,11 @@ describe(`operations.restore`, () => {
       const fooData = restoreGraphSnapshot.getNodeData('1');
       const barData = restoreGraphSnapshot.getNodeData('2');
 
-      jestExpect(fooGraphSnapshot.inbound).toEqual([
+      jestExpect(mapToEntries(fooGraphSnapshot.inbound)).toEqual([
         { id: QueryRootId, path: ['foo'] },
         { id: '2', path: ['fizz'] },
       ]);
-      jestExpect(fooGraphSnapshot.outbound).toEqual([{ id: '2', path: ['bar'] }]);
+      jestExpect(mapToEntries(fooGraphSnapshot.outbound)).toEqual([{ id: '2', path: ['bar'] }]);
       jestExpect(fooData.id).toBe(1);
       jestExpect(fooData.name).toBe('Foo');
       jestExpect(fooData.bar).toBe(barData);
@@ -113,11 +113,11 @@ describe(`operations.restore`, () => {
       const fooData = restoreGraphSnapshot.getNodeData('1');
       const barData = restoreGraphSnapshot.getNodeData('2');
 
-      jestExpect(barGraphSnapshot.inbound).toEqual([
+      jestExpect(mapToEntries(barGraphSnapshot.inbound)).toEqual([
         { id: '1', path: ['bar'] },
         { id: '2', path: ['buzz'] },
       ]);
-      jestExpect(barGraphSnapshot.outbound).toEqual([
+      jestExpect(mapToEntries(barGraphSnapshot.outbound)).toEqual([
         { id: '1', path: ['fizz'] },
         { id: '2', path: ['buzz'] },
       ]);

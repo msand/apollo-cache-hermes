@@ -1,4 +1,5 @@
 import { JsonValue, NestedArray, NestedObject } from '../primitive';
+import { nodeToEntry, nodeToInEntry } from '../util';
 
 import { NodeSnapshot, NodeReference } from './NodeSnapshot';
 
@@ -14,12 +15,19 @@ export { NestedArray, NestedObject };
  * overlaid on top of the static values of the entity that contains them.
  */
 export class ParameterizedValueSnapshot implements NodeSnapshot {
+  /** Other node snapshots that point to this one. */
+  public inbound?: Map<string, NodeReference>;
+  /** The node snapshots that this one points to. */
+  public outbound?: Map<string, NodeReference>;
   constructor(
     /** A reference to the entity this snapshot is about. */
     public data?: JsonValue,
     /** Other node snapshots that point to this one. */
-    public inbound?: NodeReference[],
+    inbound?: Map<string, NodeReference> | NodeReference[],
     /** The node snapshots that this one points to. */
-    public outbound?: NodeReference[],
-  ) {}
+    outbound?: Map<string, NodeReference> | NodeReference[],
+  ) {
+    this.inbound = Array.isArray(inbound) ? new Map(inbound.map(nodeToInEntry)) : inbound;
+    this.outbound = Array.isArray(outbound) ? new Map(outbound.map(nodeToEntry)) : outbound;
+  }
 }

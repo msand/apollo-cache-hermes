@@ -3,7 +3,7 @@ import { GraphSnapshot } from '../../../../../src/GraphSnapshot';
 import { EntitySnapshot } from '../../../../../src/nodes';
 import { write } from '../../../../../src/operations';
 import { NodeId, StaticNodeId } from '../../../../../src/schema';
-import { query, strictConfig } from '../../../../helpers';
+import {mapToEntries, query, strictConfig} from '../../../../helpers';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
@@ -138,14 +138,14 @@ describe(`operations.write`, () => {
 
     it(`records the outbound reference from the query root`, () => {
       const queryRoot = snapshot.getNodeSnapshot(QueryRootId)!;
-      jestExpect(queryRoot.outbound).toEqual([{ id: '123', path: ['viewer'] }]);
-      jestExpect(queryRoot.inbound).toBe(undefined);
+      jestExpect(mapToEntries(queryRoot.outbound)).toEqual([{ id: '123', path: ['viewer'] }]);
+      jestExpect(mapToEntries(queryRoot.inbound)).toBe(undefined);
     });
 
     it(`records the inbound reference from referenced entity`, () => {
       const queryRoot = snapshot.getNodeSnapshot('123')!;
-      jestExpect(queryRoot.inbound).toEqual([{ id: QueryRootId, path: ['viewer'] }]);
-      jestExpect(queryRoot.outbound).toBe(undefined);
+      jestExpect(mapToEntries(queryRoot.inbound)).toEqual([{ id: QueryRootId, path: ['viewer'] }]);
+      jestExpect(mapToEntries(queryRoot.outbound)).toBe(undefined);
     });
 
     it(`marks the entity and root as edited`, () => {

@@ -20,15 +20,17 @@ export function removeNodeReference(
   const references = snapshot[direction];
   if (!references) return true;
 
-  const fromIndex = getIndexOfGivenReference(references, id, path);
-  if (fromIndex < 0) return false;
-  references.splice(fromIndex, 1);
+  const key = direction === 'inbound' ? JSON.stringify({ id, path }) : path.join();
+  const ref = references.get(key);
+  if (ref === undefined) return false;
+  references.delete(key);
 
-  if (!references.length) {
+  const empty = references.size === 0;
+  if (empty) {
     snapshot[direction] = undefined;
   }
 
-  return !references.length;
+  return empty;
 }
 
 /**
@@ -42,12 +44,13 @@ export function addNodeReference(
 ): boolean {
   let references = snapshot[direction];
   if (!references) {
-    references = snapshot[direction] = [];
+    references = snapshot[direction] = new Map();
   }
 
-  const idx = getIndexOfGivenReference(references, id, path);
-  if (idx === -1) {
-    references.push({ id, path });
+  const key = direction === 'inbound' ? JSON.stringify({ id, path }) : path.join();
+  const idx = references.get(key);
+  if (idx === undefined) {
+    references.set(key, { id, path });
     return true;
   }
   return false;
@@ -64,8 +67,7 @@ export function hasNodeReference(
   path: PathPart[],
 ): boolean {
   const references = snapshot[type];
-  if (!references || getIndexOfGivenReference(references, id, path) === -1) return false;
-  return true;
+  return references !== undefined && references.has(type === 'inbound' ? JSON.stringify({ id, path }) : path.join());
 }
 
 /**
@@ -76,21 +78,6 @@ export function getIndexOfGivenReference(references: NodeReference[], id: NodeId
   return references.findIndex((reference) => {
     return reference.id === id && isEqual(reference.path, path);
   });
-}
-
-/**
- * Return true if of 'path' points to a valid reference field
- */
-export function isReferenceField(
-  snapshot: NodeSnapshot,
-  path: PathPart[],
-): boolean {
-  const references = snapshot['outbound'];
-  if (!references) return false;
-  const index = references.findIndex((reference) => {
-    return isEqual(reference.path, path);
-  });
-  return (index >= 0);
 }
 
 function getCircularReplacer() {
@@ -134,3 +121,6 @@ export function safeStringify(value: JsonObject) {
     }
   }
 }
+
+export const nodeToEntry = (node: NodeReference): [string, NodeReference] => [node.path.join(), node];
+export const nodeToInEntry = (node: NodeReference): [string, NodeReference] => [JSON.stringify(node), node];

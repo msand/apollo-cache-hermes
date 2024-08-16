@@ -9,7 +9,7 @@ import { EntitySnapshot, NodeReference, ParameterizedValueSnapshot } from '../no
 import { OptimisticUpdateQueue } from '../OptimisticUpdateQueue';
 import { JsonObject, JsonValue, NestedValue, PathPart } from '../primitive';
 import { NodeId, Serializable } from '../schema';
-import { isNumber, isObject, isScalar } from '../util';
+import { isNumber, isObject, isScalar, nodeToEntry, nodeToInEntry } from '../util';
 
 import { nodeIdForParameterizedValue } from './SnapshotEditor';
 
@@ -48,15 +48,15 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
     let nodeSnapshot;
     switch (type) {
       case Serializable.NodeSnapshotType.EntitySnapshot:
-        nodeSnapshot = new EntitySnapshot(data as JsonObject, inbound, outbound);
+        nodeSnapshot = new EntitySnapshot(data as JsonObject, inbound ? new Map(inbound.map(nodeToInEntry)) : inbound, outbound ? new Map(outbound.map(nodeToEntry)) : outbound);
         break;
       case Serializable.NodeSnapshotType.ParameterizedValueSnapshot:
-        nodeSnapshot = new ParameterizedValueSnapshot(data as JsonValue, inbound, outbound);
+        nodeSnapshot = new ParameterizedValueSnapshot(data as JsonValue, inbound ? new Map(inbound.map(nodeToInEntry)) : inbound, outbound ? new Map(outbound.map(nodeToEntry)) : outbound);
         break;
       case undefined: {
         const parsed: JsonObject = {};
-        const parsedIn: NodeReference[] = missingPointers.get(nodeId) ?? [];
-        const parsedOut: NodeReference[] = [];
+        const parsedIn: [string, NodeReference][] = missingPointers.get(nodeId)?.map(nodeToInEntry) ?? [];
+        const parsedOut: [string, NodeReference][] = [];
         for (const [key, val] of Object.entries(state)) {
           const result = /(.+)\((.+)\)/.exec(key);
           if (result) {
@@ -64,18 +64,18 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
             const path = [key];
             nodesMap[fieldId] = new ParameterizedValueSnapshot(
               val as JsonValue,
-              [...missingPointers.get(nodeId) ?? [], { id: nodeId, path }],
-              []
+              new Map([...missingPointers.get(nodeId) ?? [], { id: nodeId, path }].map(nodeToInEntry)),
+              new Map()
             );
             editedNodeIds.add(fieldId);
-            parsedOut.push({ id: fieldId, path });
+            parsedOut.push([key, { id: fieldId, path }]);
           } else if (isReference(val)) {
             const id = val.__ref;
             const path = [key];
-            parsedOut.push({ id, path });
+            parsedOut.push([key, { id, path }]);
             const reverse: NodeReference = { id: nodeId, path };
             if (id in nodesMap) {
-              nodesMap[id]?.inbound?.push(reverse);
+              nodesMap[id]?.inbound?.set(JSON.stringify(reverse), reverse);
             } else {
               const references = missingPointers.get(id) ?? [];
               if (references.length === 0) {
@@ -87,7 +87,7 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
             parsed[key] = val;
           }
         }
-        nodeSnapshot = new EntitySnapshot(parsed as JsonObject, parsedIn, parsedOut);
+        nodeSnapshot = new EntitySnapshot(parsed as JsonObject, new Map(parsedIn), new Map(parsedOut));
         break;
       }
       default:
@@ -120,7 +120,7 @@ function restoreEntityReferences<TSerialized>(nodesMap: NodeSnapshotMap, cacheCo
       continue;
     }
 
-    for (const { id: referenceId, path } of outbound) {
+    for (const { id: referenceId, path } of outbound.values()) {
       const referenceNode = nodesMap[referenceId];
       if (referenceNode instanceof EntitySnapshot && data === null) {
         // data is a reference.

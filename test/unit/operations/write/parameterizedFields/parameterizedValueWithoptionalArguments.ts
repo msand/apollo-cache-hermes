@@ -6,7 +6,7 @@ import { ParameterizedValueSnapshot } from '../../../../../src/nodes';
 import { nodeIdForParameterizedValue } from '../../../../../src/operations/SnapshotEditor';
 import { write } from '../../../../../src/operations';
 import { NodeId, StaticNodeId } from '../../../../../src/schema';
-import { query, strictConfig } from '../../../../helpers';
+import {mapToEntries, query, strictConfig} from '../../../../helpers';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
@@ -42,12 +42,12 @@ describe(`operations.write`, () => {
 
     it(`creates an outgoing reference from the field's container`, () => {
       const queryRoot = snapshot.getNodeSnapshot(QueryRootId)!;
-      jestExpect(queryRoot.outbound).toEqual([{ id: parameterizedId, path: ['foo'] }]);
+      jestExpect(mapToEntries(queryRoot.outbound)).toEqual([{ id: parameterizedId, path: ['foo'] }]);
     });
 
     it(`creates an inbound reference to the field's container`, () => {
       const values = snapshot.getNodeSnapshot(parameterizedId)!;
-      jestExpect(values.inbound).toEqual([{ id: QueryRootId, path: ['foo'] }]);
+      jestExpect(mapToEntries(values.inbound)).toEqual([{ id: QueryRootId, path: ['foo'] }]);
     });
 
     it(`does not expose the parameterized field directly from its container`, () => {

@@ -3,7 +3,7 @@ import { ParameterizedValueSnapshot, EntitySnapshot } from '../../../../../src/n
 import { restore } from '../../../../../src/operations';
 import { nodeIdForParameterizedValue } from '../../../../../src/operations/SnapshotEditor';
 import { StaticNodeId, Serializable } from '../../../../../src/schema';
-import { createGraphSnapshot, createStrictCacheContext } from '../../../../helpers';
+import {createGraphSnapshot, createStrictCacheContext, mapToEntries} from '../../../../helpers';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
@@ -95,8 +95,8 @@ describe(`operations.restore`, () => {
       const parameterizedNode = restoreGraphSnapshot.getNodeSnapshot(parameterizedId)!;
       const entityData = restoreGraphSnapshot.getNodeData('31');
 
-      jestExpect(parameterizedNode.inbound).toEqual([{ id: QueryRootId, path: ['one', 'two'] }]);
-      jestExpect(parameterizedNode.outbound).toEqual([{ id: '31', path: ['three'] }]);
+      jestExpect(mapToEntries(parameterizedNode.inbound)).toEqual([{ id: QueryRootId, path: ['one', 'two'] }]);
+      jestExpect(mapToEntries(parameterizedNode.outbound)).toEqual([{ id: '31', path: ['three'] }]);
       const data = parameterizedNode.data;
       jestExpect(data).not.toBe(undefined);
       jestExpect(typeof data === 'object' && !Array.isArray(data) && data!['three' as string]).toBe(entityData);

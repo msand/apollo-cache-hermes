@@ -7,8 +7,8 @@ import { ParameterizedValueSnapshot } from './ParameterizedValueSnapshot';
  * preserving object shapes.
  */
 export function cloneNodeSnapshot(parent: NodeSnapshot) {
-  const inbound = parent.inbound ? [...parent.inbound] : undefined;
-  const outbound = parent.outbound ? [...parent.outbound] : undefined;
+  const inbound = parent.inbound ? new Map(parent.inbound) : undefined;
+  const outbound = parent.outbound ? new Map(parent.outbound) : undefined;
 
   if (parent instanceof EntitySnapshot) {
     return new EntitySnapshot(parent.data, inbound, outbound);

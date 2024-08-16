@@ -76,7 +76,7 @@ function migrateEntity(
       const fieldId = nodeIdForParameterizedValue(id, parameterized.path, parameterized.args);
       // create a parameterized value snapshot if container doesn't know of the
       // parameterized field we expect
-      if (!snapshot.outbound || !snapshot.outbound.find(s =>  s.id === fieldId)) {
+      if (!snapshot.outbound || !Array.from(snapshot.outbound.values()).find(s =>  s.id === fieldId)) {
         let newData = parameterized.defaultReturn;
         if (allNodes && parameterized.copyFrom) {
           const { path, args } = parameterized.copyFrom;
