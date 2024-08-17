@@ -6,7 +6,7 @@ import { GraphSnapshot } from '../../../../src/GraphSnapshot';
 import { nodeIdForParameterizedValue } from '../../../../src/operations/SnapshotEditor';
 import { StaticNodeId, Serializable } from '../../../../src/schema';
 import { strictConfig } from '../../../helpers';
-import {getOutbound, nodeToEntry, nodeToInEntry} from "../../../../src/util";
+import { getOutbound, nodeToEntry, nodeToInEntry } from '../../../../src/util';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 

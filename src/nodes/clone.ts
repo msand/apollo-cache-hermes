@@ -1,7 +1,8 @@
+import { getOutbound, iterOutbound } from '../util';
+
 import { EntitySnapshot } from './EntitySnapshot';
 import { NodeSnapshot } from './NodeSnapshot';
 import { ParameterizedValueSnapshot } from './ParameterizedValueSnapshot';
-import {getOutbound, iterOutbound} from "../util";
 
 /**
  * Factory function for cloning nodes to their specific type signatures, while

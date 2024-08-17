@@ -2,7 +2,7 @@ import { GraphSnapshot } from '../../../../src/GraphSnapshot';
 import { EntitySnapshot } from '../../../../src/nodes';
 import { restore } from '../../../../src/operations';
 import { StaticNodeId, Serializable } from '../../../../src/schema';
-import {createGraphSnapshot, createStrictCacheContext, mapToEntries, mapToEntries2} from '../../../helpers';
+import { createGraphSnapshot, createStrictCacheContext, mapToEntries, mapToEntries2 } from '../../../helpers';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 

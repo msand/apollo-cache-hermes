@@ -5,7 +5,7 @@ import { GraphSnapshot } from '../../../../../src/GraphSnapshot';
 import { nodeIdForParameterizedValue } from '../../../../../src/operations/SnapshotEditor';
 import { write } from '../../../../../src/operations';
 import { NodeId, StaticNodeId } from '../../../../../src/schema';
-import {mapToEntries, mapToEntries2, query, strictConfig} from '../../../../helpers';
+import { mapToEntries, mapToEntries2, query, strictConfig } from '../../../../helpers';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 

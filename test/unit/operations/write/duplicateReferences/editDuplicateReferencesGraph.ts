@@ -2,7 +2,7 @@ import { CacheContext } from '../../../../../src/context';
 import { GraphSnapshot } from '../../../../../src/GraphSnapshot';
 import { write } from '../../../../../src/operations';
 import { StaticNodeId } from '../../../../../src/schema';
-import {mapToEntries, mapToEntries2, query, strictConfig} from '../../../../helpers';
+import { mapToEntries, mapToEntries2, query, strictConfig } from '../../../../helpers';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 

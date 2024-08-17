@@ -3,7 +3,7 @@ import { GraphSnapshot } from '../../../../../src/GraphSnapshot';
 import { EntitySnapshot } from '../../../../../src/nodes';
 import { write } from '../../../../../src/operations';
 import { NodeId, StaticNodeId } from '../../../../../src/schema';
-import {mapToEntries, mapToEntries2, query, strictConfig} from '../../../../helpers';
+import { mapToEntries, mapToEntries2, query, strictConfig } from '../../../../helpers';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 

@@ -1,6 +1,6 @@
 import { GraphSnapshot } from '../../../../../src/GraphSnapshot';
 import { StaticNodeId } from '../../../../../src/schema';
-import {createSnapshot, mapToEntries} from '../../../../helpers';
+import { createSnapshot, mapToEntries } from '../../../../helpers';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
