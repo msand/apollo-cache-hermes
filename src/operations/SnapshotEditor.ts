@@ -284,19 +284,17 @@ export class SnapshotEditor<TSerialized> {
       if (key in data) {
         return (data as JsonObject)[key];
       }
-      const ref = obj.outbound?.get(key);
-      if (ref) {
+      const out = obj.outbound?.get(key);
+      if (out) {
+        return this._getNodeData(out.id);
+      }
+      const ref = obj.parameterized?.get(key)?.[0];
+      if (ref !== undefined) {
         return this._getNodeData(ref.id);
       }
-      for (const out of iterParameterized(obj.parameterized)) {
+      for (const out of iterRefs(obj.outbound, obj.parameterized)) {
         const k = out.id;
-        if (k === key || out.path[0] === key) {
-          return this._getNodeData(k);
-        }
-      }
-      for (const out of obj.outbound?.values() ?? []) {
-        const k = out.id;
-        if (k === key || out.path[0] === key) {
+        if (k === key) {
           return this._getNodeData(k);
         }
       }
