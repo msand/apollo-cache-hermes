@@ -24,6 +24,7 @@ import {
   lazyImmutableDeepSet,
   pathBeginsWith,
   removeNodeReference,
+  toOutKey,
 } from '../util';
 
 const ensureIdConstistencyMsg = `Ensure id is included (or not included) consistently across multiple requests.`;
@@ -814,7 +815,7 @@ export class SnapshotEditor<TSerialized> {
     const value = deepGet(node?.data, path);
     if (value === undefined) {
       if (node) {
-        const out = node.outbound?.get(path.join());
+        const out = node.outbound?.get(toOutKey(path));
         if (out !== undefined) {
           return this._getNodeData(out.id);
         }
