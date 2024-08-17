@@ -814,16 +814,24 @@ export class SnapshotEditor<TSerialized> {
     const value = deepGet(node?.data, path);
     if (value === undefined) {
       if (node) {
-        const pathLength = path.length;
-        // TODO optimize
-        for (const out of iterRefs(node.outbound, node.parameterized)) {
-          if (out.path.length !== pathLength) continue;
-          if (path.some((part, i) => part !== out.path[i])) continue;
+        const out = node.outbound?.get(path.join());
+        if (out !== undefined) {
           return this._getNodeData(out.id);
         }
-        const ref = node.outbound?.get(path.join());
-        if (ref) {
-          return this._getNodeData(ref.id);
+        const key = path.at(0);
+        if (key === undefined) {
+          return value;
+        }
+        const refs = node.parameterized?.get(key.toString());
+        if (refs === undefined) {
+          return value;
+        }
+        const pathLength = path.length;
+        for (const out of refs) {
+          const p = out.path;
+          if (p.length !== pathLength) continue;
+          if (path.some((part, i) => part !== p[i])) continue;
+          return this._getNodeData(out.id);
         }
       }
     }
@@ -899,7 +907,6 @@ export class SnapshotEditor<TSerialized> {
   private _removeArrayReferences(referenceEdits: ReferenceEdit[], containerId: NodeId, prefix: PathPart[], afterIndex: number) {
     const container = this._getNodeSnapshot(containerId);
     if (!container || (!container.outbound && !container.parameterized)) return;
-    // TODO optimize
     for (const reference of iterRefs(container.outbound, container.parameterized)) {
       if (!pathBeginsWith(reference.path, prefix)) continue;
       const index = reference.path[prefix.length];
