@@ -9,7 +9,7 @@ import { EntitySnapshot, NodeReference, ParameterizedValueSnapshot } from '../no
 import { OptimisticUpdateQueue } from '../OptimisticUpdateQueue';
 import { JsonObject, JsonValue, NestedValue, PathPart } from '../primitive';
 import { NodeId, Serializable } from '../schema';
-import { getInbound, getOutbound, getParameterized, isNumber, isObject, isScalar, iterRefs } from '../util';
+import { getInbound, getOutbound, getParameterized, isNumber, isObject, isScalar, iterRefs, refToInKey } from '../util';
 
 import { nodeIdForParameterizedValue } from './SnapshotEditor';
 
@@ -76,7 +76,7 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
             parsedOut.push({ id, path });
             const reverse: NodeReference = { id: nodeId, path };
             if (id in nodesMap) {
-              nodesMap[id]?.inbound?.set(JSON.stringify(reverse), reverse);
+              nodesMap[id]?.inbound?.set(refToInKey(reverse), reverse);
             } else {
               const references = missingPointers.get(id) ?? [];
               if (references.length === 0) {

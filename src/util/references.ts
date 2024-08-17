@@ -21,7 +21,7 @@ export function removeNodeReference(
   if (direction === 'inbound') {
     const map = snapshot.inbound;
     if (!map) return true;
-    const key = JSON.stringify({ id, path });
+    const key = toInKey(id, path);
     const ref = map.get(key);
     if (ref === undefined) return false;
     map.delete(key);
@@ -73,7 +73,7 @@ export function addNodeReference(
       references = snapshot.inbound = new Map();
     }
     const node: NodeReference = { id, path };
-    const key = JSON.stringify(node);
+    const key = refToInKey(node);
     references.set(key, node);
   } else if (direction === 'outbound') {
     let references = snapshot.outbound;
@@ -109,7 +109,7 @@ export function hasNodeReference(
   path: PathPart[],
 ): boolean {
   if (type === 'inbound') {
-    return snapshot.inbound?.has(JSON.stringify({ id, path })) === true;
+    return snapshot.inbound?.has(toInKey(id, path)) === true;
   } else if (type === 'outbound') {
     const ref = snapshot.outbound?.get(path.join());
     return ref !== undefined;
@@ -171,8 +171,15 @@ export function safeStringify(value: JsonObject) {
   }
 }
 
+export function refToInKey({ id, path }: NodeReference) {
+  return `${id}.${path.join('.')}`;
+}
+export function toInKey(id: NodeId, path: PathPart[]) {
+  return `${id}.${path.join('.')}`;
+}
+
 export const nodeToEntry = (node: NodeReference): [string, NodeReference] => [node.path.join(), node];
-export const nodeToInEntry = (node: NodeReference): [string, NodeReference] => [JSON.stringify(node), node];
+export const nodeToInEntry = (node: NodeReference): [string, NodeReference] => [refToInKey(node), node];
 
 export function getInbound(inbound: NodeReference[] | undefined) {
   if (!inbound) {
