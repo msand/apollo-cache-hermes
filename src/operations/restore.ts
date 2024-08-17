@@ -9,7 +9,7 @@ import { EntitySnapshot, NodeReference, ParameterizedValueSnapshot } from '../no
 import { OptimisticUpdateQueue } from '../OptimisticUpdateQueue';
 import { JsonObject, JsonValue, NestedValue, PathPart } from '../primitive';
 import { NodeId, Serializable } from '../schema';
-import { getOutbound, isNumber, isObject, isScalar, iterOutbound, nodeToEntry, nodeToInEntry } from '../util';
+import { getInbound, getOutbound, isNumber, isObject, isScalar, iterOutbound } from '../util';
 
 import { nodeIdForParameterizedValue } from './SnapshotEditor';
 
@@ -48,14 +48,14 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
     let nodeSnapshot;
     switch (type) {
       case Serializable.NodeSnapshotType.EntitySnapshot:
-        nodeSnapshot = new EntitySnapshot(data as JsonObject, inbound ? new Map(inbound.map(nodeToInEntry)) : inbound, getOutbound(outbound));
+        nodeSnapshot = new EntitySnapshot(data as JsonObject, inbound ? getInbound(inbound) : inbound, getOutbound(outbound));
         break;
       case Serializable.NodeSnapshotType.ParameterizedValueSnapshot:
-        nodeSnapshot = new ParameterizedValueSnapshot(data as JsonValue, inbound ? new Map(inbound.map(nodeToInEntry)) : inbound, getOutbound(outbound));
+        nodeSnapshot = new ParameterizedValueSnapshot(data as JsonValue, inbound ? getInbound(inbound) : inbound, getOutbound(outbound));
         break;
       case undefined: {
         const parsed: JsonObject = {};
-        const parsedIn: [string, NodeReference][] = missingPointers.get(nodeId)?.map(nodeToInEntry) ?? [];
+        const parsedIn: NodeReference[] = missingPointers.get(nodeId) ?? [];
         const parsedOut: NodeReference[] = [];
         for (const [key, val] of Object.entries(state)) {
           const result = /(.+)\((.+)\)/.exec(key);
@@ -64,8 +64,8 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
             const path = [key];
             nodesMap[fieldId] = new ParameterizedValueSnapshot(
               val as JsonValue,
-              new Map([...missingPointers.get(nodeId) ?? [], { id: nodeId, path }].map(nodeToInEntry)),
-              new Map()
+              [...missingPointers.get(nodeId) ?? [], { id: nodeId, path }],
+              []
             );
             editedNodeIds.add(fieldId);
             parsedOut.push({ id: fieldId, path });
@@ -87,7 +87,7 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
             parsed[key] = val;
           }
         }
-        nodeSnapshot = new EntitySnapshot(parsed as JsonObject, new Map(parsedIn), getOutbound(parsedOut));
+        nodeSnapshot = new EntitySnapshot(parsed as JsonObject, getInbound(parsedIn), getOutbound(parsedOut));
         break;
       }
       default:

@@ -1,5 +1,5 @@
 import { JsonValue, NestedArray, NestedObject } from '../primitive';
-import { getOutbound, nodeToInEntry } from '../util';
+import { getInbound, getOutbound } from '../util';
 
 import { NodeSnapshot, NodeReference } from './NodeSnapshot';
 
@@ -27,7 +27,7 @@ export class ParameterizedValueSnapshot implements NodeSnapshot {
     /** The node snapshots that this one points to. */
     outbound?: Map<string, NodeReference[]> | NodeReference[],
   ) {
-    this.inbound = Array.isArray(inbound) ? new Map(inbound.map(nodeToInEntry)) : inbound;
+    this.inbound = Array.isArray(inbound) ? getInbound(inbound) : inbound;
     this.outbound = Array.isArray(outbound) ? getOutbound(outbound) : outbound;
   }
 }

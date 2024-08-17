@@ -6,7 +6,7 @@ import { GraphSnapshot } from '../../../../src/GraphSnapshot';
 import { nodeIdForParameterizedValue } from '../../../../src/operations/SnapshotEditor';
 import { StaticNodeId, Serializable } from '../../../../src/schema';
 import { strictConfig } from '../../../helpers';
-import { getOutbound, nodeToEntry, nodeToInEntry } from '../../../../src/util';
+import { getInbound, getOutbound } from '../../../../src/util';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
@@ -96,7 +96,7 @@ describe(`writeFragment with parameterized references`, () => {
   it(`correctly references a parameterized reference`, () => {
     expect(baseline.getNodeSnapshot(parameterizedId)).to.deep.eq({
       outbound: getOutbound([{ id: 'shipment0', path: [] }]),
-      inbound: new Map([{ id: '123', path: ['shipment'] }].map(nodeToInEntry)),
+      inbound: getInbound([{ id: '123', path: ['shipment'] }]),
       data: {
         complete: true,
         truckType: 'flatbed',
