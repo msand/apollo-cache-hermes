@@ -213,13 +213,13 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
     if (key in data) {
       return (data as JsonObject)[key];
     }
-    const out = obj.outbound?.get(key)?.id;
+    const out = obj.outbound?.get(key);
     if (out !== undefined) {
-      return snapshot.getNodeData(out);
+      return snapshot.getNodeData(out.id);
     }
-    const ref = obj.parameterized?.get(key)?.[0]?.id;
+    const ref = obj.parameterized?.get(key)?.[0];
     if (ref !== undefined) {
-      return snapshot.getNodeData(ref);
+      return snapshot.getNodeData(ref.id);
     }
     for (const out of iterRefs(obj.outbound, obj.parameterized)) {
       const k = out.id;
