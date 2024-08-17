@@ -72,7 +72,7 @@ describe(`operations.extract`, () => {
       jestExpect(extractResult).toEqual({
         [QueryRootId]: {
           type: Serializable.NodeSnapshotType.EntitySnapshot,
-          outbound: [{ id: parameterizedTopContainerId, path: ['one', 'two'] }],
+          parameterized: [{ id: parameterizedTopContainerId, path: ['one', 'two'] }],
         },
         [parameterizedTopContainerId]: {
           type: Serializable.NodeSnapshotType.ParameterizedValueSnapshot,
@@ -86,7 +86,7 @@ describe(`operations.extract`, () => {
         '31': {
           type: Serializable.NodeSnapshotType.EntitySnapshot,
           inbound: [{ id: parameterizedTopContainerId, path: [0, 'three'] }],
-          outbound: [{ id: nestedParameterizedValueId0, path: ['four'] }],
+          parameterized: [{ id: nestedParameterizedValueId0, path: ['four'] }],
           data: {
             id: 31,
           },
@@ -101,7 +101,7 @@ describe(`operations.extract`, () => {
         '32': {
           type: Serializable.NodeSnapshotType.EntitySnapshot,
           inbound: [{ id: parameterizedTopContainerId, path: [1, 'three'] }],
-          outbound: [{ id: nestedParameterizedValueId1, path: ['four'] }],
+          parameterized: [{ id: nestedParameterizedValueId1, path: ['four'] }],
           data: {
             id: 32,
           },

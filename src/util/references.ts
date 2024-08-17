@@ -4,7 +4,7 @@ import { NodeReference, NodeSnapshot } from '../nodes';
 import { JsonObject, PathPart } from '../primitive';
 import { NodeId } from '../schema';
 
-export type ReferenceDirection = 'inbound' | 'outbound';
+export type ReferenceDirection = 'inbound' | 'outbound' | 'parameterized';
 
 /**
  * Mutates a snapshot, removing an inbound reference from it.
@@ -26,10 +26,18 @@ export function removeNodeReference(
     if (ref === undefined) return false;
     map.delete(key);
     references = map;
-  } else {
+  } else if (direction === 'outbound') {
     const map = snapshot.outbound;
     if (!map) return true;
     const key = path.join();
+    const ref = map.get(key);
+    if (ref === undefined) return false;
+    map.delete(key);
+    references = map;
+  } else {
+    const map = snapshot.parameterized;
+    if (!map) return true;
+    const key = path[0].toString();
     const refs = map.get(key);
     if (!refs) return false;
     const index = getIndexOfGivenReference(refs, id, path);
@@ -67,12 +75,22 @@ export function addNodeReference(
     const node: NodeReference = { id, path };
     const key = JSON.stringify(node);
     references.set(key, node);
-  } else {
+  } else if (direction === 'outbound') {
     let references = snapshot.outbound;
     if (!references) {
       references = snapshot.outbound = new Map();
     }
     const key = path.join();
+    const ref = references.get(key);
+    if (ref === undefined) {
+      references.set(key, { id, path });
+    }
+  } else {
+    let references = snapshot.parameterized;
+    if (!references) {
+      references = snapshot.parameterized = new Map();
+    }
+    const key = path[0].toString();
     const refs = references.get(key);
     if (!refs || getIndexOfGivenReference(refs, id, path) === -1) {
       set(references, { id, path });
@@ -92,8 +110,11 @@ export function hasNodeReference(
 ): boolean {
   if (type === 'inbound') {
     return snapshot.inbound?.has(JSON.stringify({ id, path })) === true;
+  } else if (type === 'outbound') {
+    const ref = snapshot.outbound?.get(path.join());
+    return ref !== undefined;
   } else {
-    const refs = snapshot.outbound?.get(path.join());
+    const refs = snapshot.parameterized?.get(path[0].toString());
     return Array.isArray(refs) && getIndexOfGivenReference(refs, id, path) > -1;
   }
 }
@@ -160,8 +181,19 @@ export function getInbound(inbound: NodeReference[] | undefined) {
   return new Map(inbound.map(nodeToInEntry));
 }
 
+export function getOutbound(outbound: Iterable<NodeReference> | undefined): Map<string, NodeReference> | undefined {
+  if (!outbound) {
+    return outbound;
+  }
+  const map = new Map<string, NodeReference>();
+  for (const out of outbound) {
+    map.set(out.path.join(), out);
+  }
+  return map;
+}
+
 export const set = (map: Map<string, NodeReference[]>, node: NodeReference) => {
-  const key = node.path.join();
+  const key = node.path[0].toString();
   const arr = map.get(key) ?? [];
   if (arr.length === 0) {
     map.set(key, arr);
@@ -169,24 +201,35 @@ export const set = (map: Map<string, NodeReference[]>, node: NodeReference) => {
   arr.push(node);
 };
 
-export function getOutbound(outbound: Iterable<NodeReference> | undefined): Map<string, NodeReference[]> | undefined {
-  if (!outbound) {
-    return outbound;
+export function getParameterized(parameterized: Iterable<NodeReference> | undefined): Map<string, NodeReference[]> | undefined {
+  if (!parameterized) {
+    return parameterized;
   }
   const map = new Map<string, NodeReference[]>();
-  for (const out of outbound) {
-    set(map, out);
+  for (const ref of parameterized) {
+    set(map, ref);
   }
   return map;
 }
 
-export function *iterOutbound(outbound: Map<string, NodeReference[]> | undefined) {
-  if (!outbound) {
+export function *iterParameterized(parameterized: Map<string, NodeReference[]> | undefined) {
+  if (!parameterized) {
     return;
   }
-  for (const out of outbound.values()) {
-    for (const o of out) {
-      yield o;
+  for (const refs of parameterized.values()) {
+    for (const ref of refs) {
+      yield ref;
     }
+  }
+}
+
+export function *iterRefs(outbound:  Map<string, NodeReference> | undefined, parameterized: Map<string, NodeReference[]> | undefined): Generator<NodeReference> {
+  for (const refs of parameterized?.values() ?? []) {
+    for (const ref of refs) {
+      yield ref;
+    }
+  }
+  for (const ref of outbound?.values() ?? []) {
+    yield ref;
   }
 }

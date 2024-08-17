@@ -55,7 +55,7 @@ describe(`operations.extract`, () => {
       jestExpect(extractResult).toEqual({
         [QueryRootId]: {
           type: Serializable.NodeSnapshotType.EntitySnapshot,
-          outbound: [{ id: parameterizedId, path: ['one', 'two'] }],
+          parameterized: [{ id: parameterizedId, path: ['one', 'two'] }],
         },
         [parameterizedId]: {
           type: Serializable.NodeSnapshotType.ParameterizedValueSnapshot,

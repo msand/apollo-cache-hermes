@@ -94,7 +94,8 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
         // will be visited in later iterations of the forEach loop only if they
         // were not previously contained by the Set.
         const node = snapshot[id];
-        node.outbound?.forEach(addRefs);
+        node.outbound?.forEach(addRef);
+        node.parameterized?.forEach(addRefs);
         // By removing IDs from the snapshot object here, we protect them from
         // getting removed from the root store layer below.
         delete snapshot[id];

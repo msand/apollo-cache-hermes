@@ -3,7 +3,7 @@ import { GraphSnapshot } from '../../../../../src/GraphSnapshot';
 import { write } from '../../../../../src/operations';
 import { JsonArray } from '../../../../../src/primitive';
 import { RawOperation, StaticNodeId } from '../../../../../src/schema';
-import { mapToEntries, query, silentConfig, strictConfig } from '../../../../helpers';
+import { mapToEntries2, query, silentConfig, strictConfig } from '../../../../helpers';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
@@ -47,7 +47,7 @@ describe(`operations.write`, () => {
     });
 
     it(`sets up outbound references`, () => {
-      jestExpect(mapToEntries(snapshot.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(jestExpect.arrayContaining([
+      jestExpect(mapToEntries2(snapshot.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(jestExpect.arrayContaining([
         { id: '1', path: ['things', 0] },
         { id: '2', path: ['things', 1] },
         { id: '3', path: ['things', 2] },
@@ -66,7 +66,7 @@ describe(`operations.write`, () => {
           { id: 3, name: 'Three' },
         ],
       }).snapshot;
-      jestExpect(mapToEntries(updated.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(jestExpect.arrayContaining([
+      jestExpect(mapToEntries2(updated.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(jestExpect.arrayContaining([
         { id: '5', path: ['things', 0] },
         { id: '2', path: ['things', 1] },
         { id: '1', path: ['things', 2] },
@@ -83,7 +83,7 @@ describe(`operations.write`, () => {
         ],
       }).snapshot;
 
-      jestExpect(mapToEntries(updated.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(jestExpect.arrayContaining([
+      jestExpect(mapToEntries2(updated.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(jestExpect.arrayContaining([
         { id: '1', path: ['things', 0] },
         { id: '2', path: ['things', 1] },
       ]));
@@ -105,7 +105,7 @@ describe(`operations.write`, () => {
         ],
       }).snapshot;
 
-      jestExpect(mapToEntries(updated.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(jestExpect.arrayContaining([
+      jestExpect(mapToEntries2(updated.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(jestExpect.arrayContaining([
         { id: '1', path: ['things', 0] },
         { id: '2', path: ['things', 1] },
         { id: '3', path: ['things', 2] },
@@ -130,7 +130,7 @@ describe(`operations.write`, () => {
         ],
       }).snapshot;
 
-      jestExpect(mapToEntries(updated.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(jestExpect.arrayContaining([
+      jestExpect(mapToEntries2(updated.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(jestExpect.arrayContaining([
         { id: '3', path: ['things', 2] },
         { id: '4', path: ['things', 3] },
       ]));
@@ -157,7 +157,7 @@ describe(`operations.write`, () => {
         ] as JsonArray,
       }).snapshot;
 
-      jestExpect(mapToEntries(updated.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(jestExpect.arrayContaining([
+      jestExpect(mapToEntries2(updated.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(jestExpect.arrayContaining([
         { id: '3', path: ['things', 2] },
         { id: '4', path: ['things', 3] },
       ]));

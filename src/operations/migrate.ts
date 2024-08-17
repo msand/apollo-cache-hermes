@@ -7,7 +7,6 @@ import {
   isObject,
   addNodeReference,
   deepGet,
-  iterOutbound,
 } from '../util';
 
 import { nodeIdForParameterizedValue, NodeSnapshotMap } from './SnapshotEditor';
@@ -89,7 +88,7 @@ function migrateEntity(
       const fieldId = nodeIdForParameterizedValue(id, parameterized.path, parameterized.args);
       // create a parameterized value snapshot if container doesn't know of the
       // parameterized field we expect
-      if (!snapshot.outbound || !findIter(iterOutbound(snapshot.outbound), s =>  s.id === fieldId)) {
+      if (!snapshot.parameterized?.get(parameterized.path[0].toString())?.find(s =>  s.id === fieldId)) {
         let newData = parameterized.defaultReturn;
         if (allNodes && parameterized.copyFrom) {
           const { path, args } = parameterized.copyFrom;
@@ -107,7 +106,7 @@ function migrateEntity(
 
         // update the reference for the new node in the container
         addNodeReference('inbound', newNode, id, parameterized.path);
-        addNodeReference('outbound', snapshot, fieldId, parameterized.path);
+        addNodeReference('parameterized', snapshot, fieldId, parameterized.path);
       }
     }
   }

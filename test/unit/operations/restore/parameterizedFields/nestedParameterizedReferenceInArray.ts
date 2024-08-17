@@ -3,7 +3,7 @@ import { ParameterizedValueSnapshot, EntitySnapshot } from '../../../../../src/n
 import { restore } from '../../../../../src/operations';
 import { nodeIdForParameterizedValue } from '../../../../../src/operations/SnapshotEditor';
 import { StaticNodeId, Serializable } from '../../../../../src/schema';
-import { createGraphSnapshot, createStrictCacheContext, mapToEntries, mapToEntries2 } from '../../../../helpers';
+import { createGraphSnapshot, createStrictCacheContext, mapToEntries2 } from '../../../../helpers';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
@@ -63,7 +63,7 @@ describe(`operations.restore`, () => {
       restoreGraphSnapshot = restore({
         [QueryRootId]: {
           type: Serializable.NodeSnapshotType.EntitySnapshot,
-          outbound: [
+          parameterized: [
             { id: parameterizedId0, path: ['one', 'two', 0, 'three'] },
             { id: parameterizedId1, path: ['one', 'two', 1, 'three'] },
           ],
@@ -123,7 +123,7 @@ describe(`operations.restore`, () => {
       const entityElement0 = restoreGraphSnapshot.getNodeData('30');
 
       jestExpect(mapToEntries2(parameterizedElement0.inbound)).toEqual([{ id: QueryRootId, path: ['one', 'two', 0, 'three'] }]);
-      jestExpect(mapToEntries(parameterizedElement0.outbound)).toEqual([{ id: '30', path: [] }]);
+      jestExpect(mapToEntries2(parameterizedElement0.outbound)).toEqual([{ id: '30', path: [] }]);
       jestExpect(parameterizedElement0.data).toBe(entityElement0);
     });
 
@@ -133,7 +133,7 @@ describe(`operations.restore`, () => {
 
       jestExpect(parameterizedElement1).toBeInstanceOf(ParameterizedValueSnapshot);
       jestExpect(mapToEntries2(parameterizedElement1.inbound)).toEqual([{ id: QueryRootId, path: ['one', 'two', 1, 'three'] }]);
-      jestExpect(mapToEntries(parameterizedElement1.outbound)).toEqual([{ id: '31', path: [] }]);
+      jestExpect(mapToEntries2(parameterizedElement1.outbound)).toEqual([{ id: '31', path: [] }]);
       jestExpect(parameterizedElement1.data).toBe(entityElement1);
     });
 

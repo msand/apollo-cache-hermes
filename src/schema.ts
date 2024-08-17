@@ -102,6 +102,7 @@ export namespace Serializable {
     type: Serializable.NodeSnapshotType;
     inbound?: NodeReference[];
     outbound?: NodeReference[];
+    parameterized?: NodeReference[];
     data?: NestedValue<JsonValue | undefined>;
   }
 }

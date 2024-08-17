@@ -2,7 +2,7 @@ import { CacheContext } from '../../../../../src/context';
 import { GraphSnapshot } from '../../../../../src/GraphSnapshot';
 import { write } from '../../../../../src/operations';
 import { StaticNodeId } from '../../../../../src/schema';
-import { mapToEntries, mapToEntries2, query, strictConfig } from '../../../../helpers';
+import { mapToEntries2, query, strictConfig } from '../../../../helpers';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
@@ -56,10 +56,10 @@ describe(`operations.write`, () => {
     });
 
     it(`doesn't insert duplicate outbound references`, () => {
-      jestExpect(mapToEntries(snapshot.getNodeSnapshot('a')!.outbound)).toEqual(jestExpect.arrayContaining([
+      jestExpect(mapToEntries2(snapshot.getNodeSnapshot('a')!.outbound)).toEqual(jestExpect.arrayContaining([
         { id: '1', path: ['bar'] },
       ]));
-      jestExpect(mapToEntries(snapshot.getNodeSnapshot('b')!.outbound)).toEqual(jestExpect.arrayContaining([
+      jestExpect(mapToEntries2(snapshot.getNodeSnapshot('b')!.outbound)).toEqual(jestExpect.arrayContaining([
         { id: '1', path: ['bar'] },
       ]));
     });

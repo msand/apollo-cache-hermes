@@ -42,7 +42,7 @@ describe(`operations.write`, () => {
 
     it(`creates an outgoing reference from the field's container`, () => {
       const queryRoot = snapshot.getNodeSnapshot(QueryRootId)!;
-      jestExpect(mapToEntries(queryRoot.outbound)).toEqual([{ id: parameterizedId, path: ['foo'] }]);
+      jestExpect(mapToEntries(queryRoot.parameterized)).toEqual([{ id: parameterizedId, path: ['foo'] }]);
     });
 
     it(`creates an inbound reference to the field's container`, () => {

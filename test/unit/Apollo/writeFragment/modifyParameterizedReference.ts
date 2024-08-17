@@ -32,7 +32,7 @@ describe(`writeFragment with parameterized references`, () => {
       '123': {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
         inbound: [{ id: QueryRootId, path: ['viewer'] }],
-        outbound: [{ id: parameterizedId, path: ['shipment'] }],
+        parameterized: [{ id: parameterizedId, path: ['shipment'] }],
         data: {
           id: 123,
           name: 'Gouda',
@@ -97,6 +97,7 @@ describe(`writeFragment with parameterized references`, () => {
     expect(baseline.getNodeSnapshot(parameterizedId)).to.deep.eq({
       outbound: getOutbound([{ id: 'shipment0', path: [] }]),
       inbound: getInbound([{ id: '123', path: ['shipment'] }]),
+      parameterized: undefined,
       data: {
         complete: true,
         truckType: 'flatbed',

@@ -65,7 +65,7 @@ describe(`operations.write`, () => {
 
     it(`references the children from the parent entity`, () => {
       const entity = snapshot.getNodeSnapshot(entityId)!;
-      jestExpect(mapToEntries(entity.outbound)).toEqual(jestExpect.arrayContaining([
+      jestExpect(mapToEntries(entity.parameterized)).toEqual(jestExpect.arrayContaining([
         { id: parameterizedFieldId, path: ['four'] },
       ]));
     });
@@ -73,7 +73,7 @@ describe(`operations.write`, () => {
     it(`references the children from the parameterized root`, () => {
       const container = snapshot.getNodeSnapshot(parameterizedRootId)!;
 
-      jestExpect(mapToEntries(container.outbound)).toEqual(jestExpect.arrayContaining([
+      jestExpect(mapToEntries2(container.outbound)).toEqual(jestExpect.arrayContaining([
         { id: entityId, path: ['three'] },
       ]));
     });

@@ -2,7 +2,7 @@ import { GraphSnapshot } from '../../../../src/GraphSnapshot';
 import { EntitySnapshot } from '../../../../src/nodes';
 import { restore } from '../../../../src/operations';
 import { StaticNodeId, Serializable } from '../../../../src/schema';
-import { createGraphSnapshot, createStrictCacheContext, mapToEntries, mapToEntries2 } from '../../../helpers';
+import { createGraphSnapshot, createStrictCacheContext, mapToEntries2 } from '../../../helpers';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
@@ -89,7 +89,7 @@ describe(`operations.restore`, () => {
       const fooData = restoreGraphSnapshot.getNodeData('1');
 
       jestExpect(mapToEntries2(rootGraphSnapshot.inbound)).toBe(undefined);
-      jestExpect(mapToEntries(rootGraphSnapshot.outbound)).toEqual([{ id: '1', path: ['foo'] }]);
+      jestExpect(mapToEntries2(rootGraphSnapshot.outbound)).toEqual([{ id: '1', path: ['foo'] }]);
       jestExpect(rootData.foo).toBe(fooData);
     });
 
@@ -102,7 +102,7 @@ describe(`operations.restore`, () => {
         { id: QueryRootId, path: ['foo'] },
         { id: '2', path: ['fizz'] },
       ]);
-      jestExpect(mapToEntries(fooGraphSnapshot.outbound)).toEqual([{ id: '2', path: ['bar'] }]);
+      jestExpect(mapToEntries2(fooGraphSnapshot.outbound)).toEqual([{ id: '2', path: ['bar'] }]);
       jestExpect(fooData.id).toBe(1);
       jestExpect(fooData.name).toBe('Foo');
       jestExpect(fooData.bar).toBe(barData);
@@ -117,7 +117,7 @@ describe(`operations.restore`, () => {
         { id: '1', path: ['bar'] },
         { id: '2', path: ['buzz'] },
       ]);
-      jestExpect(mapToEntries(barGraphSnapshot.outbound)).toEqual([
+      jestExpect(mapToEntries2(barGraphSnapshot.outbound)).toEqual([
         { id: '1', path: ['fizz'] },
         { id: '2', path: ['buzz'] },
       ]);

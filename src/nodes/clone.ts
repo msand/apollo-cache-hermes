@@ -1,4 +1,4 @@
-import { getOutbound, iterOutbound } from '../util';
+import { getParameterized, iterParameterized } from '../util';
 
 import { EntitySnapshot } from './EntitySnapshot';
 import { NodeSnapshot } from './NodeSnapshot';
@@ -10,12 +10,13 @@ import { ParameterizedValueSnapshot } from './ParameterizedValueSnapshot';
  */
 export function cloneNodeSnapshot(parent: NodeSnapshot) {
   const inbound = parent.inbound ? new Map(parent.inbound) : undefined;
-  const outbound = parent.outbound ? getOutbound(iterOutbound(parent.outbound)) : undefined;
+  const outbound = parent.outbound ? new Map(parent.outbound) : undefined;
+  const parameterized = parent.parameterized ? getParameterized(iterParameterized(parent.parameterized)) : undefined;
 
   if (parent instanceof EntitySnapshot) {
-    return new EntitySnapshot(parent.data, inbound, outbound);
+    return new EntitySnapshot(parent.data, inbound, outbound, parameterized);
   } else if (parent instanceof ParameterizedValueSnapshot) {
-    return new ParameterizedValueSnapshot(parent.data, inbound, outbound);
+    return new ParameterizedValueSnapshot(parent.data, inbound, outbound, parameterized);
   } else {
     throw new Error(`Unknown node type: ${Object.getPrototypeOf(parent).constructor.name}`);
   }

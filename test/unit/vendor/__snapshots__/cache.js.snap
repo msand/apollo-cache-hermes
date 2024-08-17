@@ -580,7 +580,7 @@ exports[`TypedDocumentNode<Data, Variables> should determine Data and Variables 
     "type": 0,
   },
   "ROOT_QUERY": {
-    "outbound": [
+    "parameterized": [
       {
         "id": "ROOT_QUERY❖["book"]❖{"isbn":"0262133210"}",
         "path": [
@@ -690,7 +690,7 @@ exports[`TypedDocumentNode<Data, Variables> should determine Data and Variables 
     "type": 0,
   },
   "ROOT_QUERY": {
-    "outbound": [
+    "parameterized": [
       {
         "id": "ROOT_QUERY❖["book"]❖{"isbn":"0262133210"}",
         "path": [

@@ -10,7 +10,9 @@ export interface NodeSnapshot {
   /** Other node snapshots that point to this one. */
   inbound?: Map<string, NodeReference>;
   /** The node snapshots that this one points to. */
-  outbound?: Map<string, NodeReference[]>;
+  outbound?: Map<string, NodeReference>;
+  /** The parameterized node snapshots that this one points to. */
+  parameterized?: Map<string, NodeReference[]>;
 }
 
 /**

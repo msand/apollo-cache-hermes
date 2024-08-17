@@ -2,7 +2,7 @@ import { CacheContext } from '../../../../../src/context';
 import { GraphSnapshot } from '../../../../../src/GraphSnapshot';
 import { write } from '../../../../../src/operations';
 import { NodeId, StaticNodeId } from '../../../../../src/schema';
-import { mapToEntries, query, strictConfig } from '../../../../helpers';
+import { mapToEntries2, query, strictConfig } from '../../../../helpers';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
@@ -50,7 +50,7 @@ describe(`operations.write`, () => {
 
     it(`updates outbound references`, () => {
       const queryRoot = snapshot.getNodeSnapshot(QueryRootId)!;
-      jestExpect(mapToEntries(queryRoot.outbound)).toEqual(jestExpect.arrayContaining([{ id: '1', path: ['foo'] }]));
+      jestExpect(mapToEntries2(queryRoot.outbound)).toEqual(jestExpect.arrayContaining([{ id: '1', path: ['foo'] }]));
     });
 
     it(`marks the container and orphaned node as edited`, () => {

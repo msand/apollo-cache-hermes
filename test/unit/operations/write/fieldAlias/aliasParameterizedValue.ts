@@ -49,6 +49,7 @@ describe(`operations.write`, () => {
         new EntitySnapshot(
           /* data */ undefined,
           /* inbound */ undefined,
+          /* outbound */ undefined,
           [{ id: 'ROOT_QUERY❖["user"]❖{"id":4}', path: ['user'] }],
         )
       );

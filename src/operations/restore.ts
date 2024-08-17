@@ -9,7 +9,7 @@ import { EntitySnapshot, NodeReference, ParameterizedValueSnapshot } from '../no
 import { OptimisticUpdateQueue } from '../OptimisticUpdateQueue';
 import { JsonObject, JsonValue, NestedValue, PathPart } from '../primitive';
 import { NodeId, Serializable } from '../schema';
-import { getInbound, getOutbound, isNumber, isObject, isScalar, iterOutbound } from '../util';
+import { getInbound, getOutbound, getParameterized, isNumber, isObject, isScalar, iterRefs } from '../util';
 
 import { nodeIdForParameterizedValue } from './SnapshotEditor';
 
@@ -43,20 +43,21 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
   // Create entity nodes in the GraphSnapshot
   for (const nodeId in serializedState) {
     const state = serializedState[nodeId];
-    const { type, data, inbound, outbound } = state;
+    const { type, data, inbound, outbound, parameterized } = state;
 
     let nodeSnapshot;
     switch (type) {
       case Serializable.NodeSnapshotType.EntitySnapshot:
-        nodeSnapshot = new EntitySnapshot(data as JsonObject, getInbound(inbound), getOutbound(outbound));
+        nodeSnapshot = new EntitySnapshot(data as JsonObject, getInbound(inbound), getOutbound(outbound), getParameterized(parameterized));
         break;
       case Serializable.NodeSnapshotType.ParameterizedValueSnapshot:
-        nodeSnapshot = new ParameterizedValueSnapshot(data as JsonValue, getInbound(inbound), getOutbound(outbound));
+        nodeSnapshot = new ParameterizedValueSnapshot(data as JsonValue, getInbound(inbound), getOutbound(outbound), getParameterized(parameterized));
         break;
       case undefined: {
         const parsed: JsonObject = {};
         const parsedIn: NodeReference[] = missingPointers.get(nodeId) ?? [];
         const parsedOut: NodeReference[] = [];
+        const parsedParameterized: NodeReference[] = [];
         for (const [key, val] of Object.entries(state)) {
           const result = /(.+)\((.+)\)/.exec(key);
           if (result) {
@@ -68,7 +69,7 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
               []
             );
             editedNodeIds.add(fieldId);
-            parsedOut.push({ id: fieldId, path });
+            parsedParameterized.push({ id: fieldId, path });
           } else if (isReference(val)) {
             const id = val.__ref;
             const path = [key];
@@ -87,7 +88,7 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
             parsed[key] = val;
           }
         }
-        nodeSnapshot = new EntitySnapshot(parsed as JsonObject, getInbound(parsedIn), getOutbound(parsedOut));
+        nodeSnapshot = new EntitySnapshot(parsed as JsonObject, getInbound(parsedIn), getOutbound(parsedOut), getParameterized(parsedParameterized));
         break;
       }
       default:
@@ -108,7 +109,7 @@ function restoreEntityReferences<TSerialized>(nodesMap: NodeSnapshotMap, cacheCo
   const { entityTransformer, entityIdForValue } = cacheContext;
 
   for (const nodeId in nodesMap) {
-    const { data, outbound } = nodesMap[nodeId];
+    const { data, outbound, parameterized } = nodesMap[nodeId];
     if (entityTransformer && isObject(data) && entityIdForValue(data)) {
       entityTransformer(data);
     }
@@ -116,11 +117,11 @@ function restoreEntityReferences<TSerialized>(nodesMap: NodeSnapshotMap, cacheCo
     // If it doesn't have outbound then 'data' doesn't have any references
     // If it is 'undefined' means that there is no data value
     // in both cases, there is no need for modification.
-    if (!outbound || data === undefined) {
+    if ((!outbound && !parameterized) || data === undefined) {
       continue;
     }
 
-    for (const { id: referenceId, path } of iterOutbound(outbound)) {
+    for (const { id: referenceId, path } of iterRefs(outbound, parameterized)) {
       const referenceNode = nodesMap[referenceId];
       if (referenceNode instanceof EntitySnapshot && data === null) {
         // data is a reference.

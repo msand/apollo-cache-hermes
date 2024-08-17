@@ -9,7 +9,15 @@ import { GraphSnapshot, NodeSnapshotMap } from '../GraphSnapshot';
 import { ParsedQuery, ParsedQueryNode } from '../ParsedQueryNode';
 import { JsonObject, JsonValue, PathPart } from '../primitive';
 import { NodeId, OperationInstance, RawOperation, StaticNodeId } from '../schema';
-import { deepGet, isNil, isObject, iterOutbound, lazyImmutableDeepSet, safeStringify, walkOperation } from '../util';
+import {
+  deepGet,
+  isNil,
+  isObject,
+  iterRefs,
+  lazyImmutableDeepSet,
+  safeStringify,
+  walkOperation,
+} from '../util';
 import { cloneNodeSnapshot, EntitySnapshot, NodeSnapshot } from '../nodes';
 
 import { nodeIdForParameterizedValue } from './SnapshotEditor';
@@ -107,11 +115,11 @@ export function read<TSerialized>(
   if (!queryResult.result) {
     cacheHit = false;
     const nodeSnapshot = snapshot.getNodeSnapshot(operation.rootId) ?? {};
-    const { data, outbound } = nodeSnapshot;
+    const { data, outbound, parameterized } = nodeSnapshot;
     queryResult.result = data as JsonObject;
 
     if (
-      (!operation.isStatic && (data || outbound || context.typePolicies)) ||
+      (!operation.isStatic && (data || outbound || parameterized || context.typePolicies)) ||
       (operation.parsedQuery.__typename && data && !('__typename' in (data as JsonObject)))
     ) {
       const dynamicNodeIds = new Set<NodeId>();
@@ -205,7 +213,8 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
     if (key in data) {
       return (data as JsonObject)[key];
     }
-    for (const out of iterOutbound(obj.outbound)) {
+    // TODO optimize
+    for (const out of iterRefs(obj.outbound, obj.parameterized)) {
       const k = out.id;
       if (k === key || out.path[0] === key) {
         return snapshot.getNodeData(k);

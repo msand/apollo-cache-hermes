@@ -1,6 +1,6 @@
 import { GraphSnapshot } from '../../../../../src/GraphSnapshot';
 import { StaticNodeId } from '../../../../../src/schema';
-import { createSnapshot, mapToEntries } from '../../../../helpers';
+import { createSnapshot, mapToEntries2 } from '../../../../helpers';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
@@ -59,7 +59,7 @@ describe(`operations.write`, () => {
     });
 
     it(`records the outbound references from the query root`, () => {
-      jestExpect(mapToEntries(snapshot.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(jestExpect.arrayContaining([
+      jestExpect(mapToEntries2(snapshot.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(jestExpect.arrayContaining([
         { id: 'a', path: ['rows', 0, 0] },
         { id: 'b', path: ['rows', 0, 1] },
         { id: 'c', path: ['rows', 1, 0] },
