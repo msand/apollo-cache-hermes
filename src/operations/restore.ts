@@ -48,10 +48,10 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
     let nodeSnapshot;
     switch (type) {
       case Serializable.NodeSnapshotType.EntitySnapshot:
-        nodeSnapshot = new EntitySnapshot(data as JsonObject, inbound ? getInbound(inbound) : inbound, getOutbound(outbound));
+        nodeSnapshot = new EntitySnapshot(data as JsonObject, getInbound(inbound), getOutbound(outbound));
         break;
       case Serializable.NodeSnapshotType.ParameterizedValueSnapshot:
-        nodeSnapshot = new ParameterizedValueSnapshot(data as JsonValue, inbound ? getInbound(inbound) : inbound, getOutbound(outbound));
+        nodeSnapshot = new ParameterizedValueSnapshot(data as JsonValue, getInbound(inbound), getOutbound(outbound));
         break;
       case undefined: {
         const parsed: JsonObject = {};

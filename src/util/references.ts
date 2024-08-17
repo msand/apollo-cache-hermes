@@ -153,7 +153,10 @@ export function safeStringify(value: JsonObject) {
 export const nodeToEntry = (node: NodeReference): [string, NodeReference] => [node.path.join(), node];
 export const nodeToInEntry = (node: NodeReference): [string, NodeReference] => [JSON.stringify(node), node];
 
-export function getInbound(inbound: NodeReference[]) {
+export function getInbound(inbound: NodeReference[] | undefined) {
+  if (!inbound) {
+    return inbound;
+  }
   return new Map(inbound.map(nodeToInEntry));
 }
 
