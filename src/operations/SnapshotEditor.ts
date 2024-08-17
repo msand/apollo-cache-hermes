@@ -827,12 +827,12 @@ export class SnapshotEditor<TSerialized> {
         if (refs === undefined) {
           return value;
         }
-        const pathLength = path.length;
-        for (const out of refs) {
-          const p = out.path;
-          if (p.length !== pathLength) continue;
-          if (path.some((part, i) => part !== p[i])) continue;
-          return this._getNodeData(out.id);
+        const length = path.length;
+        for (const ref of refs) {
+          const p = ref.path;
+          if (p.length === length && path.every((part, i) => part === p[i])) {
+            return this._getNodeData(ref.id);
+          }
         }
       }
     }
