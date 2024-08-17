@@ -67,12 +67,12 @@ export function addNodeReference(
   id: NodeId,
   path: PathPart[],
 ) {
+  const node: NodeReference = { id, path };
   if (direction === 'inbound') {
     let references = snapshot.inbound;
     if (!references) {
       references = snapshot.inbound = new Map();
     }
-    const node: NodeReference = { id, path };
     const key = refToInKey(node);
     references.set(key, node);
   } else if (direction === 'outbound') {
@@ -80,11 +80,7 @@ export function addNodeReference(
     if (!references) {
       references = snapshot.outbound = new Map();
     }
-    const key = path.join();
-    const ref = references.get(key);
-    if (ref === undefined) {
-      references.set(key, { id, path });
-    }
+    references.set(path.join(), node);
   } else {
     let references = snapshot.parameterized;
     if (!references) {
@@ -92,8 +88,10 @@ export function addNodeReference(
     }
     const key = path[0].toString();
     const refs = references.get(key);
-    if (!refs || getIndexOfGivenReference(refs, id, path) === -1) {
-      set(references, { id, path });
+    if (refs === undefined) {
+      references.set(key, [node]);
+    } else if (getIndexOfGivenReference(refs, id, path) === -1) {
+      refs.push(node);
     }
   }
 }
