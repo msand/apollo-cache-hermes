@@ -6,7 +6,7 @@ import { ParameterizedValueSnapshot } from '../../../../../src/nodes';
 import { nodeIdForParameterizedValue } from '../../../../../src/operations/SnapshotEditor';
 import { write } from '../../../../../src/operations';
 import { NodeId, StaticNodeId } from '../../../../../src/schema';
-import {mapToEntries, query, strictConfig} from '../../../../helpers';
+import {mapToEntries, mapToEntries2, query, strictConfig} from '../../../../helpers';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
@@ -52,7 +52,7 @@ describe(`operations.write`, () => {
 
     it(`creates an inbound reference to the field's container`, () => {
       const values = snapshot.getNodeSnapshot(parameterizedId)!;
-      jestExpect(mapToEntries(values.inbound)).toEqual([{ id: QueryRootId, path: ['foo'] }]);
+      jestExpect(mapToEntries2(values.inbound)).toEqual([{ id: QueryRootId, path: ['foo'] }]);
     });
 
     it(`does not expose the parameterized field directly from its container`, () => {

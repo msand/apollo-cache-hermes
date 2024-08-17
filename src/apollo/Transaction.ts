@@ -4,7 +4,7 @@ import lodashIsEqual = require('lodash.isequal');
 import { CacheTransaction } from '../CacheTransaction';
 import { PathPart, JsonValue } from '../primitive';
 import { NodeId } from '../schema';
-import { DocumentNode, verboseTypeof, deepGet } from '../util';
+import { DocumentNode, verboseTypeof, deepGet, iterOutbound } from '../util';
 
 import { ApolloQueryable } from './Queryable';
 
@@ -83,7 +83,7 @@ export class ApolloTransaction<TSerialized> extends ApolloQueryable<TSerialized>
       return;
     }
 
-    for (const { id: outboundId, path } of currentContainerNode.outbound.values()) {
+    for (const { id: outboundId, path } of iterOutbound(currentContainerNode.outbound)) {
       if (lodashIsEqual(pathToParameterizedField, path)) {
         const fieldArguments = getOriginalFieldArguments(outboundId);
         if (fieldArguments) {

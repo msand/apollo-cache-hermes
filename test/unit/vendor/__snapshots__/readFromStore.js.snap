@@ -1,0 +1,20 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`reading from the store returns === results for different queries 1`] = `
+{
+  "ROOT_QUERY": {
+    "data": {
+      "a": [
+        "a",
+        "y",
+        "y",
+      ],
+      "b": {
+        "c": "C",
+        "d": "D",
+      },
+    },
+    "type": 0,
+  },
+}
+`;

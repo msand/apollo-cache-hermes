@@ -9,7 +9,7 @@ import { GraphSnapshot, NodeSnapshotMap } from '../GraphSnapshot';
 import { ParsedQuery, ParsedQueryNode } from '../ParsedQueryNode';
 import { JsonObject, JsonValue, PathPart } from '../primitive';
 import { NodeId, OperationInstance, RawOperation, StaticNodeId } from '../schema';
-import { deepGet, isNil, isObject, lazyImmutableDeepSet, safeStringify, walkOperation } from '../util';
+import { deepGet, isNil, isObject, iterOutbound, lazyImmutableDeepSet, safeStringify, walkOperation } from '../util';
 import { cloneNodeSnapshot, EntitySnapshot, NodeSnapshot } from '../nodes';
 
 import { nodeIdForParameterizedValue } from './SnapshotEditor';
@@ -205,7 +205,7 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
     if (key in data) {
       return (data as JsonObject)[key];
     }
-    for (const out of obj.outbound?.values() ?? []) {
+    for (const out of iterOutbound(obj.outbound)) {
       const k = out.id;
       if (k === key || out.path[0] === key) {
         return snapshot.getNodeData(k);

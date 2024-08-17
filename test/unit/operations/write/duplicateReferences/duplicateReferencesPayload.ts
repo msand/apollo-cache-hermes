@@ -2,7 +2,7 @@ import { CacheContext } from '../../../../../src/context';
 import { GraphSnapshot } from '../../../../../src/GraphSnapshot';
 import { write } from '../../../../../src/operations';
 import { StaticNodeId } from '../../../../../src/schema';
-import {mapToEntries, query, strictConfig} from '../../../../helpers';
+import {mapToEntries, mapToEntries2, query, strictConfig} from '../../../../helpers';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
@@ -65,7 +65,7 @@ describe(`operations.write`, () => {
     });
 
     it(`doesn't insert duplicate inbound references for targets`, () => {
-      jestExpect(mapToEntries(snapshot.getNodeSnapshot('1')!.inbound)).toEqual(jestExpect.arrayContaining([
+      jestExpect(mapToEntries2(snapshot.getNodeSnapshot('1')!.inbound)).toEqual(jestExpect.arrayContaining([
         { id: 'a', path: ['bar'] },
         { id: 'b', path: ['bar'] },
       ]));

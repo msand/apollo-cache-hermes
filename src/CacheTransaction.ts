@@ -16,7 +16,7 @@ import { read, SnapshotEditor, write } from './operations';
 import { JsonObject, JsonValue } from './primitive';
 import { Queryable } from './Queryable';
 import { ChangeId, NodeId, OperationInstance, CacheDelta, RawOperation, StaticNodeId } from './schema';
-import { DocumentNode, addToSet, isObject } from './util';
+import { DocumentNode, addToSet, isObject, iterOutbound } from './util';
 
 const DELETE: DeleteModifier = Object.create(null);
 const INVALIDATE: InvalidateModifier = Object.create(null);
@@ -263,7 +263,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
         return [{ d: datum, k: null }];
       }
       const nodes: { d: any, k: string }[] = [];
-      for (const out of obj.outbound?.values() ?? []) {
+      for (const out of iterOutbound(obj.outbound)) {
         const k = out.id;
         if (k === key || out.path[0] === key) {
           nodes.push({ d: graphSnapshot.getNodeData(k), k });

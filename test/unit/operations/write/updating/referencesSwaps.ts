@@ -2,7 +2,7 @@ import { CacheContext } from '../../../../../src/context';
 import { GraphSnapshot } from '../../../../../src/GraphSnapshot';
 import { write } from '../../../../../src/operations';
 import { NodeId, StaticNodeId } from '../../../../../src/schema';
-import {mapToEntries, query, strictConfig} from '../../../../helpers';
+import {mapToEntries, mapToEntries2, query, strictConfig} from '../../../../helpers';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
@@ -64,14 +64,14 @@ describe(`operations.write`, () => {
         { id: '2', path: ['foo'] },
         { id: '1', path: ['bar'] },
       ]));
-      jestExpect(mapToEntries(queryRoot.inbound)).toBe(undefined);
+      jestExpect(mapToEntries2(queryRoot.inbound)).toBe(undefined);
     });
 
     it(`updates inbound references`, () => {
       const foo = snapshot.getNodeSnapshot('1')!;
       const bar = snapshot.getNodeSnapshot('2')!;
-      jestExpect(mapToEntries(foo.inbound)).toEqual(jestExpect.arrayContaining([{ id: QueryRootId, path: ['bar'] }]));
-      jestExpect(mapToEntries(bar.inbound)).toEqual(jestExpect.arrayContaining([{ id: QueryRootId, path: ['foo'] }]));
+      jestExpect(mapToEntries2(foo.inbound)).toEqual(jestExpect.arrayContaining([{ id: QueryRootId, path: ['bar'] }]));
+      jestExpect(mapToEntries2(bar.inbound)).toEqual(jestExpect.arrayContaining([{ id: QueryRootId, path: ['foo'] }]));
     });
 
     it(`marks the container as edited`, () => {

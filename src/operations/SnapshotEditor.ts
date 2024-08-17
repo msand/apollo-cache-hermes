@@ -7,7 +7,7 @@ import { StoreObject } from '@apollo/client/utilities';
 import { CacheContext } from '../context';
 import { InvalidPayloadError, OperationError } from '../errors';
 import { GraphSnapshot } from '../GraphSnapshot';
-import { cloneNodeSnapshot, EntitySnapshot, NodeSnapshot, ParameterizedValueSnapshot } from '../nodes';
+import { cloneNodeSnapshot, EntitySnapshot, NodeReference, NodeSnapshot, ParameterizedValueSnapshot } from '../nodes';
 import { FieldArguments, ParsedQuery } from '../ParsedQueryNode';
 import { JsonArray, JsonObject, JsonValue, Nil, PathPart } from '../primitive';
 import { NodeId, OperationInstance, RawOperation, StaticNodeId } from '../schema';
@@ -19,6 +19,7 @@ import {
   hasOwn,
   ifString,
   isNil,
+  iterOutbound,
   lazyImmutableDeepSet,
   pathBeginsWith,
   removeNodeReference,
@@ -61,6 +62,12 @@ function filterIter<T>(values: IterableIterator<T> | undefined, predicate: (T) =
     if (predicate(e)) result.push(e);
   }
   return result;
+}
+
+function iterEach(outbound: Map<string, NodeReference[]> | undefined, fn: (node: NodeReference) => void) {
+  for (const out of iterOutbound(outbound)) {
+    fn(out);
+  }
 }
 
 /**
@@ -284,7 +291,7 @@ export class SnapshotEditor<TSerialized> {
       if (key in data) {
         return (data as JsonObject)[key];
       }
-      for (const out of obj.outbound?.values() ?? []) {
+      for (const out of iterOutbound(obj.outbound)) {
         const k = out.id;
         if (k === key || out.path[0] === key) {
           return this._getNodeData(k);
@@ -540,7 +547,7 @@ export class SnapshotEditor<TSerialized> {
       referenceEdits.push({ containerId: id, nextNodeId: undefined, prevNodeId: nodeId, path });
     });
 
-    nodeSnapshot?.outbound?.forEach(({ id, path }) => {
+    iterEach(nodeSnapshot?.outbound, ({ id, path }) => {
       this._editedNodeIds.add(id);
       referenceEdits.push({ containerId: nodeId, nextNodeId: undefined, prevNodeId: id, path });
     });
@@ -729,7 +736,7 @@ export class SnapshotEditor<TSerialized> {
       const fieldPrefixPath = prefixPath;
       const fieldPath = [...path, payloadName];
 
-      const parameterizedFields = filterIter(nodeSnapshot?.outbound?.values(), (ref => ref.path[0] === payloadName));
+      const parameterizedFields = filterIter(iterOutbound(nodeSnapshot?.outbound), (ref => ref.path[0] === payloadName));
       if (parameterizedFields?.length) {
         for (const field of parameterizedFields) {
           // The values of a parameterized field are explicit nodes in the graph
@@ -801,7 +808,7 @@ export class SnapshotEditor<TSerialized> {
     if (value === undefined) {
       if (node) {
         const pathLength = path.length;
-        for (const out of node.outbound?.values() ?? []) {
+        for (const out of iterOutbound(node.outbound)) {
           if (out.path.length !== pathLength) continue;
           if (path.some((part, i) => part !== out.path[i])) continue;
           return this._getNodeData(out.id);
@@ -880,7 +887,7 @@ export class SnapshotEditor<TSerialized> {
   private _removeArrayReferences(referenceEdits: ReferenceEdit[], containerId: NodeId, prefix: PathPart[], afterIndex: number) {
     const container = this._getNodeSnapshot(containerId);
     if (!container || !container.outbound) return;
-    for (const reference of container.outbound?.values() ?? []) {
+    for (const reference of iterOutbound(container.outbound)) {
       if (!pathBeginsWith(reference.path, prefix)) continue;
       const index = reference.path[prefix.length];
       if (typeof index !== 'number') continue;
@@ -1023,7 +1030,7 @@ export class SnapshotEditor<TSerialized> {
       this._editedNodeIds.add(nodeId);
 
       if (!node.outbound) continue;
-      for (const { id, path } of node.outbound.values()) {
+      for (const { id, path } of iterOutbound(node.outbound)) {
         const reference = this._ensureNewSnapshot(id);
         if (removeNodeReference('inbound', reference, nodeId, path)) {
           queue.push(id);

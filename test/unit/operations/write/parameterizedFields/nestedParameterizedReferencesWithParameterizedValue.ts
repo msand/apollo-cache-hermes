@@ -3,7 +3,7 @@ import { GraphSnapshot } from '../../../../../src/GraphSnapshot';
 import { nodeIdForParameterizedValue } from '../../../../../src/operations/SnapshotEditor';
 import { write } from '../../../../../src/operations';
 import { NodeId, RawOperation, StaticNodeId } from '../../../../../src/schema';
-import {mapToEntries, query, strictConfig} from '../../../../helpers';
+import {mapToEntries, mapToEntries2, query, strictConfig} from '../../../../helpers';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
@@ -60,7 +60,7 @@ describe(`operations.write`, () => {
     it(`references the parent entity snapshot from the children`, () => {
       const entry1 = snapshot.getNodeSnapshot(parameterizedFieldId)!;
 
-      jestExpect(mapToEntries(entry1.inbound)).toEqual(jestExpect.arrayContaining([{ id: entityId, path: ['four'] }]));
+      jestExpect(mapToEntries2(entry1.inbound)).toEqual(jestExpect.arrayContaining([{ id: entityId, path: ['four'] }]));
     });
 
     it(`references the children from the parent entity`, () => {

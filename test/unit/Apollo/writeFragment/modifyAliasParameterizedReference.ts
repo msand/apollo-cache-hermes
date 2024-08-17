@@ -6,7 +6,7 @@ import { GraphSnapshot } from '../../../../src/GraphSnapshot';
 import { nodeIdForParameterizedValue } from '../../../../src/operations/SnapshotEditor';
 import { StaticNodeId, Serializable } from '../../../../src/schema';
 import { strictConfig } from '../../../helpers';
-import {nodeToEntry, nodeToInEntry} from "../../../../src/util";
+import {getOutbound, nodeToEntry, nodeToInEntry} from "../../../../src/util";
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
@@ -95,7 +95,7 @@ describe(`writeFragment with alias paramterized references`, () => {
 
   it(`correctly references a parameterized reference`, () => {
     expect(baseline.getNodeSnapshot(parameterizedId)).to.deep.eq({
-      outbound: new Map([{ id: 'shipment0', path: [] }].map(nodeToEntry)),
+      outbound: getOutbound([{ id: 'shipment0', path: [] }]),
       inbound: new Map([{ id: '123', path: ['shipment'] }].map(nodeToInEntry)),
       data: {
         complete: true,

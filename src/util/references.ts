@@ -17,13 +17,30 @@ export function removeNodeReference(
   id: NodeId,
   path: PathPart[],
 ): boolean {
-  const references = snapshot[direction];
-  if (!references) return true;
-
-  const key = direction === 'inbound' ? JSON.stringify({ id, path }) : path.join();
-  const ref = references.get(key);
-  if (ref === undefined) return false;
-  references.delete(key);
+  let references: Map<string, NodeReference> | Map<string, NodeReference[]> | undefined;
+  if (direction === 'inbound') {
+    const map = snapshot.inbound;
+    if (!map) return true;
+    const key = JSON.stringify({ id, path });
+    const ref = map.get(key);
+    if (ref === undefined) return false;
+    map.delete(key);
+    references = map;
+  } else {
+    const map = snapshot.outbound;
+    if (!map) return true;
+    const key = path.join();
+    const refs = map.get(key);
+    if (!refs) return false;
+    const index = getIndexOfGivenReference(refs, id, path);
+    if (index !== -1) {
+      refs.splice(index, 1);
+    }
+    if (refs.length === 0) {
+      map.delete(key);
+    }
+    references = map;
+  }
 
   const empty = references.size === 0;
   if (empty) {
@@ -41,19 +58,26 @@ export function addNodeReference(
   snapshot: NodeSnapshot,
   id: NodeId,
   path: PathPart[],
-): boolean {
-  let references = snapshot[direction];
-  if (!references) {
-    references = snapshot[direction] = new Map();
+) {
+  if (direction === 'inbound') {
+    let references = snapshot.inbound;
+    if (!references) {
+      references = snapshot.inbound = new Map();
+    }
+    const node: NodeReference = { id, path };
+    const key = JSON.stringify(node);
+    references.set(key, node);
+  } else {
+    let references = snapshot.outbound;
+    if (!references) {
+      references = snapshot.outbound = new Map();
+    }
+    const key = path.join();
+    const refs = references.get(key);
+    if (!refs || getIndexOfGivenReference(refs, id, path) === -1) {
+      set(references, { id, path });
+    }
   }
-
-  const key = direction === 'inbound' ? JSON.stringify({ id, path }) : path.join();
-  const idx = references.get(key);
-  if (idx === undefined) {
-    references.set(key, { id, path });
-    return true;
-  }
-  return false;
 }
 
 /**
@@ -66,8 +90,12 @@ export function hasNodeReference(
   id: NodeId,
   path: PathPart[],
 ): boolean {
-  const references = snapshot[type];
-  return references !== undefined && references.has(type === 'inbound' ? JSON.stringify({ id, path }) : path.join());
+  if (type === 'inbound') {
+    return snapshot.inbound?.has(JSON.stringify({ id, path })) === true;
+  } else {
+    const refs = snapshot.outbound?.get(path.join());
+    return Array.isArray(refs) && getIndexOfGivenReference(refs, id, path) > -1;
+  }
 }
 
 /**
@@ -124,3 +152,34 @@ export function safeStringify(value: JsonObject) {
 
 export const nodeToEntry = (node: NodeReference): [string, NodeReference] => [node.path.join(), node];
 export const nodeToInEntry = (node: NodeReference): [string, NodeReference] => [JSON.stringify(node), node];
+
+export const set = (map: Map<string, NodeReference[]>, node: NodeReference) => {
+  const key = node.path.join();
+  const arr = map.get(key) ?? [];
+  if (arr.length === 0) {
+    map.set(key, arr);
+  }
+  arr.push(node);
+};
+
+export function getOutbound(outbound: Iterable<NodeReference> | undefined): Map<string, NodeReference[]> | undefined {
+  if (!outbound) {
+    return outbound;
+  }
+  const map = new Map<string, NodeReference[]>();
+  for (const out of outbound) {
+    set(map, out);
+  }
+  return map;
+}
+
+export function *iterOutbound(outbound: Map<string, NodeReference[]> | undefined) {
+  if (!outbound) {
+    return;
+  }
+  for (const out of outbound.values()) {
+    for (const o of out) {
+      yield o;
+    }
+  }
+}

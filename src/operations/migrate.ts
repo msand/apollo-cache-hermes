@@ -7,6 +7,7 @@ import {
   isObject,
   addNodeReference,
   deepGet,
+  iterOutbound,
 } from '../util';
 
 import { nodeIdForParameterizedValue, NodeSnapshotMap } from './SnapshotEditor';
@@ -43,6 +44,18 @@ export type MigrationMap = {
   _parameterized?: ParameterizedMigrations,
 };
 
+export function findIter<T>(values: IterableIterator<T> | undefined, predicate: (T) => boolean): T | undefined {
+  if (!values) {
+    return undefined;
+  }
+  for (const e of values) {
+    if (predicate(e)) {
+      return e;
+    }
+  }
+  return undefined;
+}
+
 /**
  * Returns the migrated entity snapshot. Supports add and modify but not delete
  * fields.
@@ -76,7 +89,7 @@ function migrateEntity(
       const fieldId = nodeIdForParameterizedValue(id, parameterized.path, parameterized.args);
       // create a parameterized value snapshot if container doesn't know of the
       // parameterized field we expect
-      if (!snapshot.outbound || !Array.from(snapshot.outbound.values()).find(s =>  s.id === fieldId)) {
+      if (!snapshot.outbound || !findIter(iterOutbound(snapshot.outbound), s =>  s.id === fieldId)) {
         let newData = parameterized.defaultReturn;
         if (allNodes && parameterized.copyFrom) {
           const { path, args } = parameterized.copyFrom;

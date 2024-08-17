@@ -1,6 +1,7 @@
 import { EntitySnapshot } from './EntitySnapshot';
 import { NodeSnapshot } from './NodeSnapshot';
 import { ParameterizedValueSnapshot } from './ParameterizedValueSnapshot';
+import {getOutbound, iterOutbound} from "../util";
 
 /**
  * Factory function for cloning nodes to their specific type signatures, while
@@ -8,7 +9,7 @@ import { ParameterizedValueSnapshot } from './ParameterizedValueSnapshot';
  */
 export function cloneNodeSnapshot(parent: NodeSnapshot) {
   const inbound = parent.inbound ? new Map(parent.inbound) : undefined;
-  const outbound = parent.outbound ? new Map(parent.outbound) : undefined;
+  const outbound = parent.outbound ? getOutbound(iterOutbound(parent.outbound)) : undefined;
 
   if (parent instanceof EntitySnapshot) {
     return new EntitySnapshot(parent.data, inbound, outbound);
