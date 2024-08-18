@@ -22,16 +22,12 @@ export function removeNodeReference(
     const map = snapshot.inbound;
     if (!map) return true;
     const key = toInKey(id, path);
-    const ref = map.get(key);
-    if (ref === undefined) return false;
     map.delete(key);
     references = map;
   } else if (direction === 'outbound') {
     const map = snapshot.outbound;
     if (!map) return true;
     const key = toOutKey(path);
-    const ref = map.get(key);
-    if (ref === undefined) return false;
     map.delete(key);
     references = map;
   } else {
