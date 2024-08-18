@@ -57,9 +57,14 @@ interface ReferenceEdit {
 // https://github.com/nzakas/eslint-plugin-typescript/issues/69
 export type NodeSnapshotMap = { [Key in NodeId]?: NodeSnapshot };
 
-function iterEach(parameterized: Map<string, NodeReference[]> | undefined, fn: (node: NodeReference) => void) {
-  for (const ref of iterParameterized(parameterized)) {
-    fn(ref);
+function forEach(parameterized: Map<string, NodeReference[]> | undefined, fn: (node: NodeReference) => void) {
+  if (!parameterized) {
+    return;
+  }
+  for (const refs of parameterized.values()) {
+    for (const ref of refs) {
+      fn(ref);
+    }
   }
 }
 
@@ -553,7 +558,7 @@ export class SnapshotEditor<TSerialized> {
       referenceEdits.push({ containerId: nodeId, nextNodeId: undefined, prevNodeId: id, path });
     });
 
-    iterEach(nodeSnapshot?.parameterized, ({ id, path }) => {
+    forEach(nodeSnapshot?.parameterized, ({ id, path }) => {
       this._editedNodeIds.add(id);
       referenceEdits.push({ containerId: nodeId, nextNodeId: undefined, prevNodeId: id, path });
     });
