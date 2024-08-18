@@ -37,7 +37,7 @@ export function removeNodeReference(
   } else {
     const map = snapshot.parameterized;
     if (!map) return true;
-    const key = path[0].toString();
+    const key = toParamKey(path);
     const refs = map.get(key);
     if (!refs) return false;
     const index = getIndexOfGivenReference(refs, id, path);
@@ -86,7 +86,7 @@ export function addNodeReference(
     if (!references) {
       references = snapshot.parameterized = new Map();
     }
-    const key = path[0].toString();
+    const key = toParamKey(path);
     const refs = references.get(key);
     if (refs === undefined) {
       references.set(key, [node]);
@@ -112,7 +112,7 @@ export function hasNodeReference(
     const ref = snapshot.outbound?.get(toOutKey(path));
     return ref !== undefined;
   } else {
-    const refs = snapshot.parameterized?.get(path[0].toString());
+    const refs = snapshot.parameterized?.get(toParamKey(path));
     return Array.isArray(refs) && getIndexOfGivenReference(refs, id, path) > -1;
   }
 }
@@ -178,6 +178,9 @@ export function toInKey(id: NodeId, path: PathPart[]) {
 export function toOutKey(path: PathPart[]) {
   return path.join('.');
 }
+export function toParamKey(path: PathPart[]) {
+  return path[0].toString();
+}
 
 export const nodeToEntry = (node: NodeReference): [string, NodeReference] => [toOutKey(node.path), node];
 export const nodeToInEntry = (node: NodeReference): [string, NodeReference] => [refToInKey(node), node];
@@ -201,12 +204,13 @@ export function getOutbound(outbound: Iterable<NodeReference> | undefined): Map<
 }
 
 export const set = (map: Map<string, NodeReference[]>, node: NodeReference) => {
-  const key = node.path[0].toString();
-  const arr = map.get(key) ?? [];
-  if (arr.length === 0) {
-    map.set(key, arr);
+  const key = toParamKey(node.path);
+  const arr = map.get(key);
+  if (arr === undefined) {
+    map.set(key, [node]);
+  } else {
+    arr.push(node);
   }
-  arr.push(node);
 };
 
 export function getParameterized(parameterized: Iterable<NodeReference> | undefined): Map<string, NodeReference[]> | undefined {
@@ -231,13 +235,17 @@ export function *iterParameterized(parameterized: Map<string, NodeReference[]> |
   }
 }
 
-export function *iterRefs(outbound:  Map<string, NodeReference> | undefined, parameterized: Map<string, NodeReference[]> | undefined): Generator<NodeReference> {
-  for (const refs of parameterized?.values() ?? []) {
-    for (const ref of refs) {
-      yield ref;
+export function *iterRefs(outbound: Map<string, NodeReference> | undefined, parameterized: Map<string, NodeReference[]> | undefined): Generator<NodeReference> {
+  if (parameterized !== undefined) {
+    for (const refs of parameterized.values()) {
+      for (const ref of refs) {
+        yield ref;
+      }
     }
   }
-  for (const ref of outbound?.values() ?? []) {
-    yield ref;
+  if (outbound !== undefined) {
+    for (const ref of outbound.values()) {
+      yield ref;
+    }
   }
 }
