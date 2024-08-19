@@ -1,5 +1,4 @@
 import { Cache, Transaction } from '@apollo/client';
-import lodashIsEqual = require('lodash.isequal');
 
 import { CacheTransaction } from '../CacheTransaction';
 import { PathPart, JsonValue } from '../primitive';
@@ -89,7 +88,7 @@ export class ApolloTransaction<TSerialized> extends ApolloQueryable<TSerialized>
     }
 
     for (const { id: outboundId, path } of iterParameterized(currentContainerNode.parameterized)) {
-      if (lodashIsEqual(pathToParameterizedField, path)) {
+      if (pathToParameterizedField.every((part, i) => part === path[i])) {
         const fieldArguments = getOriginalFieldArguments(outboundId);
         if (fieldArguments) {
           let cacheResult: any;

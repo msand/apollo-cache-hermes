@@ -954,7 +954,7 @@ export class SnapshotEditor<TSerialized> {
         if (parameterized) {
           removeParameterizedReference(container, prevNodeId, path);
         } else {
-          removeOutboundReference(container, prevNodeId, path);
+          removeOutboundReference(container, path);
         }
         removeInboundReference(prevTarget, containerId, path);
         if (!prevTarget.inbound) {

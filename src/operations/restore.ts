@@ -1,5 +1,3 @@
-import lodashSet = require('lodash.set');
-import lodashFindIndex = require('lodash.findindex');
 import { isReference } from '@apollo/client';
 
 import { CacheSnapshot } from '../CacheSnapshot';
@@ -7,7 +5,7 @@ import { CacheContext } from '../context';
 import { GraphSnapshot, NodeSnapshotMap } from '../GraphSnapshot';
 import { EntitySnapshot, NodeReference, ParameterizedValueSnapshot } from '../nodes';
 import { OptimisticUpdateQueue } from '../OptimisticUpdateQueue';
-import { JsonObject, JsonValue, NestedValue, PathPart } from '../primitive';
+import { JsonObject, JsonScalar, JsonValue, NestedArray, NestedObject, NestedValue, PathPart } from '../primitive';
 import { NodeId, Serializable } from '../schema';
 import { getInbound, getOutbound, getParameterized, isNumber, isObject, isScalar, iterRefs, refToInKey } from '../util';
 
@@ -106,6 +104,19 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
   return { nodesMap, editedNodeIds };
 }
 
+function set(data: NestedArray<JsonScalar> | NestedObject<JsonScalar>, path: PathPart[], value: JsonValue | undefined) {
+  let obj = data;
+  const l = path.length - 1;
+  for (let i = 0; i < l; i++) {
+    const key = path[i];
+    if (!(key in obj)) {
+      obj[key] = typeof key === 'string' ? {} : [];
+    }
+    obj = obj[key];
+  }
+  obj[path[l]] = value;
+}
+
 function restoreEntityReferences<TSerialized>(nodesMap: NodeSnapshotMap, cacheContext: CacheContext<TSerialized>) {
   const { entityTransformer, entityIdForValue } = cacheContext;
 
@@ -133,12 +144,12 @@ function restoreEntityReferences<TSerialized>(nodesMap: NodeSnapshotMap, cacheCo
         // ParameterizedValueSnapshot.
         // (see: parameterizedFields/nestedParameterizedReferenceInArray.ts)
         // We only want to try walking if its data contains an array
-        const indexToArrayIndex = lodashFindIndex(path, isNumber);
-        if (indexToArrayIndex !== -1) {
+        const hasArrayIndex = path.some(part => isNumber(part));
+        if (hasArrayIndex) {
           tryRestoreSparseArray(data, path, 0);
         }
       } else if (Array.isArray(data) || isObject(data)) {
-        lodashSet(data, path, referenceNode.data);
+        set(data, path, referenceNode.data);
       }
     }
   }

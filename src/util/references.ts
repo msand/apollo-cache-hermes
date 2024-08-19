@@ -1,13 +1,9 @@
-import isEqual from '@wry/equality';
-
 import { NodeReference, NodeSnapshot } from '../nodes';
 import { JsonObject, PathPart } from '../primitive';
 import { NodeId } from '../schema';
 
 /**
- * Mutates a snapshot, removing an inbound reference from it.
- *
- * Returns whether all references were removed.
+ * Mutates a snapshot, removing a reference from it.
  */
 export function removeInboundReference(
   snapshot: NodeSnapshot,
@@ -27,7 +23,6 @@ export function removeInboundReference(
 }
 export function removeOutboundReference(
   snapshot: NodeSnapshot,
-  id: NodeId,
   path: PathPart[],
 ) {
   const map = snapshot.outbound;
@@ -134,7 +129,8 @@ export function hasParameterizedReference(
  */
 export function getIndexOfGivenReference(references: NodeReference[], id: NodeId, path: PathPart[]): number {
   return references.findIndex((reference) => {
-    return reference.id === id && isEqual(reference.path, path);
+    const p = reference.path;
+    return reference.id === id && path.every((part, i) => part === p[i]);
   });
 }
 
