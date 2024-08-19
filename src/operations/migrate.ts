@@ -5,9 +5,10 @@ import { JsonObject, JsonValue, PathPart } from '../primitive';
 import { NodeId } from '../schema';
 import {
   isObject,
-  addNodeReference,
   deepGet,
   toParamKey,
+  addInboundReference,
+  addParameterizedReference,
 } from '../util';
 
 import { nodeIdForParameterizedValue, NodeSnapshotMap } from './SnapshotEditor';
@@ -94,8 +95,8 @@ function migrateEntity(
         nodesToAdd[fieldId] = newNode;
 
         // update the reference for the new node in the container
-        addNodeReference('inbound', newNode, id, parameterized.path);
-        addNodeReference('parameterized', snapshot, fieldId, parameterized.path);
+        addInboundReference(newNode, id, parameterized.path);
+        addParameterizedReference(snapshot, fieldId, parameterized.path);
       }
     }
   }

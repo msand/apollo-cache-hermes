@@ -4,51 +4,71 @@ import { NodeReference, NodeSnapshot } from '../nodes';
 import { JsonObject, PathPart } from '../primitive';
 import { NodeId } from '../schema';
 
-export type ReferenceDirection = 'inbound' | 'outbound' | 'parameterized';
-
 /**
  * Mutates a snapshot, removing an inbound reference from it.
  *
  * Returns whether all references were removed.
  */
-export function removeNodeReference(
-  direction: ReferenceDirection,
+export function removeInboundReference(
   snapshot: NodeSnapshot,
   id: NodeId,
   path: PathPart[],
 ): boolean {
-  let references: Map<string, NodeReference> | Map<string, NodeReference[]> | undefined;
-  if (direction === 'inbound') {
-    const map = snapshot.inbound;
-    if (!map) return true;
-    const key = toInKey(id, path);
-    map.delete(key);
-    references = map;
-  } else if (direction === 'outbound') {
-    const map = snapshot.outbound;
-    if (!map) return true;
-    const key = toOutKey(path);
-    map.delete(key);
-    references = map;
-  } else {
-    const map = snapshot.parameterized;
-    if (!map) return true;
-    const key = toParamKey(path);
-    const refs = map.get(key);
-    if (!refs) return false;
-    const index = getIndexOfGivenReference(refs, id, path);
-    if (index !== -1) {
-      refs.splice(index, 1);
-    }
-    if (refs.length === 0) {
-      map.delete(key);
-    }
-    references = map;
+  const map = snapshot.inbound;
+  if (!map) return true;
+
+  const key = toInKey(id, path);
+  map.delete(key);
+
+  const empty = map.size === 0;
+  if (empty) {
+    snapshot.inbound = undefined;
   }
 
-  const empty = references.size === 0;
+  return empty;
+}
+export function removeOutboundReference(
+  snapshot: NodeSnapshot,
+  id: NodeId,
+  path: PathPart[],
+): boolean {
+  const map = snapshot.outbound;
+  if (!map) return true;
+
+  const key = toOutKey(path);
+  map.delete(key);
+
+  const empty = map.size === 0;
   if (empty) {
-    snapshot[direction] = undefined;
+    snapshot.outbound = undefined;
+  }
+
+  return empty;
+}
+export function removeParameterizedReference(
+  snapshot: NodeSnapshot,
+  id: NodeId,
+  path: PathPart[],
+): boolean {
+  const map = snapshot.parameterized;
+  if (!map) return true;
+
+  const key = toParamKey(path);
+  const refs = map.get(key);
+  if (!refs) return false;
+
+  const index = getIndexOfGivenReference(refs, id, path);
+  if (index !== -1) {
+    refs.splice(index, 1);
+  }
+
+  if (refs.length === 0) {
+    map.delete(key);
+  }
+
+  const empty = map.size === 0;
+  if (empty) {
+    snapshot.parameterized = undefined;
   }
 
   return empty;
@@ -57,38 +77,47 @@ export function removeNodeReference(
 /**
  * Mutates a snapshot, adding a new reference to it.
  */
-export function addNodeReference(
-  direction: ReferenceDirection,
+export function addInboundReference(
   snapshot: NodeSnapshot,
   id: NodeId,
   path: PathPart[],
 ) {
   const node: NodeReference = { id, path };
-  if (direction === 'inbound') {
-    let references = snapshot.inbound;
-    if (!references) {
-      references = snapshot.inbound = new Map();
-    }
-    const key = refToInKey(node);
-    references.set(key, node);
-  } else if (direction === 'outbound') {
-    let references = snapshot.outbound;
-    if (!references) {
-      references = snapshot.outbound = new Map();
-    }
-    references.set(toOutKey(path), node);
-  } else {
-    let references = snapshot.parameterized;
-    if (!references) {
-      references = snapshot.parameterized = new Map();
-    }
-    const key = toParamKey(path);
-    const refs = references.get(key);
-    if (refs === undefined) {
-      references.set(key, [node]);
-    } else if (getIndexOfGivenReference(refs, id, path) === -1) {
-      refs.push(node);
-    }
+  let references = snapshot.inbound;
+  if (!references) {
+    references = snapshot.inbound = new Map();
+  }
+  const key = refToInKey(node);
+  references.set(key, node);
+}
+export function addOutboundReference(
+  snapshot: NodeSnapshot,
+  id: NodeId,
+  path: PathPart[],
+) {
+  const node: NodeReference = { id, path };
+  let references = snapshot.outbound;
+  if (!references) {
+    references = snapshot.outbound = new Map();
+  }
+  const key = toOutKey(path);
+  references.set(key, node);
+}
+export function addParameterizedReference(
+  snapshot: NodeSnapshot,
+  id: NodeId,
+  path: PathPart[],
+) {
+  let references = snapshot.parameterized;
+  if (!references) {
+    references = snapshot.parameterized = new Map();
+  }
+  const key = toParamKey(path);
+  const refs = references.get(key);
+  if (refs === undefined) {
+    references.set(key, [{ id, path }]);
+  } else if (getIndexOfGivenReference(refs, id, path) === -1) {
+    refs.push({ id, path });
   }
 }
 
@@ -96,20 +125,13 @@ export function addNodeReference(
  * Return true if { id, path } is a valid reference in the node's references
  * array. Otherwise, return false.
  */
-export function hasNodeReference(
+export function hasParameterizedReference(
   snapshot: NodeSnapshot,
-  type: ReferenceDirection,
   id: NodeId,
   path: PathPart[],
 ): boolean {
-  if (type === 'inbound') {
-    return snapshot.inbound?.has(toInKey(id, path)) === true;
-  } else if (type === 'outbound') {
-    return snapshot.outbound?.has(toOutKey(path)) === true;
-  } else {
-    const refs = snapshot.parameterized?.get(toParamKey(path));
-    return refs !== undefined && getIndexOfGivenReference(refs, id, path) > -1;
-  }
+  const refs = snapshot.parameterized?.get(toParamKey(path));
+  return refs !== undefined && getIndexOfGivenReference(refs, id, path) > -1;
 }
 
 /**

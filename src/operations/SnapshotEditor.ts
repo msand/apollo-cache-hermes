@@ -12,18 +12,22 @@ import { FieldArguments, ParsedQuery } from '../ParsedQueryNode';
 import { JsonArray, JsonObject, JsonValue, Nil, PathPart } from '../primitive';
 import { NodeId, OperationInstance, RawOperation, StaticNodeId } from '../schema';
 import {
-  addNodeReference,
+  addInboundReference,
+  addOutboundReference,
+  addParameterizedReference,
   addToSet,
   deepGet,
-  hasNodeReference,
   hasOwn,
+  hasParameterizedReference,
   ifString,
   isNil,
   iterParameterized,
   iterRefs,
   lazyImmutableDeepSet,
   pathBeginsWith,
-  removeNodeReference,
+  removeInboundReference,
+  removeOutboundReference,
+  removeParameterizedReference,
   toOutKey,
 } from '../util';
 
@@ -946,8 +950,13 @@ export class SnapshotEditor<TSerialized> {
 
       if (prevNodeId) {
         const prevTarget = this._ensureNewSnapshot(prevNodeId);
-        removeNodeReference(prevTarget instanceof ParameterizedValueSnapshot ? 'parameterized' : 'outbound', container, prevNodeId, path);
-        removeNodeReference('inbound', prevTarget, containerId, path);
+        const parameterized = prevTarget instanceof ParameterizedValueSnapshot;
+        if (parameterized) {
+          removeParameterizedReference(container, prevNodeId, path);
+        } else {
+          removeOutboundReference(container, prevNodeId, path);
+        }
+        removeInboundReference(prevTarget, containerId, path);
         if (!prevTarget.inbound) {
           orphanedNodeIds.add(prevNodeId);
         }
@@ -955,8 +964,13 @@ export class SnapshotEditor<TSerialized> {
 
       if (nextNodeId) {
         const nextTarget = this._ensureNewSnapshot(nextNodeId);
-        addNodeReference(nextTarget instanceof ParameterizedValueSnapshot ? 'parameterized' : 'outbound', container, nextNodeId, path);
-        addNodeReference('inbound', nextTarget, containerId, path);
+        const parameterized = nextTarget instanceof ParameterizedValueSnapshot;
+        if (parameterized) {
+          addParameterizedReference(container, nextNodeId, path);
+        } else {
+          addOutboundReference(container, nextNodeId, path);
+        }
+        addInboundReference(nextTarget, containerId, path);
         orphanedNodeIds.delete(nextNodeId);
       }
     }
@@ -1066,7 +1080,7 @@ export class SnapshotEditor<TSerialized> {
   private removeInbound(refs: Iterable<NodeReference>, nodeId: string, queue: string[]) {
     for (const { id, path } of refs) {
       const reference = this._ensureNewSnapshot(id);
-      if (removeNodeReference('inbound', reference, nodeId, path)) {
+      if (removeInboundReference(reference, nodeId, path)) {
         queue.push(id);
       }
     }
@@ -1134,15 +1148,15 @@ export class SnapshotEditor<TSerialized> {
     // We're careful to not edit the container unless we absolutely have to.
     // (There may be no changes for this parameterized value).
     const containerSnapshot = this._getNodeSnapshot(containerId);
-    if (!containerSnapshot || !hasNodeReference(containerSnapshot, 'parameterized', fieldId, path)) {
+    if (!containerSnapshot || !hasParameterizedReference(containerSnapshot, fieldId, path)) {
       // We need to construct a new snapshot otherwise.
       const newSnapshot = new ParameterizedValueSnapshot();
-      addNodeReference('inbound', newSnapshot, containerId, path);
+      addInboundReference(newSnapshot, containerId, path);
       this._newNodes[fieldId] = newSnapshot;
 
       // Ensure that the container points to it.
       const snapshot = this._ensureNewSnapshot(containerId);
-      addNodeReference('parameterized', snapshot, fieldId, path);
+      addParameterizedReference(snapshot, fieldId, path);
     }
 
     return fieldId;
