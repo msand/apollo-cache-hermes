@@ -44,18 +44,6 @@ export type MigrationMap = {
   _parameterized?: ParameterizedMigrations,
 };
 
-export function findIter<T>(values: IterableIterator<T> | undefined, predicate: (T) => boolean): T | undefined {
-  if (!values) {
-    return undefined;
-  }
-  for (const e of values) {
-    if (predicate(e)) {
-      return e;
-    }
-  }
-  return undefined;
-}
-
 /**
  * Returns the migrated entity snapshot. Supports add and modify but not delete
  * fields.
