@@ -78,11 +78,12 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
             if (id in nodesMap) {
               nodesMap[id]?.inbound?.set(refToInKey(reverse), reverse);
             } else {
-              const references = missingPointers.get(id) ?? [];
-              if (references.length === 0) {
-                missingPointers.set(id, references);
+              const references = missingPointers.get(id);
+              if (references === undefined) {
+                missingPointers.set(id, [reverse]);
+              } else {
+                references.push(reverse);
               }
-              references.push(reverse);
             }
           } else {
             parsed[key] = val;

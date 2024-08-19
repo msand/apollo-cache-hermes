@@ -194,13 +194,16 @@ export function toParamKey(path: PathPart[]) {
 }
 
 export const nodeToEntry = (node: NodeReference): [string, NodeReference] => [toOutKey(node.path), node];
-export const nodeToInEntry = (node: NodeReference): [string, NodeReference] => [refToInKey(node), node];
 
-export function getInbound(inbound: NodeReference[] | undefined) {
+export function getInbound(inbound: NodeReference[] | undefined): Map<string, NodeReference> | undefined {
   if (!inbound) {
     return inbound;
   }
-  return new Map(inbound.map(nodeToInEntry));
+  const map = new Map<string, NodeReference>();
+  for (const ref of inbound) {
+    map.set(refToInKey(ref), ref);
+  }
+  return map;
 }
 
 export function getOutbound(outbound: Iterable<NodeReference> | undefined): Map<string, NodeReference> | undefined {
