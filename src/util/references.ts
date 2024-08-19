@@ -105,11 +105,10 @@ export function hasNodeReference(
   if (type === 'inbound') {
     return snapshot.inbound?.has(toInKey(id, path)) === true;
   } else if (type === 'outbound') {
-    const ref = snapshot.outbound?.get(toOutKey(path));
-    return ref !== undefined;
+    return snapshot.outbound?.has(toOutKey(path)) === true;
   } else {
     const refs = snapshot.parameterized?.get(toParamKey(path));
-    return Array.isArray(refs) && getIndexOfGivenReference(refs, id, path) > -1;
+    return refs !== undefined && getIndexOfGivenReference(refs, id, path) > -1;
   }
 }
 
