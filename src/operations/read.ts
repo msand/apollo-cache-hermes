@@ -13,7 +13,6 @@ import {
   deepGet,
   isNil,
   isObject,
-  iterRefs,
   lazyImmutableDeepSet,
   safeStringify,
   walkOperation,
@@ -220,12 +219,6 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
     const ref = obj.parameterized?.get(key)?.[0];
     if (ref !== undefined) {
       return snapshot.getNodeData(ref.id);
-    }
-    for (const out of iterRefs(obj.outbound, obj.parameterized)) {
-      const k = out.id;
-      if (k === key) {
-        return snapshot.getNodeData(k);
-      }
     }
     if (isRoot && key === '__typename') {
       return 'Query';

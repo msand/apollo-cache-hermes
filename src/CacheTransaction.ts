@@ -16,7 +16,7 @@ import { read, SnapshotEditor, write } from './operations';
 import { JsonObject, JsonValue } from './primitive';
 import { Queryable } from './Queryable';
 import { ChangeId, NodeId, OperationInstance, CacheDelta, RawOperation, StaticNodeId } from './schema';
-import { DocumentNode, addToSet, isObject, iterParameterized } from './util';
+import { DocumentNode, addToSet, isObject } from './util';
 
 const DELETE: DeleteModifier = Object.create(null);
 const INVALIDATE: InvalidateModifier = Object.create(null);
@@ -256,23 +256,19 @@ export class CacheTransaction<TSerialized> implements Queryable {
       return false;
     }
 
+    const nodeRefToMatch = ({ id }) => ({ d: graphSnapshot.getNodeData(id), k: id });
+
     function readFromSnapshot(obj: Readonly<NodeSnapshot>, key: string) {
       const data = obj.data;
       const datum = data && typeof data === 'object' && key in data ? (data as JsonObject)[key] : undefined;
       if (datum != null) {
         return [{ d: datum, k: null }];
       }
-      const nodes: { d: any, k: string }[] = [];
+      const nodes: { d: any, k: string }[] = obj.parameterized?.get(key)?.map(nodeRefToMatch) ?? [];
       const out = obj.outbound?.get(key);
       if (out) {
         const k = out.id;
-        nodes.push({ d: graphSnapshot.getNodeData(k), k });
-      }
-      for (const out of iterParameterized(obj.parameterized)) {
-        const k = out.id;
-        if (k === key || out.path[0] === key) {
-          nodes.push({ d: graphSnapshot.getNodeData(k), k });
-        }
+        return [{ d: graphSnapshot.getNodeData(k), k }].concat(nodes);
       }
       if (nodes.length) {
         return nodes;
@@ -284,6 +280,26 @@ export class CacheTransaction<TSerialized> implements Queryable {
         return [{ d: null, k: null }];
       }
       return [];
+    }
+
+    function readOneFromSnapshot(obj: Readonly<NodeSnapshot>, key: string) {
+      const data = obj.data;
+      const datum = data && typeof data === 'object' && key in data ? (data as JsonObject)[key] : undefined;
+      if (datum != null) {
+        return datum;
+      }
+      const out = obj.outbound?.get(key);
+      if (out) {
+        return graphSnapshot.getNodeData(out.id);
+      }
+      const ref = obj.parameterized?.get(key)?.[0];
+      if (ref) {
+        return graphSnapshot.getNodeData(ref.id);
+      }
+      if (id === 'ROOT_QUERY' && key === '__typename') {
+        return 'Query';
+      }
+      return datum;
     }
 
     const tempStore: NodeSnapshotMap = Object.create(null);
@@ -306,7 +322,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
         if (!obj) {
           return undefined;
         }
-        return readFromSnapshot(obj, fieldNameOrOptions)[0]?.d;
+        return readOneFromSnapshot(obj, fieldNameOrOptions);
       } else {
         return from[fieldNameOrOptions];
       }

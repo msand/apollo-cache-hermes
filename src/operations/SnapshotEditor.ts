@@ -301,12 +301,6 @@ export class SnapshotEditor<TSerialized> {
       if (ref !== undefined) {
         return this._getNodeData(ref.id);
       }
-      for (const out of iterRefs(obj.outbound, obj.parameterized)) {
-        const k = out.id;
-        if (k === key) {
-          return this._getNodeData(k);
-        }
-      }
       if (containerId === 'ROOT_QUERY' && key === '__typename') {
         return 'Query';
       }
