@@ -193,8 +193,6 @@ export function toParamKey(path: PathPart[]) {
   return path[0].toString();
 }
 
-export const nodeToEntry = (node: NodeReference): [string, NodeReference] => [toOutKey(node.path), node];
-
 export function getInbound(inbound: NodeReference[] | undefined): Map<string, NodeReference> | undefined {
   if (!inbound) {
     return inbound;
