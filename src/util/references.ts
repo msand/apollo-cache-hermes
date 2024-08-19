@@ -13,9 +13,9 @@ export function removeInboundReference(
   snapshot: NodeSnapshot,
   id: NodeId,
   path: PathPart[],
-): boolean {
+) {
   const map = snapshot.inbound;
-  if (!map) return true;
+  if (!map) return;
 
   const key = toInKey(id, path);
   map.delete(key);
@@ -24,16 +24,14 @@ export function removeInboundReference(
   if (empty) {
     snapshot.inbound = undefined;
   }
-
-  return empty;
 }
 export function removeOutboundReference(
   snapshot: NodeSnapshot,
   id: NodeId,
   path: PathPart[],
-): boolean {
+) {
   const map = snapshot.outbound;
-  if (!map) return true;
+  if (!map) return;
 
   const key = toOutKey(path);
   map.delete(key);
@@ -42,20 +40,18 @@ export function removeOutboundReference(
   if (empty) {
     snapshot.outbound = undefined;
   }
-
-  return empty;
 }
 export function removeParameterizedReference(
   snapshot: NodeSnapshot,
   id: NodeId,
   path: PathPart[],
-): boolean {
+) {
   const map = snapshot.parameterized;
-  if (!map) return true;
+  if (!map) return;
 
   const key = toParamKey(path);
   const refs = map.get(key);
-  if (!refs) return false;
+  if (!refs) return;
 
   const index = getIndexOfGivenReference(refs, id, path);
   if (index !== -1) {
@@ -70,8 +66,6 @@ export function removeParameterizedReference(
   if (empty) {
     snapshot.parameterized = undefined;
   }
-
-  return empty;
 }
 
 /**

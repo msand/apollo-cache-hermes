@@ -1080,7 +1080,8 @@ export class SnapshotEditor<TSerialized> {
   private removeInbound(refs: Iterable<NodeReference>, nodeId: string, queue: string[]) {
     for (const { id, path } of refs) {
       const reference = this._ensureNewSnapshot(id);
-      if (removeInboundReference(reference, nodeId, path)) {
+      removeInboundReference(reference, nodeId, path);
+      if (reference.inbound === undefined) {
         queue.push(id);
       }
     }
