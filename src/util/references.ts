@@ -1,3 +1,5 @@
+import { Reference } from '@apollo/client/utilities';
+
 import { NodeReference, NodeSnapshot } from '../nodes';
 import { JsonObject, PathPart } from '../primitive';
 import { NodeId } from '../schema';
@@ -211,7 +213,7 @@ export function getOutbound(outbound: Iterable<NodeReference> | undefined): Map<
   return map;
 }
 
-export const set = (map: Map<string, NodeReference[]>, node: NodeReference) => {
+function setParameterized(map: Map<string, NodeReference[]>, node: NodeReference) {
   const key = toParamKey(node.path);
   const arr = map.get(key);
   if (arr === undefined) {
@@ -219,7 +221,9 @@ export const set = (map: Map<string, NodeReference[]>, node: NodeReference) => {
   } else {
     arr.push(node);
   }
-};
+}
+
+export const set = setParameterized;
 
 export function getParameterized(parameterized: Iterable<NodeReference> | undefined): Map<string, NodeReference[]> | undefined {
   if (!parameterized) {
@@ -227,7 +231,7 @@ export function getParameterized(parameterized: Iterable<NodeReference> | undefi
   }
   const map = new Map<string, NodeReference[]>();
   for (const ref of parameterized) {
-    set(map, ref);
+    setParameterized(map, ref);
   }
   return map;
 }
@@ -256,4 +260,8 @@ export function *iterRefs(outbound: Map<string, NodeReference> | undefined, para
       yield ref;
     }
   }
+}
+
+export function isReference(obj: any): obj is Reference {
+  return obj != null && typeof obj === 'object' && typeof obj.__ref === 'string';
 }

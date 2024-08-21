@@ -1,5 +1,3 @@
-import { isReference } from '@apollo/client';
-
 import { CacheSnapshot } from '../CacheSnapshot';
 import { CacheContext } from '../context';
 import { GraphSnapshot, NodeSnapshotMap } from '../GraphSnapshot';
@@ -7,9 +5,21 @@ import { EntitySnapshot, NodeReference, ParameterizedValueSnapshot } from '../no
 import { OptimisticUpdateQueue } from '../OptimisticUpdateQueue';
 import { JsonObject, JsonScalar, JsonValue, NestedArray, NestedObject, NestedValue, PathPart } from '../primitive';
 import { NodeId, Serializable } from '../schema';
-import { getInbound, getOutbound, getParameterized, isNumber, isObject, isScalar, iterRefs, refToInKey } from '../util';
+import * as util from '../util';
 
 import { nodeIdForParameterizedValue } from './SnapshotEditor';
+
+const {
+  getInbound,
+  getOutbound,
+  getParameterized,
+  isNumber,
+  isObject,
+  isReference,
+  isScalar,
+  iterRefs,
+  refToInKey,
+} = util;
 
 /**
  * Restore GraphSnapshot from serializable representation.

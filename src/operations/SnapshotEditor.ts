@@ -1,17 +1,29 @@
-import isEqual from '@wry/equality';
-import { FieldFunctionOptions, FieldPolicy, FieldReadFunction, TypePolicy } from '@apollo/client/cache/inmemory/policies';
-import { isReference, makeReference, Reference, StoreValue } from '@apollo/client';
-import { ReadFieldOptions } from '@apollo/client/cache/core/types/common';
-import { StoreObject } from '@apollo/client/utilities';
+import * as equality from '@wry/equality';
+import { makeReference } from '@apollo/client';
+import type { FieldFunctionOptions, FieldPolicy, FieldReadFunction, TypePolicy } from '@apollo/client/cache/inmemory/policies';
+import type { Reference, StoreValue } from '@apollo/client';
+import type { ReadFieldOptions } from '@apollo/client/cache/core/types/common';
+import type { StoreObject } from '@apollo/client/utilities';
 
-import { CacheContext } from '../context';
-import { InvalidPayloadError, OperationError } from '../errors';
-import { GraphSnapshot } from '../GraphSnapshot';
-import { cloneNodeSnapshot, EntitySnapshot, NodeReference, NodeSnapshot, ParameterizedValueSnapshot } from '../nodes';
-import { FieldArguments, ParsedQuery } from '../ParsedQueryNode';
-import { JsonArray, JsonObject, JsonValue, Nil, PathPart } from '../primitive';
-import { NodeId, OperationInstance, RawOperation, StaticNodeId } from '../schema';
-import {
+import type { CacheContext } from '../context';
+import type { GraphSnapshot as GraphSnapshotType } from '../GraphSnapshot';
+import type { NodeReference, EntitySnapshot as EntitySnapshotType, NodeSnapshot } from '../nodes';
+import type { FieldArguments, ParsedQuery } from '../ParsedQueryNode';
+import type { JsonArray, JsonObject, JsonScalar, JsonValue, NestedObject, Nil, PathPart } from '../primitive';
+import type { NodeId, OperationInstance, RawOperation } from '../schema';
+import * as graphSnapshot from '../GraphSnapshot';
+import * as schema from '../schema';
+import * as errors from '../errors';
+import * as nodes from '../nodes';
+import * as util from '../util';
+
+// Ensure typescript doesn't emit (0, fn)(...args)
+const isEqual = equality.equal;
+const { GraphSnapshot } = graphSnapshot;
+const { StaticNodeId } = schema;
+const { InvalidPayloadError, OperationError } = errors;
+const { cloneNodeSnapshot, EntitySnapshot, ParameterizedValueSnapshot } = nodes;
+const {
   addInboundReference,
   addOutboundReference,
   addParameterizedReference,
@@ -21,6 +33,7 @@ import {
   hasParameterizedReference,
   ifString,
   isNil,
+  isReference,
   iterParameterized,
   iterRefs,
   lazyImmutableDeepSet,
@@ -29,14 +42,15 @@ import {
   removeOutboundReference,
   removeParameterizedReference,
   toOutKey,
-} from '../util';
+} = util;
+const makeRef = makeReference;
 
 const ensureIdConstistencyMsg = `Ensure id is included (or not included) consistently across multiple requests.`;
 /**
  * A newly modified snapshot.
  */
-export interface EditedSnapshot<TSerialized = GraphSnapshot> {
-  snapshot: GraphSnapshot;
+export interface EditedSnapshot<TSerialized = GraphSnapshotType> {
+  snapshot: GraphSnapshotType;
   editedNodeIds: Set<NodeId>;
   writtenQueries: Set<OperationInstance<TSerialized>>;
   ref: Reference | undefined;
@@ -70,6 +84,21 @@ function forEach(parameterized: Map<string, NodeReference[]> | undefined, fn: (n
       fn(ref);
     }
   }
+}
+
+function getVisibleProxy(value: JsonValue | NestedObject<JsonScalar> | undefined | null, map: { [prop: string]: string } | undefined) {
+  const compatible = value != null && typeof value === 'object';
+  if (!compatible) {
+    return undefined;
+  }
+  if (!map) {
+    return value;
+  }
+  return new Proxy(value, {
+    get: (target, p: string) => {
+      return hasOwn.call(target, p) ? target[p] : target[map[p]];
+    },
+  });
 }
 
 /**
@@ -107,7 +136,7 @@ export class SnapshotEditor<TSerialized> {
     /** The configuration/context to use when editing snapshots. */
     private _context: CacheContext<TSerialized>,
     /** The snapshot to base edits off of. */
-    private _parent: GraphSnapshot,
+    private _parent: GraphSnapshotType,
   ) {}
 
   /**
@@ -126,7 +155,7 @@ export class SnapshotEditor<TSerialized> {
     // once all new nodes have been built (and we can guarantee that we're
     // referencing the correct version).
     const referenceEdits: ReferenceEdit[] = [];
-    const ref = this._mergeSubgraph(referenceEdits, warnings, parsed.rootId, [] /* prefixPath */, [] /* path */, parsed.parsedQuery, payload, prune);
+    const ref = this._mergeSubgraph(referenceEdits, warnings, parsed.rootId, [] /* prefixPath */, [] /* path */, parsed.parsedQuery, payload, prune, parsed.propMap);
 
     // Now that we have new versions of every edited node, we can point all the
     // edited references to the correct nodes.
@@ -158,6 +187,7 @@ export class SnapshotEditor<TSerialized> {
     parsed: ParsedQuery,
     payload: JsonValue | undefined,
     prune: boolean,
+    propMap: { [prop: string]: string } | undefined,
   ) {
     // Don't trust our inputs; we can receive values that aren't JSON
     // serializable via optimistic updates.
@@ -197,35 +227,15 @@ export class SnapshotEditor<TSerialized> {
         throw new InvalidPayloadError(`Unsupported transition from a list to a non-list value`, prefixPath, containerId, path, payload);
       }
 
-      this._mergeArraySubgraph(referenceEdits, warnings, containerId, prefixPath, path, parsed, payload, previousValue, prune);
+      this._mergeArraySubgraph(referenceEdits, warnings, containerId, prefixPath, path, parsed, payload, previousValue, prune, propMap);
       return;
-    }
-
-    const visiblePayload: Record<string, unknown> = {};
-    const visiblePrevious: Record<string, unknown> = {};
-    if (payload) {
-      for (const key in parsed) {
-        const value = payload[key];
-        const previous = (previousValue as JsonObject)?.[key];
-
-        visiblePayload[key] = value;
-        visiblePrevious[key] = previous;
-
-        const schemaName = parsed[key].schemaName;
-        if (schemaName) {
-          visiblePayload[schemaName] = value;
-          visiblePrevious[schemaName] = previous;
-        }
-      }
     }
 
     const ref = isReference(payload) ? payload.__ref : undefined;
     const payloadId = ref
-      ?? this._context.entityIdForValue(visiblePayload)
-      ?? this._context.entityIdForValue(payload)
+      ?? this._context.entityIdForValue(getVisibleProxy(payload, propMap))
       ?? (path.length === 0 && !isRoot ? containerId : undefined);
-    const previousId = this._context.entityIdForValue(visiblePrevious)
-      ?? this._context.entityIdForValue(previousValue)
+    const previousId = this._context.entityIdForValue(getVisibleProxy(previousValue, propMap))
       ?? (
         path.length === 0 && !isRoot
           ? containerId
@@ -346,7 +356,7 @@ export class SnapshotEditor<TSerialized> {
         if (entityId && mergeIntoStore && !isReference(value) && typeof value !== 'string') {
           this._ensureNewSnapshot(entityId).data = value as JsonValue;
         }
-        return entityId ? makeReference(entityId) : undefined;
+        return entityId ? makeRef(entityId) : undefined;
       },
       variables: undefined,
       mergeObjects<T>(existing: T, incoming: T): T {
@@ -452,7 +462,7 @@ export class SnapshotEditor<TSerialized> {
       // directly written via _setValue.  This allows us to perform minimal
       // edits to the graph.
       if (node.children) {
-        this._mergeSubgraph(referenceEdits, warnings, containerIdForField, fieldPrefixPath, fieldPath, node.children, fieldValue, prune);
+        this._mergeSubgraph(referenceEdits, warnings, containerIdForField, fieldPrefixPath, fieldPath, node.children, fieldValue, prune, node.propMap);
 
       // We've hit a leaf field.
       //
@@ -494,6 +504,7 @@ export class SnapshotEditor<TSerialized> {
     payload: JsonArray | Nil,
     previousValue: JsonArray | Nil,
     prune: boolean,
+    propMap: { [prop: string]: string } | undefined,
   ) {
     if (isNil(payload)) {
       // Note that we mark this as an edit, as this method is only ever called
@@ -537,7 +548,7 @@ export class SnapshotEditor<TSerialized> {
         }
       }
 
-      this._mergeSubgraph(referenceEdits, warnings, containerId, prefixPath, [...path, i], parsed, childPayload, prune);
+      this._mergeSubgraph(referenceEdits, warnings, containerId, prefixPath, [...path, i], parsed, childPayload, prune, propMap);
     }
   }
 
@@ -995,7 +1006,7 @@ export class SnapshotEditor<TSerialized> {
       snapshot,
       editedNodeIds: this._editedNodeIds,
       writtenQueries: this._writtenQueries,
-      ref: ref ? makeReference(ref) : undefined,
+      ref: ref ? makeRef(ref) : undefined,
     };
   }
 
@@ -1014,7 +1025,7 @@ export class SnapshotEditor<TSerialized> {
       } else {
         // TODO: This should not be run for ParameterizedValueSnapshots
         if (entityTransformer) {
-          const { data } = this._newNodes[id] as EntitySnapshot;
+          const { data } = this._newNodes[id] as EntitySnapshotType;
           if (data) entityTransformer(data);
         }
         snapshots[id] = newSnapshot;

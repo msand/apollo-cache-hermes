@@ -1,25 +1,35 @@
-import { FieldFunctionOptions } from '@apollo/client/cache/inmemory/policies';
-import { isReference, makeReference, Reference, StoreValue } from '@apollo/client';
-import { StoreObject } from '@apollo/client/utilities';
-import { ReadFieldOptions } from '@apollo/client/cache/core/types/common';
+import { makeReference } from '@apollo/client';
+import type { FieldFunctionOptions } from '@apollo/client/cache/inmemory/policies';
+import type { Reference, StoreValue } from '@apollo/client';
+import type { StoreObject } from '@apollo/client/utilities';
+import type { ReadFieldOptions } from '@apollo/client/cache/core/types/common';
 import type { DocumentNode } from 'graphql';
 
-import { CacheContext } from '../context';
-import { GraphSnapshot, NodeSnapshotMap } from '../GraphSnapshot';
-import { ParsedQuery, ParsedQueryNode } from '../ParsedQueryNode';
-import { JsonObject, JsonValue, PathPart } from '../primitive';
-import { NodeId, OperationInstance, RawOperation, StaticNodeId } from '../schema';
-import {
+import type { CacheContext } from '../context';
+import type { GraphSnapshot, NodeSnapshotMap } from '../GraphSnapshot';
+import type { ParsedQuery, ParsedQueryNode } from '../ParsedQueryNode';
+import type { JsonObject, JsonValue, PathPart } from '../primitive';
+import type { NodeId, OperationInstance, RawOperation } from '../schema';
+import type { NodeSnapshot } from '../nodes';
+import * as schema from '../schema';
+import * as util from '../util';
+import * as nodes from '../nodes';
+
+import * as snapshotEditor from './SnapshotEditor';
+
+const makeRef = makeReference;
+const { StaticNodeId } = schema;
+const { cloneNodeSnapshot, EntitySnapshot } = nodes;
+const { nodeIdForParameterizedValue } = snapshotEditor;
+const {
   deepGet,
   isNil,
   isObject,
+  isReference,
   lazyImmutableDeepSet,
   safeStringify,
   walkOperation,
-} from '../util';
-import { cloneNodeSnapshot, EntitySnapshot, NodeSnapshot } from '../nodes';
-
-import { nodeIdForParameterizedValue } from './SnapshotEditor';
+} = util;
 
 export type MissingTree =
   | string
@@ -287,7 +297,7 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
         nodeSnapshot.data = { ...nodeSnapshot.data as {}, ...value };
       }
       const ref = entityId ?? value;
-      return typeof ref === 'string' ? makeReference(ref) : undefined;
+      return typeof ref === 'string' ? makeRef(ref) : undefined;
     },
     variables: query.variables,
   };

@@ -42,6 +42,9 @@ export class ParsedQueryNode<TArgTypes = JsonScalar> {
      * ignore whole subtrees in some situations if they were completely static.
      * */
     public hasParameterizedChildren?: true,
+    public propMap?: {
+      [key: string]: string,
+    },
   ) {}
 }
 
@@ -96,14 +99,28 @@ export function parseQuery<TSerialized>(
   context: CacheContext<TSerialized>,
   fragments: FragmentMap,
   selectionSet: SelectionSetNode,
-): { parsedQuery: DeepReadonly<ParsedQueryWithVariables>, variables: Set<string> } {
+): {
+  parsedQuery: DeepReadonly<ParsedQueryWithVariables>,
+  variables: Set<string>,
+  propMap?: { [p: string]: string } | undefined,
+} {
   const variables = new Set<string>();
-  const parsedQuery = _buildNodeMap(variables, context, fragments, selectionSet);
+  const propMap = Object.create(null);
+  const parsedQuery = _buildNodeMap(variables, context, fragments, propMap, selectionSet);
   if (!parsedQuery) {
     throw new Error(`Parsed a query, but found no fields present; it may use unsupported GraphQL features`);
   }
 
+  const map = unlessEmpty(propMap);
+  if (map !== undefined) {
+    return { parsedQuery, variables, propMap: map };
+  }
+
   return { parsedQuery, variables };
+}
+
+function unlessEmpty(propMap: { [p: string]: string }) {
+  return Object.keys(propMap).length === 0 ? undefined : propMap;
 }
 
 /**
@@ -114,6 +131,7 @@ function _buildNodeMap<TSerialized>(
   variables: Set<string>,
   context: CacheContext<TSerialized>,
   fragments: FragmentMap,
+  propMap: { [p: string]: string },
   selectionSet?: SelectionSetNode,
   path: string[] = [],
 ): ParsedQueryWithVariables | undefined {
@@ -124,7 +142,8 @@ function _buildNodeMap<TSerialized>(
     if (selection.kind === 'Field') {
       // The name of the field (as defined by the query).
       const name = selection.alias ? selection.alias.value : selection.name.value;
-      const children = _buildNodeMap(variables, context, fragments, selection.selectionSet, [...path, name]);
+      const innerPropMap = Object.create(null);
+      const children = _buildNodeMap(variables, context, fragments, innerPropMap, selection.selectionSet, [...path, name]);
 
       let args, schemaName;
       // fields marked as @static are treated as if they are a static field in
@@ -133,11 +152,14 @@ function _buildNodeMap<TSerialized>(
       if (!fieldHasStaticDirective(selection)) {
         args = _buildFieldArgs(variables, selection.arguments);
         schemaName = selection.alias ? selection.name.value : undefined;
+        if (schemaName !== undefined) {
+          propMap[schemaName] = name;
+        }
       }
 
       const hasParameterizedChildren = areChildrenDynamic(children);
 
-      const node = new ParsedQueryNode(children, schemaName, args, hasParameterizedChildren);
+      const node = new ParsedQueryNode(children, schemaName, args, hasParameterizedChildren, unlessEmpty(innerPropMap));
       nodeMap[name] = _mergeNodes([...path, name], node, nodeMap[name]);
 
     } else if (selection.kind === 'FragmentSpread') {
@@ -146,7 +168,7 @@ function _buildNodeMap<TSerialized>(
         throw new Error(`Expected fragment ${selection.name.value} to be defined`);
       }
 
-      const fragmentMap = _buildNodeMap(variables, context, fragments, fragment.selectionSet, path);
+      const fragmentMap = _buildNodeMap(variables, context, fragments, propMap, fragment.selectionSet, path);
       if (fragmentMap) {
         for (const name in fragmentMap) {
           nodeMap[name] = _mergeNodes([...path, name], fragmentMap[name], nodeMap[name]);
@@ -154,7 +176,7 @@ function _buildNodeMap<TSerialized>(
       }
 
     } else if (selection.kind === 'InlineFragment') {
-      const fragmentMap = _buildNodeMap(variables, context, fragments, selection.selectionSet, path);
+      const fragmentMap = _buildNodeMap(variables, context, fragments, propMap, selection.selectionSet, path);
       if (fragmentMap) {
         for (const name in fragmentMap) {
           nodeMap[name] = _mergeNodes([...path, name], fragmentMap[name], nodeMap[name]);
@@ -279,6 +301,7 @@ export function _expandVariables(parsed?: ParsedQueryWithVariables, variables?: 
         node.schemaName,
         expandFieldArguments(node.args, variables),
         node.hasParameterizedChildren,
+        node.propMap,
       );
     // No variables to substitute for this subtree.
     } else {

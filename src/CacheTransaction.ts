@@ -1,22 +1,37 @@
-import {
+import type {
   DeleteModifier,
-  InvalidateModifier, Modifier,
+  InvalidateModifier,
+  Modifier,
   ModifierDetails,
   ReadFieldOptions,
 } from '@apollo/client/cache/core/types/common';
-import { Cache as CacheInterface, Reference, makeReference, isReference, StoreObject, StoreValue } from '@apollo/client';
-import isEqual from '@wry/equality';
+import type { Cache as CacheInterface, Reference, StoreObject, StoreValue } from '@apollo/client';
+import { makeReference } from '@apollo/client';
+import * as equality from '@wry/equality';
 
-import { ApolloTransaction } from './apollo/Transaction';
-import { CacheSnapshot } from './CacheSnapshot';
-import { CacheContext } from './context';
-import { GraphSnapshot, NodeSnapshotMap } from './GraphSnapshot';
-import { cloneNodeSnapshot, EntitySnapshot, NodeSnapshot } from './nodes';
-import { read, SnapshotEditor, write } from './operations';
-import { JsonObject, JsonValue } from './primitive';
-import { Queryable } from './Queryable';
-import { ChangeId, NodeId, OperationInstance, CacheDelta, RawOperation, StaticNodeId } from './schema';
-import { DocumentNode, addToSet, isObject } from './util';
+import type { ChangeId, NodeId, OperationInstance, CacheDelta, RawOperation } from './schema';
+import type { CacheSnapshot as CacheSnapshotType } from './CacheSnapshot';
+import type { GraphSnapshot, NodeSnapshotMap } from './GraphSnapshot';
+import type { JsonObject, JsonValue } from './primitive';
+import type { CacheContext } from './context';
+import type { Queryable } from './Queryable';
+import type { NodeSnapshot } from './nodes';
+import type { DocumentNode } from './util';
+import * as transaction from './apollo/Transaction';
+import * as cacheSnapshot from './CacheSnapshot';
+import * as operations from './operations';
+import * as schema from './schema';
+import * as nodes from './nodes';
+import * as util from './util';
+
+const isEqual = equality.equal;
+const makeRef = makeReference;
+const { StaticNodeId } = schema;
+const { CacheSnapshot } = cacheSnapshot;
+const { ApolloTransaction } = transaction;
+const { cloneNodeSnapshot, EntitySnapshot } = nodes;
+const { read, SnapshotEditor, write } = operations;
+const { addToSet, isObject, isReference } = util;
 
 const DELETE: DeleteModifier = Object.create(null);
 const INVALIDATE: InvalidateModifier = Object.create(null);
@@ -54,11 +69,11 @@ export class CacheTransaction<TSerialized> implements Queryable {
   private _writtenQueries = new Set<OperationInstance<TSerialized>>();
 
   /** The original snapshot before the transaction began. */
-  private _parentSnapshot: CacheSnapshot;
+  private _parentSnapshot: CacheSnapshotType;
 
   constructor(
     private _context: CacheContext<TSerialized>,
-    private _snapshot: CacheSnapshot,
+    private _snapshot: CacheSnapshotType,
     private _optimisticChangeId?: ChangeId,
   ) {
     this._parentSnapshot = _snapshot;
@@ -121,7 +136,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
    * Complete the transaction, returning the new snapshot and the ids of any
    * nodes that were edited.
    */
-  commit(): { snapshot: CacheSnapshot, editedNodeIds: Set<NodeId>, writtenQueries: Set<OperationInstance<TSerialized>> } {
+  commit(): { snapshot: CacheSnapshotType, editedNodeIds: Set<NodeId>, writtenQueries: Set<OperationInstance<TSerialized>> } {
     this._triggerEntityUpdaters();
 
     let snapshot = this._snapshot;
@@ -140,7 +155,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
     addToSet(this._editedNodeIds, allIds);
   }
 
-  setSnapshot(snapshot: CacheSnapshot) {
+  setSnapshot(snapshot: CacheSnapshotType) {
     this._snapshot = snapshot;
   }
 
@@ -363,7 +378,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
           nodeSnapshot.data = { ...nodeSnapshot.data as {}, ...value };
           modified = true;
         }
-        return entityId ? makeReference(entityId) : undefined;
+        return entityId ? makeRef(entityId) : undefined;
       },
     };
 

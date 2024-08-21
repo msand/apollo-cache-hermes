@@ -42,6 +42,7 @@ export class QueryInfo<TSerialized = GraphSnapshot> {
   public readonly parsed: ParsedQueryWithVariables;
   /** Variables used within this query. */
   public readonly variables: Set<string>;
+  public readonly propMap: { [p: string]: string } | undefined;
   /**
    * Default values for the variables used by this query.
    *
@@ -57,9 +58,10 @@ export class QueryInfo<TSerialized = GraphSnapshot> {
     this.operationSource = this.operation.loc && this.operation.loc.source.body;
     this.fragmentMap = fragmentMapForDocument(raw.document);
 
-    const { parsedQuery, variables } = parseQuery(context, this.fragmentMap, this.operation.selectionSet);
+    const { parsedQuery, variables, propMap } = parseQuery(context, this.fragmentMap, this.operation.selectionSet);
     this.parsed = parsedQuery;
     this.variables = variables;
+    this.propMap = propMap;
     this.variableDefaults = variableDefaultsInOperation(this.operation);
 
     // Skip verification if rawOperation is constructed from fragments

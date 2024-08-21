@@ -65,6 +65,7 @@ export interface OperationInstance<TSerialized> {
   readonly isStatic: boolean;
   /** Any variables used by parameterized fields within the selection set. */
   readonly variables?: JsonObject;
+  readonly propMap: { [p: string]: string } | undefined;
 }
 
 /**
