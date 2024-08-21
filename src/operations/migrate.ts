@@ -5,8 +5,10 @@ import { JsonObject, JsonValue, PathPart } from '../primitive';
 import { NodeId } from '../schema';
 import {
   isObject,
-  addNodeReference,
   deepGet,
+  toParamKey,
+  addInboundReference,
+  addParameterizedReference,
 } from '../util';
 
 import { nodeIdForParameterizedValue, NodeSnapshotMap } from './SnapshotEditor';
@@ -73,13 +75,15 @@ function migrateEntity(
 
   if (parameterizedMigrations && parameterizedMigrations[typeName]) {
     for (const parameterized of parameterizedMigrations[typeName]) {
-      const fieldId = nodeIdForParameterizedValue(id, parameterized.path, parameterized.args);
+      const parameterizedPath = parameterized.path;
+      const fieldId = nodeIdForParameterizedValue(id, parameterizedPath, parameterized.args);
       // create a parameterized value snapshot if container doesn't know of the
       // parameterized field we expect
-      if (!snapshot.outbound || !snapshot.outbound.find(s =>  s.id === fieldId)) {
+      if (!snapshot.parameterized?.get(toParamKey(parameterizedPath))?.find(s =>  s.id === fieldId)) {
         let newData = parameterized.defaultReturn;
-        if (allNodes && parameterized.copyFrom) {
-          const { path, args } = parameterized.copyFrom;
+        const copyFrom = parameterized.copyFrom;
+        if (allNodes && copyFrom) {
+          const { path, args } = copyFrom;
           const copyFromFieldId = nodeIdForParameterizedValue(id, path, args);
           const copyFromNode = allNodes[copyFromFieldId];
           if (copyFromNode) {
@@ -93,8 +97,8 @@ function migrateEntity(
         nodesToAdd[fieldId] = newNode;
 
         // update the reference for the new node in the container
-        addNodeReference('inbound', newNode, id, parameterized.path);
-        addNodeReference('outbound', snapshot, fieldId, parameterized.path);
+        addInboundReference(newNode, id, parameterizedPath);
+        addParameterizedReference(snapshot, fieldId, parameterizedPath);
       }
     }
   }

@@ -2,6 +2,8 @@ import { CacheContext } from '../../src/context';
 import { GraphSnapshot } from '../../src/GraphSnapshot';
 import { JsonObject } from '../../src/primitive';
 import { NodeId } from '../../src/schema';
+import { iterParameterized } from '../../src/util';
+import { NodeReference } from '../../src/nodes';
 
 import { createSnapshot } from './write';
 
@@ -24,3 +26,6 @@ export function createGraphSnapshot(
     cacheContext
   ).snapshot;
 }
+
+export const mapToEntries = (map: Map<string, NodeReference[]> | undefined): NodeReference[] | undefined => map && Array.from(iterParameterized(map));
+export const mapToEntries2 = (map: Map<string, NodeReference> | undefined): NodeReference[] | undefined => map && Array.from(map.values());

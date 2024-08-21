@@ -1,71 +1,128 @@
-import isEqual from '@wry/equality';
+import { Reference } from '@apollo/client/utilities';
 
 import { NodeReference, NodeSnapshot } from '../nodes';
 import { JsonObject, PathPart } from '../primitive';
 import { NodeId } from '../schema';
 
-export type ReferenceDirection = 'inbound' | 'outbound';
-
 /**
- * Mutates a snapshot, removing an inbound reference from it.
- *
- * Returns whether all references were removed.
+ * Mutates a snapshot, removing a reference from it.
  */
-export function removeNodeReference(
-  direction: ReferenceDirection,
+export function removeInboundReference(
   snapshot: NodeSnapshot,
   id: NodeId,
   path: PathPart[],
-): boolean {
-  const references = snapshot[direction];
-  if (!references) return true;
+) {
+  const map = snapshot.inbound;
+  if (!map) return;
 
-  const fromIndex = getIndexOfGivenReference(references, id, path);
-  if (fromIndex < 0) return false;
-  references.splice(fromIndex, 1);
+  const key = toInKey(id, path);
+  map.delete(key);
 
-  if (!references.length) {
-    snapshot[direction] = undefined;
+  const empty = map.size === 0;
+  if (empty) {
+    snapshot.inbound = undefined;
+  }
+}
+export function removeOutboundReference(
+  snapshot: NodeSnapshot,
+  path: PathPart[],
+) {
+  const map = snapshot.outbound;
+  if (!map) return;
+
+  const key = toOutKey(path);
+  map.delete(key);
+
+  const empty = map.size === 0;
+  if (empty) {
+    snapshot.outbound = undefined;
+  }
+}
+export function removeParameterizedReference(
+  snapshot: NodeSnapshot,
+  id: NodeId,
+  path: PathPart[],
+) {
+  const map = snapshot.parameterized;
+  if (!map) return;
+
+  const key = toParamKey(path);
+  const refs = map.get(key);
+  if (!refs) return;
+
+  const index = getIndexOfGivenReference(refs, id, path);
+  if (index !== -1) {
+    refs.splice(index, 1);
   }
 
-  return !references.length;
+  if (refs.length === 0) {
+    map.delete(key);
+  }
+
+  const empty = map.size === 0;
+  if (empty) {
+    snapshot.parameterized = undefined;
+  }
 }
 
 /**
  * Mutates a snapshot, adding a new reference to it.
  */
-export function addNodeReference(
-  direction: ReferenceDirection,
+export function addInboundReference(
   snapshot: NodeSnapshot,
   id: NodeId,
   path: PathPart[],
-): boolean {
-  let references = snapshot[direction];
+) {
+  const node: NodeReference = { id, path };
+  let references = snapshot.inbound;
   if (!references) {
-    references = snapshot[direction] = [];
+    references = snapshot.inbound = new Map();
   }
-
-  const idx = getIndexOfGivenReference(references, id, path);
-  if (idx === -1) {
-    references.push({ id, path });
-    return true;
+  const key = refToInKey(node);
+  references.set(key, node);
+}
+export function addOutboundReference(
+  snapshot: NodeSnapshot,
+  id: NodeId,
+  path: PathPart[],
+) {
+  const node: NodeReference = { id, path };
+  let references = snapshot.outbound;
+  if (!references) {
+    references = snapshot.outbound = new Map();
   }
-  return false;
+  const key = toOutKey(path);
+  references.set(key, node);
+}
+export function addParameterizedReference(
+  snapshot: NodeSnapshot,
+  id: NodeId,
+  path: PathPart[],
+) {
+  let references = snapshot.parameterized;
+  if (!references) {
+    references = snapshot.parameterized = new Map();
+  }
+  const key = toParamKey(path);
+  const refs = references.get(key);
+  if (refs === undefined) {
+    references.set(key, [{ id, path }]);
+  } else if (getIndexOfGivenReference(refs, id, path) === -1) {
+    refs.push({ id, path });
+  }
 }
 
 /**
  * Return true if { id, path } is a valid reference in the node's references
  * array. Otherwise, return false.
  */
-export function hasNodeReference(
+export function hasParameterizedReference(
   snapshot: NodeSnapshot,
-  type: ReferenceDirection,
   id: NodeId,
   path: PathPart[],
 ): boolean {
-  const references = snapshot[type];
-  if (!references || getIndexOfGivenReference(references, id, path) === -1) return false;
-  return true;
+  const refs = snapshot.parameterized?.get(toParamKey(path));
+  return refs !== undefined && getIndexOfGivenReference(refs, id, path) > -1;
 }
 
 /**
@@ -74,23 +131,9 @@ export function hasNodeReference(
  */
 export function getIndexOfGivenReference(references: NodeReference[], id: NodeId, path: PathPart[]): number {
   return references.findIndex((reference) => {
-    return reference.id === id && isEqual(reference.path, path);
+    const p = reference.path;
+    return reference.id === id && path.every((part, i) => part === p[i]);
   });
-}
-
-/**
- * Return true if of 'path' points to a valid reference field
- */
-export function isReferenceField(
-  snapshot: NodeSnapshot,
-  path: PathPart[],
-): boolean {
-  const references = snapshot['outbound'];
-  if (!references) return false;
-  const index = references.findIndex((reference) => {
-    return isEqual(reference.path, path);
-  });
-  return (index >= 0);
 }
 
 function getCircularReplacer() {
@@ -133,4 +176,92 @@ export function safeStringify(value: JsonObject) {
       return error instanceof Error ? error.message : 'Failed to stringify value';
     }
   }
+}
+
+export function refToInKey({ id, path }: NodeReference) {
+  return `${id}.${path.join('.')}`;
+}
+export function toInKey(id: NodeId, path: PathPart[]) {
+  return `${id}.${path.join('.')}`;
+}
+export function toOutKey(path: PathPart[]) {
+  return path.join('.');
+}
+export function toParamKey(path: PathPart[]) {
+  return path[0].toString();
+}
+
+export function getInbound(inbound: NodeReference[] | undefined): Map<string, NodeReference> | undefined {
+  if (!inbound) {
+    return inbound;
+  }
+  const map = new Map<string, NodeReference>();
+  for (const ref of inbound) {
+    map.set(refToInKey(ref), ref);
+  }
+  return map;
+}
+
+export function getOutbound(outbound: Iterable<NodeReference> | undefined): Map<string, NodeReference> | undefined {
+  if (!outbound) {
+    return outbound;
+  }
+  const map = new Map<string, NodeReference>();
+  for (const out of outbound) {
+    map.set(toOutKey(out.path), out);
+  }
+  return map;
+}
+
+function setParameterized(map: Map<string, NodeReference[]>, node: NodeReference) {
+  const key = toParamKey(node.path);
+  const arr = map.get(key);
+  if (arr === undefined) {
+    map.set(key, [node]);
+  } else {
+    arr.push(node);
+  }
+}
+
+export const set = setParameterized;
+
+export function getParameterized(parameterized: Iterable<NodeReference> | undefined): Map<string, NodeReference[]> | undefined {
+  if (!parameterized) {
+    return parameterized;
+  }
+  const map = new Map<string, NodeReference[]>();
+  for (const ref of parameterized) {
+    setParameterized(map, ref);
+  }
+  return map;
+}
+
+export function *iterParameterized(parameterized: Map<string, NodeReference[]> | undefined) {
+  if (!parameterized) {
+    return;
+  }
+  for (const refs of parameterized.values()) {
+    for (const ref of refs) {
+      yield ref;
+    }
+  }
+}
+
+export function *iterRefs(outbound: Map<string, NodeReference> | undefined, parameterized: Map<string, NodeReference[]> | undefined): Generator<NodeReference> {
+  if (parameterized !== undefined) {
+    for (const refs of parameterized.values()) {
+      for (const ref of refs) {
+        yield ref;
+      }
+    }
+  }
+  if (outbound !== undefined) {
+    for (const ref of outbound.values()) {
+      yield ref;
+    }
+  }
+}
+
+export function isReference(obj: any): obj is Reference {
+  return obj != null && typeof obj === 'object' && typeof obj.__ref === 'string';
 }

@@ -134,6 +134,7 @@ describe(`writeFragment with paramterized references in an array`, () => {
           },
         },
         [{ id: parameterizedShipmentId, path: [0] }],
+        undefined,
         [{ id: parameterizedShipperId, path: ['shipper'] }],
       )
     );

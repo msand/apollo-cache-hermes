@@ -88,6 +88,7 @@ describe(`writeFragment with nested paramterized value`, () => {
           __typename: 'Viewer',
         },
         [{ id: QueryRootId, path: ['viewer'] }],
+        undefined,
         [{ id: parameterizedTruckId, path: ['trucks'] }]
       )
     );
@@ -150,6 +151,7 @@ describe(`writeFragment with nested paramterized value`, () => {
           __typename: 'Viewer',
         },
         [{ id: QueryRootId, path: ['viewer'] }],
+        undefined,
         [{ id: parameterizedTruckId, path: ['trucks'] }]
       )
     );

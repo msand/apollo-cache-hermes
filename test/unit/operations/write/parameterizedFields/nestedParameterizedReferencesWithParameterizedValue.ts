@@ -3,7 +3,7 @@ import { GraphSnapshot } from '../../../../../src/GraphSnapshot';
 import { nodeIdForParameterizedValue } from '../../../../../src/operations/SnapshotEditor';
 import { write } from '../../../../../src/operations';
 import { NodeId, RawOperation, StaticNodeId } from '../../../../../src/schema';
-import { query, strictConfig } from '../../../../helpers';
+import { mapToEntries, mapToEntries2, query, strictConfig } from '../../../../helpers';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
@@ -60,12 +60,12 @@ describe(`operations.write`, () => {
     it(`references the parent entity snapshot from the children`, () => {
       const entry1 = snapshot.getNodeSnapshot(parameterizedFieldId)!;
 
-      jestExpect(entry1.inbound).toEqual(jestExpect.arrayContaining([{ id: entityId, path: ['four'] }]));
+      jestExpect(mapToEntries2(entry1.inbound)).toEqual(jestExpect.arrayContaining([{ id: entityId, path: ['four'] }]));
     });
 
     it(`references the children from the parent entity`, () => {
       const entity = snapshot.getNodeSnapshot(entityId)!;
-      jestExpect(entity.outbound).toEqual(jestExpect.arrayContaining([
+      jestExpect(mapToEntries(entity.parameterized)).toEqual(jestExpect.arrayContaining([
         { id: parameterizedFieldId, path: ['four'] },
       ]));
     });
@@ -73,7 +73,7 @@ describe(`operations.write`, () => {
     it(`references the children from the parameterized root`, () => {
       const container = snapshot.getNodeSnapshot(parameterizedRootId)!;
 
-      jestExpect(container.outbound).toEqual(jestExpect.arrayContaining([
+      jestExpect(mapToEntries2(container.outbound)).toEqual(jestExpect.arrayContaining([
         { id: entityId, path: ['three'] },
       ]));
     });

@@ -3,7 +3,7 @@ import { GraphSnapshot } from '../../../../../src/GraphSnapshot';
 import { nodeIdForParameterizedValue } from '../../../../../src/operations/SnapshotEditor';
 import { write } from '../../../../../src/operations';
 import { NodeId, RawOperation, StaticNodeId } from '../../../../../src/schema';
-import { query, strictConfig } from '../../../../helpers';
+import { mapToEntries2, query, strictConfig } from '../../../../helpers';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
@@ -54,14 +54,14 @@ describe(`operations.write`, () => {
       const entry1 = snapshot.getNodeSnapshot('1')!;
       const entry2 = snapshot.getNodeSnapshot('2')!;
 
-      jestExpect(entry1.inbound).toEqual(jestExpect.arrayContaining([{ id: containerId, path: [0, 'three'] }]));
-      jestExpect(entry2.inbound).toEqual(jestExpect.arrayContaining([{ id: containerId, path: [1, 'three'] }]));
+      jestExpect(mapToEntries2(entry1.inbound)).toEqual(jestExpect.arrayContaining([{ id: containerId, path: [0, 'three'] }]));
+      jestExpect(mapToEntries2(entry2.inbound)).toEqual(jestExpect.arrayContaining([{ id: containerId, path: [1, 'three'] }]));
     });
 
     it(`references the children from the parent`, () => {
       const container = snapshot.getNodeSnapshot(containerId)!;
 
-      jestExpect(container.outbound).toEqual(jestExpect.arrayContaining([
+      jestExpect(mapToEntries2(container.outbound)).toEqual(jestExpect.arrayContaining([
         { id: '1', path: [0, 'three'] },
         { id: '2', path: [1, 'three'] },
       ]));
@@ -76,11 +76,11 @@ describe(`operations.write`, () => {
         },
       }).snapshot;
 
-      jestExpect(updated.getNodeSnapshot(containerId)!.outbound).toEqual(jestExpect.arrayContaining([
+      jestExpect(mapToEntries2(updated.getNodeSnapshot(containerId)!.outbound)).toEqual(jestExpect.arrayContaining([
         { id: '2', path: [0, 'three'] },
       ]));
 
-      jestExpect(updated.getNodeSnapshot('2')!.inbound).toEqual(jestExpect.arrayContaining([
+      jestExpect(mapToEntries2(updated.getNodeSnapshot('2')!.inbound)).toEqual(jestExpect.arrayContaining([
         { id: containerId, path: [0, 'three'] },
       ]));
     });

@@ -1,4 +1,5 @@
 import { JsonObject, NestedArray, NestedObject } from '../primitive';
+import { getInbound, getOutbound, getParameterized } from '../util';
 
 import { NodeReference, NodeSnapshot } from './NodeSnapshot';
 
@@ -13,12 +14,24 @@ export { NestedArray, NestedObject };
  * parameterized values that may also have been queried for it.
  */
 export class EntitySnapshot implements NodeSnapshot {
+  /** Other node snapshots that point to this one. */
+  public inbound?: Map<string, NodeReference>;
+  /** The node snapshots that this one points to. */
+  public outbound?: Map<string, NodeReference>;
+  /** The parameterized node snapshots that this one points to. */
+  public parameterized?: Map<string, NodeReference[]>;
   constructor(
     /** A reference to the entity this snapshot is about. */
     public data?: JsonObject,
     /** Other node snapshots that point to this one. */
-    public inbound?: NodeReference[],
+    inbound?: Map<string, NodeReference> | NodeReference[],
     /** The node snapshots that this one points to. */
-    public outbound?: NodeReference[],
-  ) {}
+    outbound?: Map<string, NodeReference> | NodeReference[],
+    /** The parameterized node snapshots that this one points to. */
+    parameterized?: Map<string, NodeReference[]> | NodeReference[],
+  ) {
+    this.inbound = Array.isArray(inbound) ? getInbound(inbound) : inbound;
+    this.outbound = Array.isArray(outbound) ? getOutbound(outbound) : outbound;
+    this.parameterized = Array.isArray(parameterized) ? getParameterized(parameterized) : parameterized;
+  }
 }

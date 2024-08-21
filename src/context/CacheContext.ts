@@ -271,6 +271,7 @@ export class CacheContext<TSerialized = GraphSnapshot> {
       parsedQuery: expandVariables(info.parsed, fullVariables),
       isStatic: !areChildrenDynamic(info.parsed) && !rootHasReadPolicy,
       variables: updateRaw.variables,
+      propMap: info.propMap,
     };
     operationInstances.push(operation);
 

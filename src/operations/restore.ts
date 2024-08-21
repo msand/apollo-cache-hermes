@@ -1,17 +1,25 @@
-import lodashSet = require('lodash.set');
-import lodashFindIndex = require('lodash.findindex');
-import { isReference } from '@apollo/client';
-
 import { CacheSnapshot } from '../CacheSnapshot';
 import { CacheContext } from '../context';
 import { GraphSnapshot, NodeSnapshotMap } from '../GraphSnapshot';
 import { EntitySnapshot, NodeReference, ParameterizedValueSnapshot } from '../nodes';
 import { OptimisticUpdateQueue } from '../OptimisticUpdateQueue';
-import { JsonObject, JsonValue, NestedValue, PathPart } from '../primitive';
+import { JsonObject, JsonScalar, JsonValue, NestedArray, NestedObject, NestedValue, PathPart } from '../primitive';
 import { NodeId, Serializable } from '../schema';
-import { isNumber, isObject, isScalar } from '../util';
+import * as util from '../util';
 
 import { nodeIdForParameterizedValue } from './SnapshotEditor';
+
+const {
+  getInbound,
+  getOutbound,
+  getParameterized,
+  isNumber,
+  isObject,
+  isReference,
+  isScalar,
+  iterRefs,
+  refToInKey,
+} = util;
 
 /**
  * Restore GraphSnapshot from serializable representation.
@@ -43,20 +51,21 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
   // Create entity nodes in the GraphSnapshot
   for (const nodeId in serializedState) {
     const state = serializedState[nodeId];
-    const { type, data, inbound, outbound } = state;
+    const { type, data, inbound, outbound, parameterized } = state;
 
     let nodeSnapshot;
     switch (type) {
       case Serializable.NodeSnapshotType.EntitySnapshot:
-        nodeSnapshot = new EntitySnapshot(data as JsonObject, inbound, outbound);
+        nodeSnapshot = new EntitySnapshot(data as JsonObject, getInbound(inbound), getOutbound(outbound), getParameterized(parameterized));
         break;
       case Serializable.NodeSnapshotType.ParameterizedValueSnapshot:
-        nodeSnapshot = new ParameterizedValueSnapshot(data as JsonValue, inbound, outbound);
+        nodeSnapshot = new ParameterizedValueSnapshot(data as JsonValue, getInbound(inbound), getOutbound(outbound), getParameterized(parameterized));
         break;
       case undefined: {
         const parsed: JsonObject = {};
         const parsedIn: NodeReference[] = missingPointers.get(nodeId) ?? [];
         const parsedOut: NodeReference[] = [];
+        const parsedParameterized: NodeReference[] = [];
         for (const [key, val] of Object.entries(state)) {
           const result = /(.+)\((.+)\)/.exec(key);
           if (result) {
@@ -68,26 +77,27 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
               []
             );
             editedNodeIds.add(fieldId);
-            parsedOut.push({ id: fieldId, path });
+            parsedParameterized.push({ id: fieldId, path });
           } else if (isReference(val)) {
             const id = val.__ref;
             const path = [key];
             parsedOut.push({ id, path });
             const reverse: NodeReference = { id: nodeId, path };
             if (id in nodesMap) {
-              nodesMap[id]?.inbound?.push(reverse);
+              nodesMap[id]?.inbound?.set(refToInKey(reverse), reverse);
             } else {
-              const references = missingPointers.get(id) ?? [];
-              if (references.length === 0) {
-                missingPointers.set(id, references);
+              const references = missingPointers.get(id);
+              if (references === undefined) {
+                missingPointers.set(id, [reverse]);
+              } else {
+                references.push(reverse);
               }
-              references.push(reverse);
             }
           } else {
             parsed[key] = val;
           }
         }
-        nodeSnapshot = new EntitySnapshot(parsed as JsonObject, parsedIn, parsedOut);
+        nodeSnapshot = new EntitySnapshot(parsed as JsonObject, getInbound(parsedIn), getOutbound(parsedOut), getParameterized(parsedParameterized));
         break;
       }
       default:
@@ -104,11 +114,24 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
   return { nodesMap, editedNodeIds };
 }
 
+function set(data: NestedArray<JsonScalar> | NestedObject<JsonScalar>, path: PathPart[], value: JsonValue | undefined) {
+  let obj = data;
+  const l = path.length - 1;
+  for (let i = 0; i < l; i++) {
+    const key = path[i];
+    if (!(key in obj)) {
+      obj[key] = typeof key === 'string' ? {} : [];
+    }
+    obj = obj[key];
+  }
+  obj[path[l]] = value;
+}
+
 function restoreEntityReferences<TSerialized>(nodesMap: NodeSnapshotMap, cacheContext: CacheContext<TSerialized>) {
   const { entityTransformer, entityIdForValue } = cacheContext;
 
   for (const nodeId in nodesMap) {
-    const { data, outbound } = nodesMap[nodeId];
+    const { data, outbound, parameterized } = nodesMap[nodeId];
     if (entityTransformer && isObject(data) && entityIdForValue(data)) {
       entityTransformer(data);
     }
@@ -116,11 +139,11 @@ function restoreEntityReferences<TSerialized>(nodesMap: NodeSnapshotMap, cacheCo
     // If it doesn't have outbound then 'data' doesn't have any references
     // If it is 'undefined' means that there is no data value
     // in both cases, there is no need for modification.
-    if (!outbound || data === undefined) {
+    if ((!outbound && !parameterized) || data === undefined) {
       continue;
     }
 
-    for (const { id: referenceId, path } of outbound) {
+    for (const { id: referenceId, path } of iterRefs(outbound, parameterized)) {
       const referenceNode = nodesMap[referenceId];
       if (referenceNode instanceof EntitySnapshot && data === null) {
         // data is a reference.
@@ -131,12 +154,12 @@ function restoreEntityReferences<TSerialized>(nodesMap: NodeSnapshotMap, cacheCo
         // ParameterizedValueSnapshot.
         // (see: parameterizedFields/nestedParameterizedReferenceInArray.ts)
         // We only want to try walking if its data contains an array
-        const indexToArrayIndex = lodashFindIndex(path, isNumber);
-        if (indexToArrayIndex !== -1) {
+        const hasArrayIndex = path.some(part => isNumber(part));
+        if (hasArrayIndex) {
           tryRestoreSparseArray(data, path, 0);
         }
       } else if (Array.isArray(data) || isObject(data)) {
-        lodashSet(data, path, referenceNode.data);
+        set(data, path, referenceNode.data);
       }
     }
   }

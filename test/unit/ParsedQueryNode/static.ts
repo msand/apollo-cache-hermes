@@ -51,6 +51,9 @@ describe(`parseQuery with static queries`, () => {
         foo: new ParsedQueryNode(undefined, 'bar'),
       },
       variables: new Set(),
+      propMap: {
+        bar: 'foo',
+      },
     });
   });
 
@@ -67,6 +70,9 @@ describe(`parseQuery with static queries`, () => {
         fizz: new ParsedQueryNode(),
       },
       variables: new Set(),
+      propMap:  {
+        fizz: 'bar',
+      },
     });
   });
 

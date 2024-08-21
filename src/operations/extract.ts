@@ -1,9 +1,9 @@
-import { CacheContext } from '../context/CacheContext';
+import { CacheContext } from '../context';
 import { GraphSnapshot } from '../GraphSnapshot';
 import { EntitySnapshot, NodeSnapshot, ParameterizedValueSnapshot } from '../nodes';
 import { JsonValue, NestedValue } from '../primitive';
 import { Serializable, isSerializable } from '../schema';
-import { lazyImmutableDeepSet } from '../util';
+import { iterParameterized, iterRefs, lazyImmutableDeepSet } from '../util';
 
 /**
  * Create serializable representation of GraphSnapshot.
@@ -21,7 +21,7 @@ export function extract<TSerialized>(graphSnapshot: GraphSnapshot, cacheContext:
   // created with prototype of 'null'
   for (const id in entities) {
     const nodeSnapshot = entities[id];
-    const { outbound, inbound } = nodeSnapshot;
+    const { outbound, inbound, parameterized } = nodeSnapshot;
 
     let type: Serializable.NodeSnapshotType;
     if (nodeSnapshot instanceof EntitySnapshot) {
@@ -34,12 +34,16 @@ export function extract<TSerialized>(graphSnapshot: GraphSnapshot, cacheContext:
 
     const serializedEntity: Serializable.NodeSnapshot = { type };
 
+    if (parameterized) {
+      serializedEntity.parameterized = Array.from(iterParameterized(parameterized));
+    }
+
     if (outbound) {
-      serializedEntity.outbound = outbound;
+      serializedEntity.outbound = Array.from(outbound.values());
     }
 
     if (inbound) {
-      serializedEntity.inbound = inbound;
+      serializedEntity.inbound = Array.from(inbound.values());
     }
 
     // Extract data value
@@ -82,7 +86,7 @@ function extractSerializableData(graphSnapshot: GraphSnapshot, nodeSnapshot: Nod
   let extractedData: JsonValue | null = nodeSnapshot.data;
 
   // Set all the outbound path (e.g reference) to undefined.
-  for (const outbound of nodeSnapshot.outbound) {
+  for (const outbound of iterRefs(nodeSnapshot.outbound, nodeSnapshot.parameterized)) {
     // Only reference to EntitySnapshot is recorded in the data property
     // So we didn't end up set the value to be 'undefined' in the output
     // in every case

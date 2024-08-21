@@ -91,7 +91,7 @@ describe(`operations.migrate`, () => {
     jestExpect(cacheAfter).toEqual({
       [QueryRootId]: {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
-        outbound: [{ id: parameterizedTopContainerId, path: ['one', 'two'] }],
+        parameterized: [{ id: parameterizedTopContainerId, path: ['one', 'two'] }],
       },
       [parameterizedTopContainerId]: {
         type: Serializable.NodeSnapshotType.ParameterizedValueSnapshot,
@@ -105,7 +105,7 @@ describe(`operations.migrate`, () => {
       '31': {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
         inbound: [{ id: parameterizedTopContainerId, path: [0, 'three'] }],
-        outbound: [{ id: nestedParameterizedValueId0, path: ['four'] }],
+        parameterized: [{ id: nestedParameterizedValueId0, path: ['four'] }],
         data: {
           id: 31,
           color: 'blue',
@@ -123,7 +123,7 @@ describe(`operations.migrate`, () => {
       '32': {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
         inbound: [{ id: parameterizedTopContainerId, path: [1, 'three'] }],
-        outbound: [{ id: nestedParameterizedValueId1, path: ['four'] }],
+        parameterized: [{ id: nestedParameterizedValueId1, path: ['four'] }],
         data: {
           id: 32,
           color: 'gold',
@@ -172,7 +172,7 @@ describe(`operations.migrate`, () => {
     jestExpect(cacheAfter).toEqual({
       [QueryRootId]: {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
-        outbound: [{ id: parameterizedTopContainerId, path: ['one', 'two'] }],
+        parameterized: [{ id: parameterizedTopContainerId, path: ['one', 'two'] }],
       },
       [parameterizedTopContainerId]: {
         type: Serializable.NodeSnapshotType.ParameterizedValueSnapshot,
@@ -186,7 +186,7 @@ describe(`operations.migrate`, () => {
       '31': {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
         inbound: [{ id: parameterizedTopContainerId, path: [0, 'three'] }],
-        outbound: [{ id: nestedParameterizedValueId0, path: ['four'] }],
+        parameterized: [{ id: nestedParameterizedValueId0, path: ['four'] }],
         data: {
           id: 31,
           color: 'really blue',
@@ -203,7 +203,7 @@ describe(`operations.migrate`, () => {
       '32': {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
         inbound: [{ id: parameterizedTopContainerId, path: [1, 'three'] }],
-        outbound: [{ id: nestedParameterizedValueId1, path: ['four'] }],
+        parameterized: [{ id: nestedParameterizedValueId1, path: ['four'] }],
         data: {
           id: 32,
           color: 'really gold',

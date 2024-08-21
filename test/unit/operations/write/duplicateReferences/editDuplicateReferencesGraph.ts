@@ -2,7 +2,7 @@ import { CacheContext } from '../../../../../src/context';
 import { GraphSnapshot } from '../../../../../src/GraphSnapshot';
 import { write } from '../../../../../src/operations';
 import { StaticNodeId } from '../../../../../src/schema';
-import { query, strictConfig } from '../../../../helpers';
+import { mapToEntries2, query, strictConfig } from '../../../../helpers';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
@@ -69,10 +69,10 @@ describe(`operations.write`, () => {
     });
 
     it(`doesn't insert duplicate outbound references`, () => {
-      jestExpect(snapshot.getNodeSnapshot('a')!.outbound).toEqual(jestExpect.arrayContaining([
+      jestExpect(mapToEntries2(snapshot.getNodeSnapshot('a')!.outbound)).toEqual(jestExpect.arrayContaining([
         { id: '2', path: ['bar'] },
       ]));
-      jestExpect(snapshot.getNodeSnapshot('b')!.outbound).toBe(undefined);
+      jestExpect(mapToEntries2(snapshot.getNodeSnapshot('b')!.outbound)).toBe(undefined);
     });
 
     it(`removes unreferenced nodes`, () => {
@@ -80,7 +80,7 @@ describe(`operations.write`, () => {
     });
 
     it(`doesn't insert duplicate inbound references for targets`, () => {
-      jestExpect(snapshot.getNodeSnapshot('2')!.inbound).toEqual(jestExpect.arrayContaining([
+      jestExpect(mapToEntries2(snapshot.getNodeSnapshot('2')!.inbound)).toEqual(jestExpect.arrayContaining([
         { id: 'a', path: ['bar'] },
       ]));
     });

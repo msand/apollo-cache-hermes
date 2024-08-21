@@ -1,4 +1,4 @@
-// noinspection GraphQLUnresolvedReference,GraphQLTypeRedefinition
+// noinspection GraphQLUnresolvedReference,GraphQLTypeRedefinition,RequiredAttributes,JSNonASCIINames,JSVoidFunctionReturnValueUsed,GraphQLMemberRedefinition
 
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import gql, { disableFragmentWarnings } from 'graphql-tag';
@@ -992,7 +992,7 @@ describe('Cache', () => {
 
         expect((proxy as Hermes).extract()).toEqual({
           'ROOT_QUERY': {
-            'outbound': [
+            'parameterized': [
               {
                 'id': 'ROOT_QUERY❖["field"]❖{"literal":true,"value":42}',
                 'path': [
@@ -1059,7 +1059,7 @@ describe('Cache', () => {
 
         expect((proxy as Hermes).extract()).toEqual({
           'ROOT_QUERY': {
-            'outbound': [
+            'parameterized': [
               {
                 'id': 'ROOT_QUERY❖["field"]❖{"literal":true,"value":42}',
                 'path': [
@@ -1361,7 +1361,7 @@ describe('Cache', () => {
             'data': {
               '__typename': 'Foo',
             },
-            'outbound': [
+            'parameterized': [
               {
                 'id': 'foo❖["field"]❖{"literal":true,"value":42}',
                 'path': [
@@ -3142,7 +3142,7 @@ describe('Hermes#modify', () => {
             ],
           },
         ],
-        'outbound': [
+        'parameterized': [
           {
             'id': 'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}',
             'path': [
@@ -3269,7 +3269,7 @@ describe('Hermes#modify', () => {
             ],
           },
         ],
-        'outbound': [
+        'parameterized': [
           {
             'id': 'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}',
             'path': [
@@ -3631,7 +3631,7 @@ describe('Hermes#modify', () => {
         'type': 0,
       },
       'ROOT_QUERY':  {
-        'outbound':  [
+        'parameterized':  [
           {
             'id': 'ROOT_QUERY❖["book"]❖{"isbn":"147670032X"}',
             'path':  [
@@ -3759,7 +3759,7 @@ describe('Hermes#modify', () => {
         'data': {
           'book': null,
         },
-        'outbound': [
+        'parameterized': [
           {
             'id': 'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
             'path': [
@@ -3835,7 +3835,7 @@ describe('Hermes#modify', () => {
         'data': {
           'book': null,
         },
-        'outbound': [
+        'parameterized': [
           {
             'id': 'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
             'path': [
