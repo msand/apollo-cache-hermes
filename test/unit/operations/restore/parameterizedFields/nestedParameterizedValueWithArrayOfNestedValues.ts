@@ -53,7 +53,7 @@ describe(`operations.restore`, () => {
       restoreGraphSnapshot = restore({
         [QueryRootId]: {
           type: Serializable.NodeSnapshotType.EntitySnapshot,
-          outbound: [{ id: parameterizedId, path: ['one', 'two'] }],
+          parameterized: [{ id: parameterizedId, path: ['one', 'two'] }],
         },
         [parameterizedId]: {
           type: Serializable.NodeSnapshotType.ParameterizedValueSnapshot,

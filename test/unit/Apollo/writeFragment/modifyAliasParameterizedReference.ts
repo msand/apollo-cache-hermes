@@ -6,6 +6,7 @@ import { GraphSnapshot } from '../../../../src/GraphSnapshot';
 import { nodeIdForParameterizedValue } from '../../../../src/operations/SnapshotEditor';
 import { StaticNodeId, Serializable } from '../../../../src/schema';
 import { strictConfig } from '../../../helpers';
+import { getInbound, getOutbound } from '../../../../src/util';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
@@ -31,7 +32,7 @@ describe(`writeFragment with alias paramterized references`, () => {
       '123': {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
         inbound: [{ id: QueryRootId, path: ['viewer'] }],
-        outbound: [{ id: parameterizedId, path: ['shipment'] }],
+        parameterized: [{ id: parameterizedId, path: ['shipment'] }],
         data: {
           id: 123,
           name: 'Gouda',
@@ -94,8 +95,9 @@ describe(`writeFragment with alias paramterized references`, () => {
 
   it(`correctly references a parameterized reference`, () => {
     expect(baseline.getNodeSnapshot(parameterizedId)).to.deep.eq({
-      outbound: [{ id: 'shipment0', path: [] }],
-      inbound: [{ id: '123', path: ['shipment'] }],
+      outbound: getOutbound([{ id: 'shipment0', path: [] }]),
+      inbound: getInbound([{ id: '123', path: ['shipment'] }]),
+      parameterized: undefined,
       data: {
         complete: true,
         truckType: 'flatbed',

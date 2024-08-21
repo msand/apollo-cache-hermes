@@ -1,18 +1,35 @@
-import { FieldFunctionOptions } from '@apollo/client/cache/inmemory/policies';
-import { isReference, makeReference, Reference, StoreValue } from '@apollo/client';
-import { StoreObject } from '@apollo/client/utilities';
-import { ReadFieldOptions } from '@apollo/client/cache/core/types/common';
+import { makeReference } from '@apollo/client';
+import type { FieldFunctionOptions } from '@apollo/client/cache/inmemory/policies';
+import type { Reference, StoreValue } from '@apollo/client';
+import type { StoreObject } from '@apollo/client/utilities';
+import type { ReadFieldOptions } from '@apollo/client/cache/core/types/common';
 import type { DocumentNode } from 'graphql';
 
-import { CacheContext } from '../context';
-import { GraphSnapshot, NodeSnapshotMap } from '../GraphSnapshot';
-import { ParsedQuery, ParsedQueryNode } from '../ParsedQueryNode';
-import { JsonObject, JsonValue, PathPart } from '../primitive';
-import { NodeId, OperationInstance, RawOperation, StaticNodeId } from '../schema';
-import { deepGet, isNil, isObject, lazyImmutableDeepSet, safeStringify, walkOperation } from '../util';
-import { cloneNodeSnapshot, EntitySnapshot, NodeSnapshot } from '../nodes';
+import type { CacheContext } from '../context';
+import type { GraphSnapshot, NodeSnapshotMap } from '../GraphSnapshot';
+import type { ParsedQuery, ParsedQueryNode } from '../ParsedQueryNode';
+import type { JsonObject, JsonValue, PathPart } from '../primitive';
+import type { NodeId, OperationInstance, RawOperation } from '../schema';
+import type { NodeSnapshot } from '../nodes';
+import * as schema from '../schema';
+import * as util from '../util';
+import * as nodes from '../nodes';
 
-import { nodeIdForParameterizedValue } from './SnapshotEditor';
+import * as snapshotEditor from './SnapshotEditor';
+
+const makeRef = makeReference;
+const { StaticNodeId } = schema;
+const { cloneNodeSnapshot, EntitySnapshot } = nodes;
+const { nodeIdForParameterizedValue } = snapshotEditor;
+const {
+  deepGet,
+  isNil,
+  isObject,
+  isReference,
+  lazyImmutableDeepSet,
+  safeStringify,
+  walkOperation,
+} = util;
 
 export type MissingTree =
   | string
@@ -107,11 +124,11 @@ export function read<TSerialized>(
   if (!queryResult.result) {
     cacheHit = false;
     const nodeSnapshot = snapshot.getNodeSnapshot(operation.rootId) ?? {};
-    const { data, outbound } = nodeSnapshot;
+    const { data, outbound, parameterized } = nodeSnapshot;
     queryResult.result = data as JsonObject;
 
     if (
-      (!operation.isStatic && (data || outbound || context.typePolicies)) ||
+      (!operation.isStatic && (data || outbound || parameterized || context.typePolicies)) ||
       (operation.parsedQuery.__typename && data && !('__typename' in (data as JsonObject)))
     ) {
       const dynamicNodeIds = new Set<NodeId>();
@@ -205,11 +222,13 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
     if (key in data) {
       return (data as JsonObject)[key];
     }
-    for (const out of obj.outbound ?? []) {
-      const k = out.id;
-      if (k === key || out.path[0] === key) {
-        return snapshot.getNodeData(k);
-      }
+    const out = obj.outbound?.get(key);
+    if (out !== undefined) {
+      return snapshot.getNodeData(out.id);
+    }
+    const ref = obj.parameterized?.get(key)?.[0];
+    if (ref !== undefined) {
+      return snapshot.getNodeData(ref.id);
     }
     if (isRoot && key === '__typename') {
       return 'Query';
@@ -278,7 +297,7 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
         nodeSnapshot.data = { ...nodeSnapshot.data as {}, ...value };
       }
       const ref = entityId ?? value;
-      return typeof ref === 'string' ? makeReference(ref) : undefined;
+      return typeof ref === 'string' ? makeRef(ref) : undefined;
     },
     variables: query.variables,
   };

@@ -13,6 +13,7 @@ import { ChangeId, NodeId, RawOperation, Serializable, StaticNodeId } from './sc
 import { addToSet, DocumentNode, hasOwn, setsHaveSomeIntersection } from './util';
 import { UnsatisfiedCacheError } from './errors';
 import { Hermes } from './apollo';
+import { NodeReference } from './nodes';
 
 import BatchOptions = CacheInterface.BatchOptions;
 
@@ -84,6 +85,8 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
   // dataId strings that were removed from the store.
   public gc() {
     const ids = this.getRootIdSet();
+    const addRef = (ref: NodeReference) => ids.add(ref.id);
+    const addRefs = (refs: NodeReference[]) => refs.forEach(addRef);
     const snapshot = { ...this._snapshot.optimistic._values };
     ids.forEach((id) => {
       if (hasOwn.call(snapshot, id)) {
@@ -91,7 +94,8 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
         // will be visited in later iterations of the forEach loop only if they
         // were not previously contained by the Set.
         const node = snapshot[id];
-        node.outbound?.forEach(ref => ids.add(ref.id));
+        node.outbound?.forEach(addRef);
+        node.parameterized?.forEach(addRefs);
         // By removing IDs from the snapshot object here, we protect them from
         // getting removed from the root store layer below.
         delete snapshot[id];

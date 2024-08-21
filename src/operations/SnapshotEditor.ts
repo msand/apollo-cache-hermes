@@ -1,35 +1,56 @@
-import isEqual from '@wry/equality';
-import { FieldFunctionOptions, FieldPolicy, FieldReadFunction, TypePolicy } from '@apollo/client/cache/inmemory/policies';
-import { isReference, makeReference, Reference, StoreValue } from '@apollo/client';
-import { ReadFieldOptions } from '@apollo/client/cache/core/types/common';
-import { StoreObject } from '@apollo/client/utilities';
+import * as equality from '@wry/equality';
+import { makeReference } from '@apollo/client';
+import type { FieldFunctionOptions, FieldPolicy, FieldReadFunction, TypePolicy } from '@apollo/client/cache/inmemory/policies';
+import type { Reference, StoreValue } from '@apollo/client';
+import type { ReadFieldOptions } from '@apollo/client/cache/core/types/common';
+import type { StoreObject } from '@apollo/client/utilities';
 
-import { CacheContext } from '../context';
-import { InvalidPayloadError, OperationError } from '../errors';
-import { GraphSnapshot } from '../GraphSnapshot';
-import { cloneNodeSnapshot, EntitySnapshot, NodeSnapshot, ParameterizedValueSnapshot } from '../nodes';
-import { FieldArguments, ParsedQuery } from '../ParsedQueryNode';
-import { JsonArray, JsonObject, JsonValue, Nil, PathPart } from '../primitive';
-import { NodeId, OperationInstance, RawOperation, StaticNodeId } from '../schema';
-import {
-  addNodeReference,
+import type { CacheContext } from '../context';
+import type { GraphSnapshot as GraphSnapshotType } from '../GraphSnapshot';
+import type { NodeReference, EntitySnapshot as EntitySnapshotType, NodeSnapshot } from '../nodes';
+import type { FieldArguments, ParsedQuery } from '../ParsedQueryNode';
+import type { JsonArray, JsonObject, JsonScalar, JsonValue, NestedObject, Nil, PathPart } from '../primitive';
+import type { NodeId, OperationInstance, RawOperation } from '../schema';
+import * as graphSnapshot from '../GraphSnapshot';
+import * as schema from '../schema';
+import * as errors from '../errors';
+import * as nodes from '../nodes';
+import * as util from '../util';
+
+// Ensure typescript doesn't emit (0, fn)(...args)
+const isEqual = equality.equal;
+const { GraphSnapshot } = graphSnapshot;
+const { StaticNodeId } = schema;
+const { InvalidPayloadError, OperationError } = errors;
+const { cloneNodeSnapshot, EntitySnapshot, ParameterizedValueSnapshot } = nodes;
+const {
+  addInboundReference,
+  addOutboundReference,
+  addParameterizedReference,
   addToSet,
   deepGet,
-  hasNodeReference,
   hasOwn,
+  hasParameterizedReference,
   ifString,
   isNil,
+  isReference,
+  iterParameterized,
+  iterRefs,
   lazyImmutableDeepSet,
   pathBeginsWith,
-  removeNodeReference,
-} from '../util';
+  removeInboundReference,
+  removeOutboundReference,
+  removeParameterizedReference,
+  toOutKey,
+} = util;
+const makeRef = makeReference;
 
 const ensureIdConstistencyMsg = `Ensure id is included (or not included) consistently across multiple requests.`;
 /**
  * A newly modified snapshot.
  */
-export interface EditedSnapshot<TSerialized = GraphSnapshot> {
-  snapshot: GraphSnapshot;
+export interface EditedSnapshot<TSerialized = GraphSnapshotType> {
+  snapshot: GraphSnapshotType;
   editedNodeIds: Set<NodeId>;
   writtenQueries: Set<OperationInstance<TSerialized>>;
   ref: Reference | undefined;
@@ -53,6 +74,32 @@ interface ReferenceEdit {
 
 // https://github.com/nzakas/eslint-plugin-typescript/issues/69
 export type NodeSnapshotMap = { [Key in NodeId]?: NodeSnapshot };
+
+function forEach(parameterized: Map<string, NodeReference[]> | undefined, fn: (node: NodeReference) => void) {
+  if (!parameterized) {
+    return;
+  }
+  for (const refs of parameterized.values()) {
+    for (const ref of refs) {
+      fn(ref);
+    }
+  }
+}
+
+function getVisibleProxy(value: JsonValue | NestedObject<JsonScalar> | undefined | null, map: { [prop: string]: string } | undefined) {
+  const compatible = value != null && typeof value === 'object';
+  if (!compatible) {
+    return undefined;
+  }
+  if (!map) {
+    return value;
+  }
+  return new Proxy(value, {
+    get: (target, p: string) => {
+      return hasOwn.call(target, p) ? target[p] : target[map[p]];
+    },
+  });
+}
 
 /**
  * Builds a set of changes to apply on top of an existing `GraphSnapshot`.
@@ -89,7 +136,7 @@ export class SnapshotEditor<TSerialized> {
     /** The configuration/context to use when editing snapshots. */
     private _context: CacheContext<TSerialized>,
     /** The snapshot to base edits off of. */
-    private _parent: GraphSnapshot,
+    private _parent: GraphSnapshotType,
   ) {}
 
   /**
@@ -108,7 +155,7 @@ export class SnapshotEditor<TSerialized> {
     // once all new nodes have been built (and we can guarantee that we're
     // referencing the correct version).
     const referenceEdits: ReferenceEdit[] = [];
-    const ref = this._mergeSubgraph(referenceEdits, warnings, parsed.rootId, [] /* prefixPath */, [] /* path */, parsed.parsedQuery, payload, prune);
+    const ref = this._mergeSubgraph(referenceEdits, warnings, parsed.rootId, [] /* prefixPath */, [] /* path */, parsed.parsedQuery, payload, prune, parsed.propMap);
 
     // Now that we have new versions of every edited node, we can point all the
     // edited references to the correct nodes.
@@ -140,6 +187,7 @@ export class SnapshotEditor<TSerialized> {
     parsed: ParsedQuery,
     payload: JsonValue | undefined,
     prune: boolean,
+    propMap: { [prop: string]: string } | undefined,
   ) {
     // Don't trust our inputs; we can receive values that aren't JSON
     // serializable via optimistic updates.
@@ -179,35 +227,15 @@ export class SnapshotEditor<TSerialized> {
         throw new InvalidPayloadError(`Unsupported transition from a list to a non-list value`, prefixPath, containerId, path, payload);
       }
 
-      this._mergeArraySubgraph(referenceEdits, warnings, containerId, prefixPath, path, parsed, payload, previousValue, prune);
+      this._mergeArraySubgraph(referenceEdits, warnings, containerId, prefixPath, path, parsed, payload, previousValue, prune, propMap);
       return;
-    }
-
-    const visiblePayload: Record<string, unknown> = {};
-    const visiblePrevious: Record<string, unknown> = {};
-    if (payload) {
-      for (const key in parsed) {
-        const value = payload[key];
-        const previous = (previousValue as JsonObject)?.[key];
-
-        visiblePayload[key] = value;
-        visiblePrevious[key] = previous;
-
-        const schemaName = parsed[key].schemaName;
-        if (schemaName) {
-          visiblePayload[schemaName] = value;
-          visiblePrevious[schemaName] = previous;
-        }
-      }
     }
 
     const ref = isReference(payload) ? payload.__ref : undefined;
     const payloadId = ref
-      ?? this._context.entityIdForValue(visiblePayload)
-      ?? this._context.entityIdForValue(payload)
+      ?? this._context.entityIdForValue(getVisibleProxy(payload, propMap))
       ?? (path.length === 0 && !isRoot ? containerId : undefined);
-    const previousId = this._context.entityIdForValue(visiblePrevious)
-      ?? this._context.entityIdForValue(previousValue)
+    const previousId = this._context.entityIdForValue(getVisibleProxy(previousValue, propMap))
       ?? (
         path.length === 0 && !isRoot
           ? containerId
@@ -275,11 +303,13 @@ export class SnapshotEditor<TSerialized> {
       if (key in data) {
         return (data as JsonObject)[key];
       }
-      for (const out of obj.outbound ?? []) {
-        const k = out.id;
-        if (k === key || out.path[0] === key) {
-          return this._getNodeData(k);
-        }
+      const out = obj.outbound?.get(key);
+      if (out) {
+        return this._getNodeData(out.id);
+      }
+      const ref = obj.parameterized?.get(key)?.[0];
+      if (ref !== undefined) {
+        return this._getNodeData(ref.id);
       }
       if (containerId === 'ROOT_QUERY' && key === '__typename') {
         return 'Query';
@@ -326,7 +356,7 @@ export class SnapshotEditor<TSerialized> {
         if (entityId && mergeIntoStore && !isReference(value) && typeof value !== 'string') {
           this._ensureNewSnapshot(entityId).data = value as JsonValue;
         }
-        return entityId ? makeReference(entityId) : undefined;
+        return entityId ? makeRef(entityId) : undefined;
       },
       variables: undefined,
       mergeObjects<T>(existing: T, incoming: T): T {
@@ -432,7 +462,7 @@ export class SnapshotEditor<TSerialized> {
       // directly written via _setValue.  This allows us to perform minimal
       // edits to the graph.
       if (node.children) {
-        this._mergeSubgraph(referenceEdits, warnings, containerIdForField, fieldPrefixPath, fieldPath, node.children, fieldValue, prune);
+        this._mergeSubgraph(referenceEdits, warnings, containerIdForField, fieldPrefixPath, fieldPath, node.children, fieldValue, prune, node.propMap);
 
       // We've hit a leaf field.
       //
@@ -474,6 +504,7 @@ export class SnapshotEditor<TSerialized> {
     payload: JsonArray | Nil,
     previousValue: JsonArray | Nil,
     prune: boolean,
+    propMap: { [prop: string]: string } | undefined,
   ) {
     if (isNil(payload)) {
       // Note that we mark this as an edit, as this method is only ever called
@@ -517,7 +548,7 @@ export class SnapshotEditor<TSerialized> {
         }
       }
 
-      this._mergeSubgraph(referenceEdits, warnings, containerId, prefixPath, [...path, i], parsed, childPayload, prune);
+      this._mergeSubgraph(referenceEdits, warnings, containerId, prefixPath, [...path, i], parsed, childPayload, prune, propMap);
     }
   }
 
@@ -532,6 +563,11 @@ export class SnapshotEditor<TSerialized> {
     });
 
     nodeSnapshot?.outbound?.forEach(({ id, path }) => {
+      this._editedNodeIds.add(id);
+      referenceEdits.push({ containerId: nodeId, nextNodeId: undefined, prevNodeId: id, path });
+    });
+
+    forEach(nodeSnapshot?.parameterized, ({ id, path }) => {
       this._editedNodeIds.add(id);
       referenceEdits.push({ containerId: nodeId, nextNodeId: undefined, prevNodeId: id, path });
     });
@@ -720,7 +756,7 @@ export class SnapshotEditor<TSerialized> {
       const fieldPrefixPath = prefixPath;
       const fieldPath = [...path, payloadName];
 
-      const parameterizedFields = nodeSnapshot?.outbound?.filter(ref => ref.path[0] === payloadName);
+      const parameterizedFields = nodeSnapshot?.parameterized?.get(payloadName);
       if (parameterizedFields?.length) {
         for (const field of parameterizedFields) {
           // The values of a parameterized field are explicit nodes in the graph
@@ -791,11 +827,24 @@ export class SnapshotEditor<TSerialized> {
     const value = deepGet(node?.data, path);
     if (value === undefined) {
       if (node) {
-        const pathLength = path.length;
-        for (const out of node.outbound ?? []) {
-          if (out.path.length !== pathLength) continue;
-          if (path.some((part, i) => part !== out.path[i])) continue;
+        const out = node.outbound?.get(toOutKey(path));
+        if (out !== undefined) {
           return this._getNodeData(out.id);
+        }
+        const key = path.at(0);
+        if (key === undefined) {
+          return value;
+        }
+        const refs = node.parameterized?.get(key.toString());
+        if (refs === undefined) {
+          return value;
+        }
+        const length = path.length;
+        for (const ref of refs) {
+          const p = ref.path;
+          if (p.length === length && path.every((part, i) => part === p[i])) {
+            return this._getNodeData(ref.id);
+          }
         }
       }
     }
@@ -870,8 +919,8 @@ export class SnapshotEditor<TSerialized> {
    */
   private _removeArrayReferences(referenceEdits: ReferenceEdit[], containerId: NodeId, prefix: PathPart[], afterIndex: number) {
     const container = this._getNodeSnapshot(containerId);
-    if (!container || !container.outbound) return;
-    for (const reference of container.outbound) {
+    if (!container || (!container.outbound && !container.parameterized)) return;
+    for (const reference of iterRefs(container.outbound, container.parameterized)) {
       if (!pathBeginsWith(reference.path, prefix)) continue;
       const index = reference.path[prefix.length];
       if (typeof index !== 'number') continue;
@@ -905,18 +954,28 @@ export class SnapshotEditor<TSerialized> {
       const container = this._ensureNewSnapshot(containerId);
 
       if (prevNodeId) {
-        removeNodeReference('outbound', container, prevNodeId, path);
         const prevTarget = this._ensureNewSnapshot(prevNodeId);
-        removeNodeReference('inbound', prevTarget, containerId, path);
+        const parameterized = prevTarget instanceof ParameterizedValueSnapshot;
+        if (parameterized) {
+          removeParameterizedReference(container, prevNodeId, path);
+        } else {
+          removeOutboundReference(container, path);
+        }
+        removeInboundReference(prevTarget, containerId, path);
         if (!prevTarget.inbound) {
           orphanedNodeIds.add(prevNodeId);
         }
       }
 
       if (nextNodeId) {
-        addNodeReference('outbound', container, nextNodeId, path);
         const nextTarget = this._ensureNewSnapshot(nextNodeId);
-        addNodeReference('inbound', nextTarget, containerId, path);
+        const parameterized = nextTarget instanceof ParameterizedValueSnapshot;
+        if (parameterized) {
+          addParameterizedReference(container, nextNodeId, path);
+        } else {
+          addOutboundReference(container, nextNodeId, path);
+        }
+        addInboundReference(nextTarget, containerId, path);
         orphanedNodeIds.delete(nextNodeId);
       }
     }
@@ -947,7 +1006,7 @@ export class SnapshotEditor<TSerialized> {
       snapshot,
       editedNodeIds: this._editedNodeIds,
       writtenQueries: this._writtenQueries,
-      ref: ref ? makeReference(ref) : undefined,
+      ref: ref ? makeRef(ref) : undefined,
     };
   }
 
@@ -966,7 +1025,7 @@ export class SnapshotEditor<TSerialized> {
       } else {
         // TODO: This should not be run for ParameterizedValueSnapshots
         if (entityTransformer) {
-          const { data } = this._newNodes[id] as EntitySnapshot;
+          const { data } = this._newNodes[id] as EntitySnapshotType;
           if (data) entityTransformer(data);
         }
         snapshots[id] = newSnapshot;
@@ -990,7 +1049,7 @@ export class SnapshotEditor<TSerialized> {
       if (!(snapshot instanceof EntitySnapshot)) continue;
       if (!snapshot || !snapshot.inbound) continue;
 
-      for (const { id, path } of snapshot.inbound) {
+      for (const { id, path } of snapshot.inbound.values()) {
         this._setValue(id, path, snapshot.data, false);
         if (this._rebuiltNodeIds.has(id)) continue;
 
@@ -1013,12 +1072,22 @@ export class SnapshotEditor<TSerialized> {
       this._newNodes[nodeId] = undefined;
       this._editedNodeIds.add(nodeId);
 
-      if (!node.outbound) continue;
-      for (const { id, path } of node.outbound) {
-        const reference = this._ensureNewSnapshot(id);
-        if (removeNodeReference('inbound', reference, nodeId, path)) {
-          queue.push(id);
-        }
+      const { outbound, parameterized } = node;
+      if (outbound) {
+        this.removeInbound(outbound.values(), nodeId, queue);
+      }
+      if (parameterized) {
+        this.removeInbound(iterParameterized(parameterized), nodeId, queue);
+      }
+    }
+  }
+
+  private removeInbound(refs: Iterable<NodeReference>, nodeId: string, queue: string[]) {
+    for (const { id, path } of refs) {
+      const reference = this._ensureNewSnapshot(id);
+      removeInboundReference(reference, nodeId, path);
+      if (reference.inbound === undefined) {
+        queue.push(id);
       }
     }
   }
@@ -1085,14 +1154,15 @@ export class SnapshotEditor<TSerialized> {
     // We're careful to not edit the container unless we absolutely have to.
     // (There may be no changes for this parameterized value).
     const containerSnapshot = this._getNodeSnapshot(containerId);
-    if (!containerSnapshot || !hasNodeReference(containerSnapshot, 'outbound', fieldId, path)) {
+    if (!containerSnapshot || !hasParameterizedReference(containerSnapshot, fieldId, path)) {
       // We need to construct a new snapshot otherwise.
       const newSnapshot = new ParameterizedValueSnapshot();
-      addNodeReference('inbound', newSnapshot, containerId, path);
+      addInboundReference(newSnapshot, containerId, path);
       this._newNodes[fieldId] = newSnapshot;
 
       // Ensure that the container points to it.
-      addNodeReference('outbound', this._ensureNewSnapshot(containerId), fieldId, path);
+      const snapshot = this._ensureNewSnapshot(containerId);
+      addParameterizedReference(snapshot, fieldId, path);
     }
 
     return fieldId;

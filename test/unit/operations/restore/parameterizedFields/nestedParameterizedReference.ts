@@ -3,7 +3,7 @@ import { ParameterizedValueSnapshot, EntitySnapshot } from '../../../../../src/n
 import { restore } from '../../../../../src/operations';
 import { nodeIdForParameterizedValue } from '../../../../../src/operations/SnapshotEditor';
 import { StaticNodeId, Serializable } from '../../../../../src/schema';
-import { createGraphSnapshot, createStrictCacheContext } from '../../../../helpers';
+import { createGraphSnapshot, createStrictCacheContext, mapToEntries2 } from '../../../../helpers';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
@@ -47,7 +47,7 @@ describe(`operations.restore`, () => {
       restoreGraphSnapshot = restore({
         [QueryRootId]: {
           type: Serializable.NodeSnapshotType.EntitySnapshot,
-          outbound: [{ id: parameterizedId, path: ['one', 'two', 'three'] }],
+          parameterized: [{ id: parameterizedId, path: ['one', 'two', 'three'] }],
         },
         [parameterizedId]: {
           type: Serializable.NodeSnapshotType.ParameterizedValueSnapshot,
@@ -81,8 +81,8 @@ describe(`operations.restore`, () => {
       const parameterizedContainersNode = restoreGraphSnapshot.getNodeSnapshot(parameterizedId)!;
       const entityData = restoreGraphSnapshot.getNodeData('31');
 
-      jestExpect(parameterizedContainersNode.inbound).toEqual([{ id: QueryRootId, path: ['one', 'two', 'three'] }]);
-      jestExpect(parameterizedContainersNode.outbound).toEqual([{ id: '31', path: [] }]);
+      jestExpect(mapToEntries2(parameterizedContainersNode.inbound)).toEqual([{ id: QueryRootId, path: ['one', 'two', 'three'] }]);
+      jestExpect(mapToEntries2(parameterizedContainersNode.outbound)).toEqual([{ id: '31', path: [] }]);
       jestExpect(parameterizedContainersNode.data).toBe(entityData);
     });
 

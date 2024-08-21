@@ -3,6 +3,7 @@ import { GraphSnapshot } from '../../../../../src/GraphSnapshot';
 import { write } from '../../../../../src/operations';
 import { RawOperation, StaticNodeId } from '../../../../../src/schema';
 import { query, strictConfig } from '../../../../helpers';
+import { getOutbound } from '../../../../../src/util';
 
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
@@ -70,7 +71,7 @@ describe(`operations.write`, () => {
     it(`checks shape of GraphNodeSnapshot`, () => {
       jestExpect(snapshot.getNodeSnapshot(QueryRootId)).toEqual({
         inbound: undefined,
-        outbound: [{ id: '0', path: ['Shipment'] }, { id: '2', path: ['Dispatcher'] }, { id: '1', path: ['Carrier'] }],
+        outbound: getOutbound([{ id: '0', path: ['Shipment'] }, { id: '2', path: ['Dispatcher'] }, { id: '1', path: ['Carrier'] }]),
         data: {
           Shipment: {
             shipmentId: 0,

@@ -1,10 +1,9 @@
 import { Cache, Transaction } from '@apollo/client';
-import lodashIsEqual = require('lodash.isequal');
 
 import { CacheTransaction } from '../CacheTransaction';
 import { PathPart, JsonValue } from '../primitive';
 import { NodeId } from '../schema';
-import { DocumentNode, verboseTypeof, deepGet } from '../util';
+import { DocumentNode, verboseTypeof, deepGet, iterParameterized } from '../util';
 
 import { ApolloQueryable } from './Queryable';
 
@@ -70,6 +69,11 @@ export class ApolloTransaction<TSerialized> extends ApolloQueryable<TSerialized>
    * @param containerId {string} an id of a container node to look for editPath.
    * @param pathToParameterizedField {(string|number)[]} an array of paths to
    *    parameterized field in container.
+   * @param writeFragment
+   * @param writeFragmentName
+   * @param readFragment
+   * @param readFragmentName
+   * @param updateFieldCallback
    */
   updateParameterizedReferences(
     containerId: NodeId,
@@ -79,12 +83,12 @@ export class ApolloTransaction<TSerialized> extends ApolloQueryable<TSerialized>
     updateFieldCallback: (previousList: JsonValue[], fieldArgs?: { [argName: string]: string }) => any
   ) {
     const currentContainerNode = this._queryable.getCurrentNodeSnapshot(containerId);
-    if (!currentContainerNode || !currentContainerNode.outbound) {
+    if (!currentContainerNode || !currentContainerNode.parameterized) {
       return;
     }
 
-    for (const { id: outboundId, path } of currentContainerNode.outbound) {
-      if (lodashIsEqual(pathToParameterizedField, path)) {
+    for (const { id: outboundId, path } of iterParameterized(currentContainerNode.parameterized)) {
+      if (pathToParameterizedField.every((part, i) => part === path[i])) {
         const fieldArguments = getOriginalFieldArguments(outboundId);
         if (fieldArguments) {
           let cacheResult: any;
