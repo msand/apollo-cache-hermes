@@ -19,7 +19,6 @@ import {
   ApolloProvider,
   ApolloLink,
   ApolloCache,
-  InMemoryCache,
   split,
   useSuspenseQuery,
   skipToken,
@@ -600,7 +599,7 @@ describe('useSuspenseQuery', () => {
       value: number;
     }
 
-    const cache = new InMemoryCache({
+    const cache = new Hermes({
       canonizeResults: true,
       typePolicies: {
         Result: {

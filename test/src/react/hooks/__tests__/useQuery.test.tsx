@@ -11,7 +11,6 @@ import {
   useQuery,
   QueryResult,
   useLazyQuery,
-  InMemoryCache,
 } from '@apollo/client';
 
 import {
@@ -8070,7 +8069,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
   describe('canonical cache results', () => {
     it('can be disabled via useQuery options', async() => {
-      const cache = new InMemoryCache({
+      const cache = new Hermes({
         canonizeResults: true,
         typePolicies: {
           Result: {
@@ -8165,7 +8164,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
   // eslint-disable-next-line jest/no-identical-title
   describe('canonical cache results', () => {
     it('can be disabled via useQuery options', async() => {
-      const cache = new InMemoryCache({
+      const cache = new Hermes({
         canonizeResults: true,
         typePolicies: {
           Result: {

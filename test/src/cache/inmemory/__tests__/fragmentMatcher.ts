@@ -4,7 +4,6 @@ import { visit, FragmentDefinitionNode } from 'graphql';
 import { itAsync } from '../../../testing';
 import { hasOwn } from '../helpers';
 import { Hermes } from '../../../../../src';
-import { InMemoryCache } from '../inMemoryCache';
 
 describe('fragment matching', () => {
   it('can match exact types with or without possibleTypes', () => {
@@ -12,7 +11,7 @@ describe('fragment matching', () => {
       addTypename: true,
     });
 
-    const cacheWithPossibleTypes = new InMemoryCache({
+    const cacheWithPossibleTypes = new Hermes({
       addTypename: true,
       possibleTypes: {
         Animal: ['Cat', 'Dog'],
@@ -58,7 +57,7 @@ describe('fragment matching', () => {
   });
 
   it('can match interface subtypes', () => {
-    const cache = new InMemoryCache({
+    const cache = new Hermes({
       addTypename: true,
       possibleTypes: {
         Animal: ['Cat', 'Dog'],
@@ -90,7 +89,7 @@ describe('fragment matching', () => {
   });
 
   it('can match union member types', () => {
-    const cache = new InMemoryCache({
+    const cache = new Hermes({
       addTypename: true,
       possibleTypes: {
         Status: ['PASSING', 'FAILING', 'SKIPPED'],
@@ -140,7 +139,7 @@ describe('fragment matching', () => {
   });
 
   it('can match indirect subtypes while avoiding cycles', () => {
-    const cache = new InMemoryCache({
+    const cache = new Hermes({
       addTypename: true,
       possibleTypes: {
         Animal: ['Animal', 'Bug', 'Mammal'],
@@ -244,7 +243,7 @@ describe('policies.fragmentMatches', () => {
   });
 
   itAsync('can infer fuzzy subtypes heuristically', (resolve, reject) => {
-    const cache = new InMemoryCache({
+    const cache = new Hermes({
       possibleTypes: {
         A: ['B', 'C'],
         B: ['D'],

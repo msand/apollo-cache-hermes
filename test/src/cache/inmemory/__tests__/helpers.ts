@@ -1,13 +1,14 @@
 import { EntityStore, NormalizedCache } from '@apollo/client/cache';
-import { Cache, DiffQueryAgainstStoreOptions, InMemoryCache, NormalizedCacheObject } from '@apollo/client';
+import { Cache, DiffQueryAgainstStoreOptions, NormalizedCacheObject } from '@apollo/client';
 
 import { StoreReader } from '../readFromStore';
 import { StoreWriter } from '../writeToStore';
+import { Hermes } from '../../../../../src';
 
 export function defaultNormalizedCacheFactory(
   seed?: NormalizedCacheObject
 ): NormalizedCache {
-  const cache = new InMemoryCache();
+  const cache = new Hermes();
   return new EntityStore.Root({
     policies: cache.policies,
     resultCaching: true,

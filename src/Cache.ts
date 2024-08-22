@@ -1,4 +1,4 @@
-import { Cache as CacheInterface } from '@apollo/client';
+import { Cache as CacheInterface, TypePolicies } from '@apollo/client';
 import { Reference, StoreObject } from '@apollo/client/utilities';
 
 import { CacheSnapshot } from './CacheSnapshot';
@@ -39,6 +39,8 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
   private _cacheInstance: Hermes<TSerialized> | undefined;
   private _transactions: CacheTransaction<TSerialized>[] = [];
   private _editedNodeIds: Set<NodeId> = new Set();
+  public readonly entityIdForValue: CacheContext.EntityIdForValue;
+  public readonly typePolicies: TypePolicies | undefined;
 
   constructor(
     configuration: CacheContext.Configuration<TSerialized> | undefined,
@@ -48,6 +50,8 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     this._snapshot = new CacheSnapshot(initialGraphSnapshot, initialGraphSnapshot, new OptimisticUpdateQueue());
     this._context = new CacheContext(configuration);
     this._cacheInstance = cacheInstance;
+    this.entityIdForValue = this._context.entityIdForValue;
+    this.typePolicies = this._context.typePolicies;
   }
 
   // Maps root entity IDs to the number of times they have been retained, minus

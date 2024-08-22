@@ -5,7 +5,7 @@ import { act, render, renderHook, screen } from '@testing-library/react';
 import { GraphQLError } from 'graphql';
 import { ErrorBoundary } from 'react-error-boundary';
 import userEvent from '@testing-library/user-event';
-import { ApolloClient, ApolloLink, ApolloProvider, InMemoryCache } from '@apollo/client';
+import { ApolloClient, ApolloLink, ApolloProvider } from '@apollo/client';
 
 import { createQueryPreloader } from '../createQueryPreloader';
 import {
@@ -1727,7 +1727,7 @@ it('can disable canonical results when the cache\'s canonizeResults setting is t
     value: number;
   }
 
-  const cache = new InMemoryCache({
+  const cache = new Hermes({
     canonizeResults: true,
     typePolicies: {
       Result: {

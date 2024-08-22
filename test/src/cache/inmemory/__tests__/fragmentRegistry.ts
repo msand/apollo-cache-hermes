@@ -1,12 +1,13 @@
-import { ApolloClient, ApolloLink, gql, InMemoryCache, NetworkStatus } from '@apollo/client';
+import { ApolloClient, ApolloLink, gql, NetworkStatus } from '@apollo/client';
 
 import { getFragmentDefinitions, Observable } from '../../../utilities';
 import { createFragmentRegistry } from '../../index';
 import { itAsync, subscribeAndCount } from '../../../testing';
+import { Hermes } from '../../../../../src';
 
 describe('FragmentRegistry', () => {
   it('can be passed to Hermes', () => {
-    const cache = new InMemoryCache({
+    const cache = new Hermes({
       fragments: createFragmentRegistry(gql`
         fragment BasicFragment on Query {
           basic
@@ -40,7 +41,7 @@ describe('FragmentRegistry', () => {
   });
 
   itAsync('influences ApolloClient and ApolloLink', (resolve, reject) => {
-    const cache = new InMemoryCache({
+    const cache = new Hermes({
       fragments: createFragmentRegistry(gql`
         fragment SourceFragment on Query {
           source
@@ -126,7 +127,7 @@ describe('FragmentRegistry', () => {
   });
 
   it('throws an error when not all used fragments are defined', () => {
-    const cache = new InMemoryCache({
+    const cache = new Hermes({
       fragments: createFragmentRegistry(gql`
         fragment IncompleteFragment on Person {
           __typename
@@ -224,7 +225,7 @@ describe('FragmentRegistry', () => {
   });
 
   it('can register fragments with unbound ...spreads', () => {
-    const cache = new InMemoryCache({
+    const cache = new Hermes({
       fragments: createFragmentRegistry(gql`
         fragment NeedsExtra on Person {
           __typename

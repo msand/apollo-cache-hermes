@@ -1,8 +1,10 @@
 import {
   Transaction,
+  InMemoryCache,
   Cache as CacheInterface,
 } from '@apollo/client';
 import { Reference, StoreObject } from '@apollo/client/utilities';
+import { Policies } from '@apollo/client/cache';
 
 import { CacheContext } from '../context';
 import { Cache, MigrationMap } from '../Cache';
@@ -23,10 +25,17 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
   /** The underlying Hermes cache. */
   protected _queryable: Cache<TSerialized>;
   public watches = new Set<CacheInterface.WatchOptions>();
+  public readonly policies: Policies;
 
   constructor(configuration?: CacheContext.Configuration<TSerialized>) {
     super();
     this._queryable = new Cache<TSerialized>(configuration, this);
+    this.policies = new Policies({
+      cache: this as unknown as InMemoryCache,
+      dataIdFromObject: this._queryable.entityIdForValue,
+      possibleTypes: configuration?.possibleTypes,
+      typePolicies: this._queryable.typePolicies,
+    });
   }
 
   identify(object: StoreObject | Reference): string | undefined {

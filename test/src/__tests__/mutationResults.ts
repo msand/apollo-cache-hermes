@@ -1,7 +1,7 @@
 import { cloneDeep } from 'lodash';
 import gql from 'graphql-tag';
 import { GraphQLError } from 'graphql';
-import { ApolloClient, ApolloLink, InMemoryCache } from '@apollo/client';
+import { ApolloClient, ApolloLink } from '@apollo/client';
 
 import { FetchResult } from '../core';
 import {
@@ -132,7 +132,7 @@ describe('mutation results', () => {
         },
         ...mockedResponses
       ),
-      cache: new InMemoryCache({
+      cache: new Hermes({
         dataIdFromObject: (obj: any) => {
           if (obj.id && obj.__typename) {
             return obj.__typename + obj.id;
@@ -167,7 +167,7 @@ describe('mutation results', () => {
         },
         ...mockedResponses
       ).setOnError(reject),
-      cache: new InMemoryCache({
+      cache: new Hermes({
         dataIdFromObject: (obj: any) => {
           if (obj.id && obj.__typename) {
             return obj.__typename + obj.id;

@@ -7,7 +7,6 @@ import {
   ApolloLink,
   DefaultOptions,
   HttpLink,
-  InMemoryCache,
   makeReference,
   Observable,
   QueryOptions,
@@ -807,7 +806,7 @@ describe('ApolloClient', () => {
       using _consoleSpies = spyOnConsole.takeSnapshots('error');
       const client = new ApolloClient({
         link: ApolloLink.empty(),
-        cache: new InMemoryCache({
+        cache: new Hermes({
           // Passing an empty map enables the warning:
           possibleTypes: {},
         }),
@@ -1091,7 +1090,7 @@ describe('ApolloClient', () => {
       using _consoleSpies = spyOnConsole.takeSnapshots('error');
       const client = new ApolloClient({
         link: ApolloLink.empty(),
-        cache: new InMemoryCache({
+        cache: new Hermes({
           // Passing an empty map enables the warning:
           possibleTypes: {},
         }),

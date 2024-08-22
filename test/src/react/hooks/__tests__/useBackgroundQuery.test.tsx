@@ -8,7 +8,7 @@ import {
 import { expectTypeOf } from 'expect-type';
 import { GraphQLError } from 'graphql';
 import equal from '@wry/equality';
-import { ApolloClient, ApolloLink, ApolloProvider, InMemoryCache, skipToken } from '@apollo/client';
+import { ApolloClient, ApolloLink, ApolloProvider, skipToken } from '@apollo/client';
 import { Suspense } from 'react';
 
 import {
@@ -965,7 +965,7 @@ it('can disable canonical results when the cache\'s canonizeResults setting is t
     results: Result[];
   }
 
-  const cache = new InMemoryCache({
+  const cache = new Hermes({
     canonizeResults: true,
     typePolicies: {
       Result: {

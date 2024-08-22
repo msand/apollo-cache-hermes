@@ -13,7 +13,7 @@ import { ErrorBoundary as ReactErrorBoundary } from 'react-error-boundary';
 import { expectTypeOf } from 'expect-type';
 import { GraphQLError } from 'graphql';
 import invariant, { InvariantError } from 'ts-invariant';
-import { ApolloClient, ApolloProvider, ApolloLink, InMemoryCache } from '@apollo/client';
+import { ApolloClient, ApolloProvider, ApolloLink } from '@apollo/client';
 
 import {
   gql,
@@ -1035,7 +1035,7 @@ it('can disable canonical results when the cache\'s canonizeResults setting is t
     results: Result[];
   }
 
-  const cache = new InMemoryCache({
+  const cache = new Hermes({
     canonizeResults: true,
     typePolicies: {
       Result: {

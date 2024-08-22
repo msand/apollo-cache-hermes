@@ -19,7 +19,6 @@ import {
   NetworkStatus,
   ApolloClient,
   ApolloLink,
-  InMemoryCache,
   DocumentTransform,
   Observable,
   ObservableSubscription,
@@ -1284,7 +1283,7 @@ describe('client', () => {
       }).setOnError(reject);
       const client = new ApolloClient({
         link,
-        cache: new InMemoryCache({
+        cache: new Hermes({
           possibleTypes: {
             Item: ['ColorItem', 'MonochromeItem'],
           },
@@ -1340,7 +1339,7 @@ describe('client', () => {
 
       const client = new ApolloClient({
         link,
-        cache: new InMemoryCache({
+        cache: new Hermes({
           possibleTypes: {
             Item: ['ColorItem', 'MonochromeItem'],
           },
@@ -1412,7 +1411,7 @@ describe('client', () => {
 
       const client = new ApolloClient({
         link,
-        cache: new InMemoryCache({
+        cache: new Hermes({
           possibleTypes: {
             Item: ['ColorItem', 'MonochromeItem'],
           },
@@ -2939,7 +2938,7 @@ describe('client', () => {
       }).setOnError(reject);
       const client = new ApolloClient({
         link,
-        cache: new InMemoryCache({
+        cache: new Hermes({
           // Passing an empty map enables the warning:
           possibleTypes: {},
         }),
@@ -4103,7 +4102,7 @@ describe('custom document transforms', () => {
 
     const client = new ApolloClient({
       link,
-      cache: new InMemoryCache({
+      cache: new Hermes({
         fragments: createFragmentRegistry(gql`
           fragment ProductFields on Product {
             description
@@ -5031,7 +5030,7 @@ describe('custom document transforms', () => {
 
     const client = new ApolloClient({
       link,
-      cache: new InMemoryCache({
+      cache: new Hermes({
         fragments: createFragmentRegistry(gql`
           fragment ProductFields on Product {
             description
@@ -5260,7 +5259,7 @@ describe('custom document transforms', () => {
 
     const client = new ApolloClient({
       link: ApolloLink.from([link, new MockLink(mocks)]),
-      cache: new InMemoryCache({
+      cache: new Hermes({
         typePolicies: {
           Query: {
             fields: {
@@ -5874,7 +5873,7 @@ describe('custom document transforms', () => {
 
     const client = new ApolloClient({
       link,
-      cache: new InMemoryCache({
+      cache: new Hermes({
         fragments: createFragmentRegistry(gql`
           fragment ProductFields on Product {
             description @custom
@@ -5950,7 +5949,7 @@ describe('custom document transforms', () => {
 
     const client = new ApolloClient({
       link,
-      cache: new InMemoryCache({
+      cache: new Hermes({
         fragments: createFragmentRegistry(gql`
           fragment ProductFields on Product {
             unused @custom
@@ -6039,7 +6038,7 @@ describe('custom document transforms', () => {
 
     const client = new ApolloClient({
       link,
-      cache: new InMemoryCache({
+      cache: new Hermes({
         fragments: createFragmentRegistry(gql`
           fragment ProductFields on Product {
             description
@@ -6421,7 +6420,7 @@ function clientRoundtrip(
 
   const client = new ApolloClient({
     link,
-    cache: new InMemoryCache({
+    cache: new Hermes({
       possibleTypes,
     }),
   });

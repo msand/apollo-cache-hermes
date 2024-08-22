@@ -1,6 +1,6 @@
 import { addTypenameToDocument } from '@apollo/client/utilities';
 import isEqual from '@wry/equality';
-import { TypePolicies } from '@apollo/client';
+import { TypePolicies, InMemoryCacheConfig } from '@apollo/client';
 
 import { ApolloTransaction } from '../apollo/Transaction';
 import { CacheSnapshot } from '../CacheSnapshot';
@@ -58,6 +58,10 @@ export namespace CacheContext {
     [typeName: string]: EntityUpdater<TSerialized>;
   }
 
+  export type PossibleTypesMap = {
+    [supertype: string]: string[],
+  };
+
   /**
    * Configuration for a Hermes cache.
    */
@@ -67,6 +71,15 @@ export namespace CacheContext {
 
     /** Whether __typename should be injected into nodes in queries. */
     addTypename?: boolean;
+    possibleTypes?: PossibleTypesMap;
+    fragments?: InMemoryCacheConfig['fragments'];
+    /**
+     * @deprecated
+     * Using `canonizeResults` can result in memory leaks so we generally do not
+     * recommend using this option anymore.
+     * A future version of Apollo Client will contain a similar feature.
+     */
+    canonizeResults?: boolean;
 
     /**
      * Given a node, determines a _globally unique_ identifier for it to be used

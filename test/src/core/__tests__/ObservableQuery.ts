@@ -13,7 +13,8 @@ import {
   DocumentTransform,
   Observable,
   NormalizedCacheObject,
-  ApolloError, InMemoryCache, ObservableQuery,
+  ApolloError,
+  ObservableQuery,
 } from '@apollo/client';
 
 import { QueryManager } from '../QueryManager';
@@ -1924,7 +1925,7 @@ describe('ObservableQuery', () => {
 
         const client = new ApolloClient({
           link: ni,
-          cache: new InMemoryCache({
+          cache: new Hermes({
             possibleTypes: {
               Creature: ['Pet'],
               Pet: ['Dog', 'Cat'],

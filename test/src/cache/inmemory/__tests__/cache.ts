@@ -1,6 +1,6 @@
 import gql, { disableFragmentWarnings } from 'graphql-tag';
 import { expectTypeOf } from 'expect-type';
-import { InMemoryCache, TypePolicies } from '@apollo/client';
+import { TypePolicies } from '@apollo/client';
 
 import { cloneDeep } from '../../../utilities';
 import {
@@ -2271,12 +2271,12 @@ describe('Hermes#broadcastWatches', () => {
       },
     };
 
-    const canonicalCache = new InMemoryCache({
+    const canonicalCache = new Hermes({
       canonizeResults: true,
       typePolicies,
     });
 
-    const nonCanonicalCache = new InMemoryCache({
+    const nonCanonicalCache = new Hermes({
       canonizeResults: false,
       typePolicies,
     });
@@ -4085,7 +4085,7 @@ describe('ReactiveVar and makeVar', () => {
 
   it('should broadcast to manually added caches', () => {
     const rv = makeVar(0);
-    const cache = new InMemoryCache();
+    const cache = new Hermes();
     const query = gql`
       query {
         value

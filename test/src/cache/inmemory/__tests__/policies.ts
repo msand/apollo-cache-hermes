@@ -1,5 +1,5 @@
 import gql from 'graphql-tag';
-import { ApolloClient, InMemoryCache, FieldPolicy } from '@apollo/client';
+import { ApolloClient, FieldPolicy } from '@apollo/client';
 
 import { ReactiveVar, makeVar } from '../reactiveVars';
 import {
@@ -462,7 +462,7 @@ describe('type policies', () => {
   });
 
   it('does not clobber previous keyFields with undefined', () => {
-    const cache = new InMemoryCache({
+    const cache = new Hermes({
       typePolicies: {
         Movie: {
           keyFields(incoming) {
@@ -491,7 +491,7 @@ describe('type policies', () => {
   });
 
   it('does not remove previous typePolicies', () => {
-    const cache = new InMemoryCache({
+    const cache = new Hermes({
       typePolicies: {
         Query: {
           fields: {
@@ -530,7 +530,7 @@ describe('type policies', () => {
   });
 
   it('support inheritance', () => {
-    const cache = new InMemoryCache({
+    const cache = new Hermes({
       possibleTypes: {
         Reptile: ['Snake', 'Turtle'],
         Snake: ['Python', 'Viper', 'Cobra'],
@@ -662,7 +662,7 @@ describe('type policies', () => {
   });
 
   it('typePolicies can be inherited from supertypes with fuzzy possibleTypes', () => {
-    const cache = new InMemoryCache({
+    const cache = new Hermes({
       possibleTypes: {
         EntitySupertype: ['.*Entity'],
       },
@@ -2392,7 +2392,7 @@ describe('type policies', () => {
         };
       }
 
-      const cache = new InMemoryCache({
+      const cache = new Hermes({
         typePolicies: {
           Query: {
             fields: {
@@ -3508,7 +3508,7 @@ describe('type policies', () => {
     itAsync(
       'can handle Relay-style pagination without args',
       (resolve, reject) => {
-        const cache = new InMemoryCache({
+        const cache = new Hermes({
           addTypename: false,
           typePolicies: {
             Query: {
@@ -3689,7 +3689,7 @@ describe('type policies', () => {
     );
 
     itAsync('can handle Relay-style pagination', (resolve, reject) => {
-      const cache = new InMemoryCache({
+      const cache = new Hermes({
         addTypename: false,
         typePolicies: {
           Query: {
@@ -4740,7 +4740,7 @@ describe('type policies', () => {
     });
 
     it('can force merging of unidentified non-normalized data', () => {
-      const cache = new InMemoryCache({
+      const cache = new Hermes({
         typePolicies: {
           Book: {
             keyFields: ['isbn'],
@@ -4812,7 +4812,7 @@ describe('type policies', () => {
       };
     }
 
-    function testForceMerges(cache: InMemoryCache) {
+    function testForceMerges(cache: Hermes) {
       const queryWithAuthorName = gql`
         query {
           currentlyReading {
@@ -5003,7 +5003,7 @@ describe('type policies', () => {
 
     // Same as previous test, except with merge:true for Book.author.
     it('can force merging with merge:true field policy', () => {
-      const cache = new InMemoryCache({
+      const cache = new Hermes({
         typePolicies: {
           Book: {
             keyFields: ['isbn'],
@@ -5029,7 +5029,7 @@ describe('type policies', () => {
     // Same as previous test, except configuring merge:true for the Author
     // type instead of for the Book.author field.
     it('can force merging with merge:true type policy', () => {
-      const cache = new InMemoryCache({
+      const cache = new Hermes({
         typePolicies: {
           Book: {
             keyFields: ['isbn'],
@@ -5049,7 +5049,7 @@ describe('type policies', () => {
     });
 
     it('can force merging with inherited merge:true field policy', () => {
-      const cache = new InMemoryCache({
+      const cache = new Hermes({
         typePolicies: {
           Authored: {
             fields: {
@@ -5080,7 +5080,7 @@ describe('type policies', () => {
     });
 
     it('can force merging with inherited merge:true type policy', () => {
-      const cache = new InMemoryCache({
+      const cache = new Hermes({
         typePolicies: {
           Book: {
             keyFields: ['isbn'],
@@ -5118,7 +5118,7 @@ describe('type policies', () => {
     it('can force merging with inherited type policy merge function', () => {
       let personMergeCount = 0;
 
-      const cache = new InMemoryCache({
+      const cache = new Hermes({
         typePolicies: {
           Book: {
             keyFields: ['isbn'],
@@ -5349,7 +5349,7 @@ describe('type policies', () => {
     it('can force merging with inherited field merge function', () => {
       let authorMergeCount = 0;
 
-      const cache = new InMemoryCache({
+      const cache = new Hermes({
         typePolicies: {
           Book: {
             keyFields: ['isbn'],

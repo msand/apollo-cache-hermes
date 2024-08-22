@@ -57,7 +57,7 @@ describe('graphql(mutation) query integration', () => {
             });
 
             const dataInStore = client.cache.extract(true);
-            expect(dataInStore['Todo:99']).toEqual(
+            expect(dataInStore['Todo:99']?.data).toEqual(
               optimisticResponse.createTodo
             );
           }
@@ -139,7 +139,11 @@ describe('graphql(mutation) query integration', () => {
       const data = JSON.parse(
         JSON.stringify(proxy.readQuery<QueryData>({ query }))
       );
-      data.todo_list.tasks.push(result.data!.createTodo); // update value
+      const tasks = data.todo_list.tasks;
+      const todo = result.data!.createTodo;
+      const id = todo.id;
+      const index = tasks.findIndex(t => t.id === id);
+      tasks[index === -1 ? tasks.length : index] = todo; // update value
       proxy.writeQuery({ query, data }); // write to cache
     };
 

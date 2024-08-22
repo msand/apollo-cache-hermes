@@ -11,7 +11,7 @@ import {
   GraphQLID,
   GraphQLString,
 } from 'graphql';
-import { ApolloClient, Observable, ApolloLink, Operation, ApolloCache, InMemoryCache } from '@apollo/client';
+import { ApolloClient, Observable, ApolloLink, Operation, ApolloCache } from '@apollo/client';
 
 import { itAsync } from '../../testing';
 import { spyOnConsole } from '../../testing/internal';
@@ -198,7 +198,7 @@ describe('General functionality', () => {
     ) => __typename === typeCondition;
 
     const client = new ApolloClient({
-      cache: new InMemoryCache({
+      cache: new Hermes({
         possibleTypes: {
           Foo: ['Bar', 'Baz'],
         },

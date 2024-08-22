@@ -1,0 +1,127 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`useQuery Hook SSR should return data written previously to cache during SSR pass if using cache-only fetchPolicy 1`] = `
+{
+  "Order:{"selection":"RELEVANCE"}": {
+    "data": {
+      "__typename": "Order",
+      "selection": "RELEVANCE",
+    },
+    "inbound": [
+      {
+        "id": "ROOT_QUERY",
+        "path": [
+          "getSearchResults",
+          "order",
+        ],
+      },
+    ],
+    "type": 0,
+  },
+  "ROOT_QUERY": {
+    "data": {
+      "getSearchResults": {
+        "__typename": "SearchResults",
+        "locale": "en-US",
+        "order": undefined,
+        "pagination": {
+          "pageLimit": 3,
+        },
+        "results": [
+          undefined,
+          undefined,
+          undefined,
+        ],
+      },
+    },
+    "outbound": [
+      {
+        "id": "Order:{"selection":"RELEVANCE"}",
+        "path": [
+          "getSearchResults",
+          "order",
+        ],
+      },
+      {
+        "id": "SearchResult:1",
+        "path": [
+          "getSearchResults",
+          "results",
+          0,
+        ],
+      },
+      {
+        "id": "SearchResult:2",
+        "path": [
+          "getSearchResults",
+          "results",
+          1,
+        ],
+      },
+      {
+        "id": "SearchResult:3",
+        "path": [
+          "getSearchResults",
+          "results",
+          2,
+        ],
+      },
+    ],
+    "type": 0,
+  },
+  "SearchResult:1": {
+    "data": {
+      "__typename": "SearchResult",
+      "id": 1,
+      "text": "hi",
+    },
+    "inbound": [
+      {
+        "id": "ROOT_QUERY",
+        "path": [
+          "getSearchResults",
+          "results",
+          0,
+        ],
+      },
+    ],
+    "type": 0,
+  },
+  "SearchResult:2": {
+    "data": {
+      "__typename": "SearchResult",
+      "id": 2,
+      "text": "hello",
+    },
+    "inbound": [
+      {
+        "id": "ROOT_QUERY",
+        "path": [
+          "getSearchResults",
+          "results",
+          1,
+        ],
+      },
+    ],
+    "type": 0,
+  },
+  "SearchResult:3": {
+    "data": {
+      "__typename": "SearchResult",
+      "id": 3,
+      "text": "hey",
+    },
+    "inbound": [
+      {
+        "id": "ROOT_QUERY",
+        "path": [
+          "getSearchResults",
+          "results",
+          2,
+        ],
+      },
+    ],
+    "type": 0,
+  },
+}
+`;
