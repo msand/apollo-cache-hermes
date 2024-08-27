@@ -3,8 +3,9 @@ set -e
 
 FILES_TO_REMOVE=($(
   find . \
-    \( -name "*.js" -or -name "*.js.map" -or -name "*.ts.map" \) \
+    \( -name "*.js" -or -name "*.js.map" -or -name "*.d.ts" -or -name "*.ts.map" \) \
     -not -path "./*.config.js" \
+    -not -path "./apollo-client/*" \
     -not -path "./scripts/*" \
     -not -path "./coverage/*" \
     -not -path "./node_modules/*" \

@@ -1,6 +1,8 @@
 import * as util from 'util';
+import { KeyFieldsContext } from '@apollo/client/cache/inmemory/policies';
 
 import { CacheContext } from '../../src/context';
+import { StoreObject } from '../../apollo-client';
 
 export const strictConfig: CacheContext.Configuration = {
   freeze: true,
@@ -13,8 +15,10 @@ export const strictConfig: CacheContext.Configuration = {
     group: jest.fn(),
     groupEnd: jest.fn(),
   },
-  entityIdForNode: (obj) => {
-    const id = obj?.id;
+  entityIdForNode: (
+    object: Readonly<StoreObject>,
+    context: KeyFieldsContext) => {
+    const id = object?.id;
     return typeof id === 'string' || typeof id === 'number' ? id : undefined;
   },
   addTypename: false,
@@ -29,8 +33,10 @@ export const silentConfig: CacheContext.Configuration = {
     group: jest.fn(),
     groupEnd: jest.fn(),
   },
-  entityIdForNode: (obj) => {
-    const id = obj?.id;
+  entityIdForNode: (
+    object: Readonly<StoreObject>,
+    context: KeyFieldsContext) => {
+    const id = object?.id;
     return typeof id === 'string' || typeof id === 'number' ? id : undefined;
   },
   addTypename: false,

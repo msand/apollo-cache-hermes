@@ -8,6 +8,7 @@ export const config: Config = {
     'src/**/*.js',
   ],
   moduleFileExtensions: ['js', 'jsx', 'ts', 'tsx'],
+  extensionsToTreatAsEsm: ['js', 'jsx', 'ts', 'tsx'],
   coverageDirectory: 'output/test-unit',
   coverageReporters: ['lcovonly', 'text'],
   coveragePathIgnorePatterns: [
@@ -25,10 +26,12 @@ export const config: Config = {
   globals: {
     'ts-jest': {
       isolatedModules: true,
+      useESM: true,
     },
     __DEV__: true,
   },
-  'transformIgnorePatterns': [],
+  resolver: 'ts-jest-resolver',
+  transformIgnorePatterns: ['/node_modules/(?!(@apollo/client|@apollo/client/cache)/)', '@apollo/client'],
 };
 
 export default config;

@@ -1,18 +1,25 @@
-import { addTypenameToDocument } from '@apollo/client/utilities';
+import { addTypenameToDocument, StoreObject } from '@apollo/client/utilities';
 import isEqual from '@wry/equality';
-import { TypePolicies, InMemoryCacheConfig } from '@apollo/client';
+import type { TypePolicies, InMemoryCacheConfig, IdGetter, Reference } from '@apollo/client';
+import { KeyFieldsContext, KeySpecifier } from '@apollo/client/cache/inmemory/policies';
+import type { ReadFieldOptions } from '@apollo/client/cache/core/types/common';
 
 import { ApolloTransaction } from '../apollo/Transaction';
 import { CacheSnapshot } from '../CacheSnapshot';
 import { areChildrenDynamic, expandVariables } from '../ParsedQueryNode';
 import { JsonObject } from '../primitive';
 import { EntityId, NodeId, OperationInstance, RawOperation } from '../schema';
-import { DocumentNode, isObject } from '../util';
+import { DocumentNode, isObject, isReference } from '../util';
 import { GraphSnapshot } from '../GraphSnapshot';
 
 import { ConsoleTracer } from './ConsoleTracer';
 import { QueryInfo } from './QueryInfo';
 import { Tracer } from './Tracer';
+
+export type KeyFieldsFunction = (
+    object: Readonly<StoreObject>,
+    context: KeyFieldsContext
+) => KeySpecifier | false | ReturnType<IdGetter> | number;
 
 // Augment DocumentNode type with Hermes's properties
 // Because react-apollo can call us without doing transformDocument
@@ -20,18 +27,17 @@ import { Tracer } from './Tracer';
 // we have already done so to not repeating the process.
 declare module 'graphql/language/ast' {
   export interface DocumentNode {
-    /** Indicating that query has already ran transformDocument */
+    /** Indicating that query has already run transformDocument */
     hasBeenTransformed?: boolean;
   }
 }
 
 export namespace CacheContext {
 
-  export type EntityIdForNode = (node: JsonObject) => EntityId | undefined;
-  export type EntityIdForValue = (value: any) => EntityId | undefined;
-  export type EntityIdMapper = (node: JsonObject) => string | number | undefined;
+  export type EntityIdForValue = (value: any, context?: KeyFieldsContext) => EntityId | undefined;
+  export type EntityIdMapper = KeyFieldsFunction;
   export type EntityTransformer = (node: JsonObject) => void;
-  export type OnChangeCallback = (newCacheShapshot: CacheSnapshot, editedNodeIds: Set<String>) => void;
+  export type OnChangeCallback = (newCacheSnapshot: CacheSnapshot, editedNodeIds: Set<String>) => void;
 
   /**
    * Expected to return an EntityId or undefined, but we loosen the restrictions
@@ -66,20 +72,24 @@ export namespace CacheContext {
    * Configuration for a Hermes cache.
    */
   export interface Configuration<TSerialized = GraphSnapshot> {
-
-    typePolicies?: TypePolicies;
-
-    /** Whether __typename should be injected into nodes in queries. */
-    addTypename?: boolean;
+    resultCaching?: boolean;
     possibleTypes?: PossibleTypesMap;
-    fragments?: InMemoryCacheConfig['fragments'];
+    typePolicies?: TypePolicies;
+    /**
+    * @deprecated
+    * Please use `cacheSizes` instead.
+    */
+    resultCacheMaxSize?: number;
     /**
      * @deprecated
-     * Using `canonizeResults` can result in memory leaks so we generally do not
+     * Using `canonizeResults` can result in memory leaks, so we generally do not
      * recommend using this option anymore.
      * A future version of Apollo Client will contain a similar feature.
      */
     canonizeResults?: boolean;
+    fragments?: InMemoryCacheConfig['fragments'];
+    /** Whether __typename should be injected into nodes in queries. */
+    addTypename?: boolean;
 
     /**
      * Given a node, determines a _globally unique_ identifier for it to be used
@@ -129,7 +139,7 @@ export namespace CacheContext {
     /**
      * Callback that is triggered when there is a change in the cache.
      *
-     * This allow the cache to be integrated with external tools such as Redux.
+     * This allows the cache to be integrated with external tools such as Redux.
      * It allows other tools to be notified when there are changes.
      */
     onChange?: OnChangeCallback;
@@ -163,6 +173,7 @@ export namespace CacheContext {
      * Ignored if `tracer` is supplied.
      */
     logger?: ConsoleTracer.Logger;
+
   }
 
 }
@@ -339,11 +350,33 @@ export function _makeEntityIdMapper(
         return __typename ? `${__typename}:${id}` : `${id}`;
       }
   );
-  return function entityIdForNode(node: JsonObject) {
+
+  return function entityIdForNode(node: JsonObject, context: KeyFieldsContext = {
+    readField: (
+      fieldNameOrOptions: string | ReadFieldOptions,
+      from: StoreObject | Reference = node
+    ) => {
+      if (typeof fieldNameOrOptions === 'object') {
+        from = fieldNameOrOptions.from ?? from;
+        fieldNameOrOptions = fieldNameOrOptions.fieldName;
+      }
+      if (!from) {
+        return undefined;
+      }
+
+      if (isReference(from)) {
+        return undefined;
+      } else {
+        return from[fieldNameOrOptions];
+      }
+    },
+    storeObject: node,
+    typename: undefined,
+  }) {
     if (!isObject(node)) return undefined;
 
     // We don't trust upstream implementations.
-    const entityId = mapper(node);
+    const entityId = mapper(node, context);
     if (typeof entityId === 'string') return entityId;
     if (typeof entityId === 'number') return String(entityId);
     return undefined;

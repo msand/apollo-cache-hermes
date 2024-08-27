@@ -95,8 +95,8 @@ function getVisibleProxy(value: JsonValue | NestedObject<JsonScalar> | undefined
     return value;
   }
   return new Proxy(value, {
-    get: (target, p: string) => {
-      return hasOwn.call(target, p) ? target[p] : target[map[p]];
+    get: (target: { [ p: string | number ]: any }, p: string | number | symbol) => {
+      return typeof p === 'symbol' ? undefined : hasOwn.call(target, p) ? target[p] : target[map[p]];
     },
   });
 }

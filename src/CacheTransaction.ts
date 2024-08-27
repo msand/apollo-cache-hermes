@@ -15,7 +15,7 @@ import type { GraphSnapshot, NodeSnapshotMap } from './GraphSnapshot';
 import type { JsonObject, JsonValue } from './primitive';
 import type { CacheContext } from './context';
 import type { Queryable } from './Queryable';
-import type { NodeSnapshot } from './nodes';
+import type { NodeReference, NodeSnapshot } from './nodes';
 import type { DocumentNode } from './util';
 import * as transaction from './apollo/Transaction';
 import * as cacheSnapshot from './CacheSnapshot';
@@ -271,7 +271,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
       return false;
     }
 
-    const nodeRefToMatch = ({ id }) => ({ d: graphSnapshot.getNodeData(id), k: id });
+    const nodeRefToMatch = ({ id }: NodeReference) => ({ d: graphSnapshot.getNodeData(id), k: id });
 
     function readFromSnapshot(obj: Readonly<NodeSnapshot>, key: string) {
       const data = obj.data;

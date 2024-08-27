@@ -115,14 +115,17 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
 }
 
 function set(data: NestedArray<JsonScalar> | NestedObject<JsonScalar>, path: PathPart[], value: JsonValue | undefined) {
-  let obj = data;
+  if (value === undefined) {
+    return;
+  }
+  let obj: NestedObject<JsonScalar> = data as NestedObject<JsonScalar>;
   const l = path.length - 1;
   for (let i = 0; i < l; i++) {
     const key = path[i];
     if (!(key in obj)) {
-      obj[key] = typeof key === 'string' ? {} : [];
+      (obj as NestedObject<JsonScalar>)[key] = typeof key === 'string' ? {} : [];
     }
-    obj = obj[key];
+    obj = (obj as NestedObject<JsonScalar>)[key] as NestedObject<JsonScalar>;
   }
   obj[path[l]] = value;
 }

@@ -1,4 +1,4 @@
-import deepFreeze = require('deep-freeze-strict');
+import deepFreeze from 'deep-freeze-strict';
 
 import { NodeSnapshot } from './nodes';
 import { QueryResult, QueryResultWithNodeIds } from './operations/read';

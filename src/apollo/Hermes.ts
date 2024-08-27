@@ -1,10 +1,31 @@
 import {
+  Cache as CacheInterface,
+  DocumentTransform,
+} from '@apollo/client';
+import type {
   Transaction,
   InMemoryCache,
-  Cache as CacheInterface,
 } from '@apollo/client';
-import { Reference, StoreObject } from '@apollo/client/utilities';
-import { Policies } from '@apollo/client/cache';
+import {
+  addTypenameToDocument,
+  cacheSizes,
+  canonicalStringify,
+  defaultCacheSizes,
+  Reference,
+  StoreObject,
+} from '@apollo/client/utilities';
+import {
+  EntityStore,
+  makeVar,
+  Policies,
+} from '@apollo/client/cache';
+import { OptimisticWrapperFunction, wrap } from 'optimism';
+import type { DocumentNode } from 'graphql/index';
+import { equal } from '@wry/equality';
+import { StoreWriter } from '@apollo/client/cache/inmemory/writeToStore';
+import { StoreReader } from '@apollo/client/cache/inmemory/readFromStore';
+import { shouldCanonizeResults } from '@apollo/client/cache/inmemory/helpers';
+import { supportsResultCaching } from '@apollo/client/cache/inmemory/entityStore';
 
 import { CacheContext } from '../context';
 import { Cache, MigrationMap } from '../Cache';
@@ -17,6 +38,7 @@ import { ApolloTransaction } from './Transaction';
 import { buildRawOperationFromQuery } from './util';
 
 import BatchOptions = CacheInterface.BatchOptions;
+import Root = EntityStore.Root;
 
 /**
  * Apollo-specific interface to the cache.
@@ -26,6 +48,43 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
   protected _queryable: Cache<TSerialized>;
   public watches = new Set<CacheInterface.WatchOptions>();
   public readonly policies: Policies;
+  public readonly config: CacheContext.Configuration<TSerialized> | undefined;
+
+  private addTypename: boolean;
+  private storeReader!: StoreReader;
+  private storeWriter!: StoreWriter;
+  private addTypenameTransform = new DocumentTransform(addTypenameToDocument);
+  private maybeBroadcastWatch!: OptimisticWrapperFunction<
+      [CacheInterface.WatchOptions, Pick<
+          BatchOptions<Hermes<TSerialized>>,
+          'optimistic' | 'onWatchUpdated'
+      >?],
+      any,
+      [CacheInterface.WatchOptions]
+  >;
+
+  public readonly makeVar = makeVar;
+
+  private data!: EntityStore;
+  private optimisticData!: EntityStore;
+  private init() {
+    // Passing { resultCaching: false } in the InMemoryCache constructor options
+    // will completely disable dependency tracking, which will improve memory
+    // usage but worsen the performance of repeated reads.
+    const rootStore = (this.data = new Root({
+      policies: this.policies,
+      resultCaching: this.config?.resultCaching,
+    }));
+
+    // When no optimistic writes are currently active, cache.optimisticData ===
+    // cache.data, so there are no additional layers on top of the actual data.
+    // When an optimistic update happens, this.optimisticData will become a
+    // linked list of EntityStore Layer objects that terminates with the
+    // original this.data cache object.
+    this.optimisticData = rootStore.stump;
+
+    this.resetResultCache();
+  }
 
   constructor(configuration?: CacheContext.Configuration<TSerialized>) {
     super();
@@ -36,6 +95,126 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
       possibleTypes: configuration?.possibleTypes,
       typePolicies: this._queryable.typePolicies,
     });
+    this.config = configuration;
+    this.addTypename = !!configuration?.addTypename;
+    this.resetResultCache();
+  }
+
+  private resetResultCache(resetResultIdentities?: boolean) {
+    const previousReader = this.storeReader;
+    const fragments = this.config?.fragments;
+
+    // The StoreWriter is mostly stateless and so doesn't really need to be
+    // reset, but it does need to have its writer.storeReader reference updated,
+    // so it's simpler to update this.storeWriter as well.
+    this.storeWriter = new StoreWriter(
+      // @ts-ignore
+      this,
+      (this.storeReader = new StoreReader({
+        // @ts-ignore
+        cache: this,
+        addTypename: this.addTypename,
+        resultCacheMaxSize: this.config?.resultCacheMaxSize,
+        canonizeResults: this.config && shouldCanonizeResults(this.config),
+        canon:
+              resetResultIdentities ? void 0 : (
+                previousReader && previousReader.canon
+              ),
+        fragments,
+      })),
+      fragments
+    );
+
+    this.maybeBroadcastWatch = wrap(
+      (c: CacheInterface.WatchOptions, options?: Pick<
+            BatchOptions<Hermes<TSerialized>>,
+            'optimistic' | 'onWatchUpdated'
+        >) => {
+        return this._queryable.broadcastWatches(options);
+      },
+      {
+        max:
+              this.config?.resultCacheMaxSize ||
+              cacheSizes['inMemoryCache.maybeBroadcastWatch'] ||
+              defaultCacheSizes['inMemoryCache.maybeBroadcastWatch'],
+        makeCacheKey: (c: CacheInterface.WatchOptions) => {
+          // Return a cache key (thus enabling result caching) only if we're
+          // currently using a data store that can track cache dependencies.
+          const snapshot = this._queryable.getSnapshot();
+          const store = c.optimistic ? snapshot.optimistic : snapshot.baseline;
+          if (supportsResultCaching(store)) {
+            const { optimistic, id, variables } = c;
+            return store.makeCacheKey(
+              c.query,
+              // Different watches can have the same query, optimistic
+              // status, rootId, and variables, but if their callbacks are
+              // different, the (identical) result needs to be delivered to
+              // each distinct callback. The easiest way to achieve that
+              // separation is to include c.callback in the cache key for
+              // maybeBroadcastWatch calls. See issue #5733.
+              c.callback,
+              canonicalStringify({ optimistic, id, variables })
+            );
+          }
+        },
+      }
+    );
+  }
+
+  // This method is wrapped by maybeBroadcastWatch, which is called by
+  // broadcastWatches, so that we compute and broadcast results only when
+  // the data that would be broadcast might have changed. It would be
+  // simpler to check for changes after recomputing a result but before
+  // broadcasting it, but this wrapping approach allows us to skip both
+  // the recomputation and the broadcast, in most cases.
+  private broadcastWatch(c: CacheInterface.WatchOptions, options?: Pick<
+    BatchOptions<Hermes<TSerialized>>,
+    'optimistic' | 'onWatchUpdated'
+  >) {
+    const { lastDiff } = c;
+
+    // Both WatchOptions and DiffOptions extend ReadOptions, and DiffOptions
+    // currently requires no additional properties, so we can use c (a
+    // WatchOptions object) as DiffOptions, without having to allocate a new
+    // object, and without having to enumerate the relevant properties (query,
+    // variables, etc.) explicitly. There will be some additional properties
+    // (lastDiff, callback, etc.), but cache.diff ignores them.
+    const diff = this.diff<any>(c);
+
+    if (options) {
+      if (c.optimistic && typeof options.optimistic === 'string') {
+        diff.fromOptimisticTransaction = true;
+      }
+
+      if (
+        options.onWatchUpdated &&
+        options.onWatchUpdated.call(this, c, diff, lastDiff) === false
+      ) {
+        // Returning false from the onWatchUpdated callback will prevent
+        // calling c.callback(diff) for this watcher.
+        return;
+      }
+    }
+
+    if (!lastDiff || !equal(lastDiff.result, diff.result)) {
+      c.callback((c.lastDiff = diff), lastDiff);
+    }
+  }
+
+  get txCount(): number {
+    return this._txCount;
+  }
+
+  private addTypenameToDocument(document: DocumentNode) {
+    if (this.addTypename) {
+      return this.addTypenameTransform.transformDocument(document);
+    }
+    return document;
+  }
+
+  private addFragmentsToDocument(document: DocumentNode) {
+    const fragments = this.config?.fragments;
+    return fragments ? fragments.transform(document) : document;
   }
 
   identify(object: StoreObject | Reference): string | undefined {

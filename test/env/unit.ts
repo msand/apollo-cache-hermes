@@ -1,7 +1,6 @@
 import gql from 'graphql-tag';
 
-import { loadErrorMessageHandler } from '../src/dev/loadErrorMessageHandler';
-import '../src/testing/matchers/index';
+import { loadErrorMessageHandler } from '../../apollo-client/src/dev';
 
 // Turn off warnings for repeated fragment names
 gql.disableFragmentWarnings();
@@ -29,3 +28,4 @@ if (!Symbol.asyncDispose) {
 }
 
 import './base';
+
