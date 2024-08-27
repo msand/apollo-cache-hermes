@@ -1,8 +1,7 @@
 import gql, { disableFragmentWarnings } from "graphql-tag";
 import { expectTypeOf } from "expect-type";
-import { TypePolicies } from "@apollo/client";
 
-import { cloneDeep } from "../../../utilities";
+import { cloneDeep } from "../../../utilities/common/cloneDeep";
 import {
   makeReference,
   Reference,
@@ -11,13 +10,16 @@ import {
   isReference,
   DocumentNode,
 } from "../../../core";
-import { Cache } from "../..";
+import { Cache } from "../../../cache";
+import { InMemoryCacheConfig } from "../types";
+import { Hermes } from "../../../../../src";
+
 import { StoreReader } from "../readFromStore";
 import { StoreWriter } from "../writeToStore";
 import { ObjectCanon } from "../object-canon";
+import { TypePolicies } from "../policies";
 import { spyOnConsole } from "../../../testing/internal";
-import { Hermes } from "../../../../../src";
-import { CacheContext } from "../../../../../src/context";
+import { defaultCacheSizes } from "../../../utilities";
 
 disableFragmentWarnings();
 
@@ -36,6 +38,7 @@ describe("Cache", () => {
       initialDataForCaches.map((data) =>
         new Hermes({
           addTypename: false,
+          resultCaching: false,
         }).restore(cloneDeep(data))
       ),
     ];
@@ -48,22 +51,24 @@ describe("Cache", () => {
 
   function itWithCacheConfig(
     message: string,
-    config: CacheContext.Configuration,
+    config: InMemoryCacheConfig,
     callback: (cache: Hermes) => any
   ) {
     const caches = [
       new Hermes({
         addTypename: false,
         ...config,
+        resultCaching: true,
       }),
       new Hermes({
         addTypename: false,
         ...config,
+        resultCaching: false,
       }),
     ];
 
     caches.forEach((cache, i) => {
-      it(`${message} (${i + 1}/${caches.length})`, () => callback(cache));
+      it(message + ` (${i + 1}/${caches.length})`, () => callback(cache));
     });
   }
 
@@ -573,7 +578,9 @@ describe("Cache", () => {
     );
 
     it("should not accidentally depend on unrelated entity fields", () => {
-      const cache = new Hermes({});
+      const cache = new Hermes({
+        resultCaching: true,
+      });
 
       const bothNamesData = {
         __typename: "Person",
@@ -1248,7 +1255,7 @@ describe("Cache", () => {
       },
       (proxy) => {
         const readWriteFragment = gql`
-          fragment aFragment on Query {
+          fragment aFragment on query {
             getSomething {
               id
             }
@@ -1623,7 +1630,6 @@ describe("Cache", () => {
 
       dirtied.clear();
 
-      // noinspection JSVoidFunctionReturnValueUsed
       const bUpdateResult = cache.batch({
         update(cache) {
           cache.writeQuery({
@@ -2113,8 +2119,35 @@ describe("Cache", () => {
   });
 });
 
-describe("Hermes#broadcastWatches", () => {
-  it("should keep distinct consumers distinct (issue #5733)", () => {
+describe("resultCacheMaxSize", () => {
+  it("uses default max size on caches if resultCacheMaxSize is not configured", () => {
+    const cache = new Hermes();
+    expect(cache["maybeBroadcastWatch"].options.max).toBe(
+      defaultCacheSizes["inMemoryCache.maybeBroadcastWatch"]
+    );
+    expect(cache["storeReader"]["executeSelectionSet"].options.max).toBe(
+      defaultCacheSizes["inMemoryCache.executeSelectionSet"]
+    );
+    expect(cache["getFragmentDoc"].options.max).toBe(
+      defaultCacheSizes["cache.fragmentQueryDocuments"]
+    );
+  });
+
+  it("configures max size on caches when resultCacheMaxSize is set", () => {
+    const resultCacheMaxSize = 12345;
+    const cache = new Hermes({ resultCacheMaxSize });
+    expect(cache["maybeBroadcastWatch"].options.max).toBe(resultCacheMaxSize);
+    expect(cache["storeReader"]["executeSelectionSet"].options.max).toBe(
+      resultCacheMaxSize
+    );
+    expect(cache["getFragmentDoc"].options.max).toBe(
+      defaultCacheSizes["cache.fragmentQueryDocuments"]
+    );
+  });
+});
+
+describe("Hermes#broadcastWatches", function () {
+  it("should keep distinct consumers distinct (issue #5733)", function () {
     const cache = new Hermes();
     const query = gql`
       query {
@@ -2530,7 +2563,7 @@ describe("Hermes#modify", () => {
 
   it("should allow invalidation using details.INVALIDATE", () => {
     const cache = new Hermes({
-      // canonizeResults: true,
+      canonizeResults: true,
       typePolicies: {
         Book: {
           keyFields: ["isbn"],
@@ -3105,7 +3138,7 @@ describe("Hermes#modify", () => {
       },
     });
 
-    const aResults: any[] = [];
+    let aResults: any[] = [];
     cache.watch({
       query: queryA,
       optimistic: true,
@@ -3115,7 +3148,7 @@ describe("Hermes#modify", () => {
       },
     });
 
-    const bResults: any[] = [];
+    let bResults: any[] = [];
     cache.watch({
       query: queryB,
       optimistic: true,
@@ -3181,9 +3214,9 @@ describe("Hermes#modify", () => {
     // Check that resetting the result cache does not trigger additional watch
     // notifications.
     expect(
-      cache.gc(/* {
+      cache.gc({
         resetResultCache: true,
-      } */)
+      })
     ).toEqual([]);
     expect(aResults).toEqual([a123, a124]);
     expect(bResults).toEqual([b321, b322]);
@@ -3385,7 +3418,7 @@ describe("Hermes#modify", () => {
     });
   });
 
-  it("should modify ROOT_QUERY only when options.id absent", () => {
+  it("should modify ROOT_QUERY only when options.id absent", function () {
     const cache = new Hermes();
 
     cache.writeQuery({
@@ -3652,7 +3685,7 @@ describe("ReactiveVar and makeVar", () => {
   function makeCacheAndVar(resultCaching: boolean) {
     const nameVar = makeVar("Ben");
     const cache: Hermes = new Hermes({
-      // resultCaching,
+      resultCaching,
       typePolicies: {
         Person: {
           fields: {
@@ -3852,7 +3885,7 @@ describe("ReactiveVar and makeVar", () => {
       d: 2,
     });
 
-    cache.reset(/* { discardWatches: true } */);
+    cache.reset({ discardWatches: true });
     expect(cache["watches"].size).toBe(0);
 
     expect(diffCounts).toEqual({
@@ -3903,7 +3936,7 @@ describe("ReactiveVar and makeVar", () => {
       f: 2,
     });
 
-    cache.reset(/* { discardWatches: true } */);
+    cache.reset({ discardWatches: true });
     expect(cache["watches"].size).toBe(0);
 
     nameVar("Danielle");
@@ -4005,9 +4038,10 @@ describe("ReactiveVar and makeVar", () => {
 
     const broadcast = cache["broadcastWatches"];
     let broadcastCount = 0;
-    cache["broadcastWatches"] = function broadcastWatches(...rest) {
+    cache["broadcastWatches"] = function () {
       ++broadcastCount;
-      return broadcast.apply(this, rest);
+      // @ts-expect-error
+      return broadcast.apply(this, arguments);
     };
 
     const query = gql`

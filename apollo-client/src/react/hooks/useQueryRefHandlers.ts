@@ -1,5 +1,4 @@
 import * as React from "rehackt";
-
 import {
   assertWrappedQueryRef,
   getWrappedPromise,
@@ -9,9 +8,8 @@ import {
 } from "../internal/index";
 import type { QueryRef } from "../internal/index";
 import type { OperationVariables } from "../../core/types";
-import type { FetchMoreQueryOptions } from "../../core/watchQueryOptions";
-
 import type { RefetchFunction, FetchMoreFunction } from "./useSuspenseQuery";
+import type { FetchMoreQueryOptions } from "../../core/watchQueryOptions";
 import { useApolloClient } from "./useApolloClient";
 import { wrapHook } from "./internal/index";
 
@@ -63,6 +61,8 @@ export function useQueryRefHandlers<
       // the transported object
       // This is just a context read - it's fine to do this conditionally.
       // This hook wrapper also shouldn't be optimized by React Compiler.
+      // eslint-disable-next-line react-compiler/react-compiler
+      // eslint-disable-next-line react-hooks/rules-of-hooks
     : useApolloClient()
   )(queryRef);
 }

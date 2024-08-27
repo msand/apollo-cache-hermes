@@ -1,9 +1,8 @@
 import type { DocumentNode } from "graphql"; // ignore-comment eslint-disable-line import/no-extraneous-dependencies, import/no-unresolved
 import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
 
-import type { Reference } from "../../../utilities/index";
-
 import type { MissingFieldError } from "./common";
+import type { Reference } from "../../../utilities/index";
 
 export namespace DataProxy {
   export interface Query<TVariables, TData> {

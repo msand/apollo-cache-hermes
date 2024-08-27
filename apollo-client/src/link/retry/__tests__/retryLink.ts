@@ -1,7 +1,8 @@
 import gql from "graphql-tag";
 import waitFor from "wait-for-observables";
-import { ApolloLink, execute } from "@apollo/client";
 
+import { ApolloLink } from "../../core/ApolloLink";
+import { execute } from "../../core/execute";
 import { Observable } from "../../../utilities/observables/Observable";
 import { fromError } from "../../utils/fromError";
 import { RetryLink } from "../retryLink";

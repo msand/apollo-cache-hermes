@@ -8,8 +8,9 @@ import {
   visit,
 } from "graphql";
 import gql from "graphql-tag";
-import { waitFor } from "@testing-library/react";
+
 import {
+  ApolloClient,
   FetchPolicy,
   WatchQueryFetchPolicy,
   QueryOptions,
@@ -17,19 +18,24 @@ import {
   Operation,
   TypedDocumentNode,
   NetworkStatus,
-  ApolloClient,
-  ApolloLink,
+} from "../core";
+
+import {
   DocumentTransform,
   Observable,
   ObservableSubscription,
-} from "@apollo/client";
-
-import {
   offsetLimitPagination,
   removeDirectivesFromDocument,
 } from "../utilities";
-import { createFragmentRegistry, makeVar, PossibleTypesMap } from "../cache";
+import { ApolloLink } from "../link/core";
+import {
+  createFragmentRegistry,
+  makeVar,
+  PossibleTypesMap,
+} from "../cache";
 import { ApolloError } from "../errors";
+import { Hermes } from "../../../src";
+
 import {
   itAsync,
   subscribeAndCount,
@@ -38,7 +44,7 @@ import {
   wait,
 } from "../testing";
 import { spyOnConsole } from "../testing/internal";
-import { Hermes } from "../../../src";
+import { waitFor } from "@testing-library/react";
 
 describe("client", () => {
   it("can be loaded via require", () => {
@@ -93,7 +99,6 @@ describe("client", () => {
       cache: new Hermes(),
     });
 
-    // eslint-disable-next-line no-return-await
     return await expect(
       client.mutate({
         query: gql`
@@ -450,14 +455,18 @@ describe("client", () => {
 
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }).restore(initialState.data),
+      cache: new Hermes({ addTypename: false }).restore(
+        initialState.data
+      ),
     });
 
     return client
       .query({ query })
       .then((result) => {
         expect(result.data).toEqual(data);
-        expect(finalState.data).toEqual((client.cache as Hermes).extract());
+        expect(finalState.data).toEqual(
+          (client.cache as Hermes).extract()
+        );
       })
       .then(resolve, reject);
   });
@@ -509,7 +518,9 @@ describe("client", () => {
 
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }).restore(initialState.data),
+        cache: new Hermes({ addTypename: false }).restore(
+          initialState.data
+        ),
       });
 
       return client
@@ -577,7 +588,9 @@ describe("client", () => {
 
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }).restore(initialState.data),
+        cache: new Hermes({ addTypename: false }).restore(
+          initialState.data
+        ),
       });
 
       expect(client.restore(initialState.data)).toEqual(
@@ -2586,6 +2599,7 @@ describe("client", () => {
             new Observable((observer) => {
               observer.next({ data });
               observer.complete();
+              return;
             })
         ),
       ]);
@@ -2637,7 +2651,7 @@ describe("client", () => {
       expect(count).toEqual(0);
       await client.resetStore();
       expect(count).toEqual(2);
-      // watchQuery should only receive data twice
+      //watchQuery should only receive data twice
       expect(next).toHaveBeenCalledTimes(2);
 
       resolve();
@@ -2720,6 +2734,7 @@ describe("client", () => {
         () =>
           new Observable((x) => {
             x.error(new Error("Uh oh!"));
+            return;
           }),
       ]);
 
@@ -3748,7 +3763,7 @@ describe("@connection", () => {
           }
         `;
 
-        const fetchPolicyRecord: WatchQueryFetchPolicy[] = [];
+        let fetchPolicyRecord: WatchQueryFetchPolicy[] = [];
         const observable = client.watchQuery({
           query,
           nextFetchPolicy(currentFetchPolicy) {
@@ -5582,7 +5597,7 @@ describe("custom document transforms", () => {
     expect(observable.options.query).toMatchDocument(query);
     expect(observable.query).toMatchDocument(disabledQuery);
 
-    expect(result && "data" in result && result.data).toEqual({
+    expect(result!.data).toEqual({
       product: { __typename: "Product", id: 2 },
     });
 

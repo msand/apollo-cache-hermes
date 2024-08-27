@@ -1,12 +1,14 @@
-import * as React from "react";
+import React from "react";
 import { render, waitFor } from "@testing-library/react";
 import gql from "graphql-tag";
 import { DocumentNode } from "graphql";
-import { ApolloClient, ApolloProvider } from "@apollo/client";
-import { graphql, ChildProps } from "@apollo/client/react/hoc";
 
+import { ApolloClient } from "../../../core";
+import { ApolloProvider } from "../../context";
+import { Hermes as Cache } from "../../../../../src";
 import { itAsync, mockSingleLink } from "../../../testing";
-import { Hermes } from "../../../../../src";
+import { graphql } from "../graphql";
+import { ChildProps } from "../types";
 
 describe("client option", () => {
   it("renders with client from options", () => {
@@ -29,21 +31,20 @@ describe("client option", () => {
     });
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
     const config = {
       options: {
         client,
       },
     };
-
     const ContainerWithData = graphql<{}, Data>(query, config)(() => null);
     const { unmount } = render(
       <ApolloProvider
         client={
           new ApolloClient({
             link,
-            cache: new Hermes({ addTypename: false }),
+            cache: new Cache({ addTypename: false }),
           })
         }
       >
@@ -72,7 +73,7 @@ describe("client option", () => {
     });
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
     const config = {
       options: {
@@ -80,7 +81,6 @@ describe("client option", () => {
       },
     };
     let renderCount = 0;
-
     const ContainerWithData = graphql<{}, Data>(
       query,
       config
@@ -119,7 +119,7 @@ describe("client option", () => {
       });
       const clientProvider = new ApolloClient({
         link: linkProvider,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
       const dataOptions = {
         allPeople: { people: [{ name: "Luke Skywalker" }] },
@@ -130,7 +130,7 @@ describe("client option", () => {
       });
       const clientOptions = new ApolloClient({
         link: linkOptions,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       const config = {
@@ -148,12 +148,10 @@ describe("client option", () => {
           });
           done = true;
         }
-
         render() {
           return null;
         }
       }
-
       const ContainerWithData = graphql<{}, Data>(query, config)(Container);
       render(
         <ApolloProvider client={clientProvider}>
@@ -190,7 +188,7 @@ describe("client option", () => {
     });
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const Container = graphql<Variables, Data, Variables>(query)(
@@ -200,7 +198,6 @@ describe("client option", () => {
           expect(data!.loading).toBeFalsy(); // first data
           done = true;
         }
-
         render() {
           return null;
         }

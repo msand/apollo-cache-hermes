@@ -1,14 +1,17 @@
-import * as crypto from "crypto";
-import { ApolloLink, DocumentTransform } from "@apollo/client";
-
 import { createFragmentRegistry } from "../../../cache";
-import { ApolloClient, gql } from "../../../core";
+import {
+  ApolloClient,
+  ApolloLink,
+  DocumentTransform,
+  gql,
+} from "../../../core";
+import { Hermes } from "../../../../../src";
 import { createPersistedQueryLink } from "../../../link/persisted-queries";
 import { removeTypenameFromVariables } from "../../../link/remove-typename";
+import crypto from "crypto";
 // importing react so the `parser` cache initializes
 import "../../../react";
 import { cacheSizes, defaultCacheSizes } from "../sizes";
-import { Hermes } from "../../../../../src";
 
 function sha256(data: string) {
   const hash = crypto.createHash("sha256");
@@ -65,12 +68,11 @@ it("returns information about cache usage (empty caches)", () => {
       parser: 0,
       canonicalStringify: 0,
       print: 0,
-      /* TODO
       addTypenameDocumentTransform: [
         {
           cache: 0,
         },
-      ],*/
+      ],
       queryManager: {
         getDocumentInfo: 0,
         documentTransforms: [
@@ -82,21 +84,19 @@ it("returns information about cache usage (empty caches)", () => {
           },
         ],
       },
-      /* TODO
       fragmentRegistry: {
         findFragmentSpreads: 0,
         lookup: 0,
         transform: 0,
-      },*/
+      },
       cache: {
         fragmentQueryDocuments: 0,
       },
-      /* TODO
       inMemoryCache: {
         executeSelectionSet: 0,
         executeSubSelectedArray: 0,
         maybeBroadcastWatch: 0,
-      },*/
+      },
       links: [
         {
           PersistedQueryLink: {
@@ -145,12 +145,11 @@ it("returns information about cache usage (some query triggered)", () => {
       parser: 0,
       canonicalStringify: 0,
       print: 1,
-      /* TODO
       addTypenameDocumentTransform: [
         {
           cache: 1,
         },
-      ],*/
+      ],
       queryManager: {
         getDocumentInfo: 1,
         documentTransforms: [
@@ -162,21 +161,19 @@ it("returns information about cache usage (some query triggered)", () => {
           },
         ],
       },
-      /* TODO
       fragmentRegistry: {
         findFragmentSpreads: 1,
         lookup: 0,
         transform: 1,
-      },*/
+      },
       cache: {
         fragmentQueryDocuments: 0,
       },
-      /* TODO
       inMemoryCache: {
         executeSelectionSet: 1,
         executeSubSelectedArray: 0,
         maybeBroadcastWatch: 0,
-      },*/
+      },
       links: [
         {
           PersistedQueryLink: {

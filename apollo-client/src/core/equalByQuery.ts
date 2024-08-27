@@ -1,4 +1,5 @@
 import equal from "@wry/equality";
+
 import type {
   DirectiveNode,
   DocumentNode,
@@ -10,6 +11,8 @@ import type {
   SelectionSetNode,
 } from "graphql";
 
+import type { ApolloQueryResult, OperationVariables } from "./types";
+
 import type { FragmentMap } from "../utilities/index";
 import {
   createFragmentMap,
@@ -20,8 +23,6 @@ import {
   resultKeyNameFromField,
   shouldInclude,
 } from "../utilities/index";
-
-import type { ApolloQueryResult, OperationVariables } from "./types";
 
 // Returns true if aResult and bResult are deeply equal according to the fields
 // selected by the given query, ignoring any fields marked as @nonreactive.

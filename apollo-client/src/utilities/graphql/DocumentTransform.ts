@@ -1,16 +1,11 @@
-// eslint-disable-next-line import/no-extraneous-dependencies
 import { Trie } from "@wry/trie";
-import type { DocumentNode } from "graphql";
-// eslint-disable-next-line import/no-extraneous-dependencies
-import { WeakCache } from "@wry/caches";
-// eslint-disable-next-line import/no-extraneous-dependencies
-import { wrap } from "optimism";
-
-import { invariant } from "../globals/index";
 import { canUseWeakMap, canUseWeakSet } from "../common/canUse";
-import { cacheSizes } from "../caching/index";
-
 import { checkDocument } from "./getFromAST";
+import { invariant } from "../globals/index";
+import type { DocumentNode } from "graphql";
+import { WeakCache } from "@wry/caches";
+import { wrap } from "optimism";
+import { cacheSizes } from "../caching/index";
 
 export type DocumentTransformCacheKey = ReadonlyArray<unknown>;
 

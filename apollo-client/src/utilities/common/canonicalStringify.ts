@@ -2,7 +2,7 @@ import {
   AutoCleanedStrongCache,
   cacheSizes,
   defaultCacheSizes,
-} from "../caching/index";
+} from "../../utilities/caching/index";
 import { registerGlobalCache } from "../caching/getMemoryInternals";
 
 /**

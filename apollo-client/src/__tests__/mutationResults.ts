@@ -1,9 +1,9 @@
 import { cloneDeep } from "lodash";
 import gql from "graphql-tag";
 import { GraphQLError } from "graphql";
-import { ApolloClient, ApolloLink } from "@apollo/client";
 
-import { FetchResult } from "../core";
+import { ApolloClient, FetchResult } from "../core";
+import { ApolloLink } from "../link/core";
 import {
   Observable,
   ObservableSubscription as Subscription,
@@ -315,11 +315,10 @@ describe("mutation results", () => {
             expect(result.data!.mini.cover).toBe("image");
 
             setTimeout(() => {
-              if (count === 0) {
+              if (count === 0)
                 reject(
                   new Error("mutate did not re-call observable with next value")
                 );
-              }
             }, 250);
           }
           if (count === 1) {
@@ -1241,6 +1240,7 @@ describe("mutation results", () => {
                 return;
               default:
                 observer.error(new Error("Too many network calls."));
+                return;
             }
           }),
       ] as any),
@@ -1322,6 +1322,7 @@ describe("mutation results", () => {
                 return;
               default:
                 observer.error(new Error("Too many network calls."));
+                return;
             }
           }),
       ] as any),
@@ -1402,6 +1403,7 @@ describe("mutation results", () => {
                   return;
                 default:
                   observer.error(new Error("Too many network calls."));
+                  return;
               }
             }),
         ] as any),
@@ -1807,7 +1809,7 @@ describe("mutation results", () => {
 
         client
           .mutate<{ foo: { bar: string } }>({
-            mutation,
+            mutation: mutation,
           })
           .then((result) => {
             // This next line should **not** raise "TS2533: Object is possibly 'null' or 'undefined'.", even without `!` operator

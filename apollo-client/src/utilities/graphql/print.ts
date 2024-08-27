@@ -1,6 +1,5 @@
 import type { ASTNode } from "graphql";
 import { print as origPrint } from "graphql";
-
 import {
   AutoCleanedWeakCache,
   cacheSizes,
@@ -28,8 +27,6 @@ export const print = Object.assign(
   }
 );
 print.reset();
-
-import "../globals/index.js";
 
 if (__DEV__) {
   registerGlobalCache("print", () => (printCache ? printCache.size : 0));

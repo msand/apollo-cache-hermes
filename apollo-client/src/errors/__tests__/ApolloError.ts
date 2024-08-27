@@ -1,6 +1,5 @@
-import { GraphQLError } from "graphql";
-
 import { ApolloError } from "..";
+import { GraphQLError } from "graphql";
 
 describe("ApolloError", () => {
   it("should construct itself correctly", () => {
@@ -21,10 +20,10 @@ describe("ApolloError", () => {
     const networkError = new Error("Network error");
     const errorMessage = "this is an error message";
     const apolloError = new ApolloError({
-      graphQLErrors,
-      protocolErrors,
-      networkError,
-      errorMessage,
+      graphQLErrors: graphQLErrors,
+      protocolErrors: protocolErrors,
+      networkError: networkError,
+      errorMessage: errorMessage,
     });
     expect(apolloError.graphQLErrors).toEqual(graphQLErrors);
     expect(apolloError.protocolErrors).toEqual(protocolErrors);

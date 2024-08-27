@@ -1,9 +1,9 @@
+import { invariant } from "../../utilities/globals/index";
+
 import * as React from "rehackt";
 import type * as ReactTypes from "react";
 
-import { invariant } from "../../utilities/globals/index";
 import type { ApolloClient } from "../../core/index";
-
 import { getApolloContext } from "./ApolloContext";
 
 export interface ApolloConsumerProps {

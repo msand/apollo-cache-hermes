@@ -1,20 +1,18 @@
 import gql from "graphql-tag";
-import { ApolloCache } from "@apollo/client";
 
 import { Hermes } from "../../../../../src";
-import { GraphSnapshot } from "../../../../../src/GraphSnapshot";
 
 describe("optimistic cache layers", () => {
   it("return === results for repeated reads", () => {
     const cache = new Hermes({
-      // resultCaching: true,
-      // canonizeResults: true,
+      resultCaching: true,
+      canonizeResults: true,
       dataIdFromObject(value: any) {
         switch (value && value.__typename) {
           case "Book":
-            return `Book:${value.isbn}`;
+            return "Book:" + value.isbn;
           case "Author":
-            return `Author:${value.name}`;
+            return "Author:" + value.name;
         }
       },
     });
@@ -30,11 +28,11 @@ describe("optimistic cache layers", () => {
       }
     `;
 
-    function readOptimistic(cache: ApolloCache<GraphSnapshot>) {
+    function readOptimistic(cache: Hermes) {
       return cache.readQuery<{ book: any }>({ query }, true);
     }
 
-    function readRealistic(cache: Hermes<GraphSnapshot>) {
+    function readRealistic(cache: Hermes) {
       return cache.readQuery<{ book: any }>({ query }, false);
     }
 
@@ -88,7 +86,7 @@ describe("optimistic cache layers", () => {
         },
       });
 
-      result2666InTransaction = readOptimistic(proxy);
+      result2666InTransaction = readOptimistic(proxy as Hermes);
       expect(result2666InTransaction).toEqual({
         book: {
           __typename: "Book",
@@ -122,7 +120,7 @@ describe("optimistic cache layers", () => {
         },
       });
 
-      resultCatch22 = readOptimistic(proxy);
+      resultCatch22 = readOptimistic(proxy as Hermes);
       expect(resultCatch22).toEqual({
         book: {
           __typename: "Book",
@@ -207,14 +205,14 @@ describe("optimistic cache layers", () => {
 
   it("dirties appropriate IDs when optimistic layers are removed", () => {
     const cache = new Hermes({
-      // resultCaching: true,
-      // canonizeResults: true,
+      resultCaching: true,
+      canonizeResults: true,
       dataIdFromObject(value: any) {
         switch (value && value.__typename) {
           case "Book":
-            return `Book:${value.isbn}`;
+            return "Book:" + value.isbn;
           case "Author":
-            return `Author:${value.name}`;
+            return "Author:" + value.name;
         }
       },
     });
@@ -418,7 +416,7 @@ describe("optimistic cache layers", () => {
     function readSpinelessFragment() {
       return cache.readFragment<{ author: any }>(
         {
-          id: `Book:${spinelessBookData.isbn}`,
+          id: "Book:" + spinelessBookData.isbn,
           fragment: bookAuthorNameFragment,
         },
         true
@@ -446,8 +444,8 @@ describe("optimistic cache layers", () => {
     expect(resultWithoutOptimisticLayers).toBe(nonOptimisticResult);
   });
 
-  describe("eviction during optimistic updates", () => {
-    it("should not evict from lower layers", () => {
+  describe("eviction during optimistic updates", function () {
+    it("should not evict from lower layers", function () {
       const cache = new Hermes();
 
       const query = gql`

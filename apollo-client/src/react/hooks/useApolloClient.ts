@@ -1,7 +1,7 @@
-import * as React from "rehackt";
-import { ApolloClient, getApolloContext } from "@apollo/client";
-
 import { invariant } from "../../utilities/globals/index";
+import * as React from "rehackt";
+import type { ApolloClient } from "../../core/index";
+import { getApolloContext } from "../context/index";
 
 /**
  * @example

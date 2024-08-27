@@ -2,8 +2,8 @@ import * as React from "react";
 import type { ReactElement } from "react";
 import { render } from "@testing-library/react";
 import type { Queries, RenderOptions, queries } from "@testing-library/react";
-import { ApolloClient, ApolloProvider } from "@apollo/client";
-
+import type { ApolloClient } from "../../core/index";
+import { ApolloProvider } from "../../react/index";
 import type { MockedProviderProps } from "../react/MockedProvider";
 import { MockedProvider } from "../react/MockedProvider";
 

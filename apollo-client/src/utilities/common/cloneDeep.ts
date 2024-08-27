@@ -14,7 +14,7 @@ function cloneDeepHelper<T>(val: T, seen?: Map<any, any>): T {
       if (seen.has(val)) return seen.get(val);
       const copy: T & any[] = (val as any).slice(0);
       seen.set(val, copy);
-      copy.forEach((child, i) => {
+      copy.forEach(function (child, i) {
         copy[i] = cloneDeepHelper(child, seen);
       });
       return copy;

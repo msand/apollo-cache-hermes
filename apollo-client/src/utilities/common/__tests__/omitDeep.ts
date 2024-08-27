@@ -1,13 +1,13 @@
 import { omitDeep } from "../omitDeep";
 
-it("omits the key from a shallow object", () => {
+test("omits the key from a shallow object", () => {
   expect(omitDeep({ omit: "a", keep: "b", other: "c" }, "omit")).toEqual({
     keep: "b",
     other: "c",
   });
 });
 
-it("omits the key from arbitrarily nested object", () => {
+test("omits the key from arbitrarily nested object", () => {
   expect(
     omitDeep(
       {
@@ -28,7 +28,7 @@ it("omits the key from arbitrarily nested object", () => {
   });
 });
 
-it("omits the key from arrays", () => {
+test("omits the key from arrays", () => {
   expect(
     omitDeep(
       [
@@ -43,7 +43,7 @@ it("omits the key from arrays", () => {
   ]);
 });
 
-it("omits the key from arbitrarily nested arrays", () => {
+test("omits the key from arbitrarily nested arrays", () => {
   expect(
     omitDeep(
       [
@@ -61,7 +61,7 @@ it("omits the key from arbitrarily nested arrays", () => {
   ]);
 });
 
-it("returns primitives unchanged", () => {
+test("returns primitives unchanged", () => {
   expect(omitDeep("a", "ignored")).toBe("a");
   expect(omitDeep(1, "ignored")).toBe(1);
   expect(omitDeep(true, "ignored")).toBe(true);
@@ -70,8 +70,7 @@ it("returns primitives unchanged", () => {
   expect(omitDeep(Symbol.for("foo"), "ignored")).toBe(Symbol.for("foo"));
 });
 
-it("handles circular references", () => {
-  // eslint-disable-next-line prefer-const
+test("handles circular references", () => {
   let b: any;
   const a = { omit: "foo", b };
   b = { a, omit: "foo" };
@@ -86,7 +85,7 @@ it("handles circular references", () => {
   expect(result.b).not.toHaveProperty("omit");
 });
 
-it("returns same object unmodified if key is not found", () => {
+test("returns same object unmodified if key is not found", () => {
   const obj = {
     a: "a",
     b: "b",
@@ -99,7 +98,7 @@ it("returns same object unmodified if key is not found", () => {
   expect(omitDeep(arr, "omit")).toBe(arr);
 });
 
-it("returns unmodified subtrees for subtrees that do not contain the key", () => {
+test("returns unmodified subtrees for subtrees that do not contain the key", () => {
   const original = {
     a: "a",
     foo: { bar: "true" },
@@ -117,7 +116,7 @@ it("returns unmodified subtrees for subtrees that do not contain the key", () =>
   expect(result.omitOne[1]).toBe(original.omitOne[1]);
 });
 
-it("only considers plain objects and ignores class instances when omitting properties", () => {
+test("only considers plain objects and ignores class instances when omitting properties", () => {
   class Thing {
     foo = "bar";
     omit = false;

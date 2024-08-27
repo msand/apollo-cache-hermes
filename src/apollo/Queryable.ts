@@ -1,6 +1,6 @@
-import { ApolloCache, Cache, Reference, makeReference } from '@apollo/client';
-import { removeDirectivesFromDocument } from '@apollo/client/utilities';
-
+import { OperationVariables } from '../../apollo-client/src';
+import { ApolloCache, Cache, Reference, makeReference, NormalizedCacheObject } from '../../apollo-client/src/cache';
+import { removeDirectivesFromDocument } from '../../apollo-client/src/utilities';
 import { UnsatisfiedCacheError } from '../errors';
 import { JsonObject } from '../primitive';
 import { Queryable } from '../Queryable';
@@ -11,26 +11,28 @@ import { buildRawOperationFromQuery, buildRawOperationFromFragment } from './uti
 /**
  * Apollo-specific interface to the cache.
  */
-export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerialized> {
+export abstract class ApolloQueryable extends ApolloCache<NormalizedCacheObject> {
   /** The underlying Hermes cache. */
   protected abstract _queryable: Queryable;
 
-  diff<T>(query: Cache.DiffOptions): Cache.DiffResult<T> {
-    const rawOperation = buildRawOperationFromQuery(query.query, query.variables);
-    const { result, complete, missing, fromOptimisticTransaction } = this._queryable.read(rawOperation, query.optimistic);
-    if (query.returnPartialData === false && !complete) {
+  public diff<TData, TVariables extends OperationVariables = any>(
+    options: Cache.DiffOptions<TData, TVariables>
+  ): Cache.DiffResult<TData> {
+    const rawOperation = buildRawOperationFromQuery(options.query, options.variables);
+    const { result, complete, missing, fromOptimisticTransaction } = this._queryable.read(rawOperation, options.optimistic);
+    if (options.returnPartialData === false && !complete) {
       // TODO: Include more detail with this error.
       throw new UnsatisfiedCacheError(`diffQuery not satisfied by the cache.`);
     }
 
-    return { result: result as unknown as T, complete, missing, fromOptimisticTransaction };
+    return { result: result as unknown as TData, complete, missing, fromOptimisticTransaction };
   }
 
-  read<TData = any, TVariables = any>(query: Cache.ReadOptions<TVariables, TData>): TData | null {
-    const rawOperation = buildRawOperationFromQuery(query.query, (query.variables as unknown) as JsonObject, query.rootId);
-    const { result, complete } = this._queryable.read(rawOperation, query.optimistic);
-    if (complete || query.returnPartialData) {
-      return (result ?? null as unknown) as TData | null;
+  public read<T>(options: Cache.ReadOptions): T | null {
+    const rawOperation = buildRawOperationFromQuery(options.query, (options.variables as unknown) as JsonObject, options.rootId);
+    const { result, complete } = this._queryable.read(rawOperation, options.optimistic);
+    if (complete || options.returnPartialData) {
+      return (result ?? null as unknown) as T | null;
     }
     return null;
   }
@@ -61,11 +63,13 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
     return null;
   }
 
-  modify<Entity extends Record<string, any> = Record<string, any>>(options: Cache.ModifyOptions<Entity>): boolean {
+  public modify<Entity extends Record<string, any> = Record<string, any>>(
+    options: Cache.ModifyOptions<Entity>
+  ): boolean {
     return this._queryable.modify(options);
   }
 
-  write(options: Cache.WriteOptions): Reference | undefined {
+  public write(options: Cache.WriteOptions): Reference | undefined {
     const rawOperation = buildRawOperationFromQuery(options.query, options.variables as JsonObject, options.dataId);
     const ref = this._queryable.write(rawOperation, options.result, options.broadcast);
     return ref ?? makeReference(rawOperation.rootId);
@@ -89,8 +93,8 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
     return ref ?? makeReference(rawOperation.rootId);
   }
 
-  transformDocument(doc: DocumentNode): DocumentNode {
-    return this._queryable.transformDocument(doc);
+  public transformDocument(document: DocumentNode): DocumentNode {
+    return this._queryable.transformDocument(document);
   }
 
   transformForLink(document: DocumentNode): DocumentNode {
@@ -101,7 +105,7 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
     )!;
   }
 
-  evict(options: Cache.EvictOptions): boolean {
+  public evict(options: Cache.EvictOptions): boolean {
     return this._queryable.evict(options);
   }
 }

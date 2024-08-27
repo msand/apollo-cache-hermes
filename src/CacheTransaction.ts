@@ -1,13 +1,21 @@
+import * as equality from '@wry/equality';
+
 import type {
-  DeleteModifier,
-  InvalidateModifier,
+  ReadFieldOptions,
+} from '../apollo-client/src/cache/core/types/common';
+import {
+  DELETE,
+  INVALIDATE,
+} from '../apollo-client/src/cache/inmemory/entityStore';
+import type {
+  Cache as CacheInterface,
+  Reference,
+  StoreObject,
+  StoreValue,
   Modifier,
   ModifierDetails,
-  ReadFieldOptions,
-} from '@apollo/client/cache/core/types/common';
-import type { Cache as CacheInterface, Reference, StoreObject, StoreValue } from '@apollo/client';
-import { makeReference } from '@apollo/client';
-import * as equality from '@wry/equality';
+} from '../apollo-client/src/cache';
+import { makeReference } from '../apollo-client/src/cache';
 
 import type { ChangeId, NodeId, OperationInstance, CacheDelta, RawOperation } from './schema';
 import type { CacheSnapshot as CacheSnapshotType } from './CacheSnapshot';
@@ -33,21 +41,10 @@ const { cloneNodeSnapshot, EntitySnapshot } = nodes;
 const { read, SnapshotEditor, write } = operations;
 const { addToSet, isObject, isReference } = util;
 
-const DELETE: DeleteModifier = Object.create(null);
-const INVALIDATE: InvalidateModifier = Object.create(null);
-
-function isDeleteModifier(value: any): value is DeleteModifier {
-  return value === DELETE;
-}
-
-function isInvalidateModifier(value: any): value is InvalidateModifier {
-  return value === INVALIDATE;
-}
-
-type Node<TSerialized> = {
+type Node = {
   node: any,
   previous: JsonValue | undefined,
-  updater: CacheContext.EntityUpdater<TSerialized>,
+  updater: CacheContext.EntityUpdater,
 };
 
 /**
@@ -57,7 +54,7 @@ type Node<TSerialized> = {
  * If a ChangeId is provided, edits will be made on top of the optimistic state
  * (an optimistic update).  Otherwise edits are made against the baseline state.
  */
-export class CacheTransaction<TSerialized> implements Queryable {
+export class CacheTransaction implements Queryable {
 
   /** The set of nodes edited throughout the transaction. */
   private _editedNodeIds = new Set<NodeId>();
@@ -66,13 +63,13 @@ export class CacheTransaction<TSerialized> implements Queryable {
   private _deltas: CacheDelta[] = [];
 
   /** All queries written during the transaction. */
-  private _writtenQueries = new Set<OperationInstance<TSerialized>>();
+  private _writtenQueries = new Set<OperationInstance>();
 
   /** The original snapshot before the transaction began. */
   private _parentSnapshot: CacheSnapshotType;
 
   constructor(
-    private _context: CacheContext<TSerialized>,
+    private _context: CacheContext,
     private _snapshot: CacheSnapshotType,
     private _optimisticChangeId?: ChangeId,
   ) {
@@ -136,7 +133,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
    * Complete the transaction, returning the new snapshot and the ids of any
    * nodes that were edited.
    */
-  commit(): { snapshot: CacheSnapshotType, editedNodeIds: Set<NodeId>, writtenQueries: Set<OperationInstance<TSerialized>> } {
+  commit(): { snapshot: CacheSnapshotType, editedNodeIds: Set<NodeId>, writtenQueries: Set<OperationInstance> } {
     this._triggerEntityUpdaters();
 
     let snapshot = this._snapshot;
@@ -178,7 +175,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
     if (!Object.keys(entityUpdaters).length) return;
 
     // Capture a static set of nodes, as the updaters may add to _editedNodeIds.
-    const nodesToEmit: Node<TSerialized>[] = [];
+    const nodesToEmit: Node[] = [];
     for (const nodeId of this._editedNodeIds) {
       const node = this.getCurrentNodeSnapshot(nodeId);
       const previous = this.getPreviousNodeSnapshot(nodeId);
@@ -208,7 +205,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
 
     // TODO: This is weirdly the only place where we assume an Apollo interface.
     // Can we clean this up? :(
-    const dataProxy = new ApolloTransaction<TSerialized>(this);
+    const dataProxy = new ApolloTransaction(this);
     for (const { updater, node, previous } of nodesToEmit) {
       updater(dataProxy, node, previous);
     }
@@ -398,7 +395,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
         details.storeFieldName = '';
         try {
           const value = field(data as any, details);
-          if (isDeleteModifier(value)) {
+          if (value === DELETE) {
             allDeleted = true;
             modified = true;
           }
@@ -418,10 +415,10 @@ export class CacheTransaction<TSerialized> implements Queryable {
           details.fieldName = key;
           details.storeFieldName = storeFieldName;
           const value = field(copyOrCurrent, details);
-          if (isDeleteModifier(value)) {
+          if (value === DELETE) {
             deleted.add(storeFieldName);
             modified = true;
-          } else if (isInvalidateModifier(value)) {
+          } else if (value === INVALIDATE) {
             this._editedNodeIds.add(id);
             let dirty = this._context.dirty.get(id);
             if (!dirty) {
@@ -457,10 +454,10 @@ export class CacheTransaction<TSerialized> implements Queryable {
           details.fieldName = key;
           details.storeFieldName = storeFieldName;
           const value = field(copyOrCurrent, details);
-          if (isDeleteModifier(value)) {
+          if (value === DELETE) {
             deleted.add(storeFieldName);
             modified = true;
-          } else if (isInvalidateModifier(value)) {
+          } else if (value === INVALIDATE) {
             this._editedNodeIds.add(id);
             let dirty = this._context.dirty.get(id);
             if (!dirty) {

@@ -8,7 +8,6 @@ import {
   DocumentNode,
 } from "graphql";
 import gql from "graphql-tag";
-import { KeyFieldsFunction } from "@apollo/client/cache/inmemory/policies";
 
 import {
   storeKeyNameFromField,
@@ -22,13 +21,13 @@ import {
 } from "../../../utilities";
 import { itAsync } from "../../../testing/core";
 import { StoreWriter } from "../writeToStore";
+import { defaultNormalizedCacheFactory, writeQueryToStore } from "./helpers";
+import { Hermes } from "../../../../../src";
 import { TypedDocumentNode } from "../../../core";
 import { extractFragmentContext } from "../helpers";
+import { KeyFieldsFunction } from "../policies";
 import { invariant } from "../../../utilities/globals";
 import { spyOnConsole } from "../../../testing/internal";
-import { Hermes } from "../../../../../src";
-
-import { defaultNormalizedCacheFactory, writeQueryToStore } from "./helpers";
 
 const getIdField: KeyFieldsFunction = ({ id }) => {
   invariant(typeof id === "string", "id is not a string");
@@ -39,7 +38,7 @@ describe("writing to the store", () => {
   const cache = new Hermes({
     dataIdFromObject(object: any) {
       if (object.__typename && object.id) {
-        return `${object.__typename}__${object.id}`;
+        return object.__typename + "__" + object.id;
       }
     },
   });
@@ -776,7 +775,6 @@ describe("writing to the store", () => {
     });
   });
 
-  // eslint-disable-next-line jest/no-identical-title
   it("refuses to normalize objects with nullish id fields", () => {
     const query: TypedDocumentNode<{
       objects: Array<{
@@ -1576,7 +1574,7 @@ describe("writing to the store", () => {
       },
       dataIdFromObject(object: any) {
         if (object.__typename && object.id) {
-          return `${object.__typename}__${object.id}`;
+          return object.__typename + "__" + object.id;
         }
       },
     });
@@ -2807,7 +2805,7 @@ describe("writing to the store", () => {
     expect(Object.isFrozen(result.scalarFieldWithObjectValue.c)).toBe(true);
   });
 
-  it("should skip writing still-fresh result objects", () => {
+  it("should skip writing still-fresh result objects", function () {
     const cache = new Hermes({
       typePolicies: {
         Todo: {
@@ -2892,7 +2890,7 @@ describe("writing to the store", () => {
 
   itAsync(
     "should allow silencing broadcast of cache updates",
-    (resolve, reject) => {
+    function (resolve, reject) {
       const cache = new Hermes({
         typePolicies: {
           Counter: {
@@ -3956,7 +3954,7 @@ describe("writing to the store", () => {
     });
   });
 
-  it("prevent that a crafted query can overwrite Post:1 with what should be User:5", () => {
+  test("prevent that a crafted query can overwrite Post:1 with what should be User:5", () => {
     const postFragment = gql`
       fragment PostFragment on Post {
         id

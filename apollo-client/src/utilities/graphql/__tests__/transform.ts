@@ -1,5 +1,6 @@
 import { DocumentNode, Kind, print } from "graphql";
-import gql, { disableFragmentWarnings } from "graphql-tag";
+import gql from "graphql-tag";
+import { disableFragmentWarnings } from "graphql-tag";
 
 // Turn off warnings for repeated fragment names
 disableFragmentWarnings();
@@ -394,7 +395,6 @@ describe("removeDirectivesFromDocument", () => {
     expect(print(doc)).toBe(print(expected));
   });
 
-  // eslint-disable-next-line jest/no-identical-title
   it("should remove a simple directive [test function]", () => {
     const query = gql`
       query Simple {
@@ -562,7 +562,7 @@ describe("removeDirectivesFromDocument", () => {
 
 describe("query transforms", () => {
   it("should correctly add typenames", () => {
-    const testQuery = gql`
+    let testQuery = gql`
       query {
         author {
           name {
@@ -592,7 +592,7 @@ describe("query transforms", () => {
   });
 
   it("should not add duplicates", () => {
-    const testQuery = gql`
+    let testQuery = gql`
       query {
         author {
           name {
@@ -923,7 +923,7 @@ describe("query transforms", () => {
   });
 
   it("should correctly remove connections", () => {
-    const testQuery = gql`
+    let testQuery = gql`
       query {
         author {
           name @connection(key: "foo") {

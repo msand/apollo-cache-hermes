@@ -1,7 +1,6 @@
-
 import type { MockedResponse } from "./mockLink";
 import mockQueryManager from "./mockQueryManager";
-import { ObservableQuery } from "@apollo/client";
+import type { ObservableQuery } from "../../../core/index";
 
 export default (...mockedResponses: MockedResponse[]): ObservableQuery<any> => {
   const queryManager = mockQueryManager(...mockedResponses);

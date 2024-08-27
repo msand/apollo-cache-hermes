@@ -1,8 +1,8 @@
 import type { DocumentNode } from "graphql";
-import { ApolloClient, NormalizedCacheObject } from "@apollo/client";
 
+import { ApolloClient } from "../../../core/index";
+import type { NormalizedCacheObject } from "../../../cache/index";
 import { Hermes } from "../../../../../src";
-
 import { mockSingleLink } from "./mockLink";
 
 export function createMockClient<TData>(
@@ -17,6 +17,7 @@ export function createMockClient<TData>(
     }).setOnError((error) => {
       throw error;
     }),
+    // @ts-ignore
     cache: new Hermes({ addTypename: false }),
   });
 }

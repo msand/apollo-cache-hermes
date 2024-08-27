@@ -1,6 +1,5 @@
-import * as React from "rehackt";
-
 import { invariant } from "../../utilities/globals/index";
+import * as React from "rehackt";
 import type { OperationVariables } from "../../core/index";
 import type { IDocumentDefinition } from "../parser/index";
 
@@ -16,8 +15,8 @@ export function calculateVariablesFromProps<TProps>(
   operation: IDocumentDefinition,
   props: TProps
 ) {
-  const variables: OperationVariables = {};
-  for (const { variable, type } of operation.variables) {
+  let variables: OperationVariables = {};
+  for (let { variable, type } of operation.variables) {
     if (!variable.name || !variable.name.value) continue;
 
     const variableName = variable.name.value;

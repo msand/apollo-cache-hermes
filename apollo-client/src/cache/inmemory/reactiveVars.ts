@@ -1,9 +1,7 @@
 import type { OptimisticDependencyFunction } from "optimism";
-// eslint-disable-next-line import/no-extraneous-dependencies
 import { dep, Slot } from "optimism";
-import { ApolloCache } from "@apollo/client";
-
 import type { InMemoryCache } from "./inMemoryCache";
+import type { ApolloCache } from "../../core/index";
 
 export interface ReactiveVar<T> {
   (newValue?: T): T;

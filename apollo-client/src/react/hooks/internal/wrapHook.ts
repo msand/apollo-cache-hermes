@@ -1,5 +1,3 @@
-import { ApolloClient, ObservableQuery } from "@apollo/client";
-
 import type {
   useQuery,
   useSuspenseQuery,
@@ -9,6 +7,8 @@ import type {
   useQueryRefHandlers,
 } from "../index";
 import type { QueryManager } from "../../../core/QueryManager";
+import type { ApolloClient } from "../../../core/ApolloClient";
+import type { ObservableQuery } from "../../../core/ObservableQuery";
 
 const wrapperSymbol = Symbol.for("apollo.hook.wrappers");
 

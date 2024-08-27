@@ -1,9 +1,9 @@
 import type { ExecutionResult } from "graphql";
-import { ApolloLink } from "@apollo/client";
 
 import type { NetworkError, GraphQLErrors } from "../../errors/index";
 import { Observable } from "../../utilities/index";
 import type { Operation, FetchResult, NextLink } from "../core/index";
+import { ApolloLink } from "../core/index";
 
 export interface ErrorResponse {
   graphQLErrors?: GraphQLErrors;
@@ -58,7 +58,7 @@ export function onError(errorHandler: ErrorHandler): ApolloLink {
             retriedResult = errorHandler({
               operation,
               networkError,
-              // Network errors can return GraphQL errors on for example a 403
+              //Network errors can return GraphQL errors on for example a 403
               graphQLErrors:
                 (networkError &&
                   networkError.result &&

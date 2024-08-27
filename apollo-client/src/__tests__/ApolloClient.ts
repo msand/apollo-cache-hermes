@@ -1,22 +1,22 @@
 import gql from "graphql-tag";
-import { Kind } from "graphql";
-import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
+
 import {
   ApolloClient,
   ApolloError,
-  ApolloLink,
   DefaultOptions,
-  HttpLink,
-  makeReference,
-  Observable,
-  OperationVariables,
   QueryOptions,
-} from "@apollo/client";
+  makeReference,
+} from "../core";
+import { Kind } from "graphql";
 
-import {itAsync} from "../testing";
-import {ObservableStream, spyOnConsole} from "../testing/internal";
-import {invariant} from "../utilities/globals";
-import {Hermes} from "../../../src";
+import { Observable } from "../utilities";
+import { ApolloLink } from "../link/core";
+import { HttpLink } from "../link/http";
+import { itAsync } from "../testing";
+import { ObservableStream, spyOnConsole } from "../testing/internal";
+import { TypedDocumentNode } from "@graphql-typed-document-node/core";
+import { invariant } from "../utilities/globals";
+import { Hermes } from "../../../src";
 
 describe("ApolloClient", () => {
   describe("constructor", () => {
@@ -33,7 +33,7 @@ describe("ApolloClient", () => {
 
     it("will throw an error if cache is not passed in", () => {
       expect(() => {
-        new ApolloClient({link: ApolloLink.empty()} as any);
+        new ApolloClient({ link: ApolloLink.empty() } as any);
       }).toThrowErrorMatchingSnapshot();
     });
 
@@ -54,7 +54,7 @@ describe("ApolloClient", () => {
       const client = new ApolloClient({
         cache: new Hermes(),
         uri: uri1,
-        link: new HttpLink({uri: uri2}),
+        link: new HttpLink({ uri: uri2 }),
       });
       expect((client.link as HttpLink).options.uri).toEqual(uri2);
     });
@@ -82,35 +82,35 @@ describe("ApolloClient", () => {
       });
 
       expect(
-          client.readQuery({
-            query: gql`
-              {
-                a
-              }
-            `,
-          })
-      ).toEqual({a: 1});
+        client.readQuery({
+          query: gql`
+            {
+              a
+            }
+          `,
+        })
+      ).toEqual({ a: 1 });
       expect(
-          client.readQuery({
-            query: gql`
-              {
-                b
-                c
-              }
-            `,
-          })
-      ).toEqual({b: 2, c: 3});
+        client.readQuery({
+          query: gql`
+            {
+              b
+              c
+            }
+          `,
+        })
+      ).toEqual({ b: 2, c: 3 });
       expect(
-          client.readQuery({
-            query: gql`
-              {
-                a
-                b
-                c
-              }
-            `,
-          })
-      ).toEqual({a: 1, b: 2, c: 3});
+        client.readQuery({
+          query: gql`
+            {
+              a
+              b
+              c
+            }
+          `,
+        })
+      ).toEqual({ a: 1, b: 2, c: 3 });
     });
 
     it("will read some deeply nested data from the store", () => {
@@ -140,55 +140,55 @@ describe("ApolloClient", () => {
       });
 
       expect(
-          client.readQuery({
-            query: gql`
-              {
-                a
-                d {
-                  e
-                }
+        client.readQuery({
+          query: gql`
+            {
+              a
+              d {
+                e
               }
-            `,
-          })
-      ).toEqual({a: 1, d: {e: 4, __typename: "Foo"}});
+            }
+          `,
+        })
+      ).toEqual({ a: 1, d: { e: 4, __typename: "Foo" } });
       expect(
-          client.readQuery({
-            query: gql`
-              {
-                a
-                d {
-                  e
-                  h {
-                    i
-                  }
+        client.readQuery({
+          query: gql`
+            {
+              a
+              d {
+                e
+                h {
+                  i
                 }
               }
-            `,
-          })
+            }
+          `,
+        })
       ).toEqual({
         a: 1,
-        d: {__typename: "Foo", e: 4, h: {i: 7, __typename: "Bar"}},
+        d: { __typename: "Foo", e: 4, h: { i: 7, __typename: "Bar" } },
       });
       expect(
-          client.readQuery({
-            query: gql`
-              {
-                a
-                b
-                c
-                d {
-                  e
-                  f
-                  g
-                  h {
-                    i
-                    j
-                    k
-                  }
+        client.readQuery({
+          query: gql`
+            {
+              a
+              b
+              c
+              d {
+                e
+                f
+                g
+                h {
+                  i
+                  j
+                  k
                 }
               }
-            `,
-          })
+            }
+          `,
+        })
       ).toEqual({
         a: 1,
         b: 2,
@@ -198,7 +198,7 @@ describe("ApolloClient", () => {
           e: 4,
           f: 5,
           g: 6,
-          h: {__typename: "Bar", i: 7, j: 8, k: 9},
+          h: { __typename: "Bar", i: 7, j: 8, k: 9 },
         },
       });
     });
@@ -215,19 +215,19 @@ describe("ApolloClient", () => {
       });
 
       expect(
-          client.readQuery({
-            query: gql`
-              query ($literal: Boolean, $value: Int) {
-                a: field(literal: true, value: 42)
-                b: field(literal: $literal, value: $value)
-              }
-            `,
-            variables: {
-              literal: false,
-              value: 42,
-            },
-          })
-      ).toEqual({a: 1, b: 2});
+        client.readQuery({
+          query: gql`
+            query ($literal: Boolean, $value: Int) {
+              a: field(literal: true, value: 42)
+              b: field(literal: $literal, value: $value)
+            }
+          `,
+          variables: {
+            literal: false,
+            value: 42,
+          },
+        })
+      ).toEqual({ a: 1, b: 2 });
     });
   });
 
@@ -243,31 +243,31 @@ describe("ApolloClient", () => {
     });
 
     expect(
-        client.readQuery({
-          query: gql`
-            query ($literal: Boolean, $value: Int = -1) {
-              a: field(literal: $literal, value: $value)
-            }
-          `,
-          variables: {
-            literal: false,
-            value: 42,
-          },
-        })
-    ).toEqual({a: 2});
+      client.readQuery({
+        query: gql`
+          query ($literal: Boolean, $value: Int = -1) {
+            a: field(literal: $literal, value: $value)
+          }
+        `,
+        variables: {
+          literal: false,
+          value: 42,
+        },
+      })
+    ).toEqual({ a: 2 });
 
     expect(
-        client.readQuery({
-          query: gql`
-            query ($literal: Boolean, $value: Int = -1) {
-              a: field(literal: $literal, value: $value)
-            }
-          `,
-          variables: {
-            literal: true,
-          },
-        })
-    ).toEqual({a: 1});
+      client.readQuery({
+        query: gql`
+          query ($literal: Boolean, $value: Int = -1) {
+            a: field(literal: $literal, value: $value)
+          }
+        `,
+        variables: {
+          literal: true,
+        },
+      })
+    ).toEqual({ a: 1 });
   });
 
   describe("readFragment", () => {
@@ -289,7 +289,7 @@ describe("ApolloClient", () => {
           `,
         });
       }).toThrowError(
-          "Found a query operation. No operations are allowed when using a fragment as a query. Only fragments are allowed."
+        "Found a query operation. No operations are allowed when using a fragment as a query. Only fragments are allowed."
       );
       expect(() => {
         client.readFragment({
@@ -301,7 +301,7 @@ describe("ApolloClient", () => {
           `,
         });
       }).toThrowError(
-          "Found 0 fragments. `fragmentName` must be provided when there is not exactly 1 fragment."
+        "Found 0 fragments. `fragmentName` must be provided when there is not exactly 1 fragment."
       );
     });
 
@@ -325,7 +325,7 @@ describe("ApolloClient", () => {
           `,
         });
       }).toThrowError(
-          "Found 2 fragments. `fragmentName` must be provided when there is not exactly 1 fragment."
+        "Found 2 fragments. `fragmentName` must be provided when there is not exactly 1 fragment."
       );
       expect(() => {
         client.readFragment({
@@ -345,7 +345,7 @@ describe("ApolloClient", () => {
           `,
         });
       }).toThrowError(
-          "Found 3 fragments. `fragmentName` must be provided when there is not exactly 1 fragment."
+        "Found 3 fragments. `fragmentName` must be provided when there is not exactly 1 fragment."
       );
     });
 
@@ -377,117 +377,117 @@ describe("ApolloClient", () => {
       });
 
       expect(
-          client.readFragment({
-            id: "foo",
-            fragment: gql`
-              fragment fragmentFoo on Foo {
-                e
-                h {
-                  i
-                }
+        client.readFragment({
+          id: "foo",
+          fragment: gql`
+            fragment fragmentFoo on Foo {
+              e
+              h {
+                i
               }
-            `,
-          })
-      ).toEqual({__typename: "Foo", e: 4, h: {__typename: "Bar", i: 7}});
+            }
+          `,
+        })
+      ).toEqual({ __typename: "Foo", e: 4, h: { __typename: "Bar", i: 7 } });
       expect(
-          client.readFragment({
-            id: "foo",
-            fragment: gql`
-              fragment fragmentFoo on Foo {
-                e
-                f
-                g
-                h {
-                  i
-                  j
-                  k
-                }
+        client.readFragment({
+          id: "foo",
+          fragment: gql`
+            fragment fragmentFoo on Foo {
+              e
+              f
+              g
+              h {
+                i
+                j
+                k
               }
-            `,
-          })
+            }
+          `,
+        })
       ).toEqual({
         __typename: "Foo",
         e: 4,
         f: 5,
         g: 6,
-        h: {__typename: "Bar", i: 7, j: 8, k: 9},
+        h: { __typename: "Bar", i: 7, j: 8, k: 9 },
       });
       expect(
-          client.readFragment({
-            id: "bar",
-            fragment: gql`
-              fragment fragmentBar on Bar {
-                i
-              }
-            `,
-          })
-      ).toEqual({__typename: "Bar", i: 7});
+        client.readFragment({
+          id: "bar",
+          fragment: gql`
+            fragment fragmentBar on Bar {
+              i
+            }
+          `,
+        })
+      ).toEqual({ __typename: "Bar", i: 7 });
       expect(
-          client.readFragment({
-            id: "bar",
-            fragment: gql`
-              fragment fragmentBar on Bar {
+        client.readFragment({
+          id: "bar",
+          fragment: gql`
+            fragment fragmentBar on Bar {
+              i
+              j
+              k
+            }
+          `,
+        })
+      ).toEqual({ __typename: "Bar", i: 7, j: 8, k: 9 });
+      expect(
+        client.readFragment({
+          id: "foo",
+          fragment: gql`
+            fragment fragmentFoo on Foo {
+              e
+              f
+              g
+              h {
                 i
                 j
                 k
               }
-            `,
-          })
-      ).toEqual({__typename: "Bar", i: 7, j: 8, k: 9});
-      expect(
-          client.readFragment({
-            id: "foo",
-            fragment: gql`
-              fragment fragmentFoo on Foo {
-                e
-                f
-                g
-                h {
-                  i
-                  j
-                  k
-                }
-              }
+            }
 
-              fragment fragmentBar on Bar {
-                i
-                j
-                k
-              }
-            `,
-            fragmentName: "fragmentFoo",
-          })
+            fragment fragmentBar on Bar {
+              i
+              j
+              k
+            }
+          `,
+          fragmentName: "fragmentFoo",
+        })
       ).toEqual({
         __typename: "Foo",
         e: 4,
         f: 5,
         g: 6,
-        h: {__typename: "Bar", i: 7, j: 8, k: 9},
+        h: { __typename: "Bar", i: 7, j: 8, k: 9 },
       });
       expect(
-          client.readFragment({
-            id: "bar",
-            fragment: gql`
-              fragment fragmentFoo on Foo {
-                e
-                f
-                g
-                h {
-                  i
-                  j
-                  k
-                }
-              }
-
-              fragment fragmentBar on Bar {
+        client.readFragment({
+          id: "bar",
+          fragment: gql`
+            fragment fragmentFoo on Foo {
+              e
+              f
+              g
+              h {
                 i
                 j
                 k
               }
-            `,
-            fragmentName: "fragmentBar",
-          })
-      ).toEqual({__typename: "Bar", i: 7, j: 8, k: 9});
+            }
+
+            fragment fragmentBar on Bar {
+              i
+              j
+              k
+            }
+          `,
+          fragmentName: "fragmentBar",
+        })
+      ).toEqual({ __typename: "Bar", i: 7, j: 8, k: 9 });
     });
 
     it("will read some data from the store with variables", () => {
@@ -503,20 +503,20 @@ describe("ApolloClient", () => {
       });
 
       expect(
-          client.readFragment({
-            id: "foo",
-            fragment: gql`
-              fragment foo on Foo {
-                a: field(literal: true, value: 42)
-                b: field(literal: $literal, value: $value)
-              }
-            `,
-            variables: {
-              literal: false,
-              value: 42,
-            },
-          })
-      ).toEqual({__typename: "Foo", a: 1, b: 2});
+        client.readFragment({
+          id: "foo",
+          fragment: gql`
+            fragment foo on Foo {
+              a: field(literal: true, value: 42)
+              b: field(literal: $literal, value: $value)
+            }
+          `,
+          variables: {
+            literal: false,
+            value: 42,
+          },
+        })
+      ).toEqual({ __typename: "Foo", a: 1, b: 2 });
     });
 
     it("will return null when an id that can’t be found is provided", () => {
@@ -527,52 +527,52 @@ describe("ApolloClient", () => {
       const client2 = new ApolloClient({
         link: ApolloLink.empty(),
         cache: new Hermes().restore({
-          bar: {__typename: "Foo", a: 1, b: 2, c: 3},
+          bar: { __typename: "Foo", a: 1, b: 2, c: 3 },
         }),
       });
       const client3 = new ApolloClient({
         link: ApolloLink.empty(),
         cache: new Hermes().restore({
-          foo: {__typename: "Foo", a: 1, b: 2, c: 3},
+          foo: { __typename: "Foo", a: 1, b: 2, c: 3 },
         }),
       });
 
       expect(
-          client1.readFragment({
-            id: "foo",
-            fragment: gql`
-              fragment fooFragment on Foo {
-                a
-                b
-                c
-              }
-            `,
-          })
+        client1.readFragment({
+          id: "foo",
+          fragment: gql`
+            fragment fooFragment on Foo {
+              a
+              b
+              c
+            }
+          `,
+        })
       ).toBe(null);
       expect(
-          client2.readFragment({
-            id: "foo",
-            fragment: gql`
-              fragment fooFragment on Foo {
-                a
-                b
-                c
-              }
-            `,
-          })
+        client2.readFragment({
+          id: "foo",
+          fragment: gql`
+            fragment fooFragment on Foo {
+              a
+              b
+              c
+            }
+          `,
+        })
       ).toBe(null);
       expect(
-          client3.readFragment({
-            id: "foo",
-            fragment: gql`
-              fragment fooFragment on Foo {
-                a
-                b
-                c
-              }
-            `,
-          })
-      ).toEqual({__typename: "Foo", a: 1, b: 2, c: 3});
+        client3.readFragment({
+          id: "foo",
+          fragment: gql`
+            fragment fooFragment on Foo {
+              a
+              b
+              c
+            }
+          `,
+        })
+      ).toEqual({ __typename: "Foo", a: 1, b: 2, c: 3 });
     });
   });
 
@@ -584,7 +584,7 @@ describe("ApolloClient", () => {
       });
 
       client.writeQuery({
-        data: {a: 1},
+        data: { a: 1 },
         query: gql`
           {
             a
@@ -600,7 +600,7 @@ describe("ApolloClient", () => {
       });
 
       client.writeQuery({
-        data: {b: 2, c: 3},
+        data: { b: 2, c: 3 },
         query: gql`
           {
             b
@@ -619,7 +619,7 @@ describe("ApolloClient", () => {
       });
 
       client.writeQuery({
-        data: {a: 4, b: 5, c: 6},
+        data: { a: 4, b: 5, c: 6 },
         query: gql`
           {
             a
@@ -658,7 +658,7 @@ describe("ApolloClient", () => {
       });
 
       client.writeQuery({
-        data: {a: 1, d: {__typename: "D", e: 4}},
+        data: { a: 1, d: { __typename: "D", e: 4 } },
         query: gql`
           {
             a
@@ -672,7 +672,7 @@ describe("ApolloClient", () => {
       expect((client.cache as Hermes).extract()).toMatchSnapshot();
 
       client.writeQuery({
-        data: {a: 1, d: {__typename: "D", h: {__typename: "H", i: 7}}},
+        data: { a: 1, d: { __typename: "D", h: { __typename: "H", i: 7 } } },
         query: gql`
           {
             a
@@ -856,7 +856,7 @@ describe("ApolloClient", () => {
           `,
         });
       }).toThrowError(
-          "Found a query operation. No operations are allowed when using a fragment as a query. Only fragments are allowed."
+        "Found a query operation. No operations are allowed when using a fragment as a query. Only fragments are allowed."
       );
       expect(() => {
         client.writeFragment({
@@ -869,7 +869,7 @@ describe("ApolloClient", () => {
           `,
         });
       }).toThrowError(
-          "Found 0 fragments. `fragmentName` must be provided when there is not exactly 1 fragment."
+        "Found 0 fragments. `fragmentName` must be provided when there is not exactly 1 fragment."
       );
     });
 
@@ -894,7 +894,7 @@ describe("ApolloClient", () => {
           `,
         });
       }).toThrowError(
-          "Found 2 fragments. `fragmentName` must be provided when there is not exactly 1 fragment."
+        "Found 2 fragments. `fragmentName` must be provided when there is not exactly 1 fragment."
       );
       expect(() => {
         client.writeFragment({
@@ -915,21 +915,21 @@ describe("ApolloClient", () => {
           `,
         });
       }).toThrowError(
-          "Found 3 fragments. `fragmentName` must be provided when there is not exactly 1 fragment."
+        "Found 3 fragments. `fragmentName` must be provided when there is not exactly 1 fragment."
       );
     });
 
     it("will write some deeply nested data into the store at any id", () => {
       const client = new ApolloClient({
         link: ApolloLink.empty(),
-        cache: new Hermes({dataIdFromObject: (o: any) => o.id}),
+        cache: new Hermes({ dataIdFromObject: (o: any) => o.id }),
       });
 
       client.writeFragment({
         data: {
           __typename: "Foo",
           e: 4,
-          h: {__typename: "Bar", id: "bar", i: 7},
+          h: { __typename: "Bar", id: "bar", i: 7 },
         },
         id: "foo",
         fragment: gql`
@@ -949,7 +949,7 @@ describe("ApolloClient", () => {
           __typename: "Foo",
           f: 5,
           g: 6,
-          h: {__typename: "Bar", id: "bar", j: 8, k: 9},
+          h: { __typename: "Bar", id: "bar", j: 8, k: 9 },
         },
         id: "foo",
         fragment: gql`
@@ -967,7 +967,7 @@ describe("ApolloClient", () => {
       expect((client.cache as Hermes).extract()).toMatchSnapshot();
 
       client.writeFragment({
-        data: {__typename: "Bar", i: 10},
+        data: { __typename: "Bar", i: 10 },
         id: "bar",
         fragment: gql`
           fragment fragmentBar on Bar {
@@ -979,7 +979,7 @@ describe("ApolloClient", () => {
       expect((client.cache as Hermes).extract()).toMatchSnapshot();
 
       client.writeFragment({
-        data: {__typename: "Bar", j: 11, k: 12},
+        data: { __typename: "Bar", j: 11, k: 12 },
         id: "bar",
         fragment: gql`
           fragment fragmentBar on Bar {
@@ -997,7 +997,7 @@ describe("ApolloClient", () => {
           e: 4,
           f: 5,
           g: 6,
-          h: {__typename: "Bar", id: "bar", i: 7, j: 8, k: 9},
+          h: { __typename: "Bar", id: "bar", i: 7, j: 8, k: 9 },
         },
         id: "foo",
         fragment: gql`
@@ -1024,7 +1024,7 @@ describe("ApolloClient", () => {
       expect((client.cache as Hermes).extract()).toMatchSnapshot();
 
       client.writeFragment({
-        data: {__typename: "Bar", i: 10, j: 11, k: 12},
+        data: { __typename: "Bar", i: 10, j: 11, k: 12 },
         id: "bar",
         fragment: gql`
           fragment fooFragment on Foo {
@@ -1098,7 +1098,7 @@ describe("ApolloClient", () => {
       });
 
       client.writeFragment({
-        data: {__typename: "Bar", i: 10},
+        data: { __typename: "Bar", i: 10 },
         id: "bar",
         fragment: gql`
           fragment fragmentBar on Bar {
@@ -1127,7 +1127,6 @@ describe("ApolloClient", () => {
         type: string;
         __typename: string;
       }
-
       interface Data {
         people: {
           id: number;
@@ -1135,7 +1134,6 @@ describe("ApolloClient", () => {
           friends: Friend[];
         };
       }
-
       const bestFriend = {
         id: 1,
         type: "best",
@@ -1154,9 +1152,8 @@ describe("ApolloClient", () => {
         },
       };
       const link = new ApolloLink(() => {
-        return Observable.of({data});
+        return Observable.of({ data });
       });
-
       function newClient() {
         return new ApolloClient({
           link,
@@ -1175,7 +1172,6 @@ describe("ApolloClient", () => {
             },
             dataIdFromObject: (result) => {
               if (result.id && result.__typename) {
-                // @ts-ignore
                 return result.__typename + result.id;
               }
             },
@@ -1191,13 +1187,13 @@ describe("ApolloClient", () => {
           // This is defined manually for the purpose of the test, but
           // eventually this could be generated with graphql-code-generator
           const typedQuery: TypedDocumentNode<Data, { testVar: string }> =
-              query;
+            query;
 
           // The result and variables are being typed automatically, based on the query object we pass,
           // and type inference is done based on the TypeDocumentNode object.
           const result = await client.query({
             query: typedQuery,
-            variables: {testVar: "foo"},
+            variables: { testVar: "foo" },
           });
 
           // Just try to access it, if something will break, TS will throw an error
@@ -1206,236 +1202,233 @@ describe("ApolloClient", () => {
         });
 
         itAsync(
-            "with a replacement of nested array (wq)",
-            (resolve, reject) => {
-              let count = 0;
-              const client = newClient();
-              const observable = client.watchQuery<Data>({query});
-              const subscription = observable.subscribe({
-                next(nextResult) {
-                  ++count;
-                  if (count === 1) {
-                    expect(nextResult.data).toEqual(data);
-                    expect(observable.getCurrentResult().data).toEqual(data);
+          "with a replacement of nested array (wq)",
+          (resolve, reject) => {
+            let count = 0;
+            const client = newClient();
+            const observable = client.watchQuery<Data>({ query });
+            const subscription = observable.subscribe({
+              next(nextResult) {
+                ++count;
+                if (count === 1) {
+                  expect(nextResult.data).toEqual(data);
+                  expect(observable.getCurrentResult().data).toEqual(data);
 
-                    const readData = client.readQuery<Data>({query});
-                    expect(readData).toEqual(data);
+                  const readData = client.readQuery<Data>({ query });
+                  expect(readData).toEqual(data);
 
-                    // modify readData and writeQuery
-                    const bestFriends = readData!.people.friends.filter(
-                        (x) => x.type === "best"
-                    );
-                    // this should re call next
-                    client.writeQuery<Data>({
-                      query,
-                      data: {
-                        people: {
-                          id: 1,
-                          friends: bestFriends,
-                          __typename: "Person",
-                        },
-                      },
-                    });
-                  } else if (count === 2) {
-                    const expectation = {
+                  // modify readData and writeQuery
+                  const bestFriends = readData!.people.friends.filter(
+                    (x) => x.type === "best"
+                  );
+                  // this should re call next
+                  client.writeQuery<Data>({
+                    query,
+                    data: {
                       people: {
                         id: 1,
-                        friends: [bestFriend],
+                        friends: bestFriends,
                         __typename: "Person",
                       },
-                    };
-                    expect(nextResult.data).toEqual(expectation);
-                    expect(client.readQuery<Data>({query})).toEqual(
-                        expectation
-                    );
-                    subscription.unsubscribe();
-                    resolve();
-                  }
-                },
-              });
-            }
+                    },
+                  });
+                } else if (count === 2) {
+                  const expectation = {
+                    people: {
+                      id: 1,
+                      friends: [bestFriend],
+                      __typename: "Person",
+                    },
+                  };
+                  expect(nextResult.data).toEqual(expectation);
+                  expect(client.readQuery<Data>({ query })).toEqual(
+                    expectation
+                  );
+                  subscription.unsubscribe();
+                  resolve();
+                }
+              },
+            });
+          }
         );
 
         itAsync(
-            "with a value change inside a nested array (wq)",
-            (resolve, reject) => {
-              let count = 0;
-              const client = newClient();
-              const observable = client.watchQuery<Data>({query});
-              observable.subscribe({
-                next: (nextResult) => {
-                  count++;
-                  if (count === 1) {
-                    expect(nextResult.data).toEqual(data);
-                    expect(observable.getCurrentResult().data).toEqual(data);
+          "with a value change inside a nested array (wq)",
+          (resolve, reject) => {
+            let count = 0;
+            const client = newClient();
+            const observable = client.watchQuery<Data>({ query });
+            observable.subscribe({
+              next: (nextResult) => {
+                count++;
+                if (count === 1) {
+                  expect(nextResult.data).toEqual(data);
+                  expect(observable.getCurrentResult().data).toEqual(data);
 
-                    const readData = client.readQuery<Data>({query});
-                    expect(readData).toEqual(data);
+                  const readData = client.readQuery<Data>({ query });
+                  expect(readData).toEqual(data);
 
-                    // modify readData and writeQuery
-                    const friends = readData!.people.friends.slice();
-                    friends[0] = {...friends[0], type: "okayest"};
-                    friends[1] = {...friends[1], type: "okayest"};
+                  // modify readData and writeQuery
+                  const friends = readData!.people.friends.slice();
+                  friends[0] = { ...friends[0], type: "okayest" };
+                  friends[1] = { ...friends[1], type: "okayest" };
 
-                    // this should re call next
-                    client.writeQuery<Data>({
-                      query,
-                      data: {
-                        people: {
-                          id: 1,
-                          friends,
-                          __typename: "Person",
-                        },
+                  // this should re call next
+                  client.writeQuery<Data>({
+                    query,
+                    data: {
+                      people: {
+                        id: 1,
+                        friends,
+                        __typename: "Person",
                       },
-                    });
+                    },
+                  });
 
-                    setTimeout(() => {
-                      if (count === 1) {
-                        reject(
-                            new Error(
-                                "writeFragment did not re-call observable with next value"
-                            )
-                        );
-                      }
-                    }, 250);
-                  }
+                  setTimeout(() => {
+                    if (count === 1)
+                      reject(
+                        new Error(
+                          "writeFragment did not re-call observable with next value"
+                        )
+                      );
+                  }, 250);
+                }
 
-                  if (count === 2) {
-                    const expectation0 = {
-                      ...bestFriend,
-                      type: "okayest",
-                    };
-                    const expectation1 = {
-                      ...badFriend,
-                      type: "okayest",
-                    };
-                    const nextFriends = nextResult.data!.people.friends;
-                    expect(nextFriends[0]).toEqual(expectation0);
-                    expect(nextFriends[1]).toEqual(expectation1);
+                if (count === 2) {
+                  const expectation0 = {
+                    ...bestFriend,
+                    type: "okayest",
+                  };
+                  const expectation1 = {
+                    ...badFriend,
+                    type: "okayest",
+                  };
+                  const nextFriends = nextResult.data!.people.friends;
+                  expect(nextFriends[0]).toEqual(expectation0);
+                  expect(nextFriends[1]).toEqual(expectation1);
 
-                    const readFriends = client.readQuery<Data>({query})!.people
-                        .friends;
-                    expect(readFriends[0]).toEqual(expectation0);
-                    expect(readFriends[1]).toEqual(expectation1);
-                    resolve();
-                  }
-                },
-              });
-            }
+                  const readFriends = client.readQuery<Data>({ query })!.people
+                    .friends;
+                  expect(readFriends[0]).toEqual(expectation0);
+                  expect(readFriends[1]).toEqual(expectation1);
+                  resolve();
+                }
+              },
+            });
+          }
         );
       });
       describe("using writeFragment", () => {
         itAsync(
-            "with a replacement of nested array (wf)",
-            (resolve, reject) => {
-              let count = 0;
-              const client = newClient();
-              const observable = client.watchQuery<Data>({query});
-              observable.subscribe({
-                next: (result) => {
-                  count++;
-                  if (count === 1) {
-                    expect(result.data).toEqual(data);
-                    expect(observable.getCurrentResult().data).toEqual(data);
-                    const bestFriends = result.data!.people.friends.filter(
-                        (x) => x.type === "best"
-                    );
-                    // this should re call next
-                    client.writeFragment({
-                      id: `Person${result.data!.people.id}`,
-                      fragment: gql`
-                        fragment bestFriends on Person {
-                          friends {
-                            id
-                          }
+          "with a replacement of nested array (wf)",
+          (resolve, reject) => {
+            let count = 0;
+            const client = newClient();
+            const observable = client.watchQuery<Data>({ query });
+            observable.subscribe({
+              next: (result) => {
+                count++;
+                if (count === 1) {
+                  expect(result.data).toEqual(data);
+                  expect(observable.getCurrentResult().data).toEqual(data);
+                  const bestFriends = result.data!.people.friends.filter(
+                    (x) => x.type === "best"
+                  );
+                  // this should re call next
+                  client.writeFragment({
+                    id: `Person${result.data!.people.id}`,
+                    fragment: gql`
+                      fragment bestFriends on Person {
+                        friends {
+                          id
                         }
-                      `,
-                      data: {
-                        friends: bestFriends,
-                        __typename: "Person",
-                      },
-                    });
-
-                    setTimeout(() => {
-                      if (count === 1) {
-                        reject(
-                            new Error(
-                                "writeFragment did not re-call observable with next value"
-                            )
-                        );
                       }
-                    }, 50);
-                  }
+                    `,
+                    data: {
+                      friends: bestFriends,
+                      __typename: "Person",
+                    },
+                  });
 
-                  if (count === 2) {
-                    expect(result.data!.people.friends).toEqual([bestFriend]);
-                    resolve();
-                  }
-                },
-              });
-            }
+                  setTimeout(() => {
+                    if (count === 1)
+                      reject(
+                        new Error(
+                          "writeFragment did not re-call observable with next value"
+                        )
+                      );
+                  }, 50);
+                }
+
+                if (count === 2) {
+                  expect(result.data!.people.friends).toEqual([bestFriend]);
+                  resolve();
+                }
+              },
+            });
+          }
         );
 
         itAsync(
-            "with a value change inside a nested array (wf)",
-            (resolve, reject) => {
-              let count = 0;
-              const client = newClient();
-              const observable = client.watchQuery<Data>({query});
-              observable.subscribe({
-                next: (result) => {
-                  count++;
-                  if (count === 1) {
-                    expect(result.data).toEqual(data);
-                    expect(observable.getCurrentResult().data).toEqual(data);
-                    const friends = result.data!.people.friends;
+          "with a value change inside a nested array (wf)",
+          (resolve, reject) => {
+            let count = 0;
+            const client = newClient();
+            const observable = client.watchQuery<Data>({ query });
+            observable.subscribe({
+              next: (result) => {
+                count++;
+                if (count === 1) {
+                  expect(result.data).toEqual(data);
+                  expect(observable.getCurrentResult().data).toEqual(data);
+                  const friends = result.data!.people.friends;
 
-                    // this should re call next
-                    client.writeFragment({
-                      id: `Person${result.data!.people.id}`,
-                      fragment: gql`
-                        fragment bestFriends on Person {
-                          friends {
-                            id
-                            type
-                          }
+                  // this should re call next
+                  client.writeFragment({
+                    id: `Person${result.data!.people.id}`,
+                    fragment: gql`
+                      fragment bestFriends on Person {
+                        friends {
+                          id
+                          type
                         }
-                      `,
-                      data: {
-                        friends: [
-                          {...friends[0], type: "okayest"},
-                          {...friends[1], type: "okayest"},
-                        ],
-                        __typename: "Person",
-                      },
-                    });
-
-                    setTimeout(() => {
-                      if (count === 1) {
-                        reject(
-                            new Error(
-                                "writeFragment did not re-call observable with next value"
-                            )
-                        );
                       }
-                    }, 50);
-                  }
+                    `,
+                    data: {
+                      friends: [
+                        { ...friends[0], type: "okayest" },
+                        { ...friends[1], type: "okayest" },
+                      ],
+                      __typename: "Person",
+                    },
+                  });
 
-                  if (count === 2) {
-                    const nextFriends = result.data!.people.friends;
-                    expect(nextFriends[0]).toEqual({
-                      ...bestFriend,
-                      type: "okayest",
-                    });
-                    expect(nextFriends[1]).toEqual({
-                      ...badFriend,
-                      type: "okayest",
-                    });
-                    resolve();
-                  }
-                },
-              });
-            }
+                  setTimeout(() => {
+                    if (count === 1)
+                      reject(
+                        new Error(
+                          "writeFragment did not re-call observable with next value"
+                        )
+                      );
+                  }, 50);
+                }
+
+                if (count === 2) {
+                  const nextFriends = result.data!.people.friends;
+                  expect(nextFriends[0]).toEqual({
+                    ...bestFriend,
+                    type: "okayest",
+                  });
+                  expect(nextFriends[1]).toEqual({
+                    ...badFriend,
+                    type: "okayest",
+                  });
+                  resolve();
+                }
+              },
+            });
+          }
         );
       });
     });
@@ -1469,27 +1462,27 @@ describe("ApolloClient", () => {
       });
 
       expect(
-          client.readFragment({
-            id: "foo",
-            fragment: gql`
-              fragment x on Foo {
-                a
-                b
-                c
-                bar {
-                  d
-                  e
-                  f
-                }
+        client.readFragment({
+          id: "foo",
+          fragment: gql`
+            fragment x on Foo {
+              a
+              b
+              c
+              bar {
+                d
+                e
+                f
               }
-            `,
-          })
+            }
+          `,
+        })
       ).toEqual({
         __typename: "Foo",
         a: 1,
         b: 2,
         c: 3,
-        bar: {d: 4, e: 5, f: 6, __typename: "Bar"},
+        bar: { d: 4, e: 5, f: 6, __typename: "Bar" },
       });
 
       client.writeFragment({
@@ -1499,31 +1492,31 @@ describe("ApolloClient", () => {
             a
           }
         `,
-        data: {__typename: "Foo", a: 7},
+        data: { __typename: "Foo", a: 7 },
       });
 
       expect(
-          client.readFragment({
-            id: "foo",
-            fragment: gql`
-              fragment x on Foo {
-                a
-                b
-                c
-                bar {
-                  d
-                  e
-                  f
-                }
+        client.readFragment({
+          id: "foo",
+          fragment: gql`
+            fragment x on Foo {
+              a
+              b
+              c
+              bar {
+                d
+                e
+                f
               }
-            `,
-          })
+            }
+          `,
+        })
       ).toEqual({
         __typename: "Foo",
         a: 7,
         b: 2,
         c: 3,
-        bar: {__typename: "Bar", d: 4, e: 5, f: 6},
+        bar: { __typename: "Bar", d: 4, e: 5, f: 6 },
       });
 
       client.writeFragment({
@@ -1535,31 +1528,31 @@ describe("ApolloClient", () => {
             }
           }
         `,
-        data: {__typename: "Foo", bar: {__typename: "Bar", d: 8}},
+        data: { __typename: "Foo", bar: { __typename: "Bar", d: 8 } },
       });
 
       expect(
-          client.readFragment({
-            id: "foo",
-            fragment: gql`
-              fragment x on Foo {
-                a
-                b
-                c
-                bar {
-                  d
-                  e
-                  f
-                }
+        client.readFragment({
+          id: "foo",
+          fragment: gql`
+            fragment x on Foo {
+              a
+              b
+              c
+              bar {
+                d
+                e
+                f
               }
-            `,
-          })
+            }
+          `,
+        })
       ).toEqual({
         __typename: "Foo",
         a: 7,
         b: 2,
         c: 3,
-        bar: {__typename: "Bar", d: 8, e: 5, f: 6},
+        bar: { __typename: "Bar", d: 8, e: 5, f: 6 },
       });
 
       client.writeFragment({
@@ -1569,31 +1562,31 @@ describe("ApolloClient", () => {
             e
           }
         `,
-        data: {__typename: "Bar", e: 9},
+        data: { __typename: "Bar", e: 9 },
       });
 
       expect(
-          client.readFragment({
-            id: "foo",
-            fragment: gql`
-              fragment x on Foo {
-                a
-                b
-                c
-                bar {
-                  d
-                  e
-                  f
-                }
+        client.readFragment({
+          id: "foo",
+          fragment: gql`
+            fragment x on Foo {
+              a
+              b
+              c
+              bar {
+                d
+                e
+                f
               }
-            `,
-          })
+            }
+          `,
+        })
       ).toEqual({
         __typename: "Foo",
         a: 7,
         b: 2,
         c: 3,
-        bar: {__typename: "Bar", d: 8, e: 9, f: 6},
+        bar: { __typename: "Bar", d: 8, e: 9, f: 6 },
       });
 
       expect((client.cache as Hermes).extract()).toMatchSnapshot();
@@ -1630,29 +1623,29 @@ describe("ApolloClient", () => {
             __typename: "foo",
             c: 3,
             d: 4,
-            bar: {key: "foobar", __typename: "bar", e: 5, f: 6},
+            bar: { key: "foobar", __typename: "bar", e: 5, f: 6 },
           },
         },
       });
 
       expect(
-          client.readQuery({
-            query: gql`
-              {
-                a
-                b
-                foo {
-                  c
-                  d
-                  bar {
-                    key
-                    e
-                    f
-                  }
+        client.readQuery({
+          query: gql`
+            {
+              a
+              b
+              foo {
+                c
+                d
+                bar {
+                  key
+                  e
+                  f
                 }
               }
-            `,
-          })
+            }
+          `,
+        })
       ).toEqual({
         a: 1,
         b: 2,
@@ -1660,7 +1653,7 @@ describe("ApolloClient", () => {
           __typename: "foo",
           c: 3,
           d: 4,
-          bar: {__typename: "bar", key: "foobar", e: 5, f: 6},
+          bar: { __typename: "bar", key: "foobar", e: 5, f: 6 },
         },
       });
 
@@ -1694,7 +1687,7 @@ describe("ApolloClient", () => {
         data: {
           a: 1,
           b: 2,
-          foo: {c: 3, d: 4, bar: {id: "foobar", e: 5, f: 6}},
+          foo: { c: 3, d: 4, bar: { id: "foobar", e: 5, f: 6 } },
         },
       });
 
@@ -1717,7 +1710,7 @@ describe("ApolloClient", () => {
         data: {
           g: 8,
           h: 9,
-          bar: {i: 10, j: 11, foo: {_id: "barfoo", k: 12, l: 13}},
+          bar: { i: 10, j: 11, foo: { _id: "barfoo", k: 12, l: 13 } },
         },
       });
 
@@ -1778,7 +1771,7 @@ describe("ApolloClient", () => {
             __typename: "foo",
             c: 3,
             d: 4,
-            bar: {__typename: "bar", e: 5, f: 6},
+            bar: { __typename: "bar", e: 5, f: 6 },
           },
         },
       });
@@ -1805,7 +1798,7 @@ describe("ApolloClient", () => {
             __typename: "bar",
             i: 10,
             j: 11,
-            foo: {__typename: "foo", k: 12, l: 13},
+            foo: { __typename: "foo", k: 12, l: 13 },
           },
         },
       });
@@ -1842,7 +1835,7 @@ describe("ApolloClient", () => {
             __typename: "foo",
             c: 3,
             d: 4,
-            bar: {__typename: "bar", id: "foobar", e: 5, f: 6},
+            bar: { __typename: "bar", id: "foobar", e: 5, f: 6 },
           },
         },
       });
@@ -1879,7 +1872,7 @@ describe("ApolloClient", () => {
             __typename: "foo",
             c: 3,
             d: 4,
-            bar: {__typename: "bar", _id: "foobar", e: 5, f: 6},
+            bar: { __typename: "bar", _id: "foobar", e: 5, f: 6 },
           },
         },
       });
@@ -1914,7 +1907,7 @@ describe("ApolloClient", () => {
         data: {
           a: 1,
           b: 2,
-          foo: {c: 3, d: 4, bar: {id: "foobar", e: 5, f: 6}},
+          foo: { c: 3, d: 4, bar: { id: "foobar", e: 5, f: 6 } },
         },
       });
 
@@ -1963,7 +1956,7 @@ describe("ApolloClient", () => {
         data: {
           a: 1,
           b: 2,
-          foo: {c: 3, d: 4, bar: {_id: "foobar", e: 5, f: 6}},
+          foo: { c: 3, d: 4, bar: { _id: "foobar", e: 5, f: 6 } },
         },
       });
 
@@ -2015,7 +2008,7 @@ describe("ApolloClient", () => {
           foo: {
             c: 3,
             d: 4,
-            bar: {__typename: "bar", id: "foobar", e: 5, f: 6},
+            bar: { __typename: "bar", id: "foobar", e: 5, f: 6 },
           },
         },
       });
@@ -2039,7 +2032,7 @@ describe("ApolloClient", () => {
         data: {
           g: 8,
           h: 9,
-          bar: {i: 10, j: 11, foo: {_id: "barfoo", k: 12, l: 13}},
+          bar: { i: 10, j: 11, foo: { _id: "barfoo", k: 12, l: 13 } },
         },
       });
 
@@ -2075,7 +2068,7 @@ describe("ApolloClient", () => {
             __typename: "foo",
             c: 3,
             d: 4,
-            bar: {__typename: "bar", id: "foobar", e: 5, f: 6},
+            bar: { __typename: "bar", id: "foobar", e: 5, f: 6 },
           },
         },
       });
@@ -2103,7 +2096,7 @@ describe("ApolloClient", () => {
             __typename: "bar",
             i: 10,
             j: 11,
-            foo: {__typename: "foo", _id: "barfoo", k: 12, l: 13},
+            foo: { __typename: "foo", _id: "barfoo", k: 12, l: 13 },
           },
         },
       });
@@ -2114,70 +2107,70 @@ describe("ApolloClient", () => {
 
   describe("watchQuery", () => {
     it(
-        "should change the `fetchPolicy` to `cache-first` if network fetching " +
+      "should change the `fetchPolicy` to `cache-first` if network fetching " +
         "is disabled, and the incoming `fetchPolicy` is set to " +
         "`network-only` or `cache-and-network`",
-        () => {
-          const client = new ApolloClient({
-            link: ApolloLink.empty(),
-            cache: new Hermes(),
-          });
-          client.disableNetworkFetches = true;
+      () => {
+        const client = new ApolloClient({
+          link: ApolloLink.empty(),
+          cache: new Hermes(),
+        });
+        client.disableNetworkFetches = true;
 
-          const query = gql`
-            query someData {
-              foo {
-                bar
-              }
+        const query = gql`
+          query someData {
+            foo {
+              bar
             }
-          `;
+          }
+        `;
 
-          (["network-only", "cache-and-network"] as const).forEach(
-              (fetchPolicy) => {
-                const observable = client.watchQuery({
-                  query,
-                  fetchPolicy,
-                });
-                expect(observable.options.fetchPolicy).toEqual("cache-first");
-              }
-          );
-        }
-    );
-
-    it(
-        "should not change the incoming `fetchPolicy` if network fetching " +
-        "is enabled",
-        () => {
-          const client = new ApolloClient({
-            link: ApolloLink.empty(),
-            cache: new Hermes(),
-          });
-          client.disableNetworkFetches = false;
-
-          const query = gql`
-            query someData {
-              foo {
-                bar
-              }
-            }
-          `;
-
-          (
-              [
-                "cache-first",
-                "cache-and-network",
-                "network-only",
-                "cache-only",
-                "no-cache",
-              ] as const
-          ).forEach((fetchPolicy) => {
+        (["network-only", "cache-and-network"] as const).forEach(
+          (fetchPolicy) => {
             const observable = client.watchQuery({
               query,
               fetchPolicy,
             });
-            expect(observable.options.fetchPolicy).toEqual(fetchPolicy);
+            expect(observable.options.fetchPolicy).toEqual("cache-first");
+          }
+        );
+      }
+    );
+
+    it(
+      "should not change the incoming `fetchPolicy` if network fetching " +
+        "is enabled",
+      () => {
+        const client = new ApolloClient({
+          link: ApolloLink.empty(),
+          cache: new Hermes(),
+        });
+        client.disableNetworkFetches = false;
+
+        const query = gql`
+          query someData {
+            foo {
+              bar
+            }
+          }
+        `;
+
+        (
+          [
+            "cache-first",
+            "cache-and-network",
+            "network-only",
+            "cache-only",
+            "no-cache",
+          ] as const
+        ).forEach((fetchPolicy) => {
+          const observable = client.watchQuery({
+            query,
+            fetchPolicy,
           });
-        }
+          expect(observable.options.fetchPolicy).toEqual(fetchPolicy);
+        });
+      }
     );
   });
 
@@ -2206,7 +2199,7 @@ describe("ApolloClient", () => {
 
       const observable = client.watchFragment({
         fragment: ItemFragment,
-        from: {__typename: "Item", id: 5},
+        from: { __typename: "Item", id: 5 },
       });
 
       const stream = new ObservableStream(observable);
@@ -2248,7 +2241,7 @@ describe("ApolloClient", () => {
 
       const observable = client.watchFragment({
         fragment: ItemFragment,
-        from: {__typename: "Item", id: 5},
+        from: { __typename: "Item", id: 5 },
       });
 
       const stream = new ObservableStream(observable);
@@ -2316,7 +2309,7 @@ describe("ApolloClient", () => {
 
       const observable = client.watchFragment({
         fragment: ItemFragment,
-        from: {__typename: "Item", id: 5},
+        from: { __typename: "Item", id: 5 },
       });
 
       const stream = new ObservableStream(observable);
@@ -2351,7 +2344,7 @@ describe("ApolloClient", () => {
 
       const observable = client.watchFragment({
         fragment: ItemFragment,
-        from: {__typename: "Item", id: 5},
+        from: { __typename: "Item", id: 5 },
       });
 
       const stream = new ObservableStream(observable);
@@ -2366,8 +2359,8 @@ describe("ApolloClient", () => {
         });
       }
 
-      await expect(stream.takeNext({timeout: 1000})).rejects.toEqual(
-          expect.any(Error)
+      await expect(stream.takeNext({ timeout: 1000 })).rejects.toEqual(
+        expect.any(Error)
       );
     });
 
@@ -2395,7 +2388,7 @@ describe("ApolloClient", () => {
 
       const observable = client.watchFragment({
         fragment: ItemFragment,
-        from: {__typename: "Item", id: 5},
+        from: { __typename: "Item", id: 5 },
       });
 
       const stream = new ObservableStream(observable);
@@ -2423,22 +2416,22 @@ describe("ApolloClient", () => {
       });
 
       await expect(stream.takeNext()).rejects.toThrow(
-          new Error("Timeout waiting for next event")
+        new Error("Timeout waiting for next event")
       );
     });
   });
 
   describe("defaultOptions", () => {
     it(
-        "should set `defaultOptions` to an empty object if not provided in " +
+      "should set `defaultOptions` to an empty object if not provided in " +
         "the constructor",
-        () => {
-          const client = new ApolloClient({
-            link: ApolloLink.empty(),
-            cache: new Hermes(),
-          });
-          expect(client.defaultOptions).toEqual({});
-        }
+      () => {
+        const client = new ApolloClient({
+          link: ApolloLink.empty(),
+          cache: new Hermes(),
+        });
+        expect(client.defaultOptions).toEqual({});
+      }
     );
 
     it("should set `defaultOptions` using options passed into the constructor", () => {
@@ -2479,7 +2472,7 @@ describe("ApolloClient", () => {
       // @ts-ignore
       const queryManager = client.queryManager;
       const _query = queryManager.query;
-      queryManager.query = (options: QueryOptions<OperationVariables, any>) => {
+      queryManager.query = (options) => {
         queryOptions = options;
         return _query(options);
       };

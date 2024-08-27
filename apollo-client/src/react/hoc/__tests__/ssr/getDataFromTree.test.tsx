@@ -1,19 +1,18 @@
 /** @jest-environment node */
-import * as React from "react";
-// eslint-disable-next-line import/no-extraneous-dependencies
-import * as PropTypes from "prop-types";
-// eslint-disable-next-line import/no-extraneous-dependencies
-import * as ReactDOM from "react-dom/server";
+import React from "react";
+import PropTypes from "prop-types";
+import ReactDOM from "react-dom/server";
 import gql from "graphql-tag";
 import { DocumentNode } from "graphql";
-import { ApolloClient, ApolloProvider } from "@apollo/client";
-import { ChildProps, DataValue } from "@apollo/client/react/hoc";
-import { Query } from "@apollo/client/react/components";
 
-import { Hermes } from "../../../../../../src";
+import { ApolloClient } from "../../../../core";
+import { ApolloProvider } from "../../../context";
+import { Hermes as Cache } from "../../../../../../src";
 import { itAsync, mockSingleLink } from "../../../../testing";
+import { Query } from "../../../components";
 import { getDataFromTree, getMarkupFromTree } from "../../../ssr";
 import { graphql } from "../../graphql";
+import { ChildProps, DataValue } from "../../types";
 
 describe("SSR", () => {
   describe("`getDataFromTree`", () => {
@@ -41,7 +40,7 @@ describe("SSR", () => {
       });
       const apolloClient = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       interface Props {}
@@ -92,7 +91,7 @@ describe("SSR", () => {
       });
       const apolloClient = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
         ssrMode: true,
       });
 
@@ -137,7 +136,7 @@ describe("SSR", () => {
       });
       const apolloClient = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       interface Props {}
@@ -179,7 +178,7 @@ describe("SSR", () => {
       });
       const apolloClient = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       interface Props {}
@@ -246,7 +245,7 @@ describe("SSR", () => {
       );
       const apolloClient = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       interface Props {}
@@ -347,7 +346,7 @@ describe("SSR", () => {
       );
       const apolloClient = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       interface Props {}
@@ -409,7 +408,7 @@ describe("SSR", () => {
       });
       const apolloClient = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       interface Props {}
@@ -461,7 +460,7 @@ describe("SSR", () => {
       });
       const apolloClient = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       interface Props {}
@@ -502,7 +501,7 @@ describe("SSR", () => {
         result: { data: resultData },
       });
 
-      const cache = new Hermes({ addTypename: false });
+      const cache = new Cache({ addTypename: false });
       const apolloClient = new ApolloClient({
         link,
         cache,
@@ -561,7 +560,7 @@ describe("SSR", () => {
           result: { data: resultData },
         });
 
-        const cache = new Hermes({ addTypename: false });
+        const cache = new Cache({ addTypename: false });
         const apolloClient = new ApolloClient({
           link,
           cache,
@@ -668,7 +667,7 @@ describe("SSR", () => {
       });
       const apolloClient = new ApolloClient({
         link,
-        cache: new Hermes({
+        cache: new Cache({
           addTypename: false,
         }),
       });
@@ -758,7 +757,7 @@ describe("SSR", () => {
         result: { data: resultData },
       });
 
-      const cache = new Hermes({ addTypename: false });
+      const cache = new Cache({ addTypename: false });
       const apolloClient = new ApolloClient({
         link,
         cache,
@@ -820,7 +819,7 @@ describe("SSR", () => {
         result: { data: resultData },
       });
 
-      const cache = new Hermes({ addTypename: false });
+      const cache = new Cache({ addTypename: false });
       const apolloClient = new ApolloClient({
         link,
         cache,
@@ -883,7 +882,7 @@ describe("SSR", () => {
       );
       const apolloClient = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       interface Data {
@@ -913,7 +912,7 @@ describe("SSR", () => {
       );
 
       const withMutation = graphql<
-        Partial<QueryChildProps>,
+        QueryChildProps,
         {},
         {},
         { action: (variables: {}) => Promise<any> }
@@ -933,7 +932,7 @@ describe("SSR", () => {
       const Element: React.FunctionComponent<
         React.PropsWithChildren<
           React.PropsWithChildren<
-            Partial<QueryChildProps> & {
+            QueryChildProps & {
               action: (variables: {}) => Promise<any>;
             }
           >
@@ -946,6 +945,7 @@ describe("SSR", () => {
         </div>
       );
 
+      // @ts-expect-error
       const WrappedElement = withQuery(withMutation(Element));
 
       const app = (
@@ -1000,7 +1000,7 @@ describe("SSR", () => {
       );
       const apolloClient = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       const withMutation = graphql<Props, MutationData>(mutation);
@@ -1063,7 +1063,7 @@ describe("SSR", () => {
       });
       const apolloClient = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       const WrappedElement = graphql<{}, Data>(query)(

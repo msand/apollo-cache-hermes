@@ -1,3 +1,5 @@
+import { invariant } from "../globals/index";
+
 // Provides the methods that allow QueryManager to handle the `skip` and
 // `include` directives within GraphQL.
 import type {
@@ -11,8 +13,6 @@ import type {
   ASTNode,
 } from "graphql";
 import { visit, BREAK } from "graphql";
-
-import { invariant } from "../globals/index";
 
 export type DirectiveInfo = {
   [fieldName: string]: { [argName: string]: any };

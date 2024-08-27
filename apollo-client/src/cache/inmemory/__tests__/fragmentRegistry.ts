@@ -1,5 +1,4 @@
-import { ApolloClient, ApolloLink, gql, NetworkStatus } from "@apollo/client";
-
+import { ApolloClient, ApolloLink, gql, NetworkStatus } from "../../../core";
 import { getFragmentDefinitions, Observable } from "../../../utilities";
 import { createFragmentRegistry } from "../../index";
 import { itAsync, subscribeAndCount } from "../../../testing";

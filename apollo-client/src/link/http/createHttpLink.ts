@@ -1,16 +1,9 @@
-import type { DefinitionNode } from "graphql";
-import { ApolloLink } from "@apollo/client";
-
 import { invariant } from "../../utilities/globals/index";
-import {
-  Observable,
-  hasDirectives,
-  maybe,
-  getMainDefinition,
-  removeClientSetsFromDocument,
-} from "../../utilities/index";
-import { fromError, filterOperationVariables } from "../utils/index";
 
+import type { DefinitionNode } from "graphql";
+
+import { ApolloLink } from "../core/index";
+import { Observable, hasDirectives } from "../../utilities/index";
 import { serializeFetchParameter } from "./serializeFetchParameter";
 import { selectURI } from "./selectURI";
 import {
@@ -26,11 +19,17 @@ import {
   fallbackHttpConfig,
 } from "./selectHttpOptionsAndBody";
 import { rewriteURIForGET } from "./rewriteURIForGET";
+import { fromError, filterOperationVariables } from "../utils/index";
+import {
+  maybe,
+  getMainDefinition,
+  removeClientSetsFromDocument,
+} from "../../utilities/index";
 
 const backupFetch = maybe(() => fetch);
 
 export const createHttpLink = (linkOptions: HttpOptions = {}) => {
-  const {
+  let {
     uri = "/graphql",
     // use default global fetch if nothing passed in
     fetch: preferredFetch,
@@ -104,7 +103,7 @@ export const createHttpLink = (linkOptions: HttpOptions = {}) => {
       operation.query = transformedQuery;
     }
 
-    // uses fallback, link, and then context to build options
+    //uses fallback, link, and then context to build options
     const { options, body } = selectHttpOptionsAndBodyInternal(
       operation,
       print,

@@ -5,7 +5,6 @@ import type {
   ApolloPayloadResult,
   FetchResult,
 } from "../../link/core/index";
-
 import { isNonNullObject } from "./objects";
 import { isNonEmptyArray } from "./arrays";
 import { DeepMerger } from "./mergeDeep";
@@ -40,7 +39,7 @@ export function isApolloPayloadResult(
   return isNonNullObject(value) && "payload" in value;
 }
 
-export function mergeIncrementalData<TData>(
+export function mergeIncrementalData<TData extends object>(
   prevResult: TData,
   result: ExecutionPatchResult<TData>
 ) {

@@ -1,10 +1,8 @@
 import { invariant as originalInvariant, InvariantError } from "ts-invariant";
-
 import { version } from "../../version";
+import global from "./global";
 import type { ErrorCodes } from "../../invariantErrorCodes";
 import { stringifyForDisplay } from "../common/stringifyForDisplay";
-
-import global from "./global";
 
 function wrap(fn: (msg?: string, ...args: any[]) => void) {
   return function (message?: string | number, ...args: any[]) {
@@ -108,7 +106,7 @@ function newInvariantError(
 }
 
 const ApolloErrorMessageHandler = Symbol.for(
-  `ApolloErrorMessageHandler_${version}`
+  "ApolloErrorMessageHandler_" + version
 );
 declare global {
   interface Window {
@@ -119,7 +117,7 @@ declare global {
 }
 
 function stringify(arg: any) {
-  if (typeof arg === "string") {
+  if (typeof arg == "string") {
     return arg;
   }
 

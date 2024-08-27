@@ -1,9 +1,8 @@
 import { equal } from "@wry/equality";
-import { ObservableQuery } from "@apollo/client";
-
 import type {
   ApolloError,
   ApolloQueryResult,
+  ObservableQuery,
   OperationVariables,
   WatchQueryOptions,
 } from "../../../core/index";
@@ -14,11 +13,10 @@ import type {
 import {
   createFulfilledPromise,
   createRejectedPromise,
-  wrapPromiseWithState,
 } from "../../../utilities/index";
-import { invariant } from "../../../utilities/globals/invariantWrappers";
-
 import type { QueryKey } from "./types";
+import { wrapPromiseWithState } from "../../../utilities/index";
+import { invariant } from "../../../utilities/globals/invariantWrappers";
 
 type QueryRefPromise<TData> = PromiseWithState<ApolloQueryResult<TData>>;
 

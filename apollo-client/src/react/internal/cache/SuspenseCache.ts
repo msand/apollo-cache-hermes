@@ -1,9 +1,6 @@
-// eslint-disable-next-line import/no-extraneous-dependencies
 import { Trie } from "@wry/trie";
-import { ObservableQuery } from "@apollo/client";
-
+import type { ObservableQuery } from "../../../core/index";
 import { canUseWeakMap } from "../../../utilities/index";
-
 import { InternalQueryReference } from "./QueryReference";
 import type { CacheKey } from "./types";
 
@@ -25,7 +22,6 @@ export class SuspenseCache {
   private queryRefs = new Trie<{ current?: InternalQueryReference }>(
     canUseWeakMap
   );
-
   private options: SuspenseCacheOptions;
 
   constructor(options: SuspenseCacheOptions = Object.create(null)) {

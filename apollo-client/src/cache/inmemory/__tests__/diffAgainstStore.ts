@@ -3,14 +3,13 @@ import gql, { disableFragmentWarnings } from "graphql-tag";
 import { StoreReader } from "../readFromStore";
 import { StoreWriter } from "../writeToStore";
 import { defaultDataIdFromObject } from "../helpers";
+import { NormalizedCache, Reference } from "../types";
 import {
   defaultNormalizedCacheFactory,
   writeQueryToStore,
   withError,
 } from "./helpers";
 import { Hermes } from "../../../../../src";
-import {Reference} from "@apollo/client";
-import {NormalizedCache} from "@apollo/client/cache";
 
 disableFragmentWarnings();
 

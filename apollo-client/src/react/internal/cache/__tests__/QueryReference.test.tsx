@@ -1,7 +1,9 @@
-import * as React from "react";
-import { ApolloClient, ApolloLink } from "@apollo/client";
-
-import { Observable } from "../../../../core";
+import {
+  ApolloClient,
+  ApolloLink,
+  Observable,
+} from "../../../../core";
+import { Hermes } from "../../../../../../src";
 import { setupSimpleCase } from "../../../../testing/internal";
 import {
   InternalQueryReference,
@@ -9,9 +11,9 @@ import {
   QueryRef,
   QueryReference,
 } from "../QueryReference";
-import { Hermes } from "../../../../../../src";
+import React from "react";
 
-it("kicks off request immediately when created", async () => {
+test("kicks off request immediately when created", async () => {
   const { query } = setupSimpleCase();
   let fetchCount = 0;
 
@@ -30,8 +32,8 @@ it("kicks off request immediately when created", async () => {
   expect(fetchCount).toBe(1);
 });
 
-it.skip("type tests", () => {
-  it("passing as prop", () => {
+test.skip("type tests", () => {
+  test("passing as prop", () => {
     const ANY: any = {};
 
     interface Data {
@@ -43,21 +45,18 @@ it.skip("type tests", () => {
     function ComponentWithQueryRefProp<
       TData = unknown,
       TVariables = unknown,
-      // eslint-disable-next-line no-empty-pattern
     >({}: { queryRef: QueryRef<TData, TVariables> }) {
       return null;
     }
     function ComponentWithQueryReferenceProp<
       TData = unknown,
       TVariables = unknown,
-      // eslint-disable-next-line no-empty-pattern
     >({}: { queryRef: QueryReference<TData> }) {
       return null;
     }
     function ComponentWithPreloadedQueryRefProp<
       TData = unknown,
       TVariables = unknown,
-      // eslint-disable-next-line no-empty-pattern
     >({}: { queryRef: PreloadedQueryRef<TData, TVariables> }) {
       return null;
     }

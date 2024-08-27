@@ -1,23 +1,26 @@
 import gql from "graphql-tag";
 import { GraphQLError } from "graphql";
-import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
-import { SubscriptionObserver } from "zen-observable-ts";
-import { waitFor } from "@testing-library/react";
+import { TypedDocumentNode } from "@graphql-typed-document-node/core";
+
 import {
   ApolloClient,
-  ApolloLink,
-  FetchResult,
   ApolloQueryResult,
   NetworkStatus,
   WatchQueryFetchPolicy,
+} from "../../core";
+import { ObservableQuery } from "../ObservableQuery";
+import { QueryManager } from "../QueryManager";
+
+import {
   DocumentTransform,
   Observable,
-  NormalizedCacheObject,
-  ApolloError,
-  ObservableQuery,
-} from "@apollo/client";
+  removeDirectivesFromDocument,
+} from "../../utilities";
+import { ApolloLink, FetchResult } from "../../link/core";
+import { NormalizedCacheObject } from "../../cache";
+import { ApolloError } from "../../errors";
+import { Hermes } from "../../../../src";
 
-import { removeDirectivesFromDocument } from "../../utilities";
 import {
   itAsync,
   MockLink,
@@ -29,18 +32,15 @@ import {
 import mockQueryManager from "../../testing/core/mocking/mockQueryManager";
 import mockWatchQuery from "../../testing/core/mocking/mockWatchQuery";
 import wrap from "../../testing/core/wrap";
-import { ObservableStream } from "../../testing/internal";
-import { Hermes } from "../../../../src";
 
 import { resetStore } from "./QueryManager";
-import { QueryManager } from "@apollo/client/core/QueryManager";
-import { QueryManager as QueryManagerType } from "../QueryManager";
+import { SubscriptionObserver } from "zen-observable-ts";
+import { waitFor } from "@testing-library/react";
+import { ObservableStream } from "../../testing/internal";
 
-export const mockFetchQuery = (
-  queryManager: QueryManager<NormalizedCacheObject>
-) => {
-  const fetchConcastWithInfo: QueryManagerType<NormalizedCacheObject>["fetchConcastWithInfo"] = queryManager["fetchConcastWithInfo"];
-  const fetchQueryByPolicy: QueryManagerType<NormalizedCacheObject>["fetchQueryByPolicy"] =
+export const mockFetchQuery = (queryManager: QueryManager<NormalizedCacheObject>) => {
+  const fetchConcastWithInfo: QueryManager<NormalizedCacheObject>["fetchConcastWithInfo"] = queryManager["fetchConcastWithInfo"];
+  const fetchQueryByPolicy: QueryManager<NormalizedCacheObject>["fetchQueryByPolicy"] =
     (queryManager as any).fetchQueryByPolicy;
 
   const mock = <
@@ -49,7 +49,7 @@ export const mockFetchQuery = (
     original: T
   ) =>
     jest.fn<ReturnType<T>, Parameters<T>>(function (): ReturnType<T> {
-      // @ts-ignore
+      // @ts-expect-error
       return original.apply(queryManager, arguments);
     });
 
@@ -564,56 +564,7 @@ describe("ObservableQuery", () => {
     itAsync(
       "can set queries to standby and will not fetch when doing so",
       (resolve, reject) => {
-        const testQuery = gql`
-          query {
-            author {
-              firstName
-              lastName
-            }
-          }
-        `;
-        const data = {
-          author: {
-            firstName: "John",
-            lastName: "Smith",
-          },
-        };
-
-        let timesFired = 0;
-        const link: ApolloLink = ApolloLink.from([
-          () => {
-            return new Observable((observer) => {
-              timesFired += 1;
-              observer.next({ data });
-              observer.complete();
-            });
-          },
-        ]);
-        const queryManager = createQueryManager({ link });
-        const observable = queryManager.watchQuery({
-          query: testQuery,
-          fetchPolicy: "cache-first",
-          notifyOnNetworkStatusChange: false,
-        });
-
-        subscribeAndCount(reject, observable, async (handleCount, result) => {
-          if (handleCount === 1) {
-            expect(result.data).toEqual(data);
-            expect(timesFired).toBe(1);
-            await observable.setOptions({ query, fetchPolicy: "standby" });
-            // make sure the query didn't get fired again.
-            expect(timesFired).toBe(1);
-            resolve();
-          } else if (handleCount === 2) {
-            throw new Error("Handle should not be triggered on standby query");
-          }
-        });
-      }
-    );
-
-    itAsync(
-      "will not fetch when setting a cache-only query to standby",
-      (resolve, reject) => {
+        let queryManager: QueryManager<NormalizedCacheObject>;
         let observable: ObservableQuery<any>;
         const testQuery = gql`
           query {
@@ -637,10 +588,64 @@ describe("ObservableQuery", () => {
               timesFired += 1;
               observer.next({ data });
               observer.complete();
+              return;
             });
           },
         ]);
-        const queryManager = createQueryManager({ link });
+        queryManager = createQueryManager({ link });
+        observable = queryManager.watchQuery({
+          query: testQuery,
+          fetchPolicy: "cache-first",
+          notifyOnNetworkStatusChange: false,
+        });
+
+        subscribeAndCount(reject, observable, async (handleCount, result) => {
+          if (handleCount === 1) {
+            expect(result.data).toEqual(data);
+            expect(timesFired).toBe(1);
+            await observable.setOptions({ query, fetchPolicy: "standby" });
+            // make sure the query didn't get fired again.
+            expect(timesFired).toBe(1);
+            resolve();
+          } else if (handleCount === 2) {
+            throw new Error("Handle should not be triggered on standby query");
+          }
+        });
+      }
+    );
+
+    itAsync(
+      "will not fetch when setting a cache-only query to standby",
+      (resolve, reject) => {
+        let queryManager: QueryManager<NormalizedCacheObject>;
+        let observable: ObservableQuery<any>;
+        const testQuery = gql`
+          query {
+            author {
+              firstName
+              lastName
+            }
+          }
+        `;
+        const data = {
+          author: {
+            firstName: "John",
+            lastName: "Smith",
+          },
+        };
+
+        let timesFired = 0;
+        const link: ApolloLink = ApolloLink.from([
+          () => {
+            return new Observable((observer) => {
+              timesFired += 1;
+              observer.next({ data });
+              observer.complete();
+              return;
+            });
+          },
+        ]);
+        queryManager = createQueryManager({ link });
 
         queryManager.query({ query: testQuery }).then(() => {
           observable = queryManager.watchQuery({
@@ -3156,7 +3161,7 @@ describe("ObservableQuery", () => {
       });
 
       const queryInfo = observable["queryInfo"];
-      const cache = (queryInfo["cache"] as Hermes);
+      const cache = queryInfo["cache"];
       const setDiffSpy = jest.spyOn(queryInfo, "setDiff");
       const notifySpy = jest.spyOn(queryInfo, "notify");
 
@@ -3257,8 +3262,8 @@ describe("ObservableQuery", () => {
   });
 });
 
-it("regression test for #10587", async () => {
-  const observers: Record<string, SubscriptionObserver<FetchResult>> = {};
+test("regression test for #10587", async () => {
+  let observers: Record<string, SubscriptionObserver<FetchResult>> = {};
   const link = new ApolloLink((operation) => {
     return new Observable((observer) => {
       observers[operation.operationName] = observer;
@@ -3410,7 +3415,7 @@ it("regression test for #10587", async () => {
 });
 
 // https://github.com/apollographql/apollo-client/issues/11184
-it("handles changing variables in rapid succession before other request is completed", async () => {
+test("handles changing variables in rapid succession before other request is completed", async () => {
   interface UserCountQuery {
     userCount: number;
   }

@@ -13,7 +13,8 @@ export const toBeGarbageCollected: MatcherFunction<[weakRef: WeakRef<any>]> =
 
     if (!(actual instanceof WeakRef)) {
       throw new Error(
-        `${hint}\n\n` +
+        hint +
+          "\n\n" +
           `Expected value to be a WeakRef, but it was a ${typeof actual}.`
       );
     }
@@ -44,12 +45,15 @@ export const toBeGarbageCollected: MatcherFunction<[weakRef: WeakRef<any>]> =
       message: () => {
         if (pass) {
           return (
-            `${hint}\n\n` +
-            `Expected value to not be cache-collected, but it was.`
+            hint +
+            "\n\n" +
+            "Expected value to not be cache-collected, but it was."
           );
         }
 
-        return `${hint}\n\n Expected value to be cache-collected, but it was not.`;
+        return (
+          hint + "\n\n Expected value to be cache-collected, but it was not."
+        );
       },
     };
   };

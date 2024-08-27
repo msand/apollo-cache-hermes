@@ -1,12 +1,14 @@
-import * as React from "react";
+import React from "react";
 import { render, waitFor } from "@testing-library/react";
 import gql from "graphql-tag";
 import { DocumentNode } from "graphql";
-import { ApolloClient, ApolloProvider } from "@apollo/client";
-import { graphql, ChildProps } from "@apollo/client/react/hoc";
 
+import { ApolloClient } from "../../../../core";
+import { ApolloProvider } from "../../../context";
+import { Hermes as Cache } from "../../../../../../src";
 import { itAsync, mockSingleLink } from "../../../../testing";
-import { Hermes } from "../../../../../../src";
+import { graphql } from "../../graphql";
+import { ChildProps } from "../../types";
 
 describe("[queries] api", () => {
   const consoleWarn = console.warn;
@@ -37,7 +39,7 @@ describe("[queries] api", () => {
     );
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     let hasRefetched = false,
@@ -122,7 +124,7 @@ describe("[queries] api", () => {
       });
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       // example of loose typing
@@ -176,7 +178,7 @@ describe("[queries] api", () => {
     );
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     let count = 0;
@@ -266,7 +268,7 @@ describe("[queries] api", () => {
       );
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       let isUpdated = false;

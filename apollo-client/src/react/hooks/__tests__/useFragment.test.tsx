@@ -5,34 +5,31 @@ import {
   screen,
   renderHook,
   within,
-  act,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import assert from "assert";
-import { expectTypeOf } from "expect-type";
-import { SubscriptionObserver } from "zen-observable-ts";
-import {
-  ApolloClient,
-  ApolloProvider,
-  useFragment,
-  ApolloLink,
-  UseFragmentOptions,
-  StoreObject,
-} from "@apollo/client";
+import { act } from "@testing-library/react";
 
+import { UseFragmentOptions, useFragment } from "../useFragment";
 import { MockedProvider } from "../../../testing";
+import { ApolloProvider } from "../../context";
+import { Hermes } from "../../../../../src";
 import {
   gql,
   TypedDocumentNode,
   Reference,
+  ApolloClient,
   Observable,
+  ApolloLink,
+  StoreObject,
   DocumentNode,
   FetchResult,
 } from "../../../core";
 import { useQuery } from "../useQuery";
 import { concatPagination } from "../../../utilities";
+import assert from "assert";
+import { expectTypeOf } from "expect-type";
+import { SubscriptionObserver } from "zen-observable-ts";
 import { profile, profileHook, spyOnConsole } from "../../../testing/internal";
-import { Hermes } from "../../../../../src";
 
 describe("useFragment", () => {
   it("is importable and callable", () => {
@@ -114,7 +111,7 @@ describe("useFragment", () => {
     }
 
     function Item(props: { id: number }) {
-      renders.push(`item ${props.id}`);
+      renders.push("item " + props.id);
       const { complete, data } = useFragment({
         fragment: ItemFragment,
         fragmentName: "ItemFragment",
@@ -133,9 +130,10 @@ describe("useFragment", () => {
     );
 
     function getItemTexts() {
-      return screen
-        .getAllByText(/^Item/)
-        .map((li) => li.firstChild!.textContent);
+      return screen.getAllByText(/^Item/).map(
+        // eslint-disable-next-line testing-library/no-node-access
+        (li) => li.firstChild!.textContent
+      );
     }
 
     await waitFor(() => {
@@ -552,7 +550,7 @@ describe("useFragment", () => {
             id: cache.identify({ __typename: "Item", id })!,
             fields: {
               text(existing) {
-                return `${existing}ly`;
+                return existing + "ly";
               },
             },
           });
@@ -802,7 +800,6 @@ describe("useFragment", () => {
       });
       expect(complete).toBe(true);
       assert(!!complete);
-      if (!complete) throw new Error();
       return (
         <ol>
           {data.list.map((item) => (
@@ -813,7 +810,7 @@ describe("useFragment", () => {
     }
 
     function Item(props: { id: number }) {
-      renders.push(`item ${props.id}`);
+      renders.push("item " + props.id);
       const { complete, data } = useFragment({
         fragment: ItemFragment,
         from: {
@@ -831,9 +828,10 @@ describe("useFragment", () => {
     );
 
     function getItemTexts() {
-      return screen
-        .getAllByText(/^Item/)
-        .map((li) => li.firstChild!.textContent);
+      return screen.getAllByText(/^Item/).map(
+        // eslint-disable-next-line testing-library/no-node-access
+        (li) => li.firstChild!.textContent
+      );
     }
 
     await waitFor(() => {
@@ -1325,9 +1323,10 @@ describe("useFragment", () => {
     );
 
     function getItemTexts() {
-      return screen
-        .getAllByText(/^Item/)
-        .map((li) => li.firstChild!.textContent);
+      return screen.getAllByText(/^Item/).map(
+        // eslint-disable-next-line testing-library/no-node-access
+        (li) => li.firstChild!.textContent
+      );
     }
 
     await waitFor(() => {
@@ -1618,7 +1617,7 @@ describe("useFragment", () => {
       );
     });
 
-    it("if all data is available, `complete` is `true`", () => {
+    test("if all data is available, `complete` is `true`", () => {
       cache.writeFragment({
         fragment: ItemFragment,
         data: {
@@ -1643,7 +1642,7 @@ describe("useFragment", () => {
       });
     });
 
-    it("if only partial data is available, `complete` is `false`", () => {
+    test("if only partial data is available, `complete` is `false`", () => {
       cache.writeFragment({
         fragment: ItemFragment,
         data: {
@@ -1670,7 +1669,7 @@ describe("useFragment", () => {
       });
     });
 
-    it("if no data is available, `complete` is `false`", () => {
+    test("if no data is available, `complete` is `false`", () => {
       const { result } = renderHook(
         () =>
           useFragment({
@@ -1709,7 +1708,7 @@ describe("has the same timing as `useQuery`", () => {
       }
       ${itemFragment}
     `;
-    let observer: SubscriptionObserver<FetchResult> | undefined;
+    let observer: SubscriptionObserver<FetchResult>;
     const cache = new Hermes();
     const client = new ApolloClient({
       cache,
@@ -1750,7 +1749,7 @@ describe("has the same timing as `useQuery`", () => {
       expect(snapshot.fragmentData).toStrictEqual({});
     }
 
-    if (!observer) throw new Error();
+    assert(observer!);
     observer.next({ data: { item: initialItem } });
     observer.complete();
 
@@ -1949,7 +1948,7 @@ describe("has the same timing as `useQuery`", () => {
 });
 
 describe.skip("Type Tests", () => {
-  it("NoInfer prevents adding arbitrary additional variables", () => {
+  test("NoInfer prevents adding arbitrary additional variables", () => {
     const typedNode = {} as TypedDocumentNode<{ foo: string }, { bar: number }>;
     useFragment({
       fragment: typedNode,
@@ -1962,7 +1961,7 @@ describe.skip("Type Tests", () => {
     });
   });
 
-  it("UseFragmentOptions interface shape", <TData, TVars>() => {
+  test("UseFragmentOptions interface shape", <TData, TVars>() => {
     expectTypeOf<UseFragmentOptions<TData, TVars>>().branded.toEqualTypeOf<{
       from: string | StoreObject | Reference;
       fragment: DocumentNode | TypedDocumentNode<TData, TVars>;

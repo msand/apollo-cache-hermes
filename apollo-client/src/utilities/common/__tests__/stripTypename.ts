@@ -1,12 +1,12 @@
 import { stripTypename } from "../stripTypename";
 
-it("omits __typename from a shallow object", () => {
+test("omits __typename from a shallow object", () => {
   expect(
     stripTypename({ __typename: "Person", firstName: "Foo", lastName: "Bar" })
   ).toEqual({ firstName: "Foo", lastName: "Bar" });
 });
 
-it("omits __typename from arbitrarily nested object", () => {
+test("omits __typename from arbitrarily nested object", () => {
   expect(
     stripTypename({
       __typename: "Profile",
@@ -33,7 +33,7 @@ it("omits __typename from arbitrarily nested object", () => {
   });
 });
 
-it("omits the __typename from arrays", () => {
+test("omits the __typename from arrays", () => {
   expect(
     stripTypename([
       { __typename: "Todo", name: "Take out trash" },
@@ -42,7 +42,7 @@ it("omits the __typename from arrays", () => {
   ).toEqual([{ name: "Take out trash" }, { name: "Clean room" }]);
 });
 
-it("omits __typename from arbitrarily nested arrays", () => {
+test("omits __typename from arbitrarily nested arrays", () => {
   expect(
     stripTypename([
       [{ __typename: "Foo", foo: "foo" }],
@@ -51,7 +51,7 @@ it("omits __typename from arbitrarily nested arrays", () => {
   ).toEqual([[{ foo: "foo" }], [{ bar: "bar" }, [{ baz: "baz" }]]]);
 });
 
-it("returns primitives unchanged", () => {
+test("returns primitives unchanged", () => {
   expect(stripTypename("a")).toBe("a");
   expect(stripTypename(1)).toBe(1);
   expect(stripTypename(true)).toBe(true);

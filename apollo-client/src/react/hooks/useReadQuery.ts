@@ -1,5 +1,4 @@
 import * as React from "rehackt";
-
 import {
   assertWrappedQueryRef,
   getWrappedPromise,
@@ -7,12 +6,11 @@ import {
   updateWrappedQueryRef,
 } from "../internal/index";
 import type { QueryRef } from "../internal/index";
-import type { ApolloError } from "../../errors/index";
-import type { ApolloQueryResult, NetworkStatus } from "../../core/index";
-
 import { __use, wrapHook } from "./internal/index";
 import { toApolloError } from "./useSuspenseQuery";
 import { useSyncExternalStore } from "./useSyncExternalStore";
+import type { ApolloError } from "../../errors/index";
+import type { NetworkStatus } from "../../core/index";
 import { useApolloClient } from "./useApolloClient";
 
 export interface UseReadQueryResult<TData = unknown> {
@@ -56,6 +54,8 @@ export function useReadQuery<TData>(
       // the transported object
       // This is just a context read - it's fine to do this conditionally.
       // This hook wrapper also shouldn't be optimized by React Compiler.
+      // eslint-disable-next-line react-compiler/react-compiler
+      // eslint-disable-next-line react-hooks/rules-of-hooks
     : useApolloClient()
   )(queryRef);
 }
@@ -95,7 +95,7 @@ function _useReadQuery<TData>(
     getPromise
   );
 
-  const result = __use(promise) as ApolloQueryResult<TData>;
+  const result = __use(promise);
 
   return React.useMemo(() => {
     return {

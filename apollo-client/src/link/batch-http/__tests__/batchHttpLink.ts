@@ -1,8 +1,8 @@
 import fetchMock from "fetch-mock";
 import gql from "graphql-tag";
 import { ASTNode, print, stripIgnoredCharacters } from "graphql";
-import { ApolloLink } from "@apollo/client";
 
+import { ApolloLink } from "../../core/ApolloLink";
 import { execute } from "../../core/execute";
 import {
   Observable,
@@ -164,7 +164,6 @@ describe("BatchHttpLink", () => {
         reject("complete should not have been called");
       };
 
-      // eslint-disable-next-line handle-callback-err
       const error = (error: any) => {
         errors++;
 
@@ -195,7 +194,7 @@ describe("BatchHttpLink", () => {
         let key = true;
         const batchKey = () => {
           key = !key;
-          return `${!key}`;
+          return "" + !key;
         };
 
         const link = ApolloLink.from([
@@ -204,7 +203,7 @@ describe("BatchHttpLink", () => {
               return operation.variables.endpoint;
             },
             batchInterval: 1,
-            // if batchKey does not work, then the batch size would be 3
+            //if batchKey does not work, then the batch size would be 3
             batchMax: 2,
             batchKey,
           }),
@@ -468,7 +467,7 @@ describe("SharedHttpTest", () => {
       error: (error) => reject(error),
       complete: () => {
         try {
-          const body = convertBatchedBody(fetchMock.lastCall()![1]!.body);
+          let body = convertBatchedBody(fetchMock.lastCall()![1]!.body);
           expect(body.query).toBe(print(sampleMutation));
           expect(body.variables).toEqual(
             includeUnusedVariables ? variables : {}
@@ -1048,7 +1047,7 @@ describe("SharedHttpTest", () => {
 
       execute(link, { query: sampleQuery, variables }).subscribe(
         makeCallback(resolve, reject, (result: any) => {
-          const body = convertBatchedBody(fetchMock.lastCall()![1]!.body);
+          let body = convertBatchedBody(fetchMock.lastCall()![1]!.body);
 
           expect(body.query).not.toBeDefined();
           expect(body.extensions).toEqual({ persistedQuery: { hash: "1234" } });

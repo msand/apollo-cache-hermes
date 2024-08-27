@@ -1,18 +1,11 @@
 import * as React from "rehackt";
 import type * as ReactTypes from "react";
 import type { DocumentNode } from "graphql";
-// eslint-disable-next-line import/no-extraneous-dependencies
 import hoistNonReactStatics from "hoist-non-react-statics";
-import {
-  DataProps,
-  OperationOption,
-  OptionProps,
-} from "@apollo/client/react/hoc";
 
 import { parser } from "../parser/index";
 import type { BaseQueryOptions } from "../types/types";
 import { Query } from "../components/index";
-
 import {
   getDisplayName,
   GraphQLBase,
@@ -20,6 +13,7 @@ import {
   defaultMapPropsToOptions,
   defaultMapPropsToSkip,
 } from "./hoc-utils";
+import type { OperationOption, OptionProps, DataProps } from "./types";
 
 /**
  * @deprecated

@@ -1,13 +1,14 @@
-import * as React from "react";
+import React from "react";
 import gql from "graphql-tag";
 import { render, waitFor } from "@testing-library/react";
-import { ApolloClient, ApolloProvider, ApolloLink } from "@apollo/client";
 
-import { Operation } from "../../../../link/core";
+import { ApolloClient } from "../../../../core";
+import { ApolloProvider } from "../../../context";
+import { ApolloLink, Operation } from "../../../../link/core";
 import { itAsync, MockSubscriptionLink } from "../../../../testing";
 import { Subscription } from "../../Subscription";
 import { spyOnConsole } from "../../../../testing/internal";
-import { Hermes } from "../../../../../../src";
+import { Hermes as Cache } from "../../../../../../src";
 
 const results = [
   "Luke Skywalker",
@@ -30,7 +31,7 @@ const subscription = gql`
   }
 `;
 
-const cache = new Hermes({ addTypename: false });
+const cache = new Cache({ addTypename: false });
 const link = new MockSubscriptionLink();
 const client = new ApolloClient({
   link,
@@ -418,15 +419,15 @@ describe("should update", () => {
     const link2 = new MockSubscriptionLink();
     const client2 = new ApolloClient({
       link: link2,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     let count = 0;
-    const testFailures: any[] = [];
+    let testFailures: any[] = [];
 
     class Component extends React.Component {
       state = {
-        client,
+        client: client,
       };
 
       render() {
@@ -520,7 +521,7 @@ describe("should update", () => {
 
     const mockClient = new ApolloClient({
       link: linkCombined,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     let count = 0;

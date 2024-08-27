@@ -1,8 +1,9 @@
-// eslint-disable-next-line import/no-extraneous-dependencies
 import * as PropTypes from "prop-types";
 import type * as ReactTypes from "react";
-import { OperationVariables, useMutation } from "@apollo/client";
-import { MutationComponentOptions } from "@apollo/client/react/components";
+
+import type { OperationVariables } from "../../core/index";
+import type { MutationComponentOptions } from "./types";
+import { useMutation } from "../hooks/index";
 
 /**
  * @deprecated
@@ -10,10 +11,7 @@ import { MutationComponentOptions } from "@apollo/client/react/components";
  * This library is still included in the `@apollo/client` package,
  * but it no longer receives feature updates or bug fixes.
  */
-export function Mutation<
-  TData = any,
-  TVariables extends OperationVariables = OperationVariables,
->(
+export function Mutation<TData = any, TVariables = OperationVariables>(
   props: MutationComponentOptions<TData, TVariables>
 ): ReactTypes.JSX.Element | null {
   const [runMutation, result] = useMutation(props.mutation, props);

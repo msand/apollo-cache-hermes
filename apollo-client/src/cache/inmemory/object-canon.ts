@@ -1,12 +1,9 @@
-// eslint-disable-next-line import/no-extraneous-dependencies
 import { Trie } from "@wry/trie";
-
 import {
   canUseWeakMap,
   canUseWeakSet,
   isNonNullObject as isObjectOrArray,
 } from "../../utilities/index";
-
 import { isArray } from "./helpers";
 
 function shallowCopy<T>(value: T): T {
@@ -186,7 +183,6 @@ export class ObjectCanon {
     }
     return node.keys;
   }
-
   // Arrays that contain the same elements in a different order can share
   // the same SortedKeysInfo object, to save memory.
   private keysByJSON = new Map<string, SortedKeysInfo>();

@@ -4,22 +4,22 @@ import { ASTNode, print, stripIgnoredCharacters } from "graphql";
 import { TextDecoder } from "util";
 import { ReadableStream } from "web-streams-polyfill";
 import { Readable } from "stream";
-import { ApolloLink, execute } from "@apollo/client";
 
 import {
   Observable,
   Observer,
   ObservableSubscription,
 } from "../../../utilities/observables/Observable";
+import { ApolloLink } from "../../core/ApolloLink";
+import { execute } from "../../core/execute";
 import { PROTOCOL_ERRORS_SYMBOL } from "../../../errors";
 import { HttpLink } from "../HttpLink";
 import { createHttpLink } from "../createHttpLink";
 import { ClientParseError } from "../serializeFetchParameter";
 import { ServerParseError } from "../parseAndCheckHttpResponse";
 import { FetchResult, ServerError } from "../../..";
-import { itAsync } from "../../../testing";
-
 import { voidFetchDuringEachTest } from "./helpers";
+import { itAsync } from "../../../testing";
 
 const sampleQuery = gql`
   query SampleQuery {
@@ -163,7 +163,6 @@ describe("HttpLink", () => {
         });
         observable.subscribe({
           next,
-          // eslint-disable-next-line handle-callback-err
           error: (error) => expect(false),
           complete: () => {
             expect(next).toHaveBeenCalledTimes(1);
@@ -424,7 +423,6 @@ describe("HttpLink", () => {
           includeUnusedVariables: true,
         });
 
-        // eslint-disable-next-line prefer-const
         let b;
         const a: any = { b };
         b = { a };
@@ -456,7 +454,6 @@ describe("HttpLink", () => {
           includeExtensions: true,
         });
 
-        // eslint-disable-next-line prefer-const
         let b;
         const a: any = { b };
         b = { a };
@@ -493,7 +490,6 @@ describe("HttpLink", () => {
       console.warn = _warn;
     });
 
-    // eslint-disable-next-line jest/no-identical-title
     it("does not need any constructor arguments", () => {
       expect(() => createHttpLink()).not.toThrow();
     });
@@ -576,7 +572,7 @@ describe("HttpLink", () => {
         error: (error) => reject(error),
         complete: () => {
           try {
-            const body = convertBatchedBody(fetchMock.lastCall()![1]!.body);
+            let body = convertBatchedBody(fetchMock.lastCall()![1]!.body);
             expect(body.query).toBe(print(sampleMutation));
             expect(body.variables).toEqual({});
             expect(body.context).not.toBeDefined();
@@ -1082,7 +1078,7 @@ describe("HttpLink", () => {
 
         execute(link, { query: sampleQuery, variables }).subscribe(
           makeCallback(resolve, reject, () => {
-            const body = convertBatchedBody(fetchMock.lastCall()![1]!.body);
+            let body = convertBatchedBody(fetchMock.lastCall()![1]!.body);
 
             expect(body.query).not.toBeDefined();
             expect(body.extensions).toEqual({
@@ -1404,7 +1400,6 @@ describe("HttpLink", () => {
         includeUnusedVariables: true,
       });
 
-      // eslint-disable-next-line prefer-const
       let b;
       const a: any = { b };
       b = { a };
@@ -1663,7 +1658,7 @@ describe("HttpLink", () => {
             try {
               for (const line of lines) {
                 await new Promise((resolve) => setTimeout(resolve, 10));
-                controller.enqueue(`${line}\r\n`);
+                controller.enqueue(line + "\r\n");
               }
             } finally {
               controller.close();
@@ -1738,7 +1733,7 @@ describe("HttpLink", () => {
             try {
               for (const line of lines) {
                 await new Promise((resolve) => setTimeout(resolve, 10));
-                controller.enqueue(`${line}\r\n`);
+                controller.enqueue(line + "\r\n");
               }
             } finally {
               controller.close();
@@ -1797,7 +1792,7 @@ describe("HttpLink", () => {
 
       it("node stream bodies", (done) => {
         const stream = Readable.from(
-          body.split("\r\n").map((line) => `${line}\r\n`)
+          body.split("\r\n").map((line) => line + "\r\n")
         );
 
         const fetch = jest.fn(async () => ({
@@ -1863,7 +1858,7 @@ describe("HttpLink", () => {
         "sets correct accept header on request with deferred query",
         (resolve, reject) => {
           const stream = Readable.from(
-            body.split("\r\n").map((line) => `${line}\r\n`)
+            body.split("\r\n").map((line) => line + "\r\n")
           );
           const fetch = jest.fn(async () => ({
             status: 200,
@@ -1898,7 +1893,7 @@ describe("HttpLink", () => {
         "sets does not set accept header on query with custom directive begging with @defer",
         (resolve, reject) => {
           const stream = Readable.from(
-            body.split("\r\n").map((line) => `${line}\r\n`)
+            body.split("\r\n").map((line) => line + "\r\n")
           );
           const fetch = jest.fn(async () => ({
             status: 200,
@@ -1975,7 +1970,7 @@ describe("HttpLink", () => {
             try {
               for (const line of lines) {
                 await new Promise((resolve) => setTimeout(resolve, 10));
-                controller.enqueue(`${line}\r\n`);
+                controller.enqueue(line + "\r\n");
               }
             } finally {
               controller.close();
@@ -2040,14 +2035,14 @@ describe("HttpLink", () => {
         );
       });
 
-      it("whatwg stream bodies, warns if combined with @defer", () => {
+      test("whatwg stream bodies, warns if combined with @defer", () => {
         const stream = new ReadableStream({
           async start(controller) {
             const lines = subscriptionsBody.split("\r\n");
             try {
               for (const line of lines) {
                 await new Promise((resolve) => setTimeout(resolve, 10));
-                controller.enqueue(`${line}\r\n`);
+                controller.enqueue(line + "\r\n");
               }
             } finally {
               controller.close();
@@ -2078,7 +2073,7 @@ describe("HttpLink", () => {
 
       it("node stream bodies", (done) => {
         const stream = Readable.from(
-          subscriptionsBody.split("\r\n").map((line) => `${line}\r\n`)
+          subscriptionsBody.split("\r\n").map((line) => line + "\r\n")
         );
 
         const fetch = jest.fn(async () => ({
@@ -2139,7 +2134,7 @@ describe("HttpLink", () => {
 
       it("node stream bodies, with errors", (done) => {
         const stream = Readable.from(
-          subscriptionsBodyError.split("\r\n").map((line) => `${line}\r\n`)
+          subscriptionsBodyError.split("\r\n").map((line) => line + "\r\n")
         );
 
         const fetch = jest.fn(async () => ({
@@ -2203,7 +2198,7 @@ describe("HttpLink", () => {
         "sets correct accept header on request with subscription",
         (resolve, reject) => {
           const stream = Readable.from(
-            subscriptionsBody.split("\r\n").map((line) => `${line}\r\n`)
+            subscriptionsBody.split("\r\n").map((line) => line + "\r\n")
           );
           const fetch = jest.fn(async () => ({
             status: 200,

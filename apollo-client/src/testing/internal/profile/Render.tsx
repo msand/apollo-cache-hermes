@@ -11,7 +11,6 @@ As we only use this file in our internal tests, we can safely ignore it.
 
 import { within, screen } from "@testing-library/dom";
 import { JSDOM, VirtualConsole } from "jsdom";
-
 import { applyStackTrace, captureStackTrace } from "./traces";
 
 /** @internal */
@@ -195,7 +194,7 @@ export function errorOnDomInteraction() {
     throw new Error(`
     DOM interaction with a snapshot detected in test.
     Please don't interact with the DOM you get from \`withinDOM\`,
-    but still use \`screen\` to get elements for simulating user interaction.
+    but still use \`screen\' to get elements for simulating user interaction.
     `);
   }
   events.forEach((event) => {

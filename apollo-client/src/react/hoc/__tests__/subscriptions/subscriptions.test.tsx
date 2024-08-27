@@ -1,12 +1,15 @@
-import * as React from "react";
+import React from "react";
 import { act, render } from "@testing-library/react";
 import gql from "graphql-tag";
 import { DocumentNode } from "graphql";
-import { ApolloClient, ApolloProvider, ApolloLink } from "@apollo/client";
-import { graphql, ChildProps } from "@apollo/client/react/hoc";
 
-import { Hermes } from "../../../../../../src";
+import { ApolloClient } from "../../../../core";
+import { ApolloProvider } from "../../../context";
+import { Hermes as Cache } from "../../../../../../src";
+import { ApolloLink } from "../../../../link/core";
 import { itAsync, MockSubscriptionLink } from "../../../../testing";
+import { graphql } from "../../graphql";
+import { ChildProps } from "../../types";
 
 const IS_REACT_18 = React.version.startsWith("18");
 
@@ -44,7 +47,7 @@ describe("subscriptions", () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     interface Props {}
@@ -80,7 +83,7 @@ describe("subscriptions", () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     interface Variables {
@@ -117,7 +120,7 @@ describe("subscriptions", () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     let bar: any;
@@ -134,6 +137,7 @@ describe("subscriptions", () => {
       }
 
       render() {
+        // eslint-disable-next-line testing-library/no-node-access
         return this.props.children;
       }
     }
@@ -164,7 +168,7 @@ describe("subscriptions", () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     let count = 0;
@@ -218,8 +222,8 @@ describe("subscriptions", () => {
   });
 
   itAsync("resubscribes to a subscription", (resolve, reject) => {
-    // we make an extra Hoc which will trigger the inner HoC to resubscribe
-    // these are the results for the outer subscription
+    //we make an extra Hoc which will trigger the inner HoC to resubscribe
+    //these are the results for the outer subscription
     const triggerResults = [
       "0",
       "trigger resubscribe",
@@ -233,7 +237,7 @@ describe("subscriptions", () => {
       delay: 10,
     }));
 
-    // These are the results from the resubscription
+    //These are the results from the resubscription
     const results3 = [
       "NewUser: 1",
       "NewUser: 2",
@@ -274,7 +278,7 @@ describe("subscriptions", () => {
 
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     let count = 0;
@@ -328,7 +332,6 @@ describe("subscriptions", () => {
 
             count++;
           }
-
           render() {
             return null;
           }

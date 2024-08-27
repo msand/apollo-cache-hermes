@@ -1,18 +1,14 @@
 import gql from "graphql-tag";
-import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
-import {
-  ApolloClient,
-  NetworkStatus,
-  ApolloLink,
-  Observable,
-  ApolloQueryResult,
-  ObservableQuery,
-  WatchQueryFetchPolicy,
-  WatchQueryOptions,
-} from "@apollo/client";
 
-import { subscribeAndCount, itAsync, mockSingleLink } from "../../testing";
+import { ApolloClient, NetworkStatus } from "../../core";
+import { ApolloLink } from "../../link/core";
 import { Hermes } from "../../../../src";
+import { Observable } from "../../utilities";
+import { subscribeAndCount, itAsync, mockSingleLink } from "../../testing";
+import { TypedDocumentNode } from "@graphql-typed-document-node/core";
+import { WatchQueryFetchPolicy, WatchQueryOptions } from "../watchQueryOptions";
+import { ApolloQueryResult } from "../types";
+import { ObservableQuery } from "../ObservableQuery";
 
 const query = gql`
   query {
@@ -717,7 +713,7 @@ describe("cache-only", () => {
   });
 });
 
-describe("cache-and-network", () => {
+describe("cache-and-network", function () {
   itAsync(
     "gives appropriate networkStatus for refetched queries",
     (resolve, reject) => {

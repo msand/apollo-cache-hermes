@@ -1,7 +1,6 @@
 import gql from "graphql-tag";
-
 import "@testing-library/jest-dom";
-import { loadErrorMessageHandler } from "../../dev/loadErrorMessageHandler.js";
+import { loadErrorMessageHandler } from "../../dev/loadErrorMessageHandler";
 import "../../testing/matchers/index";
 
 // Turn off warnings for repeated fragment names

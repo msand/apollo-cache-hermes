@@ -1,16 +1,17 @@
-import * as React from "react";
+import React from "react";
 import gql from "graphql-tag";
 import { DocumentNode } from "graphql";
 import { render, screen, waitFor } from "@testing-library/react";
-import { ApolloClient, ApolloLink, ApolloProvider } from "@apollo/client";
-import { Query } from "@apollo/client/react/components";
 
-import { NetworkStatus } from "../../../../core";
+import { ApolloClient, NetworkStatus } from "../../../../core";
 import { ApolloError } from "../../../../errors";
+import { ApolloLink } from "../../../../link/core";
+import { Hermes } from "../../../../../../src";
+import { ApolloProvider } from "../../../context";
 import { itAsync, MockedProvider, mockSingleLink } from "../../../../testing";
+import { Query } from "../../Query";
 import { QueryResult } from "../../../types/types";
 import { profile } from "../../../../testing/internal";
-import { Hermes } from "../../../../../../src";
 
 const allPeopleQuery: DocumentNode = gql`
   query people {
@@ -133,7 +134,7 @@ describe("Query component", () => {
   });
 
   describe("result provides", () => {
-    const consoleWarn = console.warn;
+    let consoleWarn = console.warn;
     beforeAll(() => {
       console.warn = () => null;
     });
@@ -439,6 +440,7 @@ describe("Query component", () => {
 
       const POLL_INTERVAL = 5;
 
+      let unmount: any;
       const Component = () => (
         <Query query={allPeopleQuery}>
           {(result: any) => {
@@ -469,7 +471,7 @@ describe("Query component", () => {
         </Query>
       );
 
-      const unmount = render(
+      unmount = render(
         <MockedProvider mocks={mocks} addTypename={false}>
           <Component />
         </MockedProvider>
@@ -865,7 +867,7 @@ describe("Query component", () => {
       const mocks = [
         {
           request: { query: allPeopleQuery },
-          result: { data },
+          result: { data: data },
         },
       ];
 
@@ -993,7 +995,7 @@ describe("Query component", () => {
       const mockError = [
         {
           request: { query: allPeopleQuery },
-          error,
+          error: error,
         },
       ];
 
@@ -1779,6 +1781,7 @@ describe("Query component", () => {
         },
       ];
 
+      let unmount: any;
       let onErrorCallCount = 0;
       class Component extends React.Component {
         state = {
@@ -1786,12 +1789,10 @@ describe("Query component", () => {
             first: 1,
           },
         };
-
         onError = () => {
           onErrorCallCount += 1;
           this.setState({ causeUpdate: true });
         };
-
         render() {
           return (
             <Query
@@ -1810,7 +1811,7 @@ describe("Query component", () => {
         }
       }
 
-      const unmount = render(
+      unmount = render(
         <MockedProvider mocks={mockError} addTypename={false}>
           <Component />
         </MockedProvider>

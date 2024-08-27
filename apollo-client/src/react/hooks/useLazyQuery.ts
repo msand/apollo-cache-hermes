@@ -10,7 +10,6 @@ import type {
   LazyQueryResultTuple,
   NoInfer,
 } from "../types/types";
-
 import { useInternalState } from "./useQuery";
 import { useApolloClient } from "./useApolloClient";
 

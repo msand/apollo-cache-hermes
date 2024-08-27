@@ -1,12 +1,13 @@
 // externals
 import gql from "graphql-tag";
-import { GraphQLError } from "graphql";
+import { Hermes } from "../../../../../src";
 
 // mocks
 import { itAsync, MockSubscriptionLink } from "../../../testing/core";
+
 // core
 import { QueryManager } from "../../QueryManager";
-import { Hermes } from "../../../../../src";
+import { GraphQLError } from "graphql";
 
 describe("mutiple results", () => {
   itAsync("allows multiple query results from link", (resolve, reject) => {

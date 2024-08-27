@@ -2,7 +2,10 @@
 
 export type { ApolloClientOptions, DefaultOptions } from "./ApolloClient";
 export { ApolloClient, mergeOptions } from "./ApolloClient";
-export type { FetchMoreOptions, UpdateQueryOptions } from "./ObservableQuery";
+export type {
+  FetchMoreOptions,
+  UpdateQueryOptions,
+} from "./ObservableQuery";
 export { ObservableQuery } from "./ObservableQuery";
 export type {
   QueryOptions,

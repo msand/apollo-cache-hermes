@@ -1,23 +1,24 @@
-import * as React from "react";
+import React from "react";
 import { render } from "@testing-library/react";
 import gql from "graphql-tag";
 import { DocumentNode } from "graphql";
-import { ApolloClient, ApolloProvider, ApolloLink } from "@apollo/client";
-import { ChildProps } from "@apollo/client/react/hoc";
 
+import { ApolloClient } from "../../../core";
+import { ApolloProvider } from "../../context";
+import { Hermes as Cache } from "../../../../../src";
+import { ApolloLink } from "../../../link/core";
 import { itAsync, mockSingleLink } from "../../../testing";
 import { graphql } from "../graphql";
-import { DataValue } from "../types";
+import { ChildProps, DataValue } from "../types";
 import { withApollo } from "../withApollo";
-import { Hermes } from "../../../../../src";
 
 function compose(...funcs: Function[]) {
   const functions = funcs.reverse();
   return function (...args: any[]) {
     const [firstFunction, ...restFunctions] = functions;
-    let result = firstFunction(...args);
+    let result = firstFunction.apply(null, args);
     restFunctions.forEach((fnc) => {
-      result = fnc(result);
+      result = fnc.call(null, result);
     });
     return result;
   };
@@ -28,7 +29,7 @@ describe("shared operations", () => {
     it("passes apollo-client to props", () => {
       const client = new ApolloClient({
         link: new ApolloLink((o, f) => (f ? f(o) : null)),
-        cache: new Hermes(),
+        cache: new Cache(),
       });
 
       @withApollo
@@ -82,7 +83,7 @@ describe("shared operations", () => {
     );
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     interface PeopleChildProps {
@@ -165,7 +166,7 @@ describe("shared operations", () => {
     );
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     interface PeopleChildProps {
@@ -247,7 +248,7 @@ describe("shared operations", () => {
     );
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const withPeople = graphql(peopleQuery, { name: "people" });
@@ -297,7 +298,7 @@ describe("shared operations", () => {
     });
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     let queryExecuted = false;
@@ -306,7 +307,6 @@ describe("shared operations", () => {
         componentDidUpdate() {
           queryExecuted = true;
         }
-
         render() {
           expect(this.props.data).toBeUndefined();
           return null;
@@ -365,7 +365,7 @@ describe("shared operations", () => {
       );
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       interface PeopleChildProps {

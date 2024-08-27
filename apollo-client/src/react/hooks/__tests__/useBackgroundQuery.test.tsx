@@ -1,4 +1,4 @@
-import * as React from "react";
+import React, { Suspense } from "react";
 import { act, screen, renderHook } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
@@ -7,21 +7,14 @@ import {
 } from "react-error-boundary";
 import { expectTypeOf } from "expect-type";
 import { GraphQLError } from "graphql";
-import equal from "@wry/equality";
-import {
-  ApolloClient,
-  ApolloLink,
-  ApolloProvider,
-  skipToken,
-} from "@apollo/client";
-import { Suspense } from "react";
-
 import {
   gql,
   ApolloError,
+  ApolloClient,
   ErrorPolicy,
   NetworkStatus,
   TypedDocumentNode,
+  ApolloLink,
   Observable,
 } from "../../../core";
 import {
@@ -39,9 +32,13 @@ import {
 } from "../../../utilities";
 import { useBackgroundQuery } from "../useBackgroundQuery";
 import { UseReadQueryResult, useReadQuery } from "../useReadQuery";
+import { ApolloProvider } from "../../context";
 import { QueryRef, QueryReference } from "../../internal";
+import { Hermes } from "../../../../../src";
 import { SuspenseQueryHookFetchPolicy } from "../../types/types";
+import equal from "@wry/equality";
 import { RefetchWritePolicy } from "../../../core/watchQueryOptions";
+import { skipToken } from "../constants";
 import {
   PaginatedCaseData,
   Profiler,
@@ -57,7 +54,6 @@ import {
   spyOnConsole,
   useTrackRenders,
 } from "../../../testing/internal";
-import { Hermes } from "../../../../../src";
 
 afterEach(() => {
   jest.useRealTimers();
@@ -606,6 +602,7 @@ it("does not recreate queryRef or execute a network request when rerendering use
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
+  // eslint-disable-next-line testing-library/render-result-naming-convention
   const firstRender = await Profiler.takeRender();
   const initialQueryRef = firstRender.snapshot.queryRef;
 

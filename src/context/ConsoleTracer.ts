@@ -10,7 +10,7 @@ const INDENT = '  ';
  * By default it logs only warnings, but a verbose mode can be enabled to log
  * out all cache operations.
  */
-export class ConsoleTracer<TSerialized> implements Tracer<void> {
+export class ConsoleTracer implements Tracer<void> {
 
   // Used when emulating grouping behavior.
   private _indent = 0;
@@ -25,7 +25,7 @@ export class ConsoleTracer<TSerialized> implements Tracer<void> {
     this._emit('warn', message, ...metadata);
   }
 
-  readEnd(operation: OperationInstance<TSerialized>, info: Tracer.ReadInfo) {
+  readEnd(operation: OperationInstance, info: Tracer.ReadInfo) {
     if (!this._verbose) return;
     const message = this.formatOperation('read', operation);
     if (info.cacheHit) {
@@ -35,7 +35,7 @@ export class ConsoleTracer<TSerialized> implements Tracer<void> {
     }
   }
 
-  writeEnd(operation: OperationInstance<TSerialized>, info: Tracer.WriteInfo<TSerialized>) {
+  writeEnd(operation: OperationInstance, info: Tracer.WriteInfo) {
     if (!this._verbose) return;
     const { payload, newSnapshot, warnings } = info;
     const message = this.formatOperation('write', operation);
@@ -60,7 +60,7 @@ export class ConsoleTracer<TSerialized> implements Tracer<void> {
     }
   }
 
-  protected formatOperation(action: string, operation: OperationInstance<TSerialized>) {
+  protected formatOperation(action: string, operation: OperationInstance) {
     const { operationType, operationName } = operation.info;
     return `${action}(${operationType} ${operationName})`;
   }

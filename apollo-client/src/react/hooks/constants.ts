@@ -1,3 +1,2 @@
-import { skipToken } from "@apollo/client";
-export { skipToken } from "@apollo/client";
+export const skipToken = Symbol.for("apollo.skipToken");
 export type SkipToken = typeof skipToken;

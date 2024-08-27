@@ -1,6 +1,4 @@
-import { ApolloClient } from "@apollo/client";
-import gql from "graphql-tag";
-
+import { ApolloClient, gql } from "../../core";
 import { Hermes } from "../../../../src";
 
 /**
@@ -23,7 +21,7 @@ const setupClientWithLocalQueryResolver = (localQueryResolver: any) => {
 };
 
 describe("LocalState", () => {
-  it("resolver info field provides information about named fragments", async () => {
+  test("resolver info field provides information about named fragments", async () => {
     // Create client with local resolver
     const localQueryResolver = jest.fn().mockReturnValue({
       __typename: "LocalQueryResponse",

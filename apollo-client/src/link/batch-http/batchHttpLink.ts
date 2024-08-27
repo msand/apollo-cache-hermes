@@ -1,6 +1,5 @@
-import { ApolloLink } from "@apollo/client";
-
 import type { Operation, FetchResult } from "../core/index";
+import { ApolloLink } from "../core/index";
 import {
   Observable,
   hasDirectives,
@@ -44,8 +43,7 @@ export class BatchHttpLink extends ApolloLink {
   constructor(fetchParams?: BatchHttpLink.Options) {
     super();
 
-    const params = fetchParams || ({} as BatchHttpLink.Options);
-    const {
+    let {
       uri = "/graphql",
       // use default global fetch if nothing is passed in
       fetch: preferredFetch,
@@ -55,11 +53,10 @@ export class BatchHttpLink extends ApolloLink {
       batchInterval,
       batchDebounce,
       batchMax,
-      batchKey: _,
+      batchKey,
       includeUnusedVariables = false,
       ...requestOptions
-    } = params;
-    let { batchKey } = params;
+    } = fetchParams || ({} as BatchHttpLink.Options);
 
     if (__DEV__) {
       // Make sure at least one of preferredFetch, window.fetch, or backupFetch
@@ -122,7 +119,7 @@ export class BatchHttpLink extends ApolloLink {
         );
       }
 
-      // uses fallback, link, and then context to build options
+      //uses fallback, link, and then context to build options
       const optsAndBody = operations.map((operation, index) => {
         const result = selectHttpOptionsAndBodyInternal(
           { ...operation, query: queries[index]! },
@@ -251,7 +248,7 @@ export class BatchHttpLink extends ApolloLink {
           headers: context.headers,
         };
 
-        // may throw error if config not serializable
+        //may throw error if config not serializable
         return selectURI(operation, uri) + JSON.stringify(contextConfig);
       });
 

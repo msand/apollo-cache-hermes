@@ -1,8 +1,5 @@
 import type { DocumentNode } from "graphql";
-// eslint-disable-next-line import/no-extraneous-dependencies
 import { wrap } from "optimism";
-// eslint-disable-next-line import/no-extraneous-dependencies
-import { WeakCache } from "@wry/caches";
 
 import type {
   StoreObject,
@@ -16,13 +13,16 @@ import {
   getFragmentQueryDocument,
   mergeDeepArray,
 } from "../../utilities/index";
-import { getApolloCacheMemoryInternals } from "../../utilities/caching/getMemoryInternals";
-import type { OperationVariables, TypedDocumentNode } from "../../core/types";
-import { equalByQuery } from "../../core/equalByQuery";
-
 import type { DataProxy } from "./types/DataProxy";
 import type { Cache } from "./types/Cache";
+import { WeakCache } from "@wry/caches";
+import { getApolloCacheMemoryInternals } from "../../utilities/caching/getMemoryInternals";
+import type {
+  OperationVariables,
+  TypedDocumentNode,
+} from "../../core/types";
 import type { MissingTree } from "./types/common";
+import { equalByQuery } from "../../core/equalByQuery";
 
 export type Transaction<T> = (c: ApolloCache<T>) => void;
 
@@ -105,11 +105,9 @@ export abstract class ApolloCache<TSerialized> implements DataProxy {
   public abstract read<TData = any, TVariables = any>(
     query: Cache.ReadOptions<TVariables, TData>
   ): TData | null;
-
   public abstract write<TData = any, TVariables = any>(
     write: Cache.WriteOptions<TData, TVariables>
   ): Reference | undefined;
-
   public abstract diff<T>(query: Cache.DiffOptions): Cache.DiffResult<T>;
   public abstract watch<TData = any, TVariables = any>(
     watch: Cache.WatchOptions<TData, TVariables>
@@ -201,7 +199,7 @@ export abstract class ApolloCache<TSerialized> implements DataProxy {
   }
 
   public identify(object: StoreObject | Reference): string | undefined {
-    return undefined;
+    return;
   }
 
   public gc(): string[] {
@@ -329,13 +327,13 @@ export abstract class ApolloCache<TSerialized> implements DataProxy {
 
   public updateQuery<TData = any, TVariables = any>(
     options: Cache.UpdateQueryOptions<TData, TVariables>,
-    update: (data: TData | null) => TData | null | undefined
+    update: (data: TData | null) => TData | null | void
   ): TData | null {
     return this.batch({
       update(cache) {
         const value = cache.readQuery<TData, TVariables>(options);
         const data = update(value);
-        if (data === undefined || data === null) return value;
+        if (data === void 0 || data === null) return value;
         cache.writeQuery<TData, TVariables>({ ...options, data });
         return data;
       },
@@ -344,13 +342,13 @@ export abstract class ApolloCache<TSerialized> implements DataProxy {
 
   public updateFragment<TData = any, TVariables = any>(
     options: Cache.UpdateFragmentOptions<TData, TVariables>,
-    update: (data: TData | null) => TData | null | undefined
+    update: (data: TData | null) => TData | null | void
   ): TData | null {
     return this.batch({
       update(cache) {
         const value = cache.readFragment<TData, TVariables>(options);
         const data = update(value);
-        if (data === undefined || data === null) return value;
+        if (data === void 0 || data === null) return value;
         cache.writeFragment<TData, TVariables>({ ...options, data });
         return data;
       },

@@ -1,12 +1,14 @@
+import { invariant } from "../../../utilities/globals/index";
+
 import { equal } from "@wry/equality";
-import {
+
+import type {
   Operation,
   GraphQLRequest,
   FetchResult,
-  ApolloLink,
-} from "@apollo/client";
+} from "../../../link/core/index";
+import { ApolloLink } from "../../../link/core/index";
 
-import { invariant } from "../../../utilities/globals/index";
 import {
   Observable,
   addTypenameToDocument,
@@ -143,8 +145,9 @@ ${unmatchedVars.map((d) => `  ${stringifyForDisplay(d)}`).join("\n")}
 
       if (this.showWarnings) {
         console.warn(
-          `${configError.message}\nThis typically indicates a configuration error in your mocks ` +
-            `setup, usually due to a typo or mismatched variable.`
+          configError.message +
+            "\nThis typically indicates a configuration error in your mocks " +
+            "setup, usually due to a typo or mismatched variable."
         );
       }
     } else {

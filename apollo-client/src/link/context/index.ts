@@ -1,6 +1,5 @@
-import { ApolloLink } from "@apollo/client";
-
 import type { Operation, GraphQLRequest, NextLink } from "../core/index";
+import { ApolloLink } from "../core/index";
 import type { ObservableSubscription } from "../../utilities/index";
 import { Observable } from "../../utilities/index";
 import type { DefaultContext } from "../../core/index";

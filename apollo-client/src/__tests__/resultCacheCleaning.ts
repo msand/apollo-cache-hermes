@@ -1,11 +1,7 @@
 import { makeExecutableSchema } from "@graphql-tools/schema";
-import {
-  ApolloClient,
-  Resolvers,
-  gql,
-  NormalizedCacheObject,
-} from "@apollo/client";
 
+import { ApolloClient, Resolvers, gql } from "../core";
+import { NormalizedCacheObject } from "../cache";
 import { SchemaLink } from "../link/schema";
 import { Hermes } from "../../../src";
 
@@ -155,7 +151,7 @@ describe("resultCache cleaning", () => {
   });
 
   afterEach(() => {
-    const storeReader = client.cache["storeReader"];
+    const storeReader = (client.cache as unknown as Hermes)["storeReader"];
     expect(storeReader["executeSubSelectedArray"].size).toBeGreaterThan(0);
     expect(storeReader["executeSelectionSet"].size).toBeGreaterThan(0);
     client.cache.evict({

@@ -1,18 +1,12 @@
+import { invariant, newInvariantError } from "../../utilities/globals/index";
+
 import type {
   InlineFragmentNode,
   FragmentDefinitionNode,
   SelectionSetNode,
   FieldNode,
 } from "graphql";
-import {
-  ApolloCache,
-  ReadMergeModifyContext,
-  FieldFunctionOptions as ApolloFieldFunctionOptions, InMemoryCache,
-} from "@apollo/client";
-import { NormalizedCache } from "@apollo/client/cache";
-import { WriteContext } from "@apollo/client/cache/inmemory/writeToStore";
 
-import { invariant, newInvariantError } from "../../utilities/globals/index";
 import type {
   FragmentMap,
   StoreValue,
@@ -28,15 +22,11 @@ import {
   stringifyForDisplay,
 } from "../../utilities/index";
 import type {
-  SafeReadonly,
-  FieldSpecifier,
-  ToReferenceFunction,
-  ReadFieldFunction,
-  ReadFieldOptions,
-  CanReadFunction,
-} from "../core/types/common";
-
-import type { IdGetter, MergeInfo } from "./types";
+  IdGetter,
+  MergeInfo,
+  NormalizedCache,
+  ReadMergeModifyContext,
+} from "./types";
 import {
   hasOwn,
   fieldNameFromStoreName,
@@ -47,6 +37,17 @@ import {
   isArray,
 } from "./helpers";
 import { cacheSlot } from "./reactiveVars";
+import type { InMemoryCache } from "./inMemoryCache";
+import type {
+  SafeReadonly,
+  FieldSpecifier,
+  ToReferenceFunction,
+  ReadFieldFunction,
+  ReadFieldOptions,
+  CanReadFunction,
+} from "../core/types/common";
+import type { WriteContext } from "./writeToStore";
+
 import {
   keyArgsFnFromSpecifier,
   keyFieldsFnFromSpecifier,
@@ -203,7 +204,7 @@ export interface FieldFunctionOptions<
   // if your read function does any expensive work.
   storage: StorageType;
 
-  cache: ApolloCache<any>;
+  cache: InMemoryCache;
 
   // Helper function for reading other fields within the current object.
   // If a foreign object or reference is provided, the field will be read
@@ -310,11 +311,10 @@ export class Policies {
   // means no fuzzy subtype checking will happen in fragmentMatches.
   private fuzzySubtypes = new Map<string, RegExp>();
 
-  public readonly cache: ApolloCache<any>;
+  public readonly cache: InMemoryCache;
 
   public readonly rootIdsByTypename: Record<string, string> =
     Object.create(null);
-
   public readonly rootTypenamesById: Record<string, string> =
     Object.create(null);
 
@@ -322,7 +322,7 @@ export class Policies {
 
   constructor(
     private config: {
-      cache: ApolloCache<any>;
+      cache: InMemoryCache;
       dataIdFromObject?: KeyFieldsFunction;
       possibleTypes?: PossibleTypesMap;
       typePolicies?: TypePolicies;
@@ -381,7 +381,7 @@ export class Policies {
         function () {
           const options = normalizeReadFieldOptions(arguments, storeObject);
           return policies.readField(options, {
-            store: (policies.cache as InMemoryCache)["data"],
+            store: policies.cache["data"],
             variables: options.variables,
           });
         },
@@ -515,7 +515,7 @@ export class Policies {
     which: "Query" | "Mutation" | "Subscription",
     typename: string = which
   ) {
-    const rootId = `ROOT_${which.toUpperCase()}`;
+    const rootId = "ROOT_" + which.toUpperCase();
     const old = this.rootTypenamesById[rootId];
     if (typename !== old) {
       invariant(
@@ -804,7 +804,7 @@ export class Policies {
     // of the field, so we can always figure out which properties of a
     // StoreObject correspond to which original field names.
     return fieldName === fieldNameFromStoreName(storeFieldName) ? storeFieldName
-      : `${fieldName}:${storeFieldName}`;
+      : fieldName + ":" + storeFieldName;
   }
 
   public readField<V = StoreValue>(
@@ -938,7 +938,7 @@ export class Policies {
         },
         context,
         storage || Object.create(null)
-      ) as ApolloFieldFunctionOptions
+      )
     );
   }
 }

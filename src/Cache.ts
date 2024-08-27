@@ -1,5 +1,10 @@
-import { Cache as CacheInterface, TypePolicies } from '@apollo/client';
-import { Reference, StoreObject } from '@apollo/client/utilities';
+import {
+  Cache as CacheInterface,
+  TypePolicies,
+  Reference,
+  StoreObject,
+  NormalizedCacheObject,
+} from '../apollo-client/src/cache';
 
 import { CacheSnapshot } from './CacheSnapshot';
 import { CacheTransaction } from './CacheTransaction';
@@ -17,8 +22,13 @@ import { NodeReference } from './nodes';
 
 import BatchOptions = CacheInterface.BatchOptions;
 
+type BroadcastOptions = Pick<
+    BatchOptions<Hermes>,
+    'optimistic' | 'onWatchUpdated'
+>;
+
 export { MigrationMap };
-export type TransactionCallback<TSerialized> = (transaction: CacheTransaction<TSerialized>) => any;
+export type TransactionCallback = (transaction: CacheTransaction) => any;
 
 /**
  * The Hermes cache.
@@ -26,25 +36,25 @@ export type TransactionCallback<TSerialized> = (transaction: CacheTransaction<TS
  * @see https://github.com/apollographql/apollo-client/issues/1971
  * @see https://github.com/apollographql/apollo-client/blob/2.0-alpha/src/data/cache.ts
  */
-export class Cache<TSerialized = GraphSnapshot> implements Queryable {
+export class Cache implements Queryable {
 
   /** The cache-wide configuration. */
-  private _context: CacheContext<TSerialized>;
+  private _context: CacheContext;
 
   /** The current version of the cache. */
   private _snapshot: CacheSnapshot;
 
   /** All active query observers. */
-  private _observers: QueryObserver<TSerialized>[] = [];
-  private _cacheInstance: Hermes<TSerialized> | undefined;
-  private _transactions: CacheTransaction<TSerialized>[] = [];
+  private _observers: QueryObserver[] = [];
+  private _cacheInstance: Hermes | undefined;
+  private _transactions: CacheTransaction[] = [];
   private _editedNodeIds: Set<NodeId> = new Set();
   public readonly entityIdForValue: CacheContext.EntityIdForValue;
   public readonly typePolicies: TypePolicies | undefined;
 
   constructor(
-    configuration: CacheContext.Configuration<TSerialized> | undefined,
-    cacheInstance: Hermes<TSerialized> | undefined = undefined
+    configuration: CacheContext.Configuration | undefined,
+    cacheInstance: Hermes | undefined = undefined
   ) {
     const initialGraphSnapshot = new GraphSnapshot();
     this._snapshot = new CacheSnapshot(initialGraphSnapshot, initialGraphSnapshot, new OptimisticUpdateQueue());
@@ -98,8 +108,10 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
         // will be visited in later iterations of the forEach loop only if they
         // were not previously contained by the Set.
         const node = snapshot[id];
-        node.outbound?.forEach(addRef);
-        node.parameterized?.forEach(addRefs);
+        if (node) {
+          node.outbound?.forEach(addRef);
+          node.parameterized?.forEach(addRefs);
+        }
         // By removing IDs from the snapshot object here, we protect them from
         // getting removed from the root store layer below.
         delete snapshot[id];
@@ -123,7 +135,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     return this._context.transformDocument(document);
   }
 
-  restore(data: Serializable.GraphSnapshot, migrationMap?: MigrationMap, verifyQuery?: RawOperation) {
+  restore(data: NormalizedCacheObject | Serializable.GraphSnapshot, migrationMap?: MigrationMap, verifyQuery?: RawOperation) {
     const { cacheSnapshot, editedNodeIds } = restore(data, this._context);
     const migrated = migrate(cacheSnapshot, migrationMap);
     if (verifyQuery && !read(this._context, verifyQuery, migrated.baseline, Object.create(null), false).complete) {
@@ -212,32 +224,32 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
    */
   transaction(
     broadcast: boolean | undefined,
-    callback: TransactionCallback<TSerialized>
+    callback: TransactionCallback
   ): boolean;
 
   transaction(
     broadcast: boolean | undefined,
-    changeIdOrCallback: ChangeId, callback: TransactionCallback<TSerialized>
+    changeIdOrCallback: ChangeId, callback: TransactionCallback
   ): boolean;
 
   transaction(
     broadcast: boolean | undefined,
     changeIdOrCallback: ChangeId | null | undefined,
-    callback: TransactionCallback<TSerialized>,
-    onWatchUpdated?: BatchOptions<Hermes<TSerialized>>['onWatchUpdated'],
+    callback: TransactionCallback,
+    onWatchUpdated?: BroadcastOptions['onWatchUpdated'],
   ): boolean;
 
   transaction(
     broadcast: boolean | undefined,
-    changeIdOrCallback: ChangeId | TransactionCallback<TSerialized> | undefined | null,
-    callback?: TransactionCallback<TSerialized>,
-    onWatchUpdated?: CacheInterface.BatchOptions<Hermes<TSerialized>>['onWatchUpdated']
+    changeIdOrCallback: ChangeId | TransactionCallback | undefined | null,
+    callback?: TransactionCallback,
+    onWatchUpdated?: BroadcastOptions['onWatchUpdated']
   ): boolean {
     const { tracer } = this._context;
 
     let changeId;
     if (typeof callback !== 'function') {
-      callback = changeIdOrCallback as TransactionCallback<TSerialized>;
+      callback = changeIdOrCallback as TransactionCallback;
     } else {
       changeId = changeIdOrCallback as ChangeId;
     }
@@ -310,7 +322,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
   /**
    * Unregister an observer.
    */
-  private _removeObserver(observer: QueryObserver<TSerialized>): void {
+  private _removeObserver(observer: QueryObserver): void {
     const index = this._observers.findIndex(o => o === observer);
     if (index < 0) return;
     this._observers.splice(index, 1);
@@ -324,7 +336,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     snapshot: CacheSnapshot,
     editedNodeIds: Set<NodeId>,
     broadcast: boolean | undefined = true,
-    onWatchUpdated?: BatchOptions<Hermes<TSerialized>>['onWatchUpdated'],
+    onWatchUpdated?: BroadcastOptions['onWatchUpdated'],
   ): void {
     const lastSnapshot = this._snapshot;
     this._snapshot = snapshot;
@@ -356,16 +368,13 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     }
   }
 
-  public broadcastWatches(options?: Pick<
-    BatchOptions<Hermes<TSerialized>>,
-    'optimistic' | 'onWatchUpdated'
-  >) {
+  public broadcastWatches(options?: Pick<BroadcastOptions, 'onWatchUpdated' | 'optimistic'>) {
     this._broadcastWatches(this._editedNodeIds, options?.onWatchUpdated, options?.optimistic);
   }
 
   private _broadcastWatches(
     editedNodeIds: Set<NodeId>,
-    onWatchUpdated?: BatchOptions<Hermes<TSerialized>>['onWatchUpdated'],
+    onWatchUpdated?: BroadcastOptions['onWatchUpdated'],
     optimistic: string | boolean | undefined = true,
   ) {
     const snapshot = this._snapshot;

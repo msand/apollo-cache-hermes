@@ -1,12 +1,11 @@
 import gql from "graphql-tag";
+import { execute } from "../../core/execute";
+import { HttpLink } from "../HttpLink";
+import { itAsync, subscribeAndCount } from "../../../testing";
 import type { Observable } from "zen-observable-ts";
 import { TextEncoder, TextDecoder } from "util";
 import { ReadableStream } from "web-streams-polyfill";
 import { Readable } from "stream";
-
-import { itAsync, subscribeAndCount } from "../../../testing";
-import { HttpLink } from "../HttpLink";
-import { execute } from "../../core/execute";
 
 // As of Jest 26 there is no way to mock/unmock a module that is used indirectly
 // via a single test file.
@@ -46,7 +45,7 @@ function matchesResults<T>(
   // doesn’t have anything like that.
   subscribeAndCount(reject, observable, (count, result) => {
     // subscribeAndCount is 1-indexed for some terrible reason.
-    if (count <= 0 || count > results.length) {
+    if (0 >= count || count > results.length) {
       reject(new Error("Unexpected result"));
     }
 
@@ -187,7 +186,7 @@ describe("multipart responses", () => {
         const lines = bodyCustomBoundary.split("\r\n");
         try {
           for (const line of lines) {
-            controller.enqueue(`${line}\r\n`);
+            controller.enqueue(line + "\r\n");
           }
         } finally {
           controller.close();
@@ -216,8 +215,8 @@ describe("multipart responses", () => {
     (resolve, reject) => {
       const stream = new ReadableStream({
         async start(controller) {
-          const chunks: Array<string> = [];
-          const chunkSize = 15;
+          let chunks: Array<string> = [];
+          let chunkSize = 15;
           for (let i = 0; i < bodyCustomBoundary.length; i += chunkSize) {
             chunks.push(bodyCustomBoundary.slice(i, i + chunkSize));
           }
@@ -253,7 +252,7 @@ describe("multipart responses", () => {
     "can handle node stream bodies (strings) with default boundary",
     (resolve, reject) => {
       const stream = Readable.from(
-        bodyDefaultBoundary.split("\r\n").map((line) => `${line}\r\n`)
+        bodyDefaultBoundary.split("\r\n").map((line) => line + "\r\n")
       );
 
       const fetch = jest.fn(async () => ({
@@ -276,8 +275,8 @@ describe("multipart responses", () => {
   itAsync(
     "can handle node stream bodies (strings) with arbitrary splits",
     (resolve, reject) => {
-      const chunks: Array<string> = [];
-      const chunkSize = 15;
+      let chunks: Array<string> = [];
+      let chunkSize = 15;
       for (let i = 0; i < bodyCustomBoundary.length; i += chunkSize) {
         chunks.push(bodyCustomBoundary.slice(i, i + chunkSize));
       }
@@ -305,7 +304,7 @@ describe("multipart responses", () => {
       const stream = Readable.from(
         bodyDefaultBoundary
           .split("\r\n")
-          .map((line) => new TextEncoder().encode(`${line}\r\n`))
+          .map((line) => new TextEncoder().encode(line + "\r\n"))
       );
 
       const fetch = jest.fn(async () => ({
@@ -331,7 +330,7 @@ describe("multipart responses", () => {
       const stream = Readable.from(
         bodyBatchedResults
           .split("\r\n")
-          .map((line) => new TextEncoder().encode(`${line}\r\n`))
+          .map((line) => new TextEncoder().encode(line + "\r\n"))
       );
 
       const fetch = jest.fn(async () => ({

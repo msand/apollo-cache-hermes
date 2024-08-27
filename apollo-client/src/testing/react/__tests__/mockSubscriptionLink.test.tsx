@@ -1,11 +1,12 @@
-import * as React from "react";
+import React from "react";
 import { render, waitFor } from "@testing-library/react";
 import gql from "graphql-tag";
-import { ApolloClient, ApolloProvider } from "@apollo/client";
 
 import { MockSubscriptionLink } from "../../core";
+import { ApolloClient } from "../../../core";
+import { Hermes as Cache } from "../../../../../src";
+import { ApolloProvider } from "../../../react/context";
 import { useSubscription } from "../../../react/hooks";
-import { Hermes } from "../../../../../src";
 
 const IS_REACT_18 = React.version.startsWith("18");
 const IS_REACT_19 = React.version.startsWith("19");
@@ -23,7 +24,7 @@ describe("mockSubscriptionLink", () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     let renderCountA = 0;

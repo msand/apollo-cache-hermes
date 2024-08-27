@@ -1,5 +1,4 @@
 import type { MatcherFunction } from "expect";
-
 import type { QueryRef } from "../../react/internal/index";
 import {
   assertWrappedQueryRef,

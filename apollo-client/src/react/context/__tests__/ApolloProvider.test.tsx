@@ -1,21 +1,20 @@
-import * as React from "react";
+import React, { useContext } from "react";
 import { render, screen } from "@testing-library/react";
-import { ApolloClient, ApolloLink, ApolloProvider } from "@apollo/client";
-import { useContext } from "react";
 
+import { ApolloLink } from "../../../link/core";
+import { ApolloClient } from "../../../core";
+import { Hermes as Cache } from "../../../../../src";
+import { ApolloProvider, ApolloProviderProps } from "../ApolloProvider";
 import { ApolloContextValue, getApolloContext } from "../ApolloContext";
-import { Hermes } from "../../../../../src";
-
-type ApolloProviderProps = Parameters<typeof ApolloProvider>[0];
 
 describe("<ApolloProvider /> Component", () => {
   const client = new ApolloClient({
-    cache: new Hermes(),
+    cache: new Cache(),
     link: new ApolloLink((o, f) => (f ? f(o) : null)),
   });
 
   const anotherClient = new ApolloClient({
-    cache: new Hermes(),
+    cache: new Cache(),
     link: new ApolloLink((o, f) => (f ? f(o) : null)),
   });
 
@@ -100,7 +99,7 @@ describe("<ApolloProvider /> Component", () => {
     );
 
     const newClient = new ApolloClient({
-      cache: new Hermes(),
+      cache: new Cache(),
       link: new ApolloLink((o, f) => (f ? f(o) : null)),
     });
     clientToCheck = newClient;
@@ -114,8 +113,8 @@ describe("<ApolloProvider /> Component", () => {
   describe.each<
     [
       string,
-      Omit<ApolloProviderProps, "children">,
-      Omit<ApolloProviderProps, "children">,
+      Omit<ApolloProviderProps<any>, "children">,
+      Omit<ApolloProviderProps<any>, "children">,
     ]
   >([["client", { client }, { client: anotherClient }]])(
     "context value stability, %s prop",

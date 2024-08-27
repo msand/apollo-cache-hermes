@@ -1,10 +1,9 @@
-import gql from "graphql-tag";
-
 import { validateOperation } from "../validateOperation";
+import gql from "graphql-tag";
 
 describe("validateOperation", () => {
   it("should throw when invalid field in operation", () => {
-    expect(() => validateOperation({ qwerty: "" } as any)).toThrow();
+    expect(() => validateOperation(<any>{ qwerty: "" })).toThrow();
   });
 
   it("should not throw when valid fields in operation", () => {

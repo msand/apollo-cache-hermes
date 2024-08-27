@@ -1,8 +1,7 @@
 import { NormalizedCacheObject, StoreObject } from "../types";
 import { EntityStore } from "../entityStore";
-import {Hermes} from "../../../../../src";
-import {Policies} from "@apollo/client/cache";
-import {InMemoryCache} from "@apollo/client";
+import { Policies } from "../policies";
+import { Hermes } from "../../../../../src";
 
 describe("Optimistic EntityStore layering", () => {
   function makeLayer(root: EntityStore) {
@@ -26,7 +25,7 @@ describe("Optimistic EntityStore layering", () => {
     const underlyingStore = new EntityStore.Root({
       seed: data,
       policies: new Policies({
-        cache: new Hermes() as unknown as InMemoryCache,
+        cache: new Hermes(),
       }),
     });
 
@@ -69,7 +68,7 @@ describe("Optimistic EntityStore layering", () => {
     const underlyingStore = new EntityStore.Root({
       seed: data,
       policies: new Policies({
-        cache: new Hermes() as unknown as InMemoryCache,
+        cache: new Hermes(),
       }),
     });
     let store = makeLayer(underlyingStore);

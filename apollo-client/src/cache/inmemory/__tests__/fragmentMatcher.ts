@@ -1,7 +1,7 @@
 import gql from "graphql-tag";
-import { visit, FragmentDefinitionNode } from "graphql";
 
 import { itAsync } from "../../../testing";
+import { visit, FragmentDefinitionNode } from "graphql";
 import { hasOwn } from "../helpers";
 import { Hermes } from "../../../../../src";
 

@@ -1,11 +1,10 @@
 import gql from "graphql-tag";
-import { GraphQLError } from "graphql";
-import { ApolloClient } from "@apollo/client";
 
-import { FetchResult } from "../core";
+import { ApolloClient, FetchResult } from "../core";
 import { ApolloError, PROTOCOL_ERRORS_SYMBOL } from "../errors";
 import { QueryManager } from "../core/QueryManager";
 import { itAsync, mockObservableLink } from "../testing";
+import { GraphQLError } from "graphql";
 import { spyOnConsole } from "../testing/internal";
 import { Hermes } from "../../../src";
 
@@ -84,7 +83,7 @@ describe("GraphQL Subscriptions", () => {
       cache: new Hermes({ addTypename: false }),
     });
 
-    const count = 0;
+    let count = 0;
     const sub = client.subscribe(options).subscribe({
       next(result) {
         expect(result).toEqual(results[0].result);

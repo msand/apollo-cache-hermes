@@ -1,10 +1,11 @@
 import React from "react";
 import { render } from "@testing-library/react";
 import gql from "graphql-tag";
-import { ApolloProvider } from "@apollo/client";
-import { graphql, ChildProps } from "@apollo/client/react/hoc";
 
+import { ApolloProvider } from "../../../context/ApolloProvider";
 import { itAsync, createMockClient } from "../../../../testing/core";
+import { graphql } from "../../graphql";
+import { ChildProps } from "../../types";
 
 const query = gql`
   mutation addPerson($id: Int) {
@@ -134,7 +135,6 @@ describe("graphql(mutation) lifecycle", () => {
             resolve();
           });
         }
-
         render() {
           return null;
         }

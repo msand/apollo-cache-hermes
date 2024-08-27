@@ -1,20 +1,21 @@
 import type * as ReactTypes from "react";
 import type { DocumentNode } from "graphql";
 import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
-import {
-  ApolloClient,
-  ApolloCache,
-  ObservableQuery,
-  OperationVariables,
-  DefaultContext,
-} from "@apollo/client";
 
-import type { Observable, ObservableSubscription } from "../../utilities/index";
+import type {
+  Observable,
+  ObservableSubscription,
+} from "../../utilities/index";
 import type { FetchResult } from "../../link/core/index";
 import type { ApolloError } from "../../errors/index";
 import type {
+  ApolloCache,
+  ApolloClient,
+  DefaultContext,
   FetchPolicy,
   NetworkStatus,
+  ObservableQuery,
+  OperationVariables,
   InternalRefetchQueriesInclude,
   WatchQueryOptions,
   WatchQueryFetchPolicy,

@@ -1,8 +1,10 @@
 import gql from "graphql-tag";
 import { print } from "graphql";
-import { ApolloClient, Observable, ApolloLink } from "@apollo/client";
 
+import { Observable } from "../../utilities";
 import { itAsync } from "../../testing";
+import { ApolloLink } from "../../link/core";
+import { ApolloClient } from "../../core";
 import { spyOnConsole } from "../../testing/internal";
 import { Hermes } from "../../../../src";
 

@@ -43,7 +43,6 @@ try {
         } finally {
           // If .set or .delete fails, the exception will be silently swallowed
           // by this return-from-finally statement:
-          // eslint-disable-next-line no-unsafe-finally
           return method.call(Object, obj);
         }
       }) as M)

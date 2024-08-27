@@ -1,17 +1,12 @@
 import type { DocumentNode } from "graphql";
 import type * as ReactTypes from "react";
-import { OperationVariables } from "@apollo/client";
-import {
-  OperationOption,
-  DataProps,
-  MutateProps,
-} from "@apollo/client/react/hoc";
 
 import { parser, DocumentType } from "../parser/index";
-
 import { withQuery } from "./query-hoc";
 import { withMutation } from "./mutation-hoc";
 import { withSubscription } from "./subscription-hoc";
+import type { OperationOption, DataProps, MutateProps } from "./types";
+import type { OperationVariables } from "../../core/index";
 
 /**
  * @deprecated

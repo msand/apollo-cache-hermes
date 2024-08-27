@@ -37,12 +37,11 @@ export class OperationBatcher {
     string,
     ReturnType<typeof setTimeout>
   >();
-
   private batchDebounce?: boolean;
   private batchInterval?: number;
   private batchMax: number;
 
-  // This function is called to the queries in the queue to the server.
+  //This function is called to the queries in the queue to the server.
   private batchHandler: BatchHandler;
   private batchKey: (operation: Operation) => string;
 
@@ -171,10 +170,10 @@ export class OperationBatcher {
       this.batchHandler(operations, forwards) || Observable.of();
 
     const onError = (error: Error) => {
-      // each callback list in batch
+      //each callback list in batch
       errors.forEach((rejecters) => {
         if (rejecters) {
-          // each subscriber to request
+          //each subscriber to request
           rejecters.forEach((e) => e(error));
         }
       });
@@ -205,7 +204,7 @@ export class OperationBatcher {
       complete: () => {
         completes.forEach((complete) => {
           if (complete) {
-            // each subscriber to request
+            //each subscriber to request
             complete.forEach((c) => c());
           }
         });

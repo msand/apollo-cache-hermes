@@ -1,17 +1,18 @@
-import * as React from "react";
+import React from "react";
 import { act, render, waitFor } from "@testing-library/react";
 import gql from "graphql-tag";
 import { DocumentNode } from "graphql";
+
 import {
   ApolloClient,
-  ApolloProvider,
-  ApolloCache,
   MutationUpdaterFunction,
-} from "@apollo/client";
-import { graphql, ChildProps } from "@apollo/client/react/hoc";
-
+  ApolloCache,
+} from "../../../../core";
+import { ApolloProvider } from "../../../context";
+import { Hermes as Cache } from "../../../../../../src";
 import { itAsync, createMockClient, mockSingleLink } from "../../../../testing";
-import { Hermes } from "../../../../../../src";
+import { graphql } from "../../graphql";
+import { ChildProps } from "../../types";
 
 describe("graphql(mutation) query integration", () => {
   itAsync(
@@ -62,11 +63,10 @@ describe("graphql(mutation) query integration", () => {
             });
 
             const dataInStore = client.cache.extract(true);
-            expect(dataInStore["Todo:99"]?.data).toEqual(
+            expect(dataInStore["Todo:99"]).toEqual(
               optimisticResponse.createTodo
             );
           }
-
           render() {
             return null;
           }
@@ -144,11 +144,7 @@ describe("graphql(mutation) query integration", () => {
       const data = JSON.parse(
         JSON.stringify(proxy.readQuery<QueryData>({ query }))
       );
-      const tasks = data.todo_list.tasks;
-      const todo = result.data!.createTodo;
-      const id = todo.id;
-      const index = tasks.findIndex((t) => t.id === id);
-      tasks[index === -1 ? tasks.length : index] = todo; // update value
+      data.todo_list.tasks.push(result.data!.createTodo); // update value
       proxy.writeQuery({ query, data }); // write to cache
     };
 
@@ -163,7 +159,7 @@ describe("graphql(mutation) query integration", () => {
       },
       { request: { query: mutation }, result: { data: mutationData } }
     );
-    const cache = new Hermes({ addTypename: false });
+    const cache = new Cache({ addTypename: false });
     const client = new ApolloClient({ link, cache });
 
     const withQuery = graphql<{}, QueryData>(query);
@@ -278,15 +274,15 @@ describe("graphql(mutation) query integration", () => {
           result: { data: mutationData },
         }
       );
-      const cache = new Hermes({ addTypename: false });
+      const cache = new Cache({ addTypename: false });
       const client = new ApolloClient({ link, cache });
 
       class Boundary extends React.Component<React.PropsWithChildren> {
         componentDidCatch(e: any) {
           reject(e);
         }
-
         render() {
+          // eslint-disable-next-line testing-library/no-node-access
           return this.props.children;
         }
       }
@@ -375,7 +371,7 @@ describe("graphql(mutation) query integration", () => {
       result: { data: mutationData },
     });
 
-    const cache = new Hermes({ addTypename: false });
+    const cache = new Cache({ addTypename: false });
     const client = new ApolloClient({ link, cache });
 
     let renderCount = 0;
@@ -401,7 +397,6 @@ describe("graphql(mutation) query integration", () => {
               break;
             case 2:
               expect(this.props.result!.loading).toBeFalsy();
-            // eslint-disable-next-line no-fallthrough
             default: // Do nothing
           }
 

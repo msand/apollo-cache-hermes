@@ -5,10 +5,8 @@ import type {
   FragmentSpreadNode,
 } from "graphql";
 import { visit } from "graphql";
-// eslint-disable-next-line import/no-extraneous-dependencies
+
 import { wrap } from "optimism";
-// eslint-disable-next-line import/no-extraneous-dependencies
-import { WeakCache } from "@wry/caches";
 
 import type { FragmentMap } from "../../utilities/index";
 import {
@@ -16,6 +14,7 @@ import {
   defaultCacheSizes,
   getFragmentDefinitions,
 } from "../../utilities/index";
+import { WeakCache } from "@wry/caches";
 
 export interface FragmentRegistryAPI {
   register(...fragments: DocumentNode[]): this;

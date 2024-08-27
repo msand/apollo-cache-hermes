@@ -1,12 +1,13 @@
-import * as React from "react";
+import React from "react";
 import { render, waitFor } from "@testing-library/react";
 import gql from "graphql-tag";
 import { DocumentNode } from "graphql";
-import { ApolloClient, ApolloProvider } from "@apollo/client";
-import { graphql } from "@apollo/client/react/hoc";
 
-import { Hermes } from "../../../../../../src";
+import { ApolloClient } from "../../../../core";
+import { ApolloProvider } from "../../../context";
+import { Hermes as Cache } from "../../../../../../src";
 import { itAsync, mockSingleLink } from "../../../../testing";
+import { graphql } from "../../graphql";
 import { DataValue } from "../../types";
 
 describe("[queries] reducer", () => {
@@ -26,7 +27,7 @@ describe("[queries] reducer", () => {
     });
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     type Data = typeof result;
@@ -70,7 +71,7 @@ describe("[queries] reducer", () => {
       });
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       interface Data {
@@ -126,7 +127,7 @@ describe("[queries] reducer", () => {
     });
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     interface Data {
@@ -146,7 +147,6 @@ describe("[queries] reducer", () => {
         expect(this.props.thingy).toEqual(expectedData.getThing);
         done = true;
       }
-
       render() {
         return null;
       }
@@ -193,7 +193,7 @@ describe("[queries] reducer", () => {
       );
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       type Data = typeof expectedData;
@@ -230,7 +230,6 @@ describe("[queries] reducer", () => {
             this.props.refetch();
           }
         }
-
         render() {
           return null;
         }

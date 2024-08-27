@@ -1,14 +1,16 @@
-import * as React from "react";
+import React from "react";
 import { render, screen } from "@testing-library/react";
-import { ApolloClient, ApolloLink, ApolloProvider } from "@apollo/client";
 
+import { ApolloLink } from "../../../link/core";
+import { ApolloClient } from "../../../core";
+import { Hermes as Cache } from "../../../../../src";
+import { ApolloProvider } from "../ApolloProvider";
 import { ApolloConsumer } from "../ApolloConsumer";
 import { getApolloContext } from "../ApolloContext";
 import { itAsync } from "../../../testing";
-import { Hermes } from "../../../../../src";
 
 const client = new ApolloClient({
-  cache: new Hermes(),
+  cache: new Cache(),
   link: new ApolloLink((o, f) => (f ? f(o) : null)),
 });
 

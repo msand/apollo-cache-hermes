@@ -1,5 +1,4 @@
 import type { DocumentNode, FieldNode } from "graphql";
-import type { StorageType } from "@apollo/client/cache/inmemory/policies";
 
 import type {
   Reference,
@@ -8,6 +7,8 @@ import type {
   isReference,
   AsStoreObject,
 } from "../../../utilities/index";
+
+import type { StorageType } from "../../inmemory/policies";
 
 // The Readonly<T> type only really works for object types, since it marks
 // all of the object's properties as readonly, but there are many cases when
@@ -45,7 +46,6 @@ export class MissingFieldError extends Error {
 
     // We're not using `Object.setPrototypeOf` here as it isn't fully supported
     // on Android (see issue #3236).
-    // eslint-disable-next-line no-proto
     (this as any).__proto__ = MissingFieldError.prototype;
   }
 

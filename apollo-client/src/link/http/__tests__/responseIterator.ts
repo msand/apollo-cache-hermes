@@ -1,16 +1,14 @@
 import gql from "graphql-tag";
+import { execute } from "../../core/execute";
+import { HttpLink } from "../HttpLink";
+import { itAsync, subscribeAndCount } from "../../../testing";
 import type { Observable } from "zen-observable-ts";
+import { ObservableQuery } from "../../../core";
 import { TextEncoder, TextDecoder } from "util";
 import { ReadableStream } from "web-streams-polyfill";
 import { Readable } from "stream";
 
-import { execute } from "../../core/execute";
-import { HttpLink } from "../HttpLink";
-import { itAsync, subscribeAndCount } from "../../../testing";
-import { ObservableQuery } from "../../../core";
-
-// eslint-disable-next-line import/no-commonjs
-const Blob = require("blob-polyfill").Blob;
+var Blob = require("blob-polyfill").Blob;
 
 function makeCallback<TArgs extends any[]>(
   resolve: () => void,
@@ -55,7 +53,7 @@ function matchesResults<T>(
     observable as unknown as ObservableQuery,
     (count, result) => {
       // subscribeAndCount is 1-indexed for some terrible reason.
-      if (count <= 0 || count > results.length) {
+      if (0 >= count || count > results.length) {
         reject(new Error("Unexpected result"));
       }
 
@@ -211,7 +209,7 @@ describe("multipart responses", () => {
         const lines = bodyCustomBoundary.split("\r\n");
         try {
           for (const line of lines) {
-            controller.enqueue(`${line}\r\n`);
+            controller.enqueue(line + "\r\n");
           }
         } finally {
           controller.close();
@@ -240,8 +238,8 @@ describe("multipart responses", () => {
     (resolve, reject) => {
       const stream = new ReadableStream({
         async start(controller) {
-          const chunks: Array<string> = [];
-          const chunkSize = 15;
+          let chunks: Array<string> = [];
+          let chunkSize = 15;
           for (let i = 0; i < bodyCustomBoundary.length; i += chunkSize) {
             chunks.push(bodyCustomBoundary.slice(i, i + chunkSize));
           }
@@ -277,7 +275,7 @@ describe("multipart responses", () => {
     "can handle node stream bodies (strings) with default boundary",
     (resolve, reject) => {
       const stream = Readable.from(
-        bodyDefaultBoundary.split("\r\n").map((line) => `${line}\r\n`)
+        bodyDefaultBoundary.split("\r\n").map((line) => line + "\r\n")
       );
 
       const fetch = jest.fn(async () => ({
@@ -300,8 +298,8 @@ describe("multipart responses", () => {
   itAsync(
     "can handle node stream bodies (strings) with arbitrary splits",
     (resolve, reject) => {
-      const chunks: Array<string> = [];
-      const chunkSize = 15;
+      let chunks: Array<string> = [];
+      let chunkSize = 15;
       for (let i = 0; i < bodyCustomBoundary.length; i += chunkSize) {
         chunks.push(bodyCustomBoundary.slice(i, i + chunkSize));
       }
@@ -329,7 +327,7 @@ describe("multipart responses", () => {
       const stream = Readable.from(
         bodyDefaultBoundary
           .split("\r\n")
-          .map((line) => new TextEncoder().encode(`${line}\r\n`))
+          .map((line) => new TextEncoder().encode(line + "\r\n"))
       );
 
       const fetch = jest.fn(async () => ({
@@ -355,7 +353,7 @@ describe("multipart responses", () => {
       const stream = Readable.from(
         bodyBatchedResults
           .split("\r\n")
-          .map((line) => new TextEncoder().encode(`${line}\r\n`))
+          .map((line) => new TextEncoder().encode(line + "\r\n"))
       );
 
       const fetch = jest.fn(async () => ({
@@ -384,7 +382,7 @@ describe("multipart responses", () => {
         const lines = bodyCustomBoundary.split("\r\n");
         try {
           for (const line of lines) {
-            controller.enqueue(`${line}\r\n`);
+            controller.enqueue(line + "\r\n");
           }
         } finally {
           controller.close();
@@ -409,7 +407,7 @@ describe("multipart responses", () => {
 
   itAsync("can handle non-streamable blob bodies", (resolve, reject) => {
     const body = new Blob(
-      bodyCustomBoundary.split("\r\n").map((i) => `${i}\r\n`),
+      bodyCustomBoundary.split("\r\n").map((i) => i + "\r\n"),
       { type: "application/text" }
     );
     body.stream = undefined;
@@ -497,7 +495,7 @@ describe("multipart responses", () => {
       "throws error if TextDecoder not defined in the environment",
       (resolve, reject) => {
         const stream = Readable.from(
-          bodyIncorrectChunkType.split("\r\n").map((line) => `${line}\r\n`)
+          bodyIncorrectChunkType.split("\r\n").map((line) => line + "\r\n")
         );
         const fetch = jest.fn(async () => ({
           status: 200,

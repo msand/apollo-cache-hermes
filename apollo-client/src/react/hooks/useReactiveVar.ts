@@ -1,7 +1,5 @@
 import * as React from "rehackt";
-
 import type { ReactiveVar } from "../../core/index";
-
 import { useSyncExternalStore } from "./useSyncExternalStore";
 
 /**

@@ -6,9 +6,11 @@ export const config: Config = {
   automock: false,
   collectCoverageFrom: [
     'src/**/*.js',
+    'src/**/*.jsx',
+    'src/**/*.ts',
+    'src/**/*.tsx',
   ],
   moduleFileExtensions: ['js', 'jsx', 'ts', 'tsx'],
-  extensionsToTreatAsEsm: ['js', 'jsx', 'ts', 'tsx'],
   coverageDirectory: 'output/test-unit',
   coverageReporters: ['lcovonly', 'text'],
   coveragePathIgnorePatterns: [
@@ -16,8 +18,8 @@ export const config: Config = {
     '<rootDir>/test/',
   ],
   rootDir: '../..',
-  setupFilesAfterEnv: ['./test/env/unit.js'],
-  testMatch: ['<rootDir>/test/unit/**/*.js', '<rootDir>/test/**/*.test.js', '<rootDir>/test/**/*.test.jsx'],
+  setupFilesAfterEnv: ['./test/env/unit.ts'],
+  testMatch: ['<rootDir>/test/unit/**/*.js', '<rootDir>/test/**/*.test.js', '<rootDir>/test/**/*.test.jsx', '<rootDir>/test/unit/**/*.ts', '<rootDir>/test/**/*.test.ts', '<rootDir>/test/**/*.test.tsx'],
   reporters: ['default', 'jest-junit'],
   transform: {
     '^.+\\.(ts|tsx)?$': 'ts-jest',
@@ -26,12 +28,10 @@ export const config: Config = {
   globals: {
     'ts-jest': {
       isolatedModules: true,
-      useESM: true,
     },
     __DEV__: true,
   },
-  resolver: 'ts-jest-resolver',
-  transformIgnorePatterns: ['/node_modules/(?!(@apollo/client|@apollo/client/cache)/)', '@apollo/client'],
+  'transformIgnorePatterns': [],
 };
 
 export default config;

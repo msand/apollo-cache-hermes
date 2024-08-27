@@ -34,7 +34,6 @@ const subscription = gql`
 describe("WebSocketLink", () => {
   it("constructs", () => {
     const client: any = {};
-    // eslint-disable-next-line no-proto
     client.__proto__ = SubscriptionClient.prototype;
     expect(() => new WebSocketLink(client)).not.toThrow();
   });
@@ -50,7 +49,6 @@ describe("WebSocketLink", () => {
       const result = { data: { data: "result" } };
       const client: any = {};
       const observable = Observable.of(result);
-      // eslint-disable-next-line no-proto
       client.__proto__ = SubscriptionClient.prototype;
       client.request = jest.fn();
       client.request.mockReturnValueOnce(observable);
@@ -72,7 +70,6 @@ describe("WebSocketLink", () => {
       const result = { data: { data: "result" } };
       const client: any = {};
       const observable = Observable.of(result);
-      // eslint-disable-next-line no-proto
       client.__proto__ = SubscriptionClient.prototype;
       client.request = jest.fn();
       client.request.mockReturnValueOnce(observable);
@@ -94,7 +91,6 @@ describe("WebSocketLink", () => {
       const result = { data: { data: "result" } };
       const client: any = {};
       const observable = Observable.of(result);
-      // eslint-disable-next-line no-proto
       client.__proto__ = SubscriptionClient.prototype;
       client.request = jest.fn();
       client.request.mockReturnValueOnce(observable);
@@ -118,7 +114,6 @@ describe("WebSocketLink", () => {
         { data: { data: "result2" } },
       ];
       const client: any = {};
-      // eslint-disable-next-line no-proto
       client.__proto__ = SubscriptionClient.prototype;
       client.request = jest.fn(() => {
         const copy = [...results];

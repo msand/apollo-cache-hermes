@@ -1,8 +1,5 @@
 import { renderHook } from "@testing-library/react";
-
 import { useDeepMemo } from "../useDeepMemo";
-
-const expect = jestExpect;
 
 describe("useDeepMemo", () => {
   it("ensures the value is initialized", () => {

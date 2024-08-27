@@ -2,23 +2,27 @@ import { from, ObservableInput } from "rxjs";
 import { take, toArray, map } from "rxjs/operators";
 import { assign, cloneDeep } from "lodash";
 import gql from "graphql-tag";
+
 import {
   ApolloClient,
   makeReference,
   ApolloLink,
   ApolloCache,
   MutationQueryReducersMap,
-} from "@apollo/client";
+} from "../core";
 
 import { QueryManager } from "../core/QueryManager";
+
 import { Cache } from "../cache";
+import { Hermes } from "../../../src";
+
 import {
   Observable,
   ObservableSubscription as Subscription,
   addTypenameToDocument,
 } from "../utilities";
+
 import { itAsync, mockSingleLink } from "../testing";
-import { Hermes } from "../../../src";
 
 describe("optimistic mutation results", () => {
   const query = gql`
@@ -377,6 +381,7 @@ describe("optimistic mutation results", () => {
                 "Optimistically generated 2"
               );
 
+              // @ts-ignore
               const latestState = queryManager.mutationStore!;
               expect(latestState[1].loading).toBe(false);
               expect(latestState[2].loading).toBe(true);
@@ -396,6 +401,7 @@ describe("optimistic mutation results", () => {
                 "Second mutation."
               );
 
+              // @ts-ignore
               const latestState = queryManager.mutationStore!;
               expect(latestState[1].loading).toBe(false);
               expect(latestState[2].loading).toBe(false);
@@ -403,6 +409,7 @@ describe("optimistic mutation results", () => {
               return res;
             });
 
+          // @ts-ignore
           const mutationsState = queryManager.mutationStore!;
           expect(mutationsState[1].loading).toBe(true);
           expect(mutationsState[2].loading).toBe(true);
@@ -1257,7 +1264,9 @@ describe("optimistic mutation results", () => {
           updateQueries,
         })
         .then((res: any) => {
-          const currentDataInStore = (client.cache as Hermes).extract(true);
+          const currentDataInStore = (client.cache as Hermes).extract(
+            true
+          );
           expect((currentDataInStore["TodoList5"] as any).todos.length).toEqual(
             5
           );
@@ -1590,7 +1599,7 @@ describe("optimistic mutation results", () => {
         });
 
         let firstTime = true;
-        const before = Date.now();
+        let before = Date.now();
         const promise = client.mutate({
           mutation,
           optimisticResponse,
@@ -1603,7 +1612,7 @@ describe("optimistic mutation results", () => {
             } else {
               expect(duration > 300).toBe(true);
             }
-            const data = proxy.readQuery({ query });
+            let data = proxy.readQuery({ query });
 
             proxy.writeQuery({
               query,
@@ -1705,7 +1714,9 @@ describe("optimistic mutation results", () => {
           update,
         })
         .then((res: any) => {
-          const currentDataInStore = (client.cache as Hermes).extract(true);
+          const currentDataInStore = (client.cache as Hermes).extract(
+            true
+          );
           expect((currentDataInStore["TodoList5"] as any).todos.length).toBe(5);
           expect((currentDataInStore["Todo99"] as any).text).toBe(
             "This one was created with a mutation."
@@ -2156,7 +2167,6 @@ describe("optimistic mutation results", () => {
                   // Although ROOT_MUTATION field data gets removed immediately
                   // after the mutation finishes, it is still temporarily visible
                   // to the update function.
-
                   'addItem({"item":{"__typename":"Item","text":"mutation 4"}})':
                     {
                       __typename: "Item",
@@ -2185,7 +2195,6 @@ describe("optimistic mutation results", () => {
                 },
                 ROOT_MUTATION: {
                   __typename: "Mutation",
-
                   'addItem({"item":{"__typename":"Item","text":"mutation 4"}})':
                     {
                       __typename: "Item",

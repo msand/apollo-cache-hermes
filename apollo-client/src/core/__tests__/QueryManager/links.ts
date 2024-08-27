@@ -1,18 +1,20 @@
 // externals
 import gql from "graphql-tag";
 import { print } from "graphql";
-import { ApolloLink } from "@apollo/client";
 
 import {
   Observable,
   ObservableSubscription,
 } from "../../../utilities/observables/Observable";
+import { ApolloLink } from "../../../link/core";
+import { Hermes } from "../../../../../src";
+
 // mocks
 import { itAsync, MockSubscriptionLink } from "../../../testing/core";
+
 // core
 import { QueryManager } from "../../QueryManager";
-import { NextLink, Operation, Reference } from "../..";
-import { Hermes } from "../../../../../src";
+import { NextLink, Operation, Reference } from "../../../core";
 
 describe("Link interactions", () => {
   itAsync(

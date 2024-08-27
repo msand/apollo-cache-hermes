@@ -1,20 +1,21 @@
-import * as React from "react";
+import React from "react";
 import { render, waitFor } from "@testing-library/react";
 import gql from "graphql-tag";
 import { DocumentNode } from "graphql";
-import { ApolloClient, ApolloProvider } from "@apollo/client";
-import { graphql, ChildProps } from "@apollo/client/react/hoc";
 
+import { ApolloClient } from "../../../../core";
+import { ApolloProvider } from "../../../context";
+import { Hermes as Cache } from "../../../../../../src";
 import { mockSingleLink } from "../../../../testing";
 import { Query as QueryComponent } from "../../../components";
-import { DataValue } from "../../types";
+import { graphql } from "../../graphql";
+import { ChildProps, DataValue } from "../../types";
 import { profile } from "../../../../testing/internal";
-import { Hermes } from "../../../../../../src";
 
 describe("[queries] lifecycle", () => {
   // lifecycle
   it("reruns the query if it changes", async () => {
-    const count = 0;
+    let count = 0;
     const query: DocumentNode = gql`
       query people($first: Int) {
         allPeople(first: $first) {
@@ -40,7 +41,7 @@ describe("[queries] lifecycle", () => {
 
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const Container = graphql<Vars, Data, Vars>(query, {
@@ -116,7 +117,7 @@ describe("[queries] lifecycle", () => {
     });
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     let firstRun = true;
@@ -191,7 +192,7 @@ describe("[queries] lifecycle", () => {
 
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const Container = graphql<Vars, Data, Vars>(query, {
@@ -285,7 +286,7 @@ describe("[queries] lifecycle", () => {
 
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const Container = graphql<Vars, Data, Vars>(query)(
@@ -317,7 +318,6 @@ describe("[queries] lifecycle", () => {
             fail(err);
           }
         }
-
         render() {
           return null;
         }
@@ -369,7 +369,7 @@ describe("[queries] lifecycle", () => {
     );
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     interface Props {
@@ -405,7 +405,6 @@ describe("[queries] lifecycle", () => {
             fail(e);
           }
         }
-
         render() {
           return null;
         }
@@ -458,11 +457,13 @@ describe("[queries] lifecycle", () => {
     });
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
-    let count = 0;
+    let app: React.ReactElement<any>,
+      count = 0;
 
     let done = false;
+    let rerender: any;
     const Container = graphql<{}, Data>(query, {
       options: { pollInterval: 10, notifyOnNetworkStatusChange: false },
     })(
@@ -478,20 +479,19 @@ describe("[queries] lifecycle", () => {
           }
           count++;
         }
-
         render() {
           return null;
         }
       }
     );
 
-    const app = (
+    app = (
       <ApolloProvider client={client}>
         <Container />
       </ApolloProvider>
     );
 
-    const rerender = render(app).rerender;
+    rerender = render(app).rerender;
 
     await waitFor(() => {
       expect(done).toBeTruthy();
@@ -532,15 +532,15 @@ describe("[queries] lifecycle", () => {
     });
     const client1 = new ApolloClient({
       link: link1,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
     const client2 = new ApolloClient({
       link: link2,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
     const client3 = new ApolloClient({
       link: link3,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     interface Data {
@@ -551,7 +551,7 @@ describe("[queries] lifecycle", () => {
     let switchClient: (client: ApolloClient<any>) => void;
     let refetchQuery: () => void;
     let count = 0;
-    const testFailures: any[] = [];
+    let testFailures: any[] = [];
 
     const Query = graphql<{}, Data>(query, {
       options: { notifyOnNetworkStatusChange: true },
@@ -749,7 +749,7 @@ describe("[queries] lifecycle", () => {
       link,
       // prefill the store (like SSR would)
       // @see https://github.com/zeit/next.js/blob/master/examples/with-apollo/lib/initApollo.js
-      cache: new Hermes({ addTypename: false }).restore(initialState),
+      cache: new Cache({ addTypename: false }).restore(initialState),
     });
 
     let count = 0;
@@ -823,7 +823,7 @@ describe("[queries] lifecycle", () => {
     });
 
     const ssrClient = new ApolloClient({
-      cache: new Hermes(),
+      cache: new Cache(),
       link: ssrLink,
     });
     await ssrClient.query({
@@ -831,11 +831,11 @@ describe("[queries] lifecycle", () => {
       variables: {},
     });
     const client = new ApolloClient({
-      cache: new Hermes().restore(ssrClient.extract()), // --- this is the "SSR" bit
+      cache: new Cache().restore(ssrClient.extract()), // --- this is the "SSR" bit
       link,
     });
 
-    // try to render the app / call refetch / etc
+    //try to render the app / call refetch / etc
 
     let done = false;
     let refetched = false;
@@ -846,13 +846,13 @@ describe("[queries] lifecycle", () => {
             if (!loading) {
               if (!refetched) {
                 expect(data.books[0].name).toEqual("ssrfirst");
-                // setTimeout allows component to mount, which often happens
-                // when waiting  ideally we should be able to call refetch
-                // immediately However the subscription needs to start before
-                // we update the data To get around this issue, we would need
-                // to start the subscription before we render to the page. In
-                // practice, this seems like an uncommon use case, since the
-                // data you get is fresh, so one would wait for an interaction
+                //setTimeout allows component to mount, which often happens
+                //when waiting  ideally we should be able to call refetch
+                //immediately However the subscription needs to start before
+                //we update the data To get around this issue, we would need
+                //to start the subscription before we render to the page. In
+                //practice, this seems like an uncommon use case, since the
+                //data you get is fresh, so one would wait for an interaction
                 setTimeout(() => {
                   refetch().then((refetchResult: any) => {
                     expect(refetchResult.data.books[0].name).toEqual("first");

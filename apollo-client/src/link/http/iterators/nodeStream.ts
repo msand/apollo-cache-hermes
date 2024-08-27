@@ -4,7 +4,6 @@
  */
 
 import type { Readable as NodeReadableStream } from "stream";
-
 import { canUseAsyncIteratorSymbol } from "../../../utilities/index";
 
 interface NodeStreamIterator<T> {
@@ -42,7 +41,7 @@ export default function nodeStreamIterator<T>(
   function onError(err: Error) {
     error = err;
     const all = waiting.slice();
-    all.forEach((pair) => {
+    all.forEach(function (pair) {
       pair[1](err);
     });
     !cleanup || cleanup();
@@ -50,7 +49,7 @@ export default function nodeStreamIterator<T>(
   function onEnd() {
     done = true;
     const all = waiting.slice();
-    all.forEach((pair) => {
+    all.forEach(function (pair) {
       pair[0]({ value: undefined, done: true });
     });
     !cleanup || cleanup();
@@ -71,7 +70,7 @@ export default function nodeStreamIterator<T>(
   stream.on("close", onEnd);
 
   function getNext(): Promise<IteratorResult<T, boolean | undefined>> {
-    return new Promise((resolve, reject) => {
+    return new Promise(function (resolve, reject) {
       if (error) return reject(error);
       if (data.length)
         return resolve({ value: data.shift() as T, done: false });

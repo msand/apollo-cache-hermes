@@ -1,16 +1,15 @@
-import * as React from "react";
+import React from "react";
 import { DocumentNode } from "graphql";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import gql from "graphql-tag";
-import { Observable } from "zen-observable-ts";
-import { ApolloLink } from "@apollo/client";
 
 import { itAsync, MockedResponse, MockLink } from "../../core";
 import { MockedProvider } from "../MockedProvider";
 import { useQuery } from "../../../react/hooks";
-import { QueryResult } from "../../../react/types/types";
-import { FetchResult } from "../../../link/core";
 import { Hermes } from "../../../../../src";
+import { QueryResult } from "../../../react/types/types";
+import { ApolloLink, FetchResult } from "../../../link/core";
+import { Observable } from "zen-observable-ts";
 
 const variables = {
   username: "mock_username",
@@ -645,9 +644,7 @@ describe("General use", () => {
       return act(async () => {
         try {
           await result.current?.refetch();
-        } catch {
-          /* empty */
-        }
+        } catch {}
       });
     };
 
@@ -698,9 +695,7 @@ describe("General use", () => {
       return act(async () => {
         try {
           await result.current?.refetch();
-        } catch {
-          /* empty */
-        }
+        } catch {}
       });
     };
 
@@ -759,9 +754,7 @@ describe("General use", () => {
       return act(async () => {
         try {
           await result.current?.refetch();
-        } catch {
-          /* empty */
-        }
+        } catch {}
       });
     };
 
@@ -809,9 +802,7 @@ describe("General use", () => {
       return act(async () => {
         try {
           await result.current?.refetch();
-        } catch {
-          /* empty */
-        }
+        } catch {}
       });
     };
 

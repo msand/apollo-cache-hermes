@@ -39,7 +39,7 @@ async function* observableToAsyncEventIterator<T>(observable: Observable<T>) {
 class IteratorStream<T> {
   constructor(private iterator: AsyncGenerator<T, void, unknown>) {}
 
-  async take({ timeout = 100 }: TakeOptions = {}): Promise<Awaited<T | void>> {
+  async take({ timeout = 100 }: TakeOptions = {}): Promise<T> {
     return Promise.race([
       this.iterator.next().then((result) => result.value!),
       new Promise<T>((_, reject) => {

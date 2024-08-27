@@ -1,5 +1,4 @@
-import { Cache } from '@apollo/client';
-import { Reference } from '@apollo/client/utilities';
+import type { Cache, Reference } from '../apollo-client/src/cache';
 
 import { JsonObject, JsonValue } from './primitive';
 import { RawOperation } from './schema';

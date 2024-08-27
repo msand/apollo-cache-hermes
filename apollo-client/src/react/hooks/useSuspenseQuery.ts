@@ -1,8 +1,7 @@
 import * as React from "rehackt";
-import { ApolloClient } from "@apollo/client";
-
 import { invariant } from "../../utilities/globals/index";
 import type {
+  ApolloClient,
   ApolloQueryResult,
   DocumentNode,
   OperationVariables,
@@ -14,20 +13,19 @@ import type {
 import { ApolloError, NetworkStatus } from "../../core/index";
 import type { DeepPartial } from "../../utilities/index";
 import { isNonEmptyArray } from "../../utilities/index";
+import { useApolloClient } from "./useApolloClient";
 import { DocumentType, verifyDocumentType } from "../parser/index";
 import type {
   SuspenseQueryHookOptions,
   ObservableQueryFields,
   NoInfer,
 } from "../types/types";
+import { __use, useDeepMemo, wrapHook } from "./internal/index";
 import { getSuspenseCache } from "../internal/index";
 import { canonicalStringify } from "../../cache/index";
-import type { CacheKey, QueryKey } from "../internal/index";
-
-import { __use, useDeepMemo, wrapHook } from "./internal/index";
 import { skipToken } from "./constants";
 import type { SkipToken } from "./constants";
-import { useApolloClient } from "./useApolloClient";
+import type { CacheKey, QueryKey } from "../internal/index";
 
 export interface UseSuspenseQueryResult<
   TData = unknown,
@@ -213,7 +211,7 @@ function _useSuspenseQuery<
     client.watchQuery(watchQueryOptions)
   );
 
-  const [current, setPromise] = React.useState<
+  let [current, setPromise] = React.useState<
     [QueryKey, Promise<ApolloQueryResult<any>>]
   >([queryRef.key, queryRef.promise]);
 

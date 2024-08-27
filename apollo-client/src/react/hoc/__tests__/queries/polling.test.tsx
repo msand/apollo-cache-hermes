@@ -1,13 +1,15 @@
-import * as React from "react";
+import React from "react";
 import { render, waitFor } from "@testing-library/react";
 import gql from "graphql-tag";
 import { DocumentNode } from "graphql";
-import { ApolloClient, ApolloLink, ApolloProvider } from "@apollo/client";
-import { graphql, ChildProps } from "@apollo/client/react/hoc";
 
-import { Hermes } from "../../../../../../src";
+import { ApolloClient, ApolloLink } from "../../../../core";
+import { ApolloProvider } from "../../../context";
+import { Hermes as Cache } from "../../../../../../src";
 import { itAsync, mockSingleLink } from "../../../../testing";
 import { Observable } from "../../../../utilities";
+import { graphql } from "../../graphql";
+import { ChildProps } from "../../types";
 
 describe("[queries] polling", () => {
   let error: typeof console.error;
@@ -41,7 +43,7 @@ describe("[queries] polling", () => {
       { request: { query }, result: { data: data2 } },
       { request: { query }, result: { data } }
     );
-    const cache = new Hermes({ addTypename: false });
+    const cache = new Cache({ addTypename: false });
     const client = new ApolloClient({
       link,
       cache,
@@ -92,7 +94,7 @@ describe("[queries] polling", () => {
         { request: { query }, result: { data: data2 } },
         { request: { query }, result: { data } }
       );
-      const cache = new Hermes({ addTypename: false });
+      const cache = new Cache({ addTypename: false });
       const client = new ApolloClient({
         link,
         cache,
@@ -154,7 +156,7 @@ describe("[queries] polling", () => {
     let done = false;
     const client = new ApolloClient({
       link: lukeLink,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const Container = graphql(allPeopleQuery)(
@@ -170,7 +172,6 @@ describe("[queries] polling", () => {
             reject(e);
           }
         }
-
         render() {
           return null;
         }
@@ -193,7 +194,7 @@ describe("[queries] polling", () => {
       let done = false;
       const client = new ApolloClient({
         link: lukeLink,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       const Container = graphql(allPeopleQuery, {
@@ -210,7 +211,6 @@ describe("[queries] polling", () => {
               reject(e);
             }
           }
-
           render() {
             return null;
           }

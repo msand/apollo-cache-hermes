@@ -1,17 +1,10 @@
+import { invariant, newInvariantError } from "../../utilities/globals/index";
+
 import type { DocumentNode, FieldNode, SelectionSetNode } from "graphql";
 import { Kind } from "graphql";
 import type { OptimisticWrapperFunction } from "optimism";
-// eslint-disable-next-line import/no-extraneous-dependencies
 import { wrap } from "optimism";
-import type {
-  ApolloCache,
-  DiffQueryAgainstStoreOptions,
-  InMemoryCache,
-  ReadMergeModifyContext,
-} from "@apollo/client";
-import { NormalizedCache, Policies } from "@apollo/client/cache";
 
-import { invariant, newInvariantError } from "../../utilities/globals/index";
 import type {
   Reference,
   StoreObject,
@@ -40,10 +33,12 @@ import {
   defaultCacheSizes,
 } from "../../utilities/index";
 import type { Cache } from "../core/types/Cache";
-import type { MissingTree } from "../core/types/common";
-import { MissingFieldError } from "../core/types/common";
-
-import type { InMemoryCacheConfig } from "./types";
+import type {
+  DiffQueryAgainstStoreOptions,
+  InMemoryCacheConfig,
+  NormalizedCache,
+  ReadMergeModifyContext,
+} from "./types";
 import {
   maybeDependOnExistenceOfEntity,
   supportsResultCaching,
@@ -54,6 +49,10 @@ import {
   getTypenameFromStoreObject,
   shouldCanonizeResults,
 } from "./helpers";
+import type { Policies } from "./policies";
+import type { InMemoryCache } from "./inMemoryCache";
+import type { MissingTree } from "../core/types/common";
+import { MissingFieldError } from "../core/types/common";
 import { ObjectCanon } from "./object-canon";
 
 export type VariableMap = { [name: string]: any };
@@ -86,7 +85,7 @@ type ExecSubSelectedArrayOptions = {
 };
 
 export interface StoreReaderConfig {
-  cache: ApolloCache<any> & Pick<InMemoryCache, "policies">;
+  cache: InMemoryCache;
   addTypename?: boolean;
   resultCacheMaxSize?: number;
   canonizeResults?: boolean;
@@ -131,7 +130,7 @@ export class StoreReader {
   >;
 
   private config: {
-    cache: ApolloCache<any> & Pick<InMemoryCache, "policies">;
+    cache: InMemoryCache;
     addTypename: boolean;
     resultCacheMaxSize?: number;
     canonizeResults: boolean;
@@ -398,8 +397,8 @@ export class StoreReader {
             missing = missingMerger.merge(missing, {
               [resultName]: `Can't find field '${selection.name.value}' on ${
                 isReference(objectOrReference) ?
-                  `${objectOrReference.__ref} object`
-                : `object ${JSON.stringify(objectOrReference, null, 2)}`
+                  objectOrReference.__ref + " object"
+                : "object " + JSON.stringify(objectOrReference, null, 2)
               }`,
             });
           }
@@ -483,7 +482,7 @@ export class StoreReader {
     context,
   }: ExecSubSelectedArrayOptions): ExecResult {
     let missing: MissingTree | undefined;
-    const missingMerger = new DeepMerger<MissingTree[]>();
+    let missingMerger = new DeepMerger<MissingTree[]>();
 
     function handleMissing<T>(childResult: ExecResult<T>, i: number): T {
       if (childResult.missing) {

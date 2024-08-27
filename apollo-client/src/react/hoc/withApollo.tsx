@@ -1,11 +1,9 @@
+import { invariant } from "../../utilities/globals/index";
 import * as React from "rehackt";
 import type * as ReactTypes from "react";
-// eslint-disable-next-line import/no-extraneous-dependencies
 import hoistNonReactStatics from "hoist-non-react-statics";
-import { ApolloConsumer } from "@apollo/client";
 
-import { invariant } from "../../utilities/globals/index";
-
+import { ApolloConsumer } from "../context/index";
 import type { OperationOption, WithApolloClient } from "./types";
 
 function getDisplayName<P>(WrappedComponent: ReactTypes.ComponentType<P>) {

@@ -1,8 +1,6 @@
-
 import type { SuspenseCacheOptions } from "../index";
-
 import { SuspenseCache } from "./SuspenseCache";
-import { ApolloClient } from "@apollo/client";
+import type { ApolloClient } from "../../../core/ApolloClient";
 
 declare module "../../../core/ApolloClient.js" {
   interface DefaultOptions {

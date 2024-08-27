@@ -17,16 +17,15 @@ export default function promiseIterator<T = ArrayBuffer>(
 
   const iterator: PromiseIterator<T> = {
     next(): Promise<IteratorResult<T, ArrayBuffer | undefined>> {
-      if (resolved) {
+      if (resolved)
         return Promise.resolve({
           value: undefined,
           done: true,
         });
-      }
       resolved = true;
-      return new Promise((resolve, reject) => {
+      return new Promise(function (resolve, reject) {
         promise
-          .then((value) => {
+          .then(function (value) {
             resolve({ value: value as unknown as T, done: false });
           })
           .catch(reject);

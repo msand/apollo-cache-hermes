@@ -1,8 +1,9 @@
-import { Observable, maybe } from "../../index";
+import { Observable } from "../../index";
 import {
   handleError,
   readMultipartBody,
 } from "../../../link/http/parseAndCheckHttpResponse";
+import { maybe } from "../../index";
 import { serializeFetchParameter } from "../../../core/index";
 import type { Body } from "../../../link/http/selectHttpOptionsAndBody";
 import { generateOptionsForMultipartSubscription } from "../shared";

@@ -1,12 +1,12 @@
-import { EntityStore, NormalizedCache } from "@apollo/client/cache";
 import {
-  Cache,
-  DiffQueryAgainstStoreOptions,
+  NormalizedCache,
   NormalizedCacheObject,
-} from "@apollo/client";
-
+  DiffQueryAgainstStoreOptions,
+} from "../types";
+import { EntityStore } from "../entityStore";
 import { StoreReader } from "../readFromStore";
 import { StoreWriter } from "../writeToStore";
+import { Cache } from "../../../core";
 import { Hermes } from "../../../../../src";
 
 export function defaultNormalizedCacheFactory(
@@ -41,7 +41,6 @@ export function writeQueryToStore(
   const {
     dataId = "ROOT_QUERY",
     store = new EntityStore.Root({
-      // @ts-ignore
       policies: options.writer.cache.policies,
     }),
     ...writeOptions
@@ -70,3 +69,11 @@ export function withError(func: Function, regex?: RegExp) {
     console.error = error;
   }
 }
+
+describe("defaultNormalizedCacheFactory", function () {
+  it("should return an EntityStore", function () {
+    const store = defaultNormalizedCacheFactory();
+    expect(store).toBeInstanceOf(EntityStore);
+    expect(store).toBeInstanceOf(EntityStore.Root);
+  });
+});

@@ -25,7 +25,7 @@ function rejectExceptions<Args extends any[], Ret>(
 ) {
   return function () {
     try {
-      // @ts-ignore
+      // @ts-expect-error
       return fn.apply(this, arguments);
     } catch (error) {
       reject(error);
@@ -143,7 +143,7 @@ describe("asyncMap", () => {
     });
   });
 
-  it.each([
+  test.each([
     ["sync", (n: number) => n * 2],
     ["async", async (n: number) => n * 2],
   ])("[%s] mapFn maps over values", async (_, mapFn) => {
@@ -167,7 +167,7 @@ describe("asyncMap", () => {
     await stream.takeComplete();
   });
 
-  it.each([["sync"], ["async"]])(
+  test.each([["sync"], ["async"]])(
     "[%s] mapFn notifies the observer with an error when an error is thrown inside the mapFn",
     async (synchronity) => {
       const observable = new Observable<number>((observer) => {
@@ -211,7 +211,7 @@ describe("asyncMap", () => {
     }
   );
 
-  it.each([
+  test.each([
     ["sync", () => 99],
     ["async", async () => 99],
   ])(
@@ -237,15 +237,11 @@ describe("asyncMap", () => {
     }
   );
 
-  it.each([
+  test.each([
     // prettier-ignore
-    ['sync', () => {
-      throw new Error('another error');
-    }],
+    ["sync", () => { throw new Error("another error") }],
     // prettier-ignore
-    ['async', async() => {
-      throw new Error('another error');
-    }],
+    ["async", async () => { throw new Error("another error") }],
   ])("[%s] catchFn can map one error to another error", async (_, catchFn) => {
     const observable = new Observable<number>((observer) => {
       observer.next(1);

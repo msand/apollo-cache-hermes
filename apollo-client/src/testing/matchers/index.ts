@@ -1,6 +1,4 @@
-// eslint-disable-next-line import/no-extraneous-dependencies
 import { expect } from "@jest/globals";
-
 import { toMatchDocument } from "./toMatchDocument";
 import { toHaveSuspenseCacheEntryUsing } from "./toHaveSuspenseCacheEntryUsing";
 import { toRerender, toRenderExactlyTimes } from "./ProfiledComponent";

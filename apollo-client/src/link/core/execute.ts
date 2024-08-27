@@ -1,3 +1,3 @@
-import { ApolloLink } from "@apollo/client";
+import { ApolloLink } from "./ApolloLink";
 
 export const execute = ApolloLink.execute;

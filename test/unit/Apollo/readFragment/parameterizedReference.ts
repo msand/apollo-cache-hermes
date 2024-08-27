@@ -45,7 +45,7 @@ describe(`readFragment with parameterized references`, () => {
       },
       'shipment0': {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
-        inbound: [{ id: [parameterizedId], path: [] }],
+        inbound: [{ id: parameterizedId, path: [] }],
         data: {
           id: 'shipment0',
           __typename: 'Shipment',

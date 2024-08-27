@@ -1,7 +1,4 @@
 import * as React from "rehackt";
-import equal from "@wry/equality";
-import { ApolloClient } from "@apollo/client";
-
 import type { DeepPartial } from "../../utilities/index";
 import { mergeDeepArray } from "../../utilities/index";
 import type {
@@ -10,12 +7,13 @@ import type {
   StoreObject,
   MissingTree,
 } from "../../cache/index";
-import type { OperationVariables } from "../../core/index";
-import type { NoInfer } from "../types/types";
 
 import { useApolloClient } from "./useApolloClient";
 import { useSyncExternalStore } from "./useSyncExternalStore";
+import type { ApolloClient, OperationVariables } from "../../core/index";
+import type { NoInfer } from "../types/types";
 import { useDeepMemo, useLazyRef, wrapHook } from "./internal/index";
+import equal from "@wry/equality";
 
 export interface UseFragmentOptions<TData, TVars>
   extends Omit<

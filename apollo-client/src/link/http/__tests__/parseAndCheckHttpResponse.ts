@@ -62,7 +62,7 @@ describe("parseAndCheckResponse", () => {
     "throws a network error with a status code and result",
     (resolve, reject) => {
       const status = 403;
-      const body = { data: "fail" }; // does not contain data or errors
+      const body = { data: "fail" }; //does not contain data or errors
       fetchMock.mock("begin:/error", {
         body,
         status,
@@ -82,7 +82,7 @@ describe("parseAndCheckResponse", () => {
   );
 
   itAsync("throws a server error on incorrect data", (resolve, reject) => {
-    const data = { hello: "world" }; // does not contain data or erros
+    const data = { hello: "world" }; //does not contain data or erros
     fetchMock.mock("begin:/incorrect", data);
     fetch("incorrect")
       .then(parseAndCheckHttpResponse(operations))
@@ -98,7 +98,7 @@ describe("parseAndCheckResponse", () => {
   });
 
   itAsync("is able to return a correct GraphQL result", (resolve, reject) => {
-    const errors = ["", `${new Error("hi")}`];
+    const errors = ["", "" + new Error("hi")];
     const data = { data: { hello: "world" }, errors };
 
     fetchMock.mock("begin:/data", {

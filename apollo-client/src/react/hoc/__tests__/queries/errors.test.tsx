@@ -1,17 +1,17 @@
-import * as React from "react";
+import React from "react";
 import { render, waitFor } from "@testing-library/react";
 import gql from "graphql-tag";
+import { withState } from "./recomposeWithState";
 import { DocumentNode } from "graphql";
-import { ApolloClient, ApolloProvider } from "@apollo/client";
-import { graphql, ChildProps } from "@apollo/client/react/hoc";
 
+import { ApolloClient } from "../../../../core";
+import { ApolloProvider } from "../../../context";
+import { Hermes as Cache } from "../../../../../../src";
 import { QueryResult } from "../../../types/types";
 import { itAsync, mockSingleLink } from "../../../../testing";
 import { Query } from "../../../components/Query";
-import { DataValue } from "../../types";
-import { Hermes } from "../../../../../../src";
-
-import { withState } from "./recomposeWithState";
+import { graphql } from "../../graphql";
+import { ChildProps, DataValue } from "../../types";
 
 describe("[queries] errors", () => {
   let error: typeof console.error;
@@ -42,7 +42,7 @@ describe("[queries] errors", () => {
     });
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     class ErrorBoundary extends React.Component<React.PropsWithChildren> {
@@ -52,6 +52,7 @@ describe("[queries] errors", () => {
       }
 
       render() {
+        // eslint-disable-next-line testing-library/no-node-access
         return this.props.children;
       }
     }
@@ -91,7 +92,7 @@ describe("[queries] errors", () => {
     });
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const ContainerWithData = graphql(query)(() => null);
@@ -126,7 +127,7 @@ describe("[queries] errors", () => {
     });
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const ErrorContainer = graphql(query)(
@@ -137,7 +138,6 @@ describe("[queries] errors", () => {
           expect(data!.error!.networkError).toBeTruthy();
           done = true;
         }
-
         render() {
           return null;
         }
@@ -202,7 +202,7 @@ describe("[queries] errors", () => {
       );
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       type Data = typeof data;
@@ -220,6 +220,7 @@ describe("[queries] errors", () => {
         "setVar",
         1
       )(
+        // @ts-expect-error
         graphql<Props, Data, Vars>(query)(
           class extends React.Component<ChildProps<Props, Data, Vars>> {
             componentDidUpdate() {
@@ -247,7 +248,6 @@ describe("[queries] errors", () => {
                 });
               }
             }
-
             render() {
               return null;
             }
@@ -294,7 +294,7 @@ describe("[queries] errors", () => {
       });
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       const origError = console.error;
@@ -360,7 +360,7 @@ describe("[queries] errors", () => {
       );
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       let count = 0;
@@ -434,7 +434,7 @@ describe("[queries] errors", () => {
     );
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     let count = 0;
@@ -523,7 +523,7 @@ describe("[queries] errors", () => {
 
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
       let count = 0;
       const noop = () => null;
@@ -566,9 +566,7 @@ describe("[queries] errors", () => {
                 case 2:
                   expect(props.data!.loading).toBeFalsy();
                   expect(props.data!.error).toBeTruthy();
-                  // eslint-disable-next-line no-case-declarations
                   const origError = console.error;
-                  // eslint-disable-next-line no-case-declarations
                   const errorMock = jest.fn();
                   console.error = errorMock;
                   props.hideContainer();
@@ -587,7 +585,6 @@ describe("[queries] errors", () => {
               reject(err);
             }
           }
-
           render() {
             return null;
           }
@@ -601,7 +598,6 @@ describe("[queries] errors", () => {
             showContainer: true,
           };
         }
-
         render() {
           const {
             state: { showContainer },
@@ -651,7 +647,7 @@ describe("[queries] errors", () => {
       );
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       let count = 0;
@@ -703,9 +699,9 @@ describe("[queries] errors", () => {
           super(props);
           this.state = { show: true };
         }
-
         render() {
           if (!this.state.show) return null;
+          // eslint-disable-next-line testing-library/no-node-access
           return this.props.children(() =>
             this.setState(({ show }) => ({ show: !show }))
           );
@@ -750,7 +746,7 @@ describe("[queries] errors", () => {
 
         const client = new ApolloClient({
           link,
-          cache: new Hermes({ addTypename: false }),
+          cache: new Cache({ addTypename: false }),
         });
 
         const ErrorContainer = graphql(query, {
@@ -766,7 +762,6 @@ describe("[queries] errors", () => {
               expect(data).toMatchObject({ allPeople: { people: null } });
               done = true;
             }
-
             render() {
               return null;
             }
@@ -812,7 +807,7 @@ describe("[queries] errors", () => {
 
         const client = new ApolloClient({
           link,
-          cache: new Hermes({ addTypename: false }),
+          cache: new Cache({ addTypename: false }),
         });
 
         class ErrorContainer extends React.Component<QueryResult> {
@@ -825,7 +820,6 @@ describe("[queries] errors", () => {
             expect(props.data!.allPeople!).toMatchObject({ people: null });
             done = true;
           }
-
           render() {
             return null;
           }

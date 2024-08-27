@@ -1,16 +1,9 @@
+import { invariant, newInvariantError } from "../../utilities/globals/index";
 import { equal } from "@wry/equality";
-// eslint-disable-next-line import/no-extraneous-dependencies
 import { Trie } from "@wry/trie";
 import type { SelectionSetNode, FieldNode } from "graphql";
 import { Kind } from "graphql";
-import { NormalizedCache } from "@apollo/client/cache";
-import type {
-  ApolloCache,
-  InMemoryCache,
-  ReadMergeModifyContext,
-} from "@apollo/client";
 
-import { invariant, newInvariantError } from "../../utilities/globals/index";
 import type {
   FragmentMap,
   FragmentMapFunction,
@@ -34,10 +27,13 @@ import {
   argumentsObjectFromField,
   canonicalStringify,
 } from "../../utilities/index";
-import type { Cache } from "../../core/index";
-import type { ReadFieldFunction } from "../core/types/common";
 
-import type { MergeTree, InMemoryCacheConfig } from "./types";
+import type {
+  NormalizedCache,
+  ReadMergeModifyContext,
+  MergeTree,
+  InMemoryCacheConfig,
+} from "./types";
 import {
   isArray,
   makeProcessedFieldsMerger,
@@ -46,8 +42,11 @@ import {
   extractFragmentContext,
 } from "./helpers";
 import type { StoreReader } from "./readFromStore";
+import type { InMemoryCache } from "./inMemoryCache";
 import type { EntityStore } from "./entityStore";
-import {normalizeReadFieldOptions} from "./policies";
+import type { Cache } from "../../core/index";
+import { normalizeReadFieldOptions } from "./policies";
+import type { ReadFieldFunction } from "../core/types/common";
 
 export interface WriteContext extends ReadMergeModifyContext {
   readonly written: {
@@ -118,7 +117,7 @@ interface ProcessSelectionSetOptions {
 
 export class StoreWriter {
   constructor(
-    public readonly cache: ApolloCache<any> & Pick<InMemoryCache, "policies">,
+    public readonly cache: InMemoryCache,
     private reader?: StoreReader,
     private fragments?: InMemoryCacheConfig["fragments"]
   ) {}
@@ -261,7 +260,7 @@ export class StoreWriter {
       getTypenameFromResult(result, selectionSet, context.fragmentMap) ||
       (dataId && (context.store.get(dataId, "__typename") as string));
 
-    if (typeof typename === "string") {
+    if ("string" === typeof typename) {
       incoming.__typename = typename;
     }
 
@@ -326,7 +325,7 @@ export class StoreWriter {
 
         const childTree = getChildMergeTree(mergeTree, storeFieldName);
 
-        const incomingValue = this.processFieldValue(
+        let incomingValue = this.processFieldValue(
           value,
           field,
           // Reset context.clientOnly and context.deferred to their default
@@ -415,7 +414,7 @@ export class StoreWriter {
       if (!dataId) throw e;
     }
 
-    if (typeof dataId === "string") {
+    if ("string" === typeof dataId) {
       const dataRef = makeReference(dataId);
 
       // Avoid processing the same entity object using the same selection
@@ -869,9 +868,9 @@ For more information about these options, please refer to the documentation:
     fieldName,
     parentType,
     childTypenames.length ?
-      `either ensure all objects of type ${childTypenames.join(
-        " and "
-      )} have an ID or a custom merge function, or `
+      "either ensure all objects of type " +
+        childTypenames.join(" and ") +
+        " have an ID or a custom merge function, or "
     : "",
     typeDotName,
     { ...existing },

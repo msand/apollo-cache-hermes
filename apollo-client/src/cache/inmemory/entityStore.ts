@@ -1,46 +1,42 @@
+import { invariant } from "../../utilities/globals/index";
 import type { OptimisticDependencyFunction } from "optimism";
-// eslint-disable-next-line import/no-extraneous-dependencies
 import { dep } from "optimism";
 import { equal } from "@wry/equality";
-// eslint-disable-next-line import/no-extraneous-dependencies
 import { Trie } from "@wry/trie";
-import type { DocumentNode, FieldNode, SelectionSetNode } from "graphql";
-import {
-  Modifier, ModifierDetails,
-  Modifiers,
-  NormalizedCache,
-  Policies,
-} from "@apollo/client/cache";
-import { NormalizedCacheObject } from "@apollo/client";
-import type { StorageType } from "@apollo/client/cache/inmemory/policies.js";
 
-import { invariant } from "../../utilities/globals/index.js";
-import type { StoreValue, StoreObject, Reference } from "../../utilities/index.js";
+import type {
+  StoreValue,
+  StoreObject,
+  Reference,
+} from "../../utilities/index";
 import {
   isReference,
   makeReference,
-} from "../../utilities/index.js";
-import type {
   DeepMerger,
   maybeDeepFreeze,
   canUseWeakMap,
   isNonNullObject,
-} from "../../utilities/index.js";
+} from "../../utilities/index";
+import type { NormalizedCache, NormalizedCacheObject } from "./types";
+import { hasOwn, fieldNameFromStoreName } from "./helpers";
+import type { Policies, StorageType } from "./policies";
 import type { Cache } from "../core/types/Cache";
 import type {
   SafeReadonly,
+  Modifier,
+  Modifiers,
   ReadFieldOptions,
   ToReferenceFunction,
   CanReadFunction,
   InvalidateModifier,
   DeleteModifier,
+  ModifierDetails,
 } from "../core/types/common";
+import type { DocumentNode, FieldNode, SelectionSetNode } from "graphql";
 
-import { hasOwn, fieldNameFromStoreName } from "./helpers";
-
-const DELETE: DeleteModifier = Object.create(null);
-const delModifier: Modifier<any> = () => DELETE;
-const INVALIDATE: InvalidateModifier = Object.create(null);
+export const DELETE: DeleteModifier = Object.create(null);
+export const delModifier: Modifier<any> = () => DELETE;
+export const INVALIDATE: InvalidateModifier = Object.create(null);
 
 export abstract class EntityStore implements NormalizedCache {
   protected data: NormalizedCacheObject = Object.create(null);
@@ -234,7 +230,7 @@ export abstract class EntityStore implements NormalizedCache {
             : fieldNameOrOptions,
             { store: this }
           ),
-      } as unknown as ModifierDetails;
+      } satisfies Partial<ModifierDetails>;
 
       Object.keys(storeObject).forEach((storeFieldName) => {
         const fieldName = fieldNameFromStoreName(storeFieldName);
@@ -246,15 +242,13 @@ export abstract class EntityStore implements NormalizedCache {
           );
         if (modify) {
           let newValue =
-            modify === delModifier ? DELETE
-              // @ts-ignore TODO
-            : (
+            modify === delModifier ? DELETE : (
               modify(maybeDeepFreeze(fieldValue), {
                 ...sharedDetails,
                 fieldName,
                 storeFieldName,
                 storage: this.getStorage(dataId, storeFieldName),
-              } as unknown as ModifierDetails)
+              })
             );
           if (newValue === INVALIDATE) {
             this.group.dirty(dataId, storeFieldName);
@@ -290,7 +284,6 @@ export abstract class EntityStore implements NormalizedCache {
                     } else {
                       // Do not warn on primitive values, since those could never be represented
                       // by a reference. This is a valid (albeit uncommon) use case.
-                      // eslint-disable-next-line no-lonely-if
                       if (typeof value === "object" && !!value) {
                         const [id] = this.policies.identify(value);
                         // check if object could even be referenced, otherwise we are not interested in it for this warning
@@ -536,7 +529,6 @@ export abstract class EntityStore implements NormalizedCache {
     callback: Cache.WatchCallback<any>,
     details: string
   ): object;
-
   /** overload for `StoreReader.executeSelectionSet` */
   public makeCacheKey(
     selectionSet: SelectionSetNode,
@@ -544,14 +536,12 @@ export abstract class EntityStore implements NormalizedCache {
     varString: string | undefined,
     canonizeResults: boolean
   ): object;
-
   /** overload for `StoreReader.executeSubSelectedArray` */
   public makeCacheKey(
     field: FieldNode,
     array: readonly any[],
     varString: string | undefined
   ): object;
-
   /** @deprecated This is only meant for internal usage,
    * in your own code please use a `Trie` instance instead. */
   public makeCacheKey(...args: any[]): object;
@@ -678,7 +668,7 @@ function makeDepKey(dataId: string, storeFieldName: string) {
   // Since field names cannot have '#' characters in them, this method
   // of joining the field name and the ID should be unambiguous, and much
   // cheaper than JSON.stringify([dataId, fieldName]).
-  return `${storeFieldName}#${dataId}`;
+  return storeFieldName + "#" + dataId;
 }
 
 export function maybeDependOnExistenceOfEntity(
@@ -829,13 +819,14 @@ class Layer extends EntityStore {
       : fromParent;
   }
 
-  public getStorage(
-    idOrObj: string | StoreObject,
-    ...storeFieldNames: (string | number)[]
-  ): StorageType {
+  public getStorage(): StorageType {
     let p: EntityStore = this.parent;
     while ((p as Layer).parent) p = (p as Layer).parent;
-    return p.getStorage(idOrObj, ...storeFieldNames);
+    return p.getStorage.apply(
+      p,
+      // @ts-expect-error
+      arguments
+    );
   }
 }
 

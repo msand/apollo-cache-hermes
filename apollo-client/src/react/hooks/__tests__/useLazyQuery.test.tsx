@@ -1,16 +1,19 @@
-import * as React from "react";
+import React from "react";
 import { GraphQLError } from "graphql";
 import gql from "graphql-tag";
 import { act, render, renderHook, waitFor } from "@testing-library/react";
-import { ApolloClient, ApolloProvider, ApolloLink } from "@apollo/client";
 
+import { Hermes } from "../../../../../src";
 import {
+  ApolloClient,
   ApolloError,
+  ApolloLink,
   ErrorPolicy,
   NetworkStatus,
   TypedDocumentNode,
 } from "../../../core";
 import { Observable } from "../../../utilities";
+import { ApolloProvider } from "../../../react";
 import {
   MockedProvider,
   mockSingleLink,
@@ -22,7 +25,6 @@ import {
 import { useLazyQuery } from "../useLazyQuery";
 import { QueryResult } from "../../types/types";
 import { profileHook } from "../../../testing/internal";
-import { Hermes } from "../../../../../src";
 
 describe("useLazyQuery Hook", () => {
   const helloQuery: TypedDocumentNode<{
@@ -1575,13 +1577,13 @@ describe("useLazyQuery Hook", () => {
 
     const client = new ApolloClient({ link, cache: new Hermes() });
 
-    const countRef = { current: 0 };
+    let countRef = { current: 0 };
 
     const trackClosureValue = jest.fn();
 
     const { result, rerender } = renderHook(
       () => {
-        const count = countRef.current;
+        let count = countRef.current;
 
         return useLazyQuery(query, {
           fetchPolicy: "cache-first",
@@ -1917,7 +1919,7 @@ describe("useLazyQuery Hook", () => {
 });
 
 describe.skip("Type Tests", () => {
-  it("NoInfer prevents adding arbitrary additional variables", () => {
+  test("NoInfer prevents adding arbitrary additional variables", () => {
     const typedNode = {} as TypedDocumentNode<{ foo: string }, { bar: number }>;
     const [_, { variables }] = useLazyQuery(typedNode, {
       variables: {

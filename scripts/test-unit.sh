@@ -5,28 +5,9 @@ source ./scripts/include/shell.sh
 source ./scripts/include/node.sh
 
 FILES=("${OPTIONS_ARGS[@]}")
-if [[ "${#FILES[@]}" == "0" ]]; then
-  FILES+=($(
-    find ./test \
-      \( -name "*.ts" -not -name "*.d.ts" \) \
-      -or -name "*.tsx"
-  ))
-fi
-
-# We take ts files as arguments for everyone's sanity; but redirect to their
-# compiled sources under the covers.
-for i in "${!FILES[@]}"; do
-  file="${FILES[$i]}"
-  if [[ "${file##*.}" == "ts" ]] && [[ "${file##*/}" != "jest.config.ts" ]]; then
-    FILES[$i]="${file%.*}.js"
-  fi
-  if [[ "${file##*.}" == "tsx" ]]; then
-    FILES[$i]="${file%.*}.jsx"
-  fi
-done
 
 OPTIONS=(
-  --config ./test/unit/jest.config.js
+  --config ./test/config/jest.config.ts
 )
 DEBUGGING=false
 

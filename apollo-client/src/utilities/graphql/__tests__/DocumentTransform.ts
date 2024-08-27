@@ -1,9 +1,8 @@
-import { gql } from "graphql-tag";
-import { DocumentNode, visit, Kind } from "graphql";
-
 import { DocumentTransform } from "../DocumentTransform";
 import { isMutationOperation, isQueryOperation } from "../operations";
 import { removeDirectivesFromDocument } from "../transform";
+import { gql } from "graphql-tag";
+import { DocumentNode, visit, Kind } from "graphql";
 
 function stripDirective(directive: string) {
   return (document: DocumentNode) => {
@@ -48,7 +47,7 @@ function addClientDirectiveToField(fieldName: string) {
   };
 }
 
-it("can transform a document", () => {
+test("can transform a document", () => {
   const query = gql`
     query TestQuery {
       user {
@@ -72,7 +71,7 @@ it("can transform a document", () => {
   `);
 });
 
-it("returns unmodified document if trying to transform an already computed result", () => {
+test("returns unmodified document if trying to transform an already computed result", () => {
   const query = gql`
     query TestQuery {
       user {
@@ -97,7 +96,7 @@ it("returns unmodified document if trying to transform an already computed resul
   );
 });
 
-it("caches the result of the transform by default", () => {
+test("caches the result of the transform by default", () => {
   const query = gql`
     query TestQuery {
       user {
@@ -130,7 +129,7 @@ it("caches the result of the transform by default", () => {
   expect(transform).toHaveBeenCalledTimes(1);
 });
 
-it("allows custom cache keys to be defined", () => {
+test("allows custom cache keys to be defined", () => {
   const query = gql`
     query TestQuery {
       user @network {
@@ -199,7 +198,7 @@ it("allows custom cache keys to be defined", () => {
   expect(transform).toHaveBeenCalledTimes(2);
 });
 
-it("can disable caching the result output", () => {
+test("can disable caching the result output", () => {
   const query = gql`
     query {
       user {
@@ -232,7 +231,7 @@ it("can disable caching the result output", () => {
   expect(transform).toHaveBeenCalledTimes(2);
 });
 
-it("can combine 2 transforms with `concat`", async () => {
+test("can combine 2 transforms with `concat`", async () => {
   const query = gql`
     query TestQuery {
       user @nonreactive {
@@ -258,7 +257,7 @@ it("can combine 2 transforms with `concat`", async () => {
   `);
 });
 
-it("runs concatenated transform after original transform", () => {
+test("runs concatenated transform after original transform", () => {
   const query = gql`
     query TestQuery {
       user {
@@ -298,7 +297,7 @@ it("runs concatenated transform after original transform", () => {
   expect(result).toMatchDocument(expected);
 });
 
-it("can combine multiple transforms with `concat`", async () => {
+test("can combine multiple transforms with `concat`", async () => {
   const query = gql`
     query TestQuery {
       user @nonreactive {
@@ -327,7 +326,7 @@ it("can combine multiple transforms with `concat`", async () => {
   `);
 });
 
-it("caches the result output from a combined transform when both transforms are cached", async () => {
+test("caches the result output from a combined transform when both transforms are cached", async () => {
   const query = gql`
     query TestQuery {
       user @nonreactive {
@@ -368,7 +367,7 @@ it("caches the result output from a combined transform when both transforms are 
   expect(stripNonReactive).toHaveBeenCalledTimes(1);
 });
 
-it("allows non cached transforms to be run when concatenated", async () => {
+test("allows non cached transforms to be run when concatenated", async () => {
   const query = gql`
     query TestQuery {
       user @nonreactive {
@@ -439,7 +438,7 @@ it("allows non cached transforms to be run when concatenated", async () => {
   expect(stripNonReactive).toHaveBeenCalledTimes(2);
 });
 
-it("can conditionally run transforms using `DocumentTransform.split`", () => {
+test("can conditionally run transforms using `DocumentTransform.split`", () => {
   const mutation = gql`
     mutation TestMutation {
       incrementCounter @client {
@@ -477,7 +476,7 @@ it("can conditionally run transforms using `DocumentTransform.split`", () => {
   expect(mutationResult).toMatchDocument(mutation);
 });
 
-it("properly caches the result of `filter` when the original transform is cached", () => {
+test("properly caches the result of `filter` when the original transform is cached", () => {
   const query = gql`
     query TestQuery {
       user {
@@ -513,7 +512,7 @@ it("properly caches the result of `filter` when the original transform is cached
   expect(transform).toHaveBeenCalledTimes(1);
 });
 
-it("reruns transform returned from `DocumentTransform.split` when the original transform is not cached", () => {
+test("reruns transform returned from `DocumentTransform.split` when the original transform is not cached", () => {
   const query = gql`
     query TestQuery {
       user {
@@ -549,7 +548,7 @@ it("reruns transform returned from `DocumentTransform.split` when the original t
   expect(transform).toHaveBeenCalledTimes(2);
 });
 
-it("properly handles combinations of `DocumentTransform.split` and `filter`", () => {
+test("properly handles combinations of `DocumentTransform.split` and `filter`", () => {
   const mutation = gql`
     mutation TestMutation {
       incrementCounter @client {
@@ -613,7 +612,7 @@ it("properly handles combinations of `DocumentTransform.split` and `filter`", ()
   `);
 });
 
-it("executes other transform when using `DocumentTransform.split` when condition is false", () => {
+test("executes other transform when using `DocumentTransform.split` when condition is false", () => {
   const mutation = gql`
     mutation TestMutation {
       incrementCounter @client {
@@ -659,7 +658,7 @@ it("executes other transform when using `DocumentTransform.split` when condition
   `);
 });
 
-it("errors when passing a document that has not been parsed with `gql`", () => {
+test("errors when passing a document that has not been parsed with `gql`", () => {
   const query = `
     query TestQuery {
       user {

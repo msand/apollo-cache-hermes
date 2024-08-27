@@ -1,13 +1,19 @@
 import type { DocumentNode, FieldNode } from "graphql";
-import { FieldMergeFunction } from "@apollo/client";
-import type { TypePolicies, PossibleTypesMap } from "@apollo/client";
-import type {
-  KeyFieldsFunction,
-  StorageType,
-} from "@apollo/client/cache/inmemory/policies";
 
 import type { Transaction } from "../core/cache";
-import type { StoreObject, StoreValue, Reference } from "../../utilities/index";
+import type {
+  StoreObject,
+  StoreValue,
+  Reference,
+} from "../../utilities/index";
+import type { FieldValueGetter } from "./entityStore";
+import type {
+  TypePolicies,
+  PossibleTypesMap,
+  KeyFieldsFunction,
+  StorageType,
+  FieldMergeFunction,
+} from "./policies";
 import type {
   Modifiers,
   ToReferenceFunction,
@@ -15,7 +21,6 @@ import type {
   AllFieldsModifier,
 } from "../core/types/common";
 
-import type { FieldValueGetter } from "./entityStore";
 import type { FragmentRegistryAPI } from "./fragmentRegistry";
 
 export type { StoreObject, StoreValue, Reference };

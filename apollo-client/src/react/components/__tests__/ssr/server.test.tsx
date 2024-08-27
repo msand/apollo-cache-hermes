@@ -1,5 +1,5 @@
 /** @jest-environment node */
-import * as React from "react";
+import React from "react";
 import {
   print,
   graphql as execute,
@@ -10,12 +10,14 @@ import {
   GraphQLID,
 } from "graphql";
 import gql from "graphql-tag";
-import { ApolloClient, ApolloProvider, ApolloLink } from "@apollo/client";
 
+import { ApolloClient } from "../../../../core";
+import { Hermes as Cache } from "../../../../../../src";
+import { ApolloProvider } from "../../../context";
+import { ApolloLink } from "../../../../link/core";
 import { Observable } from "../../../../utilities";
 import { renderToStringWithData } from "../../../ssr";
 import { Query } from "../../Query";
-import { Hermes } from "../../../../../../src";
 
 const planetMap = new Map([["Planet:1", { id: "Planet:1", name: "Tatooine" }]]);
 
@@ -101,9 +103,9 @@ const Schema = new GraphQLSchema({ query: QueryType });
 
 describe("SSR", () => {
   it("should work with React.createContext", async () => {
-    const defaultValue = "default";
-    const Context = React.createContext(defaultValue);
-    const providerValue = "provider";
+    let defaultValue = "default";
+    let Context = React.createContext(defaultValue);
+    let providerValue = "provider";
     expect(
       await renderToStringWithData(
         <React.Fragment>
@@ -139,9 +141,7 @@ describe("SSR", () => {
         </Context.Consumer>
       )
     ).toBe(defaultValue);
-    const ContextForUndefined = React.createContext<void | string>(
-      defaultValue
-    );
+    let ContextForUndefined = React.createContext<void | string>(defaultValue);
 
     expect(
       await renderToStringWithData(
@@ -174,7 +174,7 @@ describe("SSR", () => {
             });
         });
       }),
-      cache: new Hermes(),
+      cache: new Cache(),
     });
 
     expect(

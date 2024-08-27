@@ -1,5 +1,4 @@
 import type { DocumentNode } from "../../core/index";
-
 import { getOperationDefinition } from "./getFromAST";
 
 function isOperation(

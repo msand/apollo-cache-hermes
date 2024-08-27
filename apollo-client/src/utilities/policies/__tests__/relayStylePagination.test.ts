@@ -1,8 +1,11 @@
-import type { FieldFunctionOptions, InMemoryCache } from "@apollo/client";
-
-import { isReference, makeReference, StoreObject } from "../../../cache";
-import { relayStylePagination, TRelayPageInfo } from "../pagination";
+import {
+  FieldFunctionOptions,
+  isReference,
+  makeReference,
+  StoreObject,
+} from "../../../cache";
 import { Hermes } from "../../../../../src";
+import { relayStylePagination, TRelayPageInfo } from "../pagination";
 
 describe("relayStylePagination", () => {
   const policy = relayStylePagination();
@@ -178,10 +181,10 @@ describe("relayStylePagination", () => {
       fieldName: "fake",
       storeFieldName: "fake",
       field: null,
-      isReference,
+      isReference: isReference,
       toReference: () => undefined,
       storage: {},
-      cache: new Hermes() as unknown as InMemoryCache,
+      cache: new Hermes(),
       readField: () => undefined,
       canRead: () => false,
       mergeObjects: (existing, _incoming) => existing,

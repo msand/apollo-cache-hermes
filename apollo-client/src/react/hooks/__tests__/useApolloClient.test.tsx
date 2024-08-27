@@ -1,10 +1,12 @@
-import * as React from "react";
+import React from "react";
 import { render } from "@testing-library/react";
 import { InvariantError } from "ts-invariant";
-import { ApolloClient, ApolloLink, ApolloProvider } from "@apollo/client";
 
-import { useApolloClient } from "../useApolloClient";
+import { ApolloClient } from "../../../core";
+import { ApolloLink } from "../../../link/core";
+import { ApolloProvider } from "../../context";
 import { Hermes } from "../../../../../src";
+import { useApolloClient } from "../useApolloClient";
 
 describe("useApolloClient Hook", () => {
   it("should return a client instance from the context if available", () => {

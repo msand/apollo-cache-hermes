@@ -1,19 +1,18 @@
 /** @jest-environment node */
-import * as React from "react";
+import React from "react";
 import { DocumentNode } from "graphql";
 import gql from "graphql-tag";
-import type { Trie } from "@wry/trie";
-import { ApolloClient, ApolloProvider } from "@apollo/client";
-
 import {
   MockedProvider,
   MockedResponse,
   mockSingleLink,
 } from "../../../testing";
-import { getApolloContext } from "../../context";
+import { ApolloClient } from "../../../core";
+import { Hermes } from "../../../../../src";
+import { ApolloProvider, getApolloContext } from "../../context";
 import { useApolloClient, useQuery } from "../../hooks";
 import { renderToStringWithData } from "..";
-import { Hermes } from "../../../../../src";
+import type { Trie } from "@wry/trie";
 
 describe("useQuery Hook SSR", () => {
   const CAR_QUERY: DocumentNode = gql`
@@ -157,7 +156,7 @@ describe("useQuery Hook SSR", () => {
     const Component = () => {
       const { data, loading } = useQuery(CAR_QUERY, { ssr: false });
 
-      const content = null;
+      let content = null;
       switch (renderCount) {
         case 0:
           expect(loading).toBeTruthy();

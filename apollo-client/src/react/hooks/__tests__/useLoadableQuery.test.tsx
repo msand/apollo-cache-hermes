@@ -1,5 +1,4 @@
-import * as React from "react";
-import { Suspense, useState } from "react";
+import React, { Suspense, useState } from "react";
 import {
   act,
   render,
@@ -12,15 +11,14 @@ import userEvent from "@testing-library/user-event";
 import { ErrorBoundary as ReactErrorBoundary } from "react-error-boundary";
 import { expectTypeOf } from "expect-type";
 import { GraphQLError } from "graphql";
-import invariant, { InvariantError } from "ts-invariant";
-import { ApolloClient, ApolloProvider, ApolloLink } from "@apollo/client";
-
 import {
   gql,
   ApolloError,
+  ApolloClient,
   ErrorPolicy,
   NetworkStatus,
   TypedDocumentNode,
+  ApolloLink,
   Observable,
   OperationVariables,
   RefetchWritePolicy,
@@ -41,9 +39,12 @@ import {
 import { useLoadableQuery } from "../useLoadableQuery";
 import type { UseReadQueryResult } from "../useReadQuery";
 import { useReadQuery } from "../useReadQuery";
+import { ApolloProvider } from "../../context";
+import { Hermes } from "../../../../../src";
 import { LoadableQueryHookFetchPolicy } from "../../types/types";
-import { QueryRef } from "../..";
+import { QueryRef } from "../../../react";
 import { FetchMoreFunction, RefetchFunction } from "../useSuspenseQuery";
+import invariant, { InvariantError } from "ts-invariant";
 import {
   Profiler,
   SimpleCaseData,
@@ -53,7 +54,6 @@ import {
   spyOnConsole,
   useTrackRenders,
 } from "../../../testing/internal";
-import { Hermes } from "../../../../../src";
 
 const IS_REACT_19 = React.version.startsWith("19");
 

@@ -1,8 +1,6 @@
-import { ApolloLink } from "@apollo/client";
-
 import type { Operation, FetchResult, NextLink } from "../core/index";
+import { ApolloLink } from "../core/index";
 import type { Observable } from "../../utilities/index";
-
 import type { BatchHandler } from "./batching";
 import { OperationBatcher } from "./batching";
 export type { BatchableRequest, BatchHandler } from "./batching";
@@ -65,7 +63,7 @@ export class BatchLink extends ApolloLink {
       batchKey,
     });
 
-    // make this link terminating
+    //make this link terminating
     if (fetchParams!.batchHandler!.length <= 1) {
       this.request = (operation) => this.batcher.enqueueRequest({ operation });
     }

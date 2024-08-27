@@ -56,7 +56,7 @@ export function buildDelayFunction(
     if (jitter) {
       // We opt for a full jitter approach for a mostly uniform distribution,
       // but bound it within initialDelay and delay for everyone's sanity.
-      delay *= Math.random();
+      delay = Math.random() * delay;
     }
 
     return delay;

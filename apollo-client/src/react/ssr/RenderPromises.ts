@@ -1,10 +1,8 @@
 import type * as ReactTypes from "react";
-// eslint-disable-next-line import/no-extraneous-dependencies
-import { Trie } from "@wry/trie";
-import { ObservableQuery } from "@apollo/client";
 
-import type { OperationVariables } from "../../core/index";
+import type { ObservableQuery, OperationVariables } from "../../core/index";
 import type { QueryDataOptions } from "../types/types";
+import { Trie } from "@wry/trie";
 import { canonicalStringify } from "../../cache/index";
 
 // TODO: A vestigial interface from when hooks were implemented with utility

@@ -1,18 +1,19 @@
 import gql from "graphql-tag";
 import { DocumentNode, ExecutionResult } from "graphql";
 import { assign } from "lodash";
+
+import { LocalState } from "../../core/LocalState";
+
 import {
   ApolloClient,
   ApolloQueryResult,
   Resolvers,
   WatchQueryOptions,
-  isReference,
-  Observable,
-  Observer,
-  ApolloLink,
-} from "@apollo/client";
+} from "../../core";
 
-import { LocalState } from "../../core/LocalState";
+import { isReference } from "../../cache";
+import { Observable, Observer } from "../../utilities";
+import { ApolloLink } from "../../link/core";
 import { itAsync } from "../../testing";
 import mockQueryManager from "../../testing/core/mocking/mockQueryManager";
 import wrap from "../../testing/core/wrap";
@@ -1210,7 +1211,7 @@ describe("Force local resolvers", () => {
     }
   );
 
-  it("should allow client-only virtual resolvers (#4731)", () => {
+  it("should allow client-only virtual resolvers (#4731)", function () {
     const query = gql`
       query UserData {
         userData @client {
@@ -1235,7 +1236,7 @@ describe("Force local resolvers", () => {
         },
         User: {
           fullName(data) {
-            return `${data.firstName} ${data.lastName}`;
+            return data.firstName + " " + data.lastName;
           },
         },
       },

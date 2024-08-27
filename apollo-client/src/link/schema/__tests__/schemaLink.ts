@@ -1,8 +1,8 @@
 import { makeExecutableSchema } from "@graphql-tools/schema";
 import gql from "graphql-tag";
-import { SchemaLink } from "@apollo/client/link/schema";
-import { execute } from "@apollo/client";
 
+import { execute } from "../../core/execute";
+import { SchemaLink } from "../";
 import { itAsync } from "../../../testing";
 
 const sampleQuery = gql`
@@ -45,8 +45,8 @@ describe("SchemaLink", () => {
   });
 
   it("correctly receives the constructor arguments", () => {
-    const rootValue = {};
-    const link = new SchemaLink({ schema, rootValue });
+    let rootValue = {};
+    let link = new SchemaLink({ schema, rootValue });
     expect(link.rootValue).toEqual(rootValue);
     expect(link.schema).toEqual(schema);
   });
@@ -155,7 +155,6 @@ describe("SchemaLink", () => {
       });
       observable.subscribe(
         next,
-        // eslint-disable-next-line handle-callback-err
         (error) => reject("Shouldn't call onError"),
         () => {
           try {
@@ -199,7 +198,6 @@ describe("SchemaLink", () => {
     });
     observable.subscribe(
       next,
-      // eslint-disable-next-line handle-callback-err
       (error) => reject("Shouldn't call onError"),
       () => {
         try {

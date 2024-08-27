@@ -2,13 +2,13 @@ import React from "react";
 import { render } from "@testing-library/react";
 import gql from "graphql-tag";
 import { DocumentNode } from "graphql";
-import { ApolloClient } from "@apollo/client";
 
+import { ApolloClient } from "../../../../core";
 import { createMockClient, itAsync, MockedProvider } from "../../../../testing";
 import { NormalizedCacheObject } from "../../../../cache";
 import { ApolloProvider } from "../../../context";
 import { graphql } from "../../graphql";
-import {ChildProps} from "@apollo/client/react/hoc";
+import { ChildProps } from "../../types";
 
 const query: DocumentNode = gql`
   mutation addPerson {
@@ -155,6 +155,7 @@ describe("graphql(mutation)", () => {
       }
 
       render() {
+        // eslint-disable-next-line testing-library/no-node-access
         return this.props.children;
       }
     }
@@ -177,7 +178,6 @@ describe("graphql(mutation)", () => {
             resolve();
           });
         }
-
         render() {
           return null;
         }
@@ -219,7 +219,6 @@ describe("graphql(mutation)", () => {
               resolve();
             });
           }
-
           render() {
             return null;
           }
@@ -267,7 +266,7 @@ describe("graphql(mutation)", () => {
           variables: { first: 1 },
         }),
       })(
-        class extends React.Component<ChildProps<Props, {}, {}>> {
+        class extends React.Component<ChildProps<Props>> {
           componentDidMount() {
             this.props.mutate!({
               variables: { second: 2 },
@@ -276,7 +275,6 @@ describe("graphql(mutation)", () => {
               resolve();
             });
           }
-
           render() {
             return null;
           }

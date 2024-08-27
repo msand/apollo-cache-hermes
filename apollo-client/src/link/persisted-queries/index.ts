@@ -1,20 +1,22 @@
-import type { DocumentNode, ExecutionResult, GraphQLError } from "graphql";
-import { ApolloLink } from "@apollo/client";
-
 import { invariant } from "../../utilities/globals/index";
+
+import { print } from "../../utilities/index";
+import type { DocumentNode, ExecutionResult, GraphQLError } from "graphql";
+
+import type { Operation } from "../core/index";
+import { ApolloLink } from "../core/index";
+import type {
+  Observer,
+  ObservableSubscription,
+} from "../../utilities/index";
+import { Observable, compact, isNonEmptyArray } from "../../utilities/index";
+import type { NetworkError } from "../../errors/index";
+import type { ServerError } from "../utils/index";
 import {
-  print,
-  Observable,
-  compact,
-  isNonEmptyArray,
   cacheSizes,
   AutoCleanedWeakCache,
   defaultCacheSizes,
 } from "../../utilities/index";
-import type { Operation } from "../core/index";
-import type { Observer, ObservableSubscription } from "../../utilities/index";
-import type { NetworkError } from "../../errors/index";
-import type { ServerError } from "../utils/index";
 
 export const VERSION = 1;
 
@@ -65,7 +67,7 @@ function processErrors(
   if (isNonEmptyArray(graphQLErrors)) {
     graphQLErrors.forEach((error) => {
       byMessage[error.message] = error;
-      if (typeof error.extensions?.code === "string")
+      if (typeof error.extensions?.code == "string")
         byCode[error.extensions.code] = error;
     });
   }
@@ -186,7 +188,7 @@ export const createPersistedQueryLink = (
             }
 
             // Network errors can return GraphQL errors on for example a 403
-            let networkErrors: GraphQLError[] | undefined;
+            let networkErrors;
             if (typeof networkError?.result !== "string") {
               networkErrors =
                 networkError &&
@@ -194,7 +196,7 @@ export const createPersistedQueryLink = (
                 (networkError.result.errors as GraphQLError[]);
             }
             if (isNonEmptyArray(networkErrors)) {
-              graphQLErrors.push(...networkErrors);
+              graphQLErrors.push(...networkErrors as GraphQLError[]);
             }
 
             const disablePayload: ErrorResponse = {

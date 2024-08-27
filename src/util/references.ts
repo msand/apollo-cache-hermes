@@ -1,5 +1,4 @@
-import { Reference } from '@apollo/client/utilities';
-
+import { Reference, StoreValue } from '../../apollo-client/src/cache';
 import { NodeReference, NodeSnapshot } from '../nodes';
 import { JsonObject, PathPart } from '../primitive';
 import { NodeId } from '../schema';
@@ -191,9 +190,9 @@ export function toParamKey(path: PathPart[]) {
   return path[0].toString();
 }
 
-export function getInbound(inbound: NodeReference[] | undefined): Map<string, NodeReference> | undefined {
-  if (!inbound) {
-    return inbound;
+export function getInbound(inbound: NodeReference[] | StoreValue | undefined): Map<string, NodeReference> | undefined {
+  if (!inbound || !Array.isArray(inbound)) {
+    return undefined;
   }
   const map = new Map<string, NodeReference>();
   for (const ref of inbound) {
@@ -202,9 +201,9 @@ export function getInbound(inbound: NodeReference[] | undefined): Map<string, No
   return map;
 }
 
-export function getOutbound(outbound: Iterable<NodeReference> | undefined): Map<string, NodeReference> | undefined {
-  if (!outbound) {
-    return outbound;
+export function getOutbound(outbound: Iterable<NodeReference> | StoreValue | undefined): Map<string, NodeReference> | undefined {
+  if (!outbound || !Array.isArray(outbound)) {
+    return undefined;
   }
   const map = new Map<string, NodeReference>();
   for (const out of outbound) {
@@ -225,12 +224,18 @@ function setParameterized(map: Map<string, NodeReference[]>, node: NodeReference
 
 export const set = setParameterized;
 
-export function getParameterized(parameterized: Iterable<NodeReference> | undefined): Map<string, NodeReference[]> | undefined {
-  if (!parameterized) {
-    return parameterized;
+export function getParameterized(parameterized: Iterable<NodeReference> | StoreValue | undefined): Map<string, NodeReference[]> | undefined {
+  if (
+    parameterized === null ||
+    typeof parameterized !== 'object' ||
+    !(Symbol.iterator in parameterized) ||
+    typeof parameterized[Symbol.iterator] !== 'function'
+  ) {
+    return undefined;
   }
+  const iterator = parameterized[Symbol.iterator]() as Iterable<NodeReference>;
   const map = new Map<string, NodeReference[]>();
-  for (const ref of parameterized) {
+  for (const ref of iterator) {
     setParameterized(map, ref);
   }
   return map;

@@ -87,7 +87,7 @@ describe("selectHttpOptionsAndBody", () => {
     expect(options.headers).toEqual(headers);
     expect(options.credentials).toEqual(credentials);
     expect(options.opt).toEqual("hi");
-    expect(options.method).toEqual("POST"); // from default
+    expect(options.method).toEqual("POST"); //from default
   });
 
   it("applies custom printer function when provided", () => {

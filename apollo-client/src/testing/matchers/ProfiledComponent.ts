@@ -1,5 +1,4 @@
 import type { MatcherFunction } from "expect";
-
 import { WaitForRenderTimeoutError } from "../internal/index";
 import type {
   NextRenderOptions,
@@ -31,7 +30,8 @@ export const toRerender: MatcherFunction<[options?: NextRenderOptions]> =
       pass,
       message() {
         return (
-          `${hint}\n\nExpected component to${pass ? " not" : ""} rerender, ` +
+          hint +
+          `\n\nExpected component to${pass ? " not" : ""} rerender, ` +
           `but it did${pass ? "" : " not"}.`
         );
       },
@@ -83,9 +83,8 @@ export const toRenderExactlyTimes: MatcherFunction<
     pass,
     message() {
       return (
-        `${hint} Expected component to${
-          pass ? " not" : ""
-        } render exactly ${times}.` +
+        hint +
+        ` Expected component to${pass ? " not" : ""} render exactly ${times}.` +
         ` It rendered ${profiler.totalRenderCount()} times.`
       );
     },

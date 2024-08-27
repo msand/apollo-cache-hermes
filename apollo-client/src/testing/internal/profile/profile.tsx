@@ -1,16 +1,16 @@
 import * as React from "react";
+
 import { TextEncoder, TextDecoder } from "util";
 
 global.TextEncoder ??= TextEncoder;
 // @ts-ignore
 global.TextDecoder ??= TextDecoder;
-import { disableActWarnings } from "../disposables/index";
-
 import type { Render, BaseRender } from "./Render";
 import { RenderInstance } from "./Render";
 import { applyStackTrace, captureStackTrace } from "./traces";
 import type { ProfilerContextValue } from "./context";
 import { ProfilerContextProvider, useProfilerContext } from "./context";
+import { disableActWarnings } from "../disposables/index";
 
 type ValidSnapshot = void | (object & { /* not a function */ call?: never });
 
@@ -292,7 +292,7 @@ export function createProfiler<Snapshot extends ValidSnapshot = void>({
         // repeated act warnings.
         using _disabledActWarnings = disableActWarnings();
 
-        let error: unknown;
+        let error: unknown = undefined;
 
         try {
           return await Profiler.peekRender({

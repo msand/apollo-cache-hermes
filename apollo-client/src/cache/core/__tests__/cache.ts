@@ -1,9 +1,8 @@
 import gql from "graphql-tag";
-import { expectTypeOf } from "expect-type";
-
 import { ApolloCache } from "../cache";
 import { Cache, DataProxy } from "../..";
 import { Reference } from "../../../utilities/graphql/storeUtils";
+import { expectTypeOf } from "expect-type";
 class TestCache extends ApolloCache<unknown> {
   constructor() {
     super();
@@ -55,7 +54,7 @@ class TestCache extends ApolloCache<unknown> {
   public write<TResult = any, TVariables = any>(
     _: Cache.WriteOptions<TResult, TVariables>
   ): Reference | undefined {
-    return undefined;
+    return;
   }
 }
 const query = gql`
@@ -136,7 +135,7 @@ describe("abstract cache", () => {
       test.write = jest.fn();
 
       test.writeQuery({
-        query,
+        query: query,
         data: "foo",
       });
       expect(test.write).toBeCalled();
@@ -190,7 +189,9 @@ describe("abstract cache", () => {
       test.readQuery = jest.fn();
       test.writeQuery = jest.fn();
 
-      test.updateQuery({ query }, (data) => {});
+      test.updateQuery({ query }, (data) => {
+        return;
+      });
 
       expect(test.readQuery).toBeCalled();
       expect(test.writeQuery).not.toBeCalled();
@@ -277,7 +278,9 @@ describe("abstract cache", () => {
       test.readFragment = jest.fn();
       test.writeFragment = jest.fn();
 
-      test.updateFragment({ id: fragmentId, fragment }, (data) => {});
+      test.updateFragment({ id: fragmentId, fragment }, (data) => {
+        return;
+      });
 
       expect(test.readFragment).toBeCalled();
       expect(test.writeFragment).not.toBeCalled();
@@ -312,7 +315,9 @@ describe("abstract cache", () => {
       const test = new TestCache();
       test.readFragment = jest.fn().mockReturnValue("foo");
       expect(
-        test.updateFragment({ id: fragmentId, fragment }, (data) => {})
+        test.updateFragment({ id: fragmentId, fragment }, (data) => {
+          return;
+        })
       ).toBe("foo");
     });
 
@@ -340,7 +345,7 @@ describe("abstract cache", () => {
 
 describe.skip("Cache type tests", () => {
   describe("modify", () => {
-    it("field types are inferred correctly from passed entity type", () => {
+    test("field types are inferred correctly from passed entity type", () => {
       const cache = new TestCache();
       cache.modify<{
         prop1: string;
@@ -376,7 +381,7 @@ describe.skip("Cache type tests", () => {
         },
       });
     });
-    it("field method needs to return a value of the correct type", () => {
+    test("field method needs to return a value of the correct type", () => {
       const cache = new TestCache();
       cache.modify<{
         p1: string;
@@ -404,7 +409,7 @@ describe.skip("Cache type tests", () => {
         },
       });
     });
-    it("passing a function as `field` should infer all entity properties as possible input (interfaces)", () => {
+    test("passing a function as `field` should infer all entity properties as possible input (interfaces)", () => {
       interface ParentEntity {
         prop1: string;
         prop2: number;
@@ -441,7 +446,7 @@ describe.skip("Cache type tests", () => {
         },
       });
     });
-    it("passing a function as `field` should infer all entity properties as possible input (types)", () => {
+    test("passing a function as `field` should infer all entity properties as possible input (types)", () => {
       type ParentEntity = {
         prop1: string;
         prop2: number;
@@ -478,7 +483,7 @@ describe.skip("Cache type tests", () => {
         },
       });
     });
-    it("passing a function as `field` w/o specifying an entity type", () => {
+    test("passing a function as `field` w/o specifying an entity type", () => {
       const cache = new TestCache();
       cache.modify({
         id: "foo",
@@ -488,7 +493,7 @@ describe.skip("Cache type tests", () => {
         },
       });
     });
-    it("passing a function as `field` property w/o specifying an entity type", () => {
+    test("passing a function as `field` property w/o specifying an entity type", () => {
       const cache = new TestCache();
       cache.modify({
         id: "foo",
@@ -501,7 +506,7 @@ describe.skip("Cache type tests", () => {
       });
     });
 
-    it("allows undefined as return value", () => {
+    test("allows undefined as return value", () => {
       const cache = new TestCache();
       cache.modify<{ foo: string }>({
         id: "foo",

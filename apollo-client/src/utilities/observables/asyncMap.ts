@@ -47,7 +47,7 @@ export function asyncMap<V, R>(
       complete() {
         // no need to reassign `promiseQueue`, after `observer.complete`,
         // the observer will be closed and short-circuit everything anyways
-        /* promiseQueue = */ promiseQueue.then(() => observer.complete());
+        /*promiseQueue = */ promiseQueue.then(() => observer.complete());
       },
     };
 

@@ -1,10 +1,11 @@
 import gql from "graphql-tag";
-import { print, DocumentNode } from "graphql";
+import { print } from "graphql";
 
 import { Observable } from "../../../utilities/observables/Observable";
 import { itAsync } from "../../../testing";
 import { FetchResult, Operation, NextLink, GraphQLRequest } from "../types";
 import { ApolloLink } from "../ApolloLink";
+import { DocumentNode } from "graphql";
 
 export class SetContextLink extends ApolloLink {
   constructor(
@@ -380,7 +381,7 @@ describe("ApolloClient", () => {
       itAsync(
         "should return an empty observable when a split link returns null",
         (resolve, reject) => {
-          const context = { test: true };
+          let context = { test: true };
           const link = new SetContextLink(() => context).split(
             (op) => op.getContext().test,
             () => Observable.of(),
@@ -789,7 +790,7 @@ describe("ApolloClient", () => {
     itAsync(
       "should allow default right to be empty or passthrough when forward available",
       (resolve, reject) => {
-        const context = { test: true };
+        let context = { test: true };
         const start = new SetContextLink(() => context);
         const link = start.split(
           (operation) => operation.getContext().test,
@@ -836,7 +837,7 @@ describe("ApolloClient", () => {
           (operation, forward) => Observable.of({ data: { count: 1 } })
         );
 
-        const context = { test: true };
+        let context = { test: true };
 
         testLinkResults({
           link,
@@ -862,7 +863,7 @@ describe("ApolloClient", () => {
         (operation, forward) => Observable.of({ data: { count: 2 } })
       );
 
-      const context = { test: true };
+      let context = { test: true };
 
       testLinkResults({
         link,
@@ -889,7 +890,7 @@ describe("ApolloClient", () => {
         )
       );
 
-      const context = { test: true };
+      let context = { test: true };
 
       testLinkResults({
         link,
@@ -916,7 +917,7 @@ describe("ApolloClient", () => {
         )
       );
 
-      const context = { test: true };
+      let context = { test: true };
 
       testLinkResults({
         link,
@@ -1068,7 +1069,6 @@ describe("ApolloClient", () => {
         expect(warningStub).toHaveBeenCalledTimes(1);
       });
 
-      // eslint-disable-next-line jest/no-identical-title
       it("should warn if attempting to add link after termination", () => {
         ApolloLink.from([
           new ApolloLink((operation, forward) => forward(operation)),

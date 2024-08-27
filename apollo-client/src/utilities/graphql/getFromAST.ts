@@ -1,11 +1,11 @@
+import { invariant, newInvariantError } from "../globals/index";
+
 import type {
   DocumentNode,
   OperationDefinitionNode,
   FragmentDefinitionNode,
   ValueNode,
 } from "graphql";
-
-import { invariant, newInvariantError } from "../globals/index";
 
 import { valueToObjectRepresentation } from "./storeUtils";
 
@@ -120,7 +120,7 @@ export function getMainDefinition(
 
   let fragmentDefinition;
 
-  for (const definition of queryDoc.definitions) {
+  for (let definition of queryDoc.definitions) {
     if (definition.kind === "OperationDefinition") {
       const operation = (definition as OperationDefinitionNode).operation;
       if (

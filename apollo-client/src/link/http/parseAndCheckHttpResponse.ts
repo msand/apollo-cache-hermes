@@ -1,11 +1,9 @@
-import type { SubscriptionObserver } from "zen-observable-ts";
-
+import { responseIterator } from "./responseIterator";
 import type { Operation } from "../core/index";
 import { throwServerError } from "../utils/index";
 import { PROTOCOL_ERRORS_SYMBOL } from "../../errors/index";
 import { isApolloPayloadResult } from "../../utilities/common/incrementalResult";
-
-import { responseIterator } from "./responseIterator";
+import type { SubscriptionObserver } from "zen-observable-ts";
 
 const { hasOwnProperty } = Object.prototype;
 
@@ -36,7 +34,7 @@ export async function readMultipartBody<
       contentType
         ?.substring(contentType?.indexOf(delimiter) + delimiter.length)
         .replace(/['"]/g, "")
-        .replace(/;(.*)/gm, "")
+        .replace(/\;(.*)/gm, "")
         .trim()
     : "-";
 

@@ -1,12 +1,12 @@
 /** @jest-environment node */
-import * as React from "react";
+import React, { ReactElement } from "react";
 import { DocumentNode } from "graphql";
 import gql from "graphql-tag";
-import { ApolloClient, ApolloProvider } from "@apollo/client";
-
 import { mockSingleLink } from "../../../testing";
+import { ApolloClient } from "../../../core";
+import { ApolloProvider } from "../../context";
 import { useLazyQuery } from "../../hooks";
-import { renderToStringWithData } from "..";
+import { renderToStringWithData } from "../../ssr";
 import { Hermes } from "../../../../../src";
 
 describe("useLazyQuery Hook SSR", () => {
@@ -44,7 +44,7 @@ describe("useLazyQuery Hook SSR", () => {
     });
 
     const Component = () => {
-      let html: React.ReactElement | null = null;
+      let html: ReactElement | null = null;
       const [execute, { loading, called, data }] = useLazyQuery(CAR_QUERY);
 
       if (!loading && !called) {

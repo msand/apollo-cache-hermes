@@ -1,3 +1,5 @@
+import { invariant } from "../globals/index";
+
 import type {
   DocumentNode,
   SelectionNode,
@@ -15,9 +17,6 @@ import type {
 } from "graphql";
 import { visit, Kind } from "graphql";
 
-import { invariant } from "../globals/index";
-import { isArray, isNonEmptyArray } from "../common/arrays";
-
 import {
   checkDocument,
   getOperationDefinition,
@@ -28,6 +27,7 @@ import {
 import { isField } from "./storeUtils";
 import type { FragmentMap } from "./fragments";
 import { createFragmentMap } from "./fragments";
+import { isArray, isNonEmptyArray } from "../common/arrays";
 
 // https://github.com/graphql/graphql-js/blob/8d7c8fccf5a9846a50785de04abda58a7eb13fc0/src/language/visitor.ts#L20-L23
 interface EnterLeaveVisitor<TVisitedNode extends ASTNode> {
@@ -451,7 +451,7 @@ export function removeDirectivesFromDocument(
 }
 
 export const addTypenameToDocument = Object.assign(
-  <N extends ASTNode>(doc: N) => {
+  function <TNode extends ASTNode>(doc: TNode): TNode {
     return visit(doc, {
       SelectionSet: {
         enter(node, _key, parent) {
@@ -677,7 +677,7 @@ export function buildQueryFromSelectionSet(
   document: DocumentNode
 ): DocumentNode {
   const definition = getMainDefinition(document);
-  const definitionOperation = (definition as OperationDefinitionNode).operation;
+  const definitionOperation = (<OperationDefinitionNode>definition).operation;
 
   if (definitionOperation === "query") {
     // Already a query, so return the existing document.
@@ -704,7 +704,7 @@ export function removeClientSetsFromDocument(
 ): DocumentNode | null {
   checkDocument(document);
 
-  const modifiedDoc = removeDirectivesFromDocument(
+  let modifiedDoc = removeDirectivesFromDocument(
     [
       {
         test: (directive: DirectiveNode) => directive.name.value === "client",

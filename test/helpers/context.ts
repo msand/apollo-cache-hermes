@@ -1,8 +1,8 @@
 import * as util from 'util';
-import { KeyFieldsContext } from '@apollo/client/cache/inmemory/policies';
 
+import { KeyFieldsContext } from '../../apollo-client/src/cache/inmemory/policies';
 import { CacheContext } from '../../src/context';
-import { StoreObject } from '../../apollo-client';
+import { StoreObject } from '../../apollo-client/src/cache';
 
 export const strictConfig: CacheContext.Configuration = {
   freeze: true,
@@ -19,7 +19,7 @@ export const strictConfig: CacheContext.Configuration = {
     object: Readonly<StoreObject>,
     context: KeyFieldsContext) => {
     const id = object?.id;
-    return typeof id === 'string' || typeof id === 'number' ? id : undefined;
+    return typeof id === 'string' ? id : typeof id === 'number' ? id.toString() : undefined;
   },
   addTypename: false,
 };
@@ -37,7 +37,7 @@ export const silentConfig: CacheContext.Configuration = {
     object: Readonly<StoreObject>,
     context: KeyFieldsContext) => {
     const id = object?.id;
-    return typeof id === 'string' || typeof id === 'number' ? id : undefined;
+    return typeof id === 'string' ? id : typeof id === 'number' ? id.toString() : undefined;
   },
   addTypename: false,
 };

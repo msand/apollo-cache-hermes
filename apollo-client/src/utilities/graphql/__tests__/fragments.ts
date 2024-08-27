@@ -1,5 +1,6 @@
 import { print } from "graphql";
-import gql, { disableFragmentWarnings } from "graphql-tag";
+import gql from "graphql-tag";
+import { disableFragmentWarnings } from "graphql-tag";
 
 // Turn off warnings for repeated fragment names
 disableFragmentWarnings();

@@ -1,7 +1,6 @@
 import gql from "graphql-tag";
-import { execute } from "@apollo/client";
-
 import { MockLink, MockedResponse } from "../mockLink";
+import { execute } from "../../../../link/core/execute";
 import { ObservableStream } from "../../../internal";
 
 describe("MockedResponse.newData", () => {
@@ -35,7 +34,7 @@ describe("MockedResponse.newData", () => {
     };
   };
 
-  it("returned 'data' can be any object with untyped response", () => {
+  test("returned 'data' can be any object with untyped response", () => {
     const { weaklyTypedMockResponse } = setup();
 
     weaklyTypedMockResponse.newData = ({ fake: { faker } }) => ({
@@ -45,7 +44,7 @@ describe("MockedResponse.newData", () => {
     });
   });
 
-  it("can't return output that doesn't match TData", () => {
+  test("can't return output that doesn't match TData", () => {
     const { stronglyTypedMockResponse } = setup();
 
     // @ts-expect-error return type does not match `TData`
@@ -56,7 +55,7 @@ describe("MockedResponse.newData", () => {
     });
   });
 
-  it("can't use input variables that don't exist in TVariables", () => {
+  test("can't use input variables that don't exist in TVariables", () => {
     const { stronglyTypedMockResponse } = setup();
 
     // @ts-expect-error unknown variables
@@ -129,7 +128,7 @@ describe("mockLink", () => {
   });
 });
 
-it("removes @nonreactive directives from fields", async () => {
+test("removes @nonreactive directives from fields", async () => {
   const serverQuery = gql`
     query A {
       a
@@ -182,7 +181,7 @@ it("removes @nonreactive directives from fields", async () => {
   }
 });
 
-it("removes @connection directives", async () => {
+test("removes @connection directives", async () => {
   const serverQuery = gql`
     query A {
       a
@@ -235,7 +234,7 @@ it("removes @connection directives", async () => {
   }
 });
 
-it("removes fields with @client directives", async () => {
+test("removes fields with @client directives", async () => {
   const serverQuery = gql`
     query A {
       a
@@ -284,7 +283,7 @@ it("removes fields with @client directives", async () => {
 
 describe.skip("type tests", () => {
   const ANY = {} as any;
-  it("covariant behaviour: `MockedResponses<X,Y>` should be assignable to `MockedResponse`", () => {
+  test("covariant behaviour: `MockedResponses<X,Y>` should be assignable to `MockedResponse`", () => {
     let unspecificArray: MockedResponse[] = [];
     let specificArray: MockedResponse<{ foo: string }, { foo: string }>[] = [];
     let unspecificResponse: MockedResponse = ANY;

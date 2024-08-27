@@ -1,5 +1,5 @@
 /** @jest-environment node */
-import * as React from "react";
+import React from "react";
 import {
   print,
   graphql as execute,
@@ -11,12 +11,15 @@ import {
   DocumentNode,
 } from "graphql";
 import gql from "graphql-tag";
-import { ApolloClient, ApolloProvider, ApolloLink } from "@apollo/client";
-import { graphql, ChildProps } from "@apollo/client/react/hoc";
 
-import { Hermes } from "../../../../../../src";
+import { ApolloClient } from "../../../../core";
+import { ApolloProvider } from "../../../context";
+import { Hermes as Cache } from "../../../../../../src";
+import { ApolloLink } from "../../../../link/core";
 import { Observable } from "../../../../utilities";
 import { renderToStringWithData } from "../../../ssr";
+import { graphql } from "../../graphql";
+import { ChildProps } from "../../types";
 
 const planetMap = new Map([["Planet:1", { id: "Planet:1", name: "Tatooine" }]]);
 
@@ -104,7 +107,7 @@ describe("SSR", () => {
   describe("`renderToStringWithData`", () => {
     // XXX break into smaller tests
     // XXX mock all queries
-    it("should work on a non trivial example", () => {
+    it("should work on a non trivial example", function () {
       const apolloClient = new ApolloClient({
         link: new ApolloLink((config) => {
           return new Observable((observer) => {
@@ -123,7 +126,7 @@ describe("SSR", () => {
               });
           });
         }),
-        cache: new Hermes(),
+        cache: new Cache(),
       });
 
       @graphql(

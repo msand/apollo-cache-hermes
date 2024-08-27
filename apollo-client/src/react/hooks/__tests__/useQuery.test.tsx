@@ -1,32 +1,21 @@
-import * as React from "react";
-import { Fragment, ReactNode, useEffect, useRef, useState } from "react";
+import React, { Fragment, ReactNode, useEffect, useRef, useState } from "react";
 import { DocumentNode, GraphQLError } from "graphql";
 import gql from "graphql-tag";
-import {
-  act,
-  render,
-  screen,
-  waitFor,
-  renderHook,
-} from "@testing-library/react";
+import { act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { render, screen, waitFor, renderHook } from "@testing-library/react";
 import {
   ApolloClient,
-  ApolloProvider,
-  ApolloLink,
-  useQuery,
-  QueryResult,
-  useLazyQuery,
-} from "@apollo/client";
-
-import {
   ApolloError,
   NetworkStatus,
   OperationVariables,
   TypedDocumentNode,
   WatchQueryFetchPolicy,
 } from "../../../core";
+import { Hermes } from "../../../../../src";
+import { ApolloProvider } from "../../context";
 import { Observable, Reference, concatPagination } from "../../../utilities";
+import { ApolloLink } from "../../../link/core";
 import {
   MockLink,
   MockedProvider,
@@ -36,6 +25,8 @@ import {
   wait,
   MockedResponse,
 } from "../../../testing";
+import { QueryResult } from "../../types/types";
+import { useQuery } from "../useQuery";
 import { useMutation } from "../useMutation";
 import {
   createProfiler,
@@ -44,7 +35,7 @@ import {
   spyOnConsole,
 } from "../../../testing/internal";
 import { useApolloClient } from "../useApolloClient";
-import { Hermes } from "../../../../../src";
+import { useLazyQuery } from "../useLazyQuery";
 
 const IS_REACT_17 = React.version.startsWith("17");
 const IS_REACT_19 = React.version.startsWith("19");
@@ -3122,10 +3113,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       let updates = 0;
       const { result, rerender } = renderHook(
-        () => {
-          updates++;
-          return useQuery(query);
-        },
+        () => (updates++, useQuery(query)),
         { wrapper }
       );
 
@@ -3152,7 +3140,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       expect(result.current.error).toBeInstanceOf(ApolloError);
       expect(result.current.error!.message).toBe("error");
 
-      const previousUpdates = updates;
+      let previousUpdates = updates;
       await expect(
         waitFor(
           () => {
@@ -3412,13 +3400,10 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       let updates = 0;
       const { result, rerender } = renderHook(
-        () => {
-          updates++;
-          return useQuery(query, {
-            onError: () => {},
-            onCompleted: () => {},
-          });
-        },
+        () => (
+          updates++,
+          useQuery(query, { onError: () => {}, onCompleted: () => {} })
+        ),
         { wrapper }
       );
 
@@ -3446,7 +3431,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       expect(result.current.error!.message).toBe("error");
 
       expect(onErrorFn).toHaveBeenCalledTimes(0);
-      const previousUpdates = updates;
+      let previousUpdates = updates;
       await expect(
         waitFor(
           () => {
@@ -8166,7 +8151,6 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
     });
   });
 
-  // eslint-disable-next-line jest/no-identical-title
   describe("canonical cache results", () => {
     it("can be disabled via useQuery options", async () => {
       const cache = new Hermes({
@@ -9624,7 +9608,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
     const emptyData = undefined;
     type TestQueryValue = typeof cacheData;
 
-    it.each<
+    test.each<
       [
         fetchPolicy: WatchQueryFetchPolicy,
         initialQueryValue: TestQueryValue | undefined,
@@ -9705,7 +9689,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 });
 
 describe.skip("Type Tests", () => {
-  it("NoInfer prevents adding arbitrary additional variables", () => {
+  test("NoInfer prevents adding arbitrary additional variables", () => {
     const typedNode = {} as TypedDocumentNode<{ foo: string }, { bar: number }>;
     const { variables } = useQuery(typedNode, {
       variables: {

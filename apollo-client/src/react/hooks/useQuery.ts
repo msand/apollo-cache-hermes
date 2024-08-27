@@ -1,26 +1,25 @@
-import * as React from "rehackt";
-import { equal } from "@wry/equality";
-import { ApolloClient, ObservableQuery } from "@apollo/client";
-
 import { invariant } from "../../utilities/globals/index";
+
+import * as React from "rehackt";
+import { useSyncExternalStore } from "./useSyncExternalStore";
+import { equal } from "@wry/equality";
+
 import type {
   OperationVariables,
   WatchQueryFetchPolicy,
+} from "../../core/index";
+import { mergeOptions } from "../../utilities/index";
+import type { ApolloContextValue } from "../context/index";
+import { getApolloContext } from "../context/index";
+import { ApolloError } from "../../errors/index";
+import type {
+  ApolloClient,
   ApolloQueryResult,
+  ObservableQuery,
   DocumentNode,
   TypedDocumentNode,
   WatchQueryOptions,
 } from "../../core/index";
-import {
-  mergeOptions,
-  canUseWeakMap,
-  compact,
-  isNonEmptyArray,
-  maybeDeepFreeze,
-} from "../../utilities/index";
-import type { ApolloContextValue } from "../context/index";
-import { getApolloContext } from "../context/index";
-import { ApolloError } from "../../errors/index";
 import { NetworkStatus } from "../../core/index";
 import type {
   QueryHookOptions,
@@ -28,10 +27,15 @@ import type {
   ObservableQueryFields,
   NoInfer,
 } from "../types/types";
-import { DocumentType, verifyDocumentType } from "../parser/index";
 
-import { useSyncExternalStore } from "./useSyncExternalStore";
+import { DocumentType, verifyDocumentType } from "../parser/index";
 import { useApolloClient } from "./useApolloClient";
+import {
+  canUseWeakMap,
+  compact,
+  isNonEmptyArray,
+  maybeDeepFreeze,
+} from "../../utilities/index";
 import { wrapHook } from "./internal/index";
 
 const {
@@ -118,7 +122,6 @@ export function useInternalState<TData, TVariables extends OperationVariables>(
     });
   }
 
-  // eslint-disable-next-line prefer-const
   let [state, updateState] = React.useState(createInternalState);
 
   if (client !== state.client || query !== state.query) {
@@ -227,13 +230,16 @@ class InternalState<TData, TVariables extends OperationVariables> {
     // initialization, this.renderPromises is usually undefined (unless SSR is
     // happening), but that's fine as long as it has been initialized that way,
     // rather than left uninitialized.
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     this.renderPromises = React.useContext(getApolloContext()).renderPromises;
 
     this.useOptions(options);
 
     const obsQuery = this.useObservableQuery();
 
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     const result = useSyncExternalStore(
+      // eslint-disable-next-line react-hooks/rules-of-hooks
       React.useCallback(
         (handleStoreChange) => {
           if (this.renderPromises) {
@@ -304,7 +310,9 @@ class InternalState<TData, TVariables extends OperationVariables> {
           // effectively passing this dependency array to that useEffect buried
           // inside useSyncExternalStore, as desired.
           obsQuery,
+          // eslint-disable-next-line react-hooks/exhaustive-deps
           this.renderPromises,
+          // eslint-disable-next-line react-hooks/exhaustive-deps
           this.client.disableNetworkFetches,
         ]
       ),
@@ -512,7 +520,6 @@ class InternalState<TData, TVariables extends OperationVariables> {
   // state.onCompleted and/or state.onError without worrying about whether a
   // callback was provided.
   private onCompleted(data: TData) {}
-  // eslint-disable-next-line handle-callback-err
   private onError(error: ApolloError) {}
 
   private observable!: ObservableQuery<TData, TVariables>;
@@ -531,6 +538,7 @@ class InternalState<TData, TVariables extends OperationVariables> {
       this.observable || // Reuse this.observable if possible (and not SSR)
       this.client.watchQuery(this.getObsQueryOptions()));
 
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     this.obsQueryFields = React.useMemo(
       () => ({
         refetch: obsQuery.refetch.bind(obsQuery),

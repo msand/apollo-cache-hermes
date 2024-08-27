@@ -1,6 +1,6 @@
 import type { ASTNode } from "graphql";
-
 import { print } from "../../utilities/index";
+
 import type { Operation } from "../core/index";
 
 export interface Printer {
@@ -181,7 +181,7 @@ export function selectHttpOptionsAndBodyInternal(
     );
   }
 
-  // The body depends on the http options
+  //The body depends on the http options
   const { operationName, extensions, variables, query } = operation;
   const body: Body = { operationName, variables };
 

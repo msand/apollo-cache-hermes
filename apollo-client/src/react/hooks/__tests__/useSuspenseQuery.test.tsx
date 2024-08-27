@@ -1,5 +1,4 @@
-import * as React from "react";
-import { Fragment, StrictMode, Suspense, useTransition } from "react";
+import React, { Fragment, StrictMode, Suspense, useTransition } from "react";
 import {
   act,
   screen,
@@ -14,24 +13,20 @@ import { GraphQLError } from "graphql";
 import { InvariantError } from "ts-invariant";
 import { equal } from "@wry/equality";
 import { expectTypeOf } from "expect-type";
-import {
-  ApolloClient,
-  ApolloProvider,
-  ApolloLink,
-  ApolloCache,
-  split,
-  useSuspenseQuery,
-  skipToken,
-} from "@apollo/client";
 
+import { Hermes } from "../../../../../src";
 import {
   gql,
+  ApolloCache,
+  ApolloClient,
   ApolloError,
+  ApolloLink,
   DocumentNode,
   Observable,
   OperationVariables,
   SubscribeToMoreOptions,
   TypedDocumentNode,
+  split,
   NetworkStatus,
   ApolloQueryResult,
   ErrorPolicy,
@@ -49,8 +44,9 @@ import {
   MockSubscriptionLink,
   MockLink,
 } from "../../../testing";
-import { SuspenseQueryHookFetchPolicy } from "../..";
-import { UseSuspenseQueryResult } from "../useSuspenseQuery";
+import { ApolloProvider } from "../../context";
+import { SuspenseQueryHookFetchPolicy, skipToken } from "../../../react";
+import { UseSuspenseQueryResult, useSuspenseQuery } from "../useSuspenseQuery";
 import {
   RefetchWritePolicy,
   WatchQueryFetchPolicy,
@@ -64,7 +60,6 @@ import {
   spyOnConsole,
   useTrackRenders,
 } from "../../../testing/internal";
-import { Hermes } from "../../../../../src";
 
 type RenderSuspenseHookOptions<Props, TSerializedCache = {}> = Omit<
   RenderHookOptions<Props>,

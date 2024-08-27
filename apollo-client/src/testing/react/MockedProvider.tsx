@@ -1,15 +1,13 @@
 import * as React from "react";
-import {
-  ApolloCache,
-  ApolloClient,
-  ApolloLink,
-  DefaultOptions,
-  ApolloProvider,
-} from "@apollo/client";
 
-import type { Resolvers } from "../../core/index";
+import type { DefaultOptions } from "../../core/index";
+import { ApolloClient } from "../../core/index";
+import { ApolloProvider } from "../../react/context/index";
 import type { MockedResponse } from "../core/index";
 import { MockLink } from "../core/index";
+import type { ApolloLink } from "../../link/core/index";
+import type { Resolvers } from "../../core/index";
+import type { ApolloCache } from "../../cache/index";
 import { Hermes } from "../../../../src";
 
 export interface MockedProviderProps<TSerializedCache = {}> {
@@ -55,6 +53,7 @@ export class MockedProvider extends React.Component<
       connectToDevTools = false,
     } = this.props;
     const client = new ApolloClient({
+      // @ts-ignore
       cache: cache || new Hermes({ addTypename }),
       defaultOptions,
       connectToDevTools,

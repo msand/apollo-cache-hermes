@@ -1,5 +1,4 @@
-import { KeySpecifier } from "@apollo/client/cache/inmemory/policies";
-
+import { KeySpecifier } from "../policies";
 import { canonicalStringify } from "../../../utilities";
 import {
   getSpecifierPaths,
@@ -20,32 +19,32 @@ describe("keyFields and keyArgs extraction", () => {
     check(["a"], [["a"]]);
 
     // prettier-ignore
-    check(['a', 'b', 'c'], [
-      ['a'],
-      ['b'],
-      ['c'],
+    check(["a", "b", "c"], [
+      ["a"],
+      ["b"],
+      ["c"]
     ]);
 
     // prettier-ignore
-    check(['a', ['b', 'c'], 'd'], [
-      ['a', 'b'],
-      ['a', 'c'],
-      ['d'],
+    check(["a", ["b", "c"], "d"], [
+      ["a", "b"],
+      ["a", "c"],
+      ["d"],
     ]);
 
     // prettier-ignore
-    check(['a', 'b', ['c'], 'd'], [
-      ['a'],
-      ['b', 'c'],
-      ['d'],
+    check(["a", "b", ["c"], "d"], [
+      ["a"],
+      ["b", "c"],
+      ["d"],
     ]);
 
     // prettier-ignore
-    check(['a', 'b', ['c', ['d', ['e', 'f'], 'g']]], [
-      ['a'],
-      ['b', 'c', 'd', 'e'],
-      ['b', 'c', 'd', 'f'],
-      ['b', 'c', 'g'],
+    check(["a", "b", ["c", ["d", ["e", "f"], "g"]]], [
+      ["a"],
+      ["b", "c", "d", "e"],
+      ["b", "c", "d", "f"],
+      ["b", "c", "g"],
     ]);
   });
 

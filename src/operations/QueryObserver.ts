@@ -1,6 +1,6 @@
-import { Cache } from '@apollo/client';
 import isEqual from '@wry/equality';
 
+import { Cache } from '../../apollo-client/src/cache';
 import { CacheContext } from '../context';
 import { GraphSnapshot } from '../GraphSnapshot';
 import { NodeId, RawOperation } from '../schema';
@@ -15,10 +15,10 @@ import WatchOptions = Cache.WatchOptions;
  *
  * @internal
  */
-export class QueryObserver<TSerialized> {
+export class QueryObserver {
 
   /** Cache configuration/context to use when executing queries. */
-  private _context: CacheContext<TSerialized>;
+  private _context: CacheContext;
   /** The query being observed. */
   private _query: RawOperation;
   /** The most recent result */
@@ -26,7 +26,7 @@ export class QueryObserver<TSerialized> {
   /** The callback to trigger when observed nodes have changed. */
   private _options: WatchOptions;
 
-  constructor(context: CacheContext<TSerialized>, query: RawOperation, snapshot: GraphSnapshot, options: WatchOptions) {
+  constructor(context: CacheContext, query: RawOperation, snapshot: GraphSnapshot, options: WatchOptions) {
     this._context = context;
     this._query = query;
     this._options = options;
@@ -48,8 +48,8 @@ export class QueryObserver<TSerialized> {
   consumeChanges(
     snapshot: GraphSnapshot,
     changedNodeIds: Set<NodeId>,
-    cacheInstance: Hermes<TSerialized>,
-    onWatchUpdated?: Cache.BatchOptions<Hermes<TSerialized>>['onWatchUpdated'],
+    cacheInstance: Hermes,
+    onWatchUpdated?: Cache.BatchOptions<Hermes>['onWatchUpdated'],
   ): void {
     const lastDiff = this._options.lastDiff;
     if (lastDiff && !this._hasUpdate(changedNodeIds)) return;

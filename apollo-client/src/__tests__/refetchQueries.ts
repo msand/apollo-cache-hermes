@@ -1,14 +1,14 @@
 import { Subscription } from "zen-observable-ts";
+
+import { itAsync } from "../testing";
 import {
   ApolloClient,
+  ApolloLink,
   gql,
   Observable,
   TypedDocumentNode,
   ObservableQuery,
-  ApolloLink,
-} from "@apollo/client";
-
-import { itAsync } from "../testing";
+} from "../core";
 import { Hermes } from "../../../src";
 
 describe("client.refetchQueries", () => {

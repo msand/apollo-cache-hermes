@@ -1,7 +1,8 @@
 import gql from "graphql-tag";
 import { DocumentNode, OperationDefinitionNode } from "graphql";
-import { ApolloClient, ApolloLink, Operation } from "@apollo/client";
 
+import { ApolloClient } from "../core";
+import { ApolloLink, Operation } from "../link/core";
 import { itAsync, mockSingleLink, mockObservableLink } from "../testing";
 import { Hermes } from "../../../src";
 
@@ -283,7 +284,7 @@ describe("subscribeToMore", () => {
 
     for (let i = 0; i < 2; i++) {
       // init optimistic mutation
-      const data = client.cache.readQuery<(typeof req4)["result"]["data"]>(
+      let data = client.cache.readQuery<(typeof req4)["result"]["data"]>(
         { query },
         false
       );

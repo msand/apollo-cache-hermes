@@ -1,5 +1,4 @@
-import { ApolloLink, Observable, gql } from "@apollo/client";
-
+import { ApolloLink, Observable, gql } from "../../../core/index";
 import type { TypedDocumentNode } from "../../../core/index";
 import type { MockedResponse } from "../../core/index";
 

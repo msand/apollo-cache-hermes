@@ -1,19 +1,20 @@
-import * as React from "react";
+import React from "react";
 import { renderHook, waitFor } from "@testing-library/react";
 import gql from "graphql-tag";
+
 import {
   ApolloClient,
-  ApolloProvider,
+  ApolloError,
   ApolloLink,
   concat,
-} from "@apollo/client";
-
-import { ApolloError, TypedDocumentNode } from "../../../core";
+  TypedDocumentNode,
+} from "../../../core";
 import { PROTOCOL_ERRORS_SYMBOL } from "../../../errors";
+import { Hermes as Cache } from "../../../../../src";
+import { ApolloProvider } from "../../context";
 import { MockSubscriptionLink } from "../../../testing";
 import { useSubscription } from "../useSubscription";
 import { spyOnConsole } from "../../../testing/internal";
-import { Hermes } from "../../../../../src";
 
 describe("useSubscription Hook", () => {
   it("should handle a simple subscription properly", async () => {
@@ -32,7 +33,7 @@ describe("useSubscription Hook", () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const { result } = renderHook(() => useSubscription(subscription), {
@@ -99,7 +100,7 @@ describe("useSubscription Hook", () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const onError = jest.fn();
@@ -151,7 +152,7 @@ describe("useSubscription Hook", () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const onComplete = jest.fn();
@@ -190,7 +191,7 @@ describe("useSubscription Hook", () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const onData = jest.fn();
@@ -246,7 +247,7 @@ describe("useSubscription Hook", () => {
     link.onSetup(onSetup);
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const onData = jest.fn();
@@ -310,7 +311,7 @@ describe("useSubscription Hook", () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
     const { result, rerender } = renderHook(
       ({ skip }) => useSubscription(subscription, { skip }),
@@ -406,7 +407,7 @@ describe("useSubscription Hook", () => {
     });
     const client = new ApolloClient({
       link: concat(contextLink, link),
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const { result } = renderHook(
@@ -469,7 +470,7 @@ describe("useSubscription Hook", () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const { result } = renderHook(
@@ -538,7 +539,7 @@ describe("useSubscription Hook", () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const { result } = renderHook(() => useSubscription(subscription), {
@@ -585,7 +586,7 @@ describe("useSubscription Hook", () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const { result } = renderHook(
@@ -650,7 +651,7 @@ describe("useSubscription Hook", () => {
     ]);
   });
 
-  it("should warn when using 'onSubscriptionData' and 'onData' together", () => {
+  test("should warn when using 'onSubscriptionData' and 'onData' together", () => {
     using consoleSpy = spyOnConsole("warn");
     const subscription = gql`
       subscription {
@@ -663,7 +664,7 @@ describe("useSubscription Hook", () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     renderHook(
@@ -687,7 +688,7 @@ describe("useSubscription Hook", () => {
     );
   });
 
-  it("prefers 'onData' when using 'onSubscriptionData' and 'onData' together", async () => {
+  test("prefers 'onData' when using 'onSubscriptionData' and 'onData' together", async () => {
     jest.spyOn(console, "warn").mockImplementation(() => {});
     const subscription = gql`
       subscription {
@@ -706,7 +707,7 @@ describe("useSubscription Hook", () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const onData = jest.fn();
@@ -735,7 +736,7 @@ describe("useSubscription Hook", () => {
     expect(onSubscriptionData).toHaveBeenCalledTimes(0);
   });
 
-  it("uses 'onSubscriptionData' when 'onData' is absent", async () => {
+  test("uses 'onSubscriptionData' when 'onData' is absent", async () => {
     using _consoleSpy = spyOnConsole("warn");
     const subscription = gql`
       subscription {
@@ -754,7 +755,7 @@ describe("useSubscription Hook", () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const onSubscriptionData = jest.fn();
@@ -780,7 +781,7 @@ describe("useSubscription Hook", () => {
     );
   });
 
-  it("only warns once using `onSubscriptionData`", () => {
+  test("only warns once using `onSubscriptionData`", () => {
     using consoleSpy = spyOnConsole("warn");
     const subscription = gql`
       subscription {
@@ -793,7 +794,7 @@ describe("useSubscription Hook", () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const { rerender } = renderHook(
@@ -813,7 +814,7 @@ describe("useSubscription Hook", () => {
     expect(consoleSpy.warn).toHaveBeenCalledTimes(1);
   });
 
-  it("should warn when using 'onComplete' and 'onSubscriptionComplete' together", () => {
+  test("should warn when using 'onComplete' and 'onSubscriptionComplete' together", () => {
     using consoleSpy = spyOnConsole("warn");
     const subscription = gql`
       subscription {
@@ -826,7 +827,7 @@ describe("useSubscription Hook", () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     renderHook(
@@ -850,7 +851,7 @@ describe("useSubscription Hook", () => {
     );
   });
 
-  it("prefers 'onComplete' when using 'onComplete' and 'onSubscriptionComplete' together", async () => {
+  test("prefers 'onComplete' when using 'onComplete' and 'onSubscriptionComplete' together", async () => {
     using _consoleSpy = spyOnConsole("warn");
     const subscription = gql`
       subscription {
@@ -869,7 +870,7 @@ describe("useSubscription Hook", () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const onComplete = jest.fn();
@@ -900,7 +901,7 @@ describe("useSubscription Hook", () => {
     expect(onSubscriptionComplete).toHaveBeenCalledTimes(0);
   });
 
-  it("uses 'onSubscriptionComplete' when 'onComplete' is absent", async () => {
+  test("uses 'onSubscriptionComplete' when 'onComplete' is absent", async () => {
     using _consoleSpy = spyOnConsole("warn");
     const subscription = gql`
       subscription {
@@ -919,7 +920,7 @@ describe("useSubscription Hook", () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const onSubscriptionComplete = jest.fn();
@@ -947,7 +948,7 @@ describe("useSubscription Hook", () => {
     );
   });
 
-  it("only warns once using `onSubscriptionComplete`", () => {
+  test("only warns once using `onSubscriptionComplete`", () => {
     using consoleSpy = spyOnConsole("warn");
     const subscription = gql`
       subscription {
@@ -960,7 +961,7 @@ describe("useSubscription Hook", () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const { rerender } = renderHook(
@@ -1015,7 +1016,7 @@ describe("useSubscription Hook", () => {
       const link = new MockSubscriptionLink();
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
       let renderCount = 0;
 
@@ -1064,7 +1065,7 @@ followed by new in-flight setup", async () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const { result, unmount, rerender } = renderHook(
@@ -1122,7 +1123,7 @@ followed by new in-flight setup", async () => {
 });
 
 describe.skip("Type Tests", () => {
-  it("NoInfer prevents adding arbitrary additional variables", () => {
+  test("NoInfer prevents adding arbitrary additional variables", () => {
     const typedNode = {} as TypedDocumentNode<{ foo: string }, { bar: number }>;
     const { variables } = useSubscription(typedNode, {
       variables: {

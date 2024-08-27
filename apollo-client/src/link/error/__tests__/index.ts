@@ -1,10 +1,10 @@
 import gql from "graphql-tag";
-import { ApolloLink } from "@apollo/client";
 
+import { ApolloLink } from "../../core/ApolloLink";
 import { execute } from "../../core/execute";
 import { ServerError, throwServerError } from "../../utils/throwServerError";
 import { Observable } from "../../../utilities/observables/Observable";
-import { onError, ErrorLink } from "..";
+import { onError, ErrorLink } from "../";
 import { itAsync } from "../../../testing";
 
 describe("error handling", () => {
@@ -188,7 +188,6 @@ describe("error handling", () => {
       }
     `;
 
-    // eslint-disable-next-line handle-callback-err
     const errorLink = onError(({ graphQLErrors, networkError }) => {
       expect(networkError!.message).toBe("app is crashing");
     });

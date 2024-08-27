@@ -1,4 +1,3 @@
-// eslint-disable-next-line import/no-extraneous-dependencies
 import { WeakCache, StrongCache } from "@wry/caches";
 
 interface CleanableCache {

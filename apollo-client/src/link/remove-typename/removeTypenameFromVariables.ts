@@ -1,11 +1,7 @@
-// eslint-disable-next-line import/no-extraneous-dependencies
 import { wrap } from "optimism";
 import type { DocumentNode, TypeNode } from "graphql";
 import { Kind, visit } from "graphql";
-// eslint-disable-next-line import/no-extraneous-dependencies
-import { WeakCache } from "@wry/caches";
-import { ApolloLink } from "@apollo/client";
-
+import { ApolloLink } from "../core/index";
 import {
   stripTypename,
   isPlainObject,
@@ -13,6 +9,7 @@ import {
   defaultCacheSizes,
 } from "../../utilities/index";
 import type { OperationVariables } from "../../core/index";
+import { WeakCache } from "@wry/caches";
 
 export const KEEP = "__KEEP";
 

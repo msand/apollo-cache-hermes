@@ -1,6 +1,9 @@
 export { DEV, maybe } from "./globals/index";
 
-export type { DirectiveInfo, InclusionDirectives } from "./graphql/directives";
+export type {
+  DirectiveInfo,
+  InclusionDirectives,
+} from "./graphql/directives";
 export {
   shouldInclude,
   hasDirectives,

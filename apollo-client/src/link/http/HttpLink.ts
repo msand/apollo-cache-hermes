@@ -1,5 +1,4 @@
-import { ApolloLink } from "@apollo/client";
-
+import { ApolloLink } from "../core/index";
 import type { HttpOptions } from "./selectHttpOptionsAndBody";
 import { createHttpLink } from "./createHttpLink";
 

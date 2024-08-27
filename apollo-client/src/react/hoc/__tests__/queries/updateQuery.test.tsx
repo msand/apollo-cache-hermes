@@ -1,12 +1,14 @@
-import * as React from "react";
+import React from "react";
 import gql from "graphql-tag";
 import { DocumentNode } from "graphql";
 import { render, waitFor } from "@testing-library/react";
-import { ApolloClient, ApolloProvider } from "@apollo/client";
-import { graphql, ChildProps } from "@apollo/client/react/hoc";
 
-import { Hermes } from "../../../../../../src";
+import { ApolloClient } from "../../../../core";
+import { ApolloProvider } from "../../../context";
+import { Hermes as Cache } from "../../../../../../src";
 import { itAsync, mockSingleLink } from "../../../../testing";
+import { graphql } from "../../graphql";
+import { ChildProps } from "../../types";
 
 describe("[queries] updateQuery", () => {
   // updateQuery
@@ -26,7 +28,7 @@ describe("[queries] updateQuery", () => {
     });
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     let done = false;
@@ -44,7 +46,6 @@ describe("[queries] updateQuery", () => {
             reject(error);
           }
         }
-
         render() {
           return null;
         }
@@ -81,7 +82,7 @@ describe("[queries] updateQuery", () => {
       });
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       const Container = graphql(query)(
@@ -130,7 +131,7 @@ describe("[queries] updateQuery", () => {
       });
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       const Container = graphql(query)(
@@ -189,7 +190,7 @@ describe("[queries] updateQuery", () => {
       );
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       let isUpdated = false;
@@ -200,6 +201,7 @@ describe("[queries] updateQuery", () => {
             if (isUpdated) {
               expect(this.props.data!.allPeople).toEqual(data2.allPeople);
               done = true;
+              return;
             } else {
               isUpdated = true;
               this.updateQuery(() => {
@@ -207,7 +209,6 @@ describe("[queries] updateQuery", () => {
               });
             }
           }
-
           render() {
             this.updateQuery = this.props.data!.updateQuery;
             return null;
@@ -250,7 +251,7 @@ describe("[queries] updateQuery", () => {
       );
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       let isUpdated = false;
@@ -260,6 +261,7 @@ describe("[queries] updateQuery", () => {
             if (isUpdated) {
               expect(this.props.data!.allPeople).toEqual(data2.allPeople);
               done = true;
+              return;
             } else {
               isUpdated = true;
               this.props.data!.updateQuery(() => {
@@ -267,7 +269,6 @@ describe("[queries] updateQuery", () => {
               });
             }
           }
-
           render() {
             return null;
           }

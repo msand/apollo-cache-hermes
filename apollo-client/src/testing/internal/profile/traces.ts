@@ -30,6 +30,6 @@ export function captureStackTrace(callingFunction?: string | (() => {})) {
 }
 
 export function applyStackTrace(error: Error, stackTrace: string) {
-  error.stack = `${error.message}\n${stackTrace}`;
+  error.stack = error.message + "\n" + stackTrace;
   return error;
 }

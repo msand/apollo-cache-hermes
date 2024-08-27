@@ -1,10 +1,14 @@
 import type { DocumentNode } from "graphql";
 import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
+
 import type * as ReactTypes from "react";
-import {
-  ApolloCache,
+
+import type {
   OperationVariables,
   DefaultContext,
+  ApolloCache,
+} from "../../core/index";
+import type {
   QueryFunctionOptions,
   QueryResult,
   BaseMutationOptions,
@@ -12,7 +16,7 @@ import {
   MutationResult,
   BaseSubscriptionOptions,
   SubscriptionResult,
-} from "@apollo/client";
+} from "../types/types";
 
 export interface QueryComponentOptions<
   TData = any,

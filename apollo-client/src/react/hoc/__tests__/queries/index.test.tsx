@@ -1,15 +1,16 @@
-import * as React from "react";
-// eslint-disable-next-line import/no-extraneous-dependencies
-import * as PropTypes from "prop-types";
+import React from "react";
+import PropTypes from "prop-types";
 import { render, waitFor } from "@testing-library/react";
 import gql from "graphql-tag";
 import { DocumentNode } from "graphql";
-import { ApolloClient, ApolloProvider, ApolloLink } from "@apollo/client";
-import { graphql, ChildProps } from "@apollo/client/react/hoc";
 
+import { ApolloClient } from "../../../../core";
+import { ApolloProvider } from "../../../context";
+import { Hermes as Cache } from "../../../../../../src";
+import { ApolloLink } from "../../../../link/core";
 import { itAsync, mockSingleLink } from "../../../../testing";
-import { DataProps } from "../../types";
-import { Hermes } from "../../../../../../src";
+import { graphql } from "../../graphql";
+import { ChildProps, DataProps } from "../../types";
 
 describe("queries", () => {
   let error: typeof console.error;
@@ -40,7 +41,7 @@ describe("queries", () => {
     });
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     interface Data {
@@ -88,7 +89,7 @@ describe("queries", () => {
     });
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     // Ensure variable types work correctly here
@@ -157,7 +158,7 @@ describe("queries", () => {
       );
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       interface Data {
@@ -256,7 +257,7 @@ describe("queries", () => {
     });
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const Container = graphql<{}, Data>(query)(
@@ -267,7 +268,6 @@ describe("queries", () => {
           expect(props.data!.allPeople).toEqual(data.allPeople);
           done = true;
         }
-
         render() {
           return null;
         }
@@ -313,7 +313,7 @@ describe("queries", () => {
     });
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const Container = graphql<{}, Data>(query)(
@@ -325,7 +325,6 @@ describe("queries", () => {
           expect(props.data!.otherPeople).toEqual(data.otherPeople);
           done = true;
         }
-
         render() {
           return null;
         }
@@ -366,7 +365,7 @@ describe("queries", () => {
     });
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const Container = graphql<Vars, Data, Vars>(query)(
@@ -378,7 +377,6 @@ describe("queries", () => {
           expect(props.data!.variables).toEqual(this.props.data!.variables);
           done = true;
         }
-
         render() {
           return null;
         }
@@ -425,10 +423,10 @@ describe("queries", () => {
           },
         },
       ];
-      const link = mockSingleLink(...mocks);
+      const link = mockSingleLink.apply(null, mocks);
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
       const options = {
         options: {
@@ -454,7 +452,6 @@ describe("queries", () => {
               reject(error);
             }
           }
-
           render() {
             return null;
           }
@@ -498,7 +495,7 @@ describe("queries", () => {
       });
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       const Container = graphql<Partial<Vars>, Data, Vars>(query)(
@@ -509,7 +506,6 @@ describe("queries", () => {
             expect(props.data!.allPeople).toEqual(data.allPeople);
             done = true;
           }
-
           render() {
             return null;
           }
@@ -550,7 +546,7 @@ describe("queries", () => {
     });
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
     const Container = graphql<Vars, Data>(query)(() => null);
 
@@ -589,7 +585,7 @@ describe("queries", () => {
     });
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const Container = graphql<{}, Data>(query)(
@@ -599,8 +595,8 @@ describe("queries", () => {
           expect(props.data!.loading).toBeFalsy();
           expect(props.data!.allPeople).toEqual(data.allPeople);
         }
-
         render() {
+          // eslint-disable-next-line testing-library/no-node-access
           return <div>{this.props.children}</div>;
         }
       }
@@ -626,6 +622,7 @@ describe("queries", () => {
       }
 
       render() {
+        // eslint-disable-next-line testing-library/no-node-access
         return <div>{this.props.children}</div>;
       }
     }
@@ -646,6 +643,7 @@ describe("queries", () => {
         }
 
         count++;
+        // eslint-disable-next-line testing-library/no-node-access
         return <div>{this.props.children}</div>;
       }
     }
@@ -740,7 +738,7 @@ describe("queries", () => {
     );
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     interface Data {
@@ -775,7 +773,7 @@ describe("queries", () => {
     });
 
     it("should not return partial cache data when `returnPartialData` is false", () => {
-      const cache = new Hermes();
+      const cache = new Cache();
       const client = new ApolloClient({
         cache,
         link: ApolloLink.empty(),
@@ -845,7 +843,7 @@ describe("queries", () => {
     });
 
     it("should return partial cache data when `returnPartialData` is true", () => {
-      const cache = new Hermes();
+      const cache = new Cache();
       const client = new ApolloClient({
         cache,
         link: ApolloLink.empty(),

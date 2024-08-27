@@ -1,5 +1,4 @@
 import * as React from "rehackt";
-
 import type {
   DocumentNode,
   FetchMoreQueryOptions,
@@ -7,6 +6,7 @@ import type {
   TypedDocumentNode,
   WatchQueryOptions,
 } from "../../core/index";
+import { useApolloClient } from "./useApolloClient";
 import {
   assertWrappedQueryRef,
   getSuspenseCache,
@@ -16,17 +16,15 @@ import {
 } from "../internal/index";
 import type { CacheKey, QueryRef } from "../internal/index";
 import type { LoadableQueryHookOptions } from "../types/types";
+import { __use, useRenderGuard } from "./internal/index";
+import { useWatchQueryOptions } from "./useSuspenseQuery";
+import type { FetchMoreFunction, RefetchFunction } from "./useSuspenseQuery";
 import { canonicalStringify } from "../../cache/index";
 import type {
   DeepPartial,
   OnlyRequiredProperties,
 } from "../../utilities/index";
 import { invariant } from "../../utilities/globals/index";
-
-import { __use, useRenderGuard } from "./internal/index";
-import { useWatchQueryOptions } from "./useSuspenseQuery";
-import type { FetchMoreFunction, RefetchFunction } from "./useSuspenseQuery";
-import { useApolloClient } from "./useApolloClient";
 
 export type LoadQueryFunction<TVariables extends OperationVariables> = (
   // Use variadic args to handle cases where TVariables is type `never`, in

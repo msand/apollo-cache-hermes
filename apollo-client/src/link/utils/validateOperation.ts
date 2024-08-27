@@ -9,7 +9,7 @@ export function validateOperation(operation: GraphQLRequest): GraphQLRequest {
     "extensions",
     "context",
   ];
-  for (const key of Object.keys(operation)) {
+  for (let key of Object.keys(operation)) {
     if (OPERATION_FIELDS.indexOf(key) < 0) {
       throw newInvariantError(`illegal argument: %s`, key);
     }

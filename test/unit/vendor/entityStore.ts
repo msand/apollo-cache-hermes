@@ -1,8 +1,8 @@
 // noinspection GraphQLUnresolvedReference
 
 import gql from 'graphql-tag';
-import { Cache, makeReference, MissingFieldError, Reference } from '@apollo/client';
 
+import { Cache, makeReference, MissingFieldError, Reference } from '../../../apollo-client/src';
 import { Hermes } from '../../../src';
 
 const expect = jestExpect;

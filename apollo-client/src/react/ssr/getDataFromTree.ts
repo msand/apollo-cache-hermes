@@ -1,11 +1,8 @@
 import * as React from "rehackt";
 import type * as ReactTypes from "react";
-// eslint-disable-next-line import/no-extraneous-dependencies
-import { renderToStaticMarkup } from "react-dom/server";
-
 import { getApolloContext } from "../context/index";
-
 import { RenderPromises } from "./RenderPromises";
+import { renderToStaticMarkup } from "react-dom/server";
 
 export function getDataFromTree(
   tree: ReactTypes.ReactNode,

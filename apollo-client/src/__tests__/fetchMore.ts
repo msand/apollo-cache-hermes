@@ -1,20 +1,28 @@
 import { assign, cloneDeep } from "lodash";
 import gql from "graphql-tag";
+
 import {
   ApolloClient,
   ApolloLink,
   NetworkStatus,
   ObservableQuery,
   TypedDocumentNode,
-  Observable,
-  ApolloCache,
-  FieldMergeFunction,
-} from "@apollo/client";
+} from "../core";
 
-import { offsetLimitPagination, concatPagination } from "../utilities";
-import { itAsync, mockSingleLink, subscribeAndCount } from "../testing";
+import {
+  Observable,
+  offsetLimitPagination,
+  concatPagination,
+} from "../utilities";
+
+import {
+  ApolloCache,
+  InMemoryCacheConfig,
+  FieldMergeFunction,
+} from "../cache";
 import { Hermes } from "../../../src";
-import { CacheContext } from "../../../src/context";
+
+import { itAsync, mockSingleLink, subscribeAndCount } from "../testing";
 
 describe("updateQuery on a simple query", () => {
   const query = gql`
@@ -260,7 +268,7 @@ describe("fetchMore on an observable query", () => {
 
   function setupWithCacheConfig(
     reject: (reason: any) => any,
-    cacheConfig: CacheContext.Configuration,
+    cacheConfig: InMemoryCacheConfig,
     ...mockedResponses: any[]
   ) {
     const client = new ApolloClient({
@@ -1038,9 +1046,14 @@ describe("fetchMore on an observable query", () => {
       const mergeArgsHistory: (Record<string, any> | null)[] = [];
       const groceriesFieldPolicy = offsetLimitPagination();
       const { merge } = groceriesFieldPolicy;
-      groceriesFieldPolicy.merge = function merge(existing, incoming, options) {
+      groceriesFieldPolicy.merge = function (existing, incoming, options) {
         mergeArgsHistory.push(options.args);
-        return merge.call(this, existing, incoming, options);
+        return (merge as FieldMergeFunction<any>).call(
+          this,
+          existing,
+          incoming,
+          options
+        );
       };
 
       const cache = new Hermes({
@@ -1589,7 +1602,7 @@ describe("fetchMore on an observable query with connection", () => {
 
   function setupWithCacheConfig(
     reject: (reason: any) => any,
-    cacheConfig: CacheContext.Configuration,
+    cacheConfig: InMemoryCacheConfig,
     ...mockedResponses: any[]
   ) {
     const client = new ApolloClient({

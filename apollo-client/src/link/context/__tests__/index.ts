@@ -1,6 +1,6 @@
 import gql from "graphql-tag";
-import { ApolloLink } from "@apollo/client";
 
+import { ApolloLink } from "../../core";
 import { Observable } from "../../../utilities/observables/Observable";
 import { execute } from "../../core/execute";
 import { setContext } from "../index";
@@ -121,8 +121,8 @@ itAsync("has access to the request information", (resolve, reject) => {
   const withContext = setContext(({ operationName, query, variables }) =>
     sleep(1).then(() =>
       Promise.resolve({
-        variables: !!variables,
-        operation: !!query,
+        variables: variables ? true : false,
+        operation: query ? true : false,
         operationName: operationName!.toUpperCase(),
       })
     )
@@ -175,7 +175,7 @@ itAsync("unsubscribes correctly", (resolve, reject) => {
 
   const link = withContext.concat(mockLink);
 
-  const handle = execute(link, {
+  let handle = execute(link, {
     query,
     context: { count: 1 },
   }).subscribe((result) => {
@@ -205,7 +205,7 @@ itAsync("unsubscribes without throwing before data", (resolve, reject) => {
 
   const link = withContext.concat(mockLink);
 
-  const handle = execute(link, {
+  let handle = execute(link, {
     query,
     context: { count: 1 },
   }).subscribe((result) => {
@@ -242,7 +242,7 @@ itAsync(
     const link = withContext.concat(mockLink);
 
     let subscriptionReturnedData = false;
-    const handle = execute(link, { query }).subscribe((result) => {
+    let handle = execute(link, { query }).subscribe((result) => {
       subscriptionReturnedData = true;
       reject("subscription should not return data");
     });

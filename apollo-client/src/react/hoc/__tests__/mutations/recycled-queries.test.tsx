@@ -1,18 +1,19 @@
-import * as React from "react";
+import React from "react";
 import { render, waitFor } from "@testing-library/react";
 import gql from "graphql-tag";
 import { DocumentNode } from "graphql";
+
 import {
   ApolloCache,
   ApolloClient,
-  ApolloProvider,
-  MutationFunction,
-} from "@apollo/client";
-import { graphql, ChildProps } from "@apollo/client/react/hoc";
-
-import { MutationUpdaterFunction } from "../../../../core";
+  MutationUpdaterFunction,
+} from "../../../../core";
+import { ApolloProvider } from "../../../context";
+import { Hermes as Cache } from "../../../../../../src";
+import { MutationFunction } from "../../../types/types";
 import { mockSingleLink } from "../../../../testing";
-import { Hermes } from "../../../../../../src";
+import { graphql } from "../../graphql";
+import { ChildProps } from "../../types";
 
 describe("graphql(mutation) update queries", () => {
   // This is a long test that keeps track of a lot of stuff. It is testing
@@ -105,7 +106,7 @@ describe("graphql(mutation) update queries", () => {
     );
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     let mutate: MutationFunction<MutationData>;
@@ -339,7 +340,7 @@ describe("graphql(mutation) update queries", () => {
     );
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     let mutate: MutationFunction<MutationData>;

@@ -1,13 +1,15 @@
-import * as React from "react";
+import React from "react";
 import userEvent from "@testing-library/user-event";
 import { render, waitFor, screen } from "@testing-library/react";
 import gql from "graphql-tag";
 import { DocumentNode } from "graphql";
-import { ApolloClient, ApolloProvider } from "@apollo/client";
-import { graphql, ChildProps } from "@apollo/client/react/hoc";
 
-import { Hermes } from "../../../../../../src";
+import { ApolloClient } from "../../../../core";
+import { ApolloProvider } from "../../../context";
+import { Hermes as Cache } from "../../../../../../src";
 import { itAsync, mockSingleLink } from "../../../../testing";
+import { graphql } from "../../graphql";
+import { ChildProps } from "../../types";
 
 describe("[queries] observableQuery", () => {
   // observableQuery
@@ -30,7 +32,7 @@ describe("[queries] observableQuery", () => {
     );
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     let count = 0;
@@ -178,7 +180,7 @@ describe("[queries] observableQuery", () => {
       );
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
       let remount: any;
 
@@ -295,7 +297,7 @@ describe("[queries] observableQuery", () => {
 
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
     let remount: any;
 
@@ -424,7 +426,7 @@ describe("[queries] observableQuery", () => {
 
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       let count = 0;

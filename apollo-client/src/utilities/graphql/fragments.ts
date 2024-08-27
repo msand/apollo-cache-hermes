@@ -1,11 +1,11 @@
+import { invariant, newInvariantError } from "../globals/index";
+
 import type {
   DocumentNode,
   FragmentDefinitionNode,
   InlineFragmentNode,
   SelectionNode,
 } from "graphql";
-
-import { invariant, newInvariantError } from "../globals/index";
 
 // TODO(brian): A hack until this issue is resolved (https://github.com/graphql/graphql-js/issues/3356)
 type Kind = any;

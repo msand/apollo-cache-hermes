@@ -6,15 +6,16 @@
 
 // externals
 import gql from "graphql-tag";
-import { ObservableQuery } from "@apollo/client";
 
 // core
+import { QueryManager } from "../../QueryManager";
+import { ObservableQuery } from "../../ObservableQuery";
 import { ObservableSubscription } from "../../../utilities";
 import { itAsync } from "../../../testing";
+import { Hermes } from "../../../../../src";
+
 // mocks
 import { MockSubscriptionLink } from "../../../testing/core";
-import { Hermes } from "../../../../../src";
-import {QueryManager} from "@apollo/client/core/QueryManager";
 
 describe("Subscription lifecycles", () => {
   itAsync(

@@ -1,5 +1,4 @@
 import * as React from "rehackt";
-
 import { canUseDOM } from "../../../utilities/index";
 
 // use canUseDOM here instead of canUseLayoutEffect because we want to be able

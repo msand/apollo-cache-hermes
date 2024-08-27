@@ -11,14 +11,12 @@ import {
   GraphQLID,
   GraphQLString,
 } from "graphql";
-import {
-  ApolloClient,
-  Observable,
-  ApolloLink,
-  Operation,
-  ApolloCache,
-} from "@apollo/client";
 
+import { Observable } from "../../utilities";
+import { ApolloLink } from "../../link/core";
+import { Operation } from "../../link/core";
+import { ApolloClient } from "../../core";
+import { ApolloCache } from "../../cache";
 import { itAsync } from "../../testing";
 import { spyOnConsole } from "../../testing/internal";
 import { Hermes } from "../../../../src";
@@ -902,20 +900,18 @@ describe("Combining client and server state/operations", () => {
       const schema = new GraphQLSchema({ query: QueryType });
 
       const link = new ApolloLink((operation) => {
-        return new Observable((observer) => {
+        // @ts-ignore
+        return new Observable(async (observer) => {
           const { query, operationName, variables } = operation;
           try {
-            const result = graphql({
+            const result = await graphql({
               schema,
               source: print(query),
               variableValues: variables,
               operationName,
-            })
-              .then((result) => {
-                observer.next(result);
-                observer.complete();
-              })
-              .catch((err) => observer.error(err));
+            });
+            observer.next(result);
+            observer.complete();
           } catch (err) {
             observer.error(err);
           }

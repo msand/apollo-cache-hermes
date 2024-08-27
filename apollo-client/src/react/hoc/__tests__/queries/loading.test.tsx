@@ -1,14 +1,18 @@
-import * as React from "react";
+import React from "react";
 import { render, waitFor } from "@testing-library/react";
 import gql from "graphql-tag";
 import { DocumentNode } from "graphql";
-import { ApolloClient, ApolloProvider } from "@apollo/client";
-import { graphql, ChildProps } from "@apollo/client/react/hoc";
 
-import { Hermes } from "../../../../../../src";
-import { NetworkStatus, WatchQueryFetchPolicy } from "../../../../core";
+import {
+  ApolloClient,
+  NetworkStatus,
+  WatchQueryFetchPolicy,
+} from "../../../../core";
+import { ApolloProvider } from "../../../context";
+import { Hermes as Cache } from "../../../../../../src";
 import { itAsync, mockSingleLink } from "../../../../testing";
-import { DataValue } from "../../types";
+import { graphql } from "../../graphql";
+import { ChildProps, DataValue } from "../../types";
 import { profile } from "../../../../testing/internal";
 
 describe("[queries] loading", () => {
@@ -33,7 +37,7 @@ describe("[queries] loading", () => {
       });
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       let done = false;
@@ -46,7 +50,6 @@ describe("[queries] loading", () => {
             expect(data!.networkStatus).toBeTruthy();
             done = true;
           }
-
           render() {
             return null;
           }
@@ -80,7 +83,7 @@ describe("[queries] loading", () => {
     });
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     @graphql(query, { options: { notifyOnNetworkStatusChange: true } })
@@ -125,7 +128,7 @@ describe("[queries] loading", () => {
       });
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       const Container = graphql(query, {
@@ -185,7 +188,7 @@ describe("[queries] loading", () => {
 
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       let done = false;
@@ -251,7 +254,6 @@ describe("[queries] loading", () => {
               reject(err);
             }
           }
-
           render() {
             return null;
           }
@@ -305,7 +307,7 @@ describe("[queries] loading", () => {
       );
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       let count = 0;
@@ -383,7 +385,7 @@ describe("[queries] loading", () => {
 
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
       queryDeduplication: false,
     });
 
@@ -500,9 +502,10 @@ describe("[queries] loading", () => {
       );
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
-      let count = 0;
+      let renderFn: (num: number) => React.ReactElement<any>,
+        count = 0;
       const testFailures: any[] = [];
 
       interface Props {
@@ -547,7 +550,7 @@ describe("[queries] loading", () => {
         }
       );
 
-      const renderFn = (first: number) => (
+      renderFn = (first: number) => (
         <ApolloProvider client={client}>
           <Container first={first} />
         </ApolloProvider>
@@ -595,7 +598,7 @@ describe("[queries] loading", () => {
       );
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       let count = 0;
@@ -668,7 +671,7 @@ describe("[queries] loading", () => {
       );
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
       let count = 0;
 
@@ -791,7 +794,7 @@ describe("[queries] loading", () => {
       );
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
       let count = 0;
 

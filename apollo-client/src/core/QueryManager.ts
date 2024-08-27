@@ -1,24 +1,27 @@
+import { invariant, newInvariantError } from "../utilities/globals/index";
+
 import type { DocumentNode } from "graphql";
 // TODO(brian): A hack until this issue is resolved (https://github.com/graphql/graphql-js/issues/3356)
 type OperationTypeNode = any;
 import { equal } from "@wry/equality";
-// eslint-disable-next-line import/no-extraneous-dependencies
-import { Trie } from "@wry/trie";
-import {
-  ApolloCache,
-  Cache,
-  ApolloLink,
-  execute,
-  DocumentTransform,
-} from "@apollo/client";
 
-import { invariant, newInvariantError } from "../utilities/globals/index";
+import type { ApolloLink, FetchResult } from "../link/core/index";
+import { execute } from "../link/core/index";
 import {
   defaultCacheSizes,
   hasDirectives,
   isExecutionPatchIncrementalResult,
   isExecutionPatchResult,
   removeDirectivesFromDocument,
+} from "../utilities/index";
+import type { Cache, ApolloCache } from "../cache/index";
+import { canonicalStringify } from "../cache/index";
+
+import type {
+  ObservableSubscription,
+  ConcastSourcesArray,
+} from "../utilities/index";
+import {
   getDefaultValues,
   getOperationDefinition,
   getOperationName,
@@ -32,27 +35,14 @@ import {
   makeUniqueId,
   isDocumentNode,
   isNonNullObject,
-  print,
-  AutoCleanedWeakCache,
-  cacheSizes,
-} from "../utilities/index";
-import { canonicalStringify } from "../cache/index";
-import type {
-  ObservableSubscription,
-  ConcastSourcesArray,
+  DocumentTransform,
 } from "../utilities/index";
 import { mergeIncrementalData } from "../utilities/common/incrementalResult";
 import {
   ApolloError,
   isApolloError,
   graphQLResultHasProtocolErrors,
-  PROTOCOL_ERRORS_SYMBOL,
 } from "../errors/index";
-import type { ApolloErrorOptions } from "../errors/index";
-import type { IgnoreModifier } from "../cache/core/types/common";
-import type { TODO } from "../utilities/types/TODO";
-import { FetchResult } from "../link/core";
-
 import type {
   QueryOptions,
   WatchQueryOptions,
@@ -61,7 +51,7 @@ import type {
   ErrorPolicy,
   MutationFetchPolicy,
 } from "./watchQueryOptions";
-import {logMissingFieldErrors, ObservableQuery} from "./ObservableQuery";
+import { ObservableQuery, logMissingFieldErrors } from "./ObservableQuery";
 import { NetworkStatus, isNetworkRequestInFlight } from "./networkStatus";
 import type {
   ApolloQueryResult,
@@ -75,9 +65,18 @@ import type {
   DefaultContext,
 } from "./types";
 import { LocalState } from "./LocalState";
-import {CacheWriteBehavior, QueryInfo, QueryStoreValue} from "./QueryInfo";
-// eslint-disable-next-line import/order
-import { shouldWriteResult } from "./QueryInfo";
+
+import type { QueryStoreValue } from "./QueryInfo";
+import {
+  QueryInfo,
+  shouldWriteResult,
+  CacheWriteBehavior,
+} from "./QueryInfo";
+import type { ApolloErrorOptions } from "../errors/index";
+import { PROTOCOL_ERRORS_SYMBOL } from "../errors/index";
+import { print } from "../utilities/index";
+import type { IgnoreModifier } from "../cache/core/types/common";
+import type { TODO } from "../utilities/types/TODO";
 
 const { hasOwnProperty } = Object.prototype;
 
@@ -103,6 +102,8 @@ interface TransformCacheEntry {
 }
 
 import type { DefaultOptions } from "./ApolloClient";
+import { Trie } from "@wry/trie";
+import { AutoCleanedWeakCache, cacheSizes } from "../utilities/index";
 
 export class QueryManager<TStore> {
   public cache: ApolloCache<TStore>;
@@ -745,10 +746,8 @@ export class QueryManager<TStore> {
       options.notifyOnNetworkStatusChange = false;
     }
 
-    // @ts-ignore TODO
     const queryInfo = new QueryInfo(this);
     const observable = new ObservableQuery<T, TVariables>({
-      // @ts-ignore TODO
       queryManager: this,
       queryInfo,
       options,
@@ -919,7 +918,6 @@ export class QueryManager<TStore> {
           variables: options.variables,
         });
         const oq = new ObservableQuery({
-          // @ts-ignore TODO
           queryManager: this,
           queryInfo,
           options: {
@@ -997,7 +995,7 @@ export class QueryManager<TStore> {
               query,
               result: result.data,
               dataId: "ROOT_SUBSCRIPTION",
-              variables,
+              variables: variables,
             });
           }
 
@@ -1248,7 +1246,7 @@ export class QueryManager<TStore> {
     const queryInfo = this.getQuery(queryId);
 
     const defaults = this.defaultOptions.watchQuery;
-    const {
+    let {
       fetchPolicy = (defaults && defaults.fetchPolicy) || "cache-first",
       errorPolicy = (defaults && defaults.errorPolicy) || "none",
       returnPartialData = false,
@@ -1480,7 +1478,7 @@ export class QueryManager<TStore> {
             info.reset(); // Force info.getDiff() to read from cache.
             diff = info.getDiff();
           }
-          result = onQueryUpdated(oq, diff!, lastDiff);
+          result = onQueryUpdated(oq, diff, lastDiff);
         }
 
         // Otherwise, we fall back to refetching.
@@ -1681,7 +1679,6 @@ export class QueryManager<TStore> {
 
   private getQuery(queryId: string): QueryInfo {
     if (queryId && !this.queries.has(queryId)) {
-      // @ts-ignore TODO
       this.queries.set(queryId, new QueryInfo(this, queryId));
     }
     return this.queries.get(queryId)!;

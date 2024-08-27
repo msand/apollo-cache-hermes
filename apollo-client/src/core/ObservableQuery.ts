@@ -1,7 +1,8 @@
+import { invariant } from "../utilities/globals/index";
 import type { DocumentNode } from "graphql";
 import { equal } from "@wry/equality";
 
-import { invariant } from "../utilities/globals/index";
+import { NetworkStatus, isNetworkRequestInFlight } from "./networkStatus";
 import type {
   Concast,
   Observer,
@@ -17,10 +18,6 @@ import {
   getQueryDefinition,
 } from "../utilities/index";
 import type { ApolloError } from "../errors/index";
-import type { MissingFieldError } from "../cache/index";
-import type { MissingTree } from "../cache/core/types/common";
-import type { TODO } from "../utilities/types/TODO";
-
 import type { QueryManager } from "./QueryManager";
 import type {
   ApolloQueryResult,
@@ -35,8 +32,10 @@ import type {
   WatchQueryFetchPolicy,
 } from "./watchQueryOptions";
 import type { QueryInfo } from "./QueryInfo";
+import type { MissingFieldError } from "../cache/index";
+import type { MissingTree } from "../cache/core/types/common";
 import { equalByQuery } from "./equalByQuery";
-import { NetworkStatus, isNetworkRequestInFlight } from "./networkStatus";
+import type { TODO } from "../utilities/types/TODO";
 
 const { assign, hasOwnProperty } = Object;
 
@@ -122,13 +121,11 @@ export class ObservableQuery<
       // Zen Observable has its own error function, so in order to log correctly
       // we need to provide a custom error callback.
       try {
-        const subObserver = (observer as any)._subscription._observer;
+        var subObserver = (observer as any)._subscription._observer;
         if (subObserver && !subObserver.error) {
           subObserver.error = defaultSubscriptionObserverErrorCallback;
         }
-      } catch {
-        /* empty */
-      }
+      } catch {}
 
       const first = !this.observers.size;
       this.observers.add(observer);
@@ -743,7 +740,6 @@ Did you mean to call refetch(variables) instead of refetch({ variables })?`,
         options.fetchPolicy = options.nextFetchPolicy(fetchPolicy, {
           reason,
           options,
-          // @ts-ignore TODO
           observable: this,
           initialFetchPolicy,
         });
@@ -764,7 +760,6 @@ Did you mean to call refetch(variables) instead of refetch({ variables })?`,
   ) {
     // TODO Make sure we update the networkStatus (and infer fetchVariables)
     // before actually committing to the fetch.
-    // @ts-ignore
     this.queryManager.setObservableQuery(this);
     return this.queryManager["fetchConcastWithInfo"](
       this.queryId,

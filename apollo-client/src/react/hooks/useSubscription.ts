@@ -1,9 +1,9 @@
+import { invariant } from "../../utilities/globals/index";
 import * as React from "rehackt";
 import type { DocumentNode } from "graphql";
 import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
 import { equal } from "@wry/equality";
 
-import { invariant } from "../../utilities/globals/index";
 import { DocumentType, verifyDocumentType } from "../parser/index";
 import type {
   NoInfer,
@@ -11,7 +11,6 @@ import type {
   SubscriptionResult,
 } from "../types/types";
 import type { OperationVariables } from "../../core/index";
-
 import { useApolloClient } from "./useApolloClient";
 /**
  * > Refer to the [Subscriptions](https://www.apollographql.com/docs/react/data/subscriptions/) section for a more in-depth overview of `useSubscription`.
@@ -205,6 +204,8 @@ export function useSubscription<
     }
 
     Object.assign(ref.current, { client, subscription, options });
+    // eslint-disable-next-line react-compiler/react-compiler
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, subscription, options, canResetObservableRef.current]);
 
   React.useEffect(() => {
@@ -272,6 +273,8 @@ export function useSubscription<
         subscription.unsubscribe();
       });
     };
+    // eslint-disable-next-line react-compiler/react-compiler
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [observable]);
 
   return result;

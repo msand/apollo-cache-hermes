@@ -1,5 +1,4 @@
 import * as React from "rehackt";
-
 import type {
   DocumentNode,
   FetchMoreQueryOptions,
@@ -7,6 +6,7 @@ import type {
   TypedDocumentNode,
   WatchQueryOptions,
 } from "../../core/index";
+import { useApolloClient } from "./useApolloClient";
 import {
   getSuspenseCache,
   unwrapQueryRef,
@@ -15,13 +15,11 @@ import {
 } from "../internal/index";
 import type { CacheKey, QueryRef } from "../internal/index";
 import type { BackgroundQueryHookOptions, NoInfer } from "../types/types";
-import { canonicalStringify } from "../../cache/index";
-import type { DeepPartial } from "../../utilities/index";
-
 import { wrapHook } from "./internal/index";
 import { useWatchQueryOptions } from "./useSuspenseQuery";
 import type { FetchMoreFunction, RefetchFunction } from "./useSuspenseQuery";
-import { useApolloClient } from "./useApolloClient";
+import { canonicalStringify } from "../../cache/index";
+import type { DeepPartial } from "../../utilities/index";
 import type { SkipToken } from "./constants";
 
 export type UseBackgroundQueryResult<

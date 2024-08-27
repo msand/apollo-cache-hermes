@@ -1,10 +1,5 @@
-import type {
-  KeyArgsFunction,
-  KeyFieldsFunction,
-  KeySpecifier,
-} from "@apollo/client/cache/inmemory/policies";
-
 import { invariant } from "../../utilities/globals/index";
+
 import {
   argumentsObjectFromField,
   DeepMerger,
@@ -13,6 +8,11 @@ import {
 } from "../../utilities/index";
 
 import { hasOwn, isArray } from "./helpers";
+import type {
+  KeySpecifier,
+  KeyFieldsFunction,
+  KeyArgsFunction,
+} from "./policies";
 
 // Mapping from JSON-encoded KeySpecifier strings to associated information.
 const specifierInfoCache: Record<
@@ -171,7 +171,7 @@ export function keyArgsFnFromSpecifier(
       // still end up with a non-empty :{...} suffix if its key configuration
       // refers to directives or variables.
       if (args || suffix !== "{}") {
-        fieldName += `:${suffix}`;
+        fieldName += ":" + suffix;
       }
 
       return fieldName;

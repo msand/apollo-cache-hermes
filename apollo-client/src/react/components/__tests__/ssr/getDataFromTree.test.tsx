@@ -1,14 +1,18 @@
 /** @jest-environment node */
-import * as React from "react";
+import React from "react";
 import gql from "graphql-tag";
 import { DocumentNode } from "graphql";
-import { ApolloClient, ApolloProvider } from "@apollo/client";
 
-import { getApolloContext, ApolloContextValue } from "../../../context";
+import { ApolloClient } from "../../../../core";
+import {
+  ApolloProvider,
+  getApolloContext,
+  ApolloContextValue,
+} from "../../../context";
 import { getDataFromTree } from "../../../ssr";
 import { itAsync, mockSingleLink } from "../../../../testing";
 import { Query } from "../../Query";
-import { Hermes } from "../../../../../../src";
+import { Hermes as Cache } from "../../../../../../src";
 
 describe("SSR", () => {
   describe("`getDataFromTree`", () => {
@@ -48,7 +52,7 @@ describe("SSR", () => {
       });
       const apolloClient = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       interface Data {
@@ -104,7 +108,7 @@ describe("SSR", () => {
 
         const client = new ApolloClient({
           link,
-          cache: new Hermes({ addTypename: false }),
+          cache: new Cache({ addTypename: false }),
         });
 
         const app = (

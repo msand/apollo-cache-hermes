@@ -5,7 +5,6 @@
 
 import type { Response as NodeResponse } from "node-fetch";
 import type { Readable as NodeReadableStream } from "stream";
-
 import { canUseAsyncIteratorSymbol } from "../../utilities/index";
 
 import asyncIterator from "./iterators/async";

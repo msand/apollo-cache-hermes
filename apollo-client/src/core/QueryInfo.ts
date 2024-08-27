@@ -1,21 +1,21 @@
 import type { DocumentNode, GraphQLError } from "graphql";
 import { equal } from "@wry/equality";
-import { Cache, ApolloCache } from "@apollo/client";
 
+import type { Cache, ApolloCache } from "../cache/index";
+import { DeepMerger } from "../utilities/index";
+import { mergeIncrementalData } from "../utilities/index";
+import type { WatchQueryOptions, ErrorPolicy } from "./watchQueryOptions";
+import type { ObservableQuery } from "./ObservableQuery";
+import { reobserveCacheFirst } from "./ObservableQuery";
+import type { QueryListener } from "./types";
+import type { FetchResult } from "../link/core/index";
 import {
-  DeepMerger,
-  mergeIncrementalData,
   isNonEmptyArray,
   graphQLResultHasError,
   canUseWeakMap,
 } from "../utilities/index";
-import type { FetchResult } from "../link/core/index";
-import type { ApolloError } from "../errors/index";
-
-import type { WatchQueryOptions, ErrorPolicy } from "./watchQueryOptions";
-import {ObservableQuery, reobserveCacheFirst} from "./ObservableQuery";
-import type { QueryListener } from "./types";
 import { NetworkStatus, isNetworkRequestInFlight } from "./networkStatus";
+import type { ApolloError } from "../errors/index";
 import type { QueryManager } from "./QueryManager";
 
 export type QueryStoreValue = Pick<
@@ -40,7 +40,7 @@ function wrapDestructiveCacheMethod(
 ) {
   const original = cache[methodName];
   if (typeof original === "function") {
-    // @ts-ignore this is just too generic to be typed correctly
+    // @ts-expect-error this is just too generic to be typed correctly
     cache[methodName] = function () {
       destructiveMethodCounts.set(
         cache,
@@ -50,7 +50,7 @@ function wrapDestructiveCacheMethod(
         // that matters in any conceivable practical scenario.
         (destructiveMethodCounts.get(cache)! + 1) % 1e15
       );
-      // @ts-ignore this is just too generic to be typed correctly
+      // @ts-expect-error this is just too generic to be typed correctly
       return original.apply(this, arguments);
     };
   }
@@ -267,7 +267,6 @@ export class QueryInfo {
             // this method, and are handled by calling oq.reobserve(). If this
             // reobservation is spurious, isDifferentFromLastResult still has a
             // chance to catch it before delivery to ObservableQuery subscribers.
-            // @ts-ignore
             reobserveCacheFirst(oq);
           }
         })
@@ -463,7 +462,6 @@ export class QueryInfo {
             // mitigate the clobbering somehow, but that would make this
             // particular cache write even less important, and thus
             // skipping it would be even safer than it is today.
-            // eslint-disable-next-line no-lonely-if
             if (this.lastDiff && this.lastDiff.diff.complete) {
               // Reuse data from the last good (complete) diff that we
               // received, when possible.

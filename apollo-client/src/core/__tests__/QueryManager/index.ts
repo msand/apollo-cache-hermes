@@ -1,26 +1,26 @@
 // externals
-
 import { from } from "rxjs";
 import { map } from "rxjs/operators";
 import { assign } from "lodash";
 import gql from "graphql-tag";
 import { DocumentNode, GraphQLError } from "graphql";
 import { setVerbosity } from "ts-invariant";
-import { waitFor } from "@testing-library/react";
-import {ApolloClient, ApolloLink, MutationOptions, ObservableQuery, WatchQueryOptions} from "@apollo/client";
 
 import {
   Observable,
   Observer,
 } from "../../../utilities/observables/Observable";
-import { GraphQLRequest, FetchResult } from "../../../link/core";
-// eslint-disable-next-line import/order
-import { NormalizedCacheObject } from "../../../cache/inmemory/types";
+import { ApolloLink, GraphQLRequest, FetchResult } from "../../../link/core";
+import { InMemoryCacheConfig } from "../../../cache";
+import {
+  ApolloReducerConfig,
+  NormalizedCacheObject,
+} from "../../../cache/inmemory/types";
+import { Hermes } from "../../../../../src";
 
 // mocks
 import mockQueryManager from "../../../testing/core/mocking/mockQueryManager";
 import mockWatchQuery from "../../../testing/core/mocking/mockWatchQuery";
-// eslint-disable-next-line import/order
 import {
   MockApolloLink,
   mockSingleLink,
@@ -29,29 +29,26 @@ import {
 // core
 import { ApolloQueryResult } from "../../types";
 import { NetworkStatus } from "../../networkStatus";
-/*
+import { ObservableQuery } from "../../ObservableQuery";
 import {
   MutationBaseOptions,
   MutationOptions,
   WatchQueryOptions,
 } from "../../watchQueryOptions";
-*/
-// eslint-disable-next-line import/order
+import { QueryManager } from "../../QueryManager";
+
 import { ApolloError } from "../../../errors";
 
 // testing utils
+import { waitFor } from "@testing-library/react";
 import wrap from "../../../testing/core/wrap";
 import observableToPromise, {
   observableToPromiseAndSubscription,
 } from "../../../testing/core/observableToPromise";
 import { itAsync, subscribeAndCount } from "../../../testing/core";
+import { ApolloClient } from "../../../core";
 import { mockFetchQuery } from "../ObservableQuery";
 import { Concast, print } from "../../../utilities";
-import { Hermes } from "../../../../../src";
-import { CacheContext } from "../../../../../src/context";
-import {QueryManager} from "@apollo/client/core/QueryManager";
-import {MutationBaseOptions} from "@apollo/client/core/watchQueryOptions";
-import {QueryInfo} from "../../QueryInfo";
 
 interface MockedMutation {
   reject: (reason: any) => any;
@@ -59,7 +56,7 @@ interface MockedMutation {
   data?: Object;
   errors?: GraphQLError[];
   variables?: Object;
-  config?: Partial<CacheContext.Configuration>;
+  config?: ApolloReducerConfig;
 }
 
 export function resetStore(qm: QueryManager<any>) {
@@ -74,7 +71,7 @@ describe("QueryManager", () => {
   // Standard "get id from object" method.
   const dataIdFromObject = (object: any) => {
     if (object.__typename && object.id) {
-      return `${object.__typename}__${object.id}`;
+      return object.__typename + "__" + object.id;
     }
     return undefined;
   };
@@ -89,7 +86,7 @@ describe("QueryManager", () => {
     queryDeduplication = false,
   }: {
     link: ApolloLink;
-    config?: Partial<CacheContext.Configuration>;
+    config?: Partial<InMemoryCacheConfig>;
     clientAwareness?: { [key: string]: string };
     queryDeduplication?: boolean;
   }) => {
@@ -285,7 +282,6 @@ describe("QueryManager", () => {
           expect(errors![0].message).toBe("This is an error message.");
           resolve();
         },
-        // eslint-disable-next-line handle-callback-err
         error(apolloError) {
           reject(
             new Error(
@@ -1242,19 +1238,19 @@ describe("QueryManager", () => {
 
       const queryManager = mockQueryManager(
         {
-          request: { query },
+          request: { query: query },
           result: { data: data1 },
         },
         {
-          request: { query },
+          request: { query: query },
           result: { data: data2 },
         },
         {
-          request: { query, variables: variables1 },
+          request: { query: query, variables: variables1 },
           result: { data: data3 },
         },
         {
-          request: { query, variables: variables2 },
+          request: { query: query, variables: variables2 },
           result: { data: data4 },
         }
       );
@@ -1311,11 +1307,11 @@ describe("QueryManager", () => {
 
     const queryManager = mockQueryManager(
       {
-        request: { query },
+        request: { query: query },
         result: { data: data1 },
       },
       {
-        request: { query },
+        request: { query: query },
         result: { data: data2 },
       }
     );
@@ -1920,8 +1916,8 @@ describe("QueryManager", () => {
         },
       };
 
-      // make sure that the query is transformed within the query
-      // manager
+      //make sure that the query is transformed within the query
+      //manager
       createQueryManager({
         link: mockSingleLink({
           request: { query: transformedQuery },
@@ -1929,7 +1925,7 @@ describe("QueryManager", () => {
         }).setOnError(reject),
         config: { addTypename: true },
       })
-        .query({ query })
+        .query({ query: query })
         .then((result) => {
           expect(result.data).toEqual(transformedQueryResult);
         })
@@ -1971,7 +1967,7 @@ describe("QueryManager", () => {
       }).setOnError(reject),
       config: { addTypename: true },
     })
-      .mutate({ mutation })
+      .mutate({ mutation: mutation })
       .then((result) => {
         expect(result.data).toEqual(transformedMutationResult);
         resolve();
@@ -3658,7 +3654,8 @@ describe("QueryManager", () => {
       }
     );
 
-    it.skip("should only refetch once when we store reset", () => {
+    xit("should only refetch once when we store reset", () => {
+      let queryManager: QueryManager<NormalizedCacheObject>;
       const query = gql`
         query {
           author {
@@ -3692,9 +3689,10 @@ describe("QueryManager", () => {
               observer.next({ data });
             }
             observer.complete();
+            return;
           })
       );
-      const queryManager = createQueryManager({ link });
+      queryManager = createQueryManager({ link });
       const observable = queryManager.watchQuery<any>({ query });
 
       // wait just to make sure the observable doesn't fire again
@@ -3715,6 +3713,8 @@ describe("QueryManager", () => {
     });
 
     itAsync("should not refetch torn-down queries", (resolve) => {
+      let queryManager: QueryManager<NormalizedCacheObject>;
+      let observable: ObservableQuery<any>;
       const query = gql`
         query {
           author {
@@ -3736,11 +3736,12 @@ describe("QueryManager", () => {
           new Observable((observer) => {
             timesFired += 1;
             observer.next({ data });
+            return;
           }),
       ]);
 
-      const queryManager = createQueryManager({ link });
-      const observable = queryManager.watchQuery({ query });
+      queryManager = createQueryManager({ link });
+      observable = queryManager.watchQuery({ query });
 
       observableToPromise({ observable, wait: 0 }, (result) =>
         expect(result.data).toEqual(data)
@@ -3783,6 +3784,7 @@ describe("QueryManager", () => {
               timesFired += 1;
               observer.next({ data });
               observer.complete();
+              return;
             })
         ),
       ]);
@@ -3810,6 +3812,7 @@ describe("QueryManager", () => {
     });
 
     itAsync("should not error on a stopped query()", (resolve, reject) => {
+      let queryManager: QueryManager<NormalizedCacheObject>;
       const query = gql`
         query {
           author {
@@ -3833,7 +3836,7 @@ describe("QueryManager", () => {
           })
       );
 
-      const queryManager = createQueryManager({ link });
+      queryManager = createQueryManager({ link });
 
       const queryId = "1";
       queryManager
@@ -3864,7 +3867,7 @@ describe("QueryManager", () => {
         const queryManager = mockQueryManager({
           request: { query },
           result: { data },
-          delay: 10000, // i.e. forever
+          delay: 10000, //i.e. forever
         });
         queryManager
           .fetchQuery("made up id", { query })
@@ -4028,6 +4031,7 @@ describe("QueryManager", () => {
     itAsync(
       "should throw an error on an inflight query() if the store is reset",
       (resolve, reject) => {
+        let queryManager: QueryManager<NormalizedCacheObject>;
         const query = gql`
           query {
             author {
@@ -4049,10 +4053,11 @@ describe("QueryManager", () => {
               // reset the store as soon as we hear about the query
               resetStore(queryManager);
               observer.next({ data });
+              return;
             })
         );
 
-        const queryManager = createQueryManager({ link });
+        queryManager = createQueryManager({ link });
         queryManager
           .query<any>({ query })
           .then(() => {
@@ -4167,6 +4172,7 @@ describe("QueryManager", () => {
     itAsync(
       "should only refetch once when we refetch observable queries",
       (resolve, reject) => {
+        let queryManager: QueryManager<NormalizedCacheObject>;
         const query = gql`
           query {
             author {
@@ -4200,9 +4206,10 @@ describe("QueryManager", () => {
                 observer.next({ data });
               }
               observer.complete();
+              return;
             })
         );
-        const queryManager = createQueryManager({ link });
+        queryManager = createQueryManager({ link });
         const observable = queryManager.watchQuery<any>({ query });
 
         // wait just to make sure the observable doesn't fire again
@@ -4227,6 +4234,8 @@ describe("QueryManager", () => {
     );
 
     itAsync("should not refetch torn-down queries", (resolve) => {
+      let queryManager: QueryManager<NormalizedCacheObject>;
+      let observable: ObservableQuery<any>;
       const query = gql`
         query {
           author {
@@ -4248,11 +4257,12 @@ describe("QueryManager", () => {
           new Observable((observer) => {
             timesFired += 1;
             observer.next({ data });
+            return;
           }),
       ]);
 
-      const queryManager = createQueryManager({ link });
-      const observable = queryManager.watchQuery({ query });
+      queryManager = createQueryManager({ link });
+      observable = queryManager.watchQuery({ query });
 
       observableToPromise({ observable, wait: 0 }, (result) =>
         expect(result.data).toEqual(data)
@@ -4347,7 +4357,6 @@ describe("QueryManager", () => {
         queryManager
           .fetchQuery("made up id", { query })
           .then(resolve)
-          // eslint-disable-next-line handle-callback-err
           .catch((error) => {
             reject(new Error("Should not return an error"));
           });
@@ -4543,6 +4552,7 @@ describe("QueryManager", () => {
     itAsync(
       "should NOT throw an error on an inflight query() if the observed queries are refetched",
       (resolve, reject) => {
+        let queryManager: QueryManager<NormalizedCacheObject>;
         const query = gql`
           query {
             author {
@@ -4568,7 +4578,7 @@ describe("QueryManager", () => {
             })
         );
 
-        const queryManager = createQueryManager({ link });
+        queryManager = createQueryManager({ link });
         queryManager
           .query<any>({ query })
           .then(() => {
@@ -5250,7 +5260,7 @@ describe("QueryManager", () => {
               .then(() => {
                 // Make sure the QueryManager cleans up legacy one-time queries like
                 // the one we requested above using refetchQueries.
-                (queryManager["queries"] as Map<string, QueryInfo>).forEach((queryInfo, queryId) => {
+                queryManager["queries"].forEach((queryInfo, queryId) => {
                   expect(queryId).not.toContain("legacyOneTimeQuery");
                 });
               })
@@ -5975,7 +5985,7 @@ describe("QueryManager", () => {
         ).setOnError(reject);
         const cache = new Hermes();
 
-        const queryManager = new QueryManager({
+        const queryManager = new QueryManager<NormalizedCacheObject>({
           link,
           cache,
         });
@@ -5997,6 +6007,7 @@ describe("QueryManager", () => {
             });
           })
           .then(() => {
+            // @ts-ignore
             expect(cache.watches.size).toBe(0);
           })
           .then(resolve, reject);
@@ -6252,7 +6263,6 @@ describe("QueryManager", () => {
 
   describe("defaultContext", () => {
     let _: any; // trash variable to throw away values when destructuring
-    // eslint-disable-next-line no-self-assign
     _ = _; // omit "'_' is declared but its value is never read." compiler warning
 
     it("ApolloClient and QueryManager share a `defaultContext` instance (default empty object)", () => {

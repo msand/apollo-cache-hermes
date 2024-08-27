@@ -4,10 +4,9 @@ import gql from "graphql-tag";
 import { EntityStore } from "../entityStore";
 import { StoreReader } from "../readFromStore";
 import { StoreWriter } from "../writeToStore";
-import { spyOnConsole } from "../../../testing/internal";
 import { Hermes } from "../../../../../src";
-
 import { writeQueryToStore, readQueryFromStore, withError } from "./helpers";
+import { spyOnConsole } from "../../../testing/internal";
 
 function assertDeeplyFrozen(value: any, stack: any[] = []) {
   if (value !== null && typeof value === "object" && stack.indexOf(value) < 0) {

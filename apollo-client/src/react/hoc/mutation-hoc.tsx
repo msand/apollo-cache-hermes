@@ -1,24 +1,16 @@
 import * as React from "rehackt";
 import type * as ReactTypes from "react";
 import type { DocumentNode } from "graphql";
-// eslint-disable-next-line import/no-extraneous-dependencies
 import hoistNonReactStatics from "hoist-non-react-statics";
-import {
-  ApolloCache,
+
+import { parser } from "../parser/index";
+import type { DefaultContext, OperationVariables } from "../../core/types";
+import type {
   BaseMutationOptions,
+  MutationFunction,
   MutationResult,
-  DefaultContext,
-  OperationVariables,
-  parser,
-  MutationFunctionOptions,
-  FetchResult,
-} from "@apollo/client";
-import { Mutation } from "@apollo/client/react/components";
-import {
-  MutateProps,
-  OperationOption,
-  OptionProps,
-} from "@apollo/client/react/hoc";
+} from "../types/types";
+import { Mutation } from "../components/index";
 
 import {
   defaultMapPropsToOptions,
@@ -26,6 +18,8 @@ import {
   calculateVariablesFromProps,
   GraphQLBase,
 } from "./hoc-utils";
+import type { OperationOption, OptionProps, MutateProps } from "./types";
+import type { ApolloCache } from "../../core/index";
 
 /**
  * @deprecated
@@ -56,11 +50,16 @@ export function withMutation<
     operationOptions;
 
   let mapPropsToOptions = options as (
-    props: TProps
-  ) => BaseMutationOptions<TData>;
-  if (typeof mapPropsToOptions !== "function") {
-    mapPropsToOptions = () => options as BaseMutationOptions<TData>;
-  }
+    props: any
+  ) => BaseMutationOptions<TData, TGraphQLVariables, TContext, TCache>;
+  if (typeof mapPropsToOptions !== "function")
+    mapPropsToOptions = () =>
+      options as BaseMutationOptions<
+        TData,
+        TGraphQLVariables,
+        TContext,
+        TCache
+      >;
 
   return (
     WrappedComponent: ReactTypes.ComponentType<TProps & TChildProps>
@@ -71,7 +70,12 @@ export function withMutation<
       static WrappedComponent = WrappedComponent;
       render() {
         let props = this.props as TProps;
-        const opts = mapPropsToOptions(props);
+        const opts = mapPropsToOptions(props) as BaseMutationOptions<
+          TData,
+          TGraphQLVariables,
+          TContext,
+          TCache
+        >;
 
         if (operationOptions.withRef) {
           this.withRef = true;
@@ -87,17 +91,10 @@ export function withMutation<
         }
 
         return (
-          // noinspection XmlDeprecatedElement
           <Mutation ignoreResults {...opts} mutation={document}>
+            {/* @ts-expect-error */}
             {(
-              mutate: <TData>(
-                options?: MutationFunctionOptions<
-                  TData,
-                  OperationVariables,
-                  DefaultContext,
-                  ApolloCache<any>
-                >
-              ) => Promise<FetchResult<TData>>,
+              mutate: MutationFunction<TData, TGraphQLVariables>,
               { data, ...r }: MutationResult<TData>
             ) => {
               // the HOC's historically hoisted the data from the execution result

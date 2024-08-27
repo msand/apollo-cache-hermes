@@ -1,12 +1,7 @@
 import { newInvariantError, invariant } from "../../utilities/globals/index";
+
 import type { Observer } from "../../utilities/index";
 import { Observable } from "../../utilities/index";
-import {
-  validateOperation,
-  createOperation,
-  transformOperation,
-} from "../utils/index";
-
 import type {
   NextLink,
   Operation,
@@ -14,6 +9,11 @@ import type {
   FetchResult,
   GraphQLRequest,
 } from "./types";
+import {
+  validateOperation,
+  createOperation,
+  transformOperation,
+} from "../utils/index";
 
 function passthrough(op: Operation, forward: NextLink) {
   return (forward ? forward(op) : Observable.of()) as Observable<FetchResult>;

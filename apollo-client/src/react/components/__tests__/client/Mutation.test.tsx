@@ -1,21 +1,22 @@
-import * as React from "react";
+import React, { useState, PropsWithChildren } from "react";
 import gql from "graphql-tag";
 import { ExecutionResult, GraphQLError } from "graphql";
 import userEvent from "@testing-library/user-event";
 import { render, screen, waitFor, act } from "@testing-library/react";
-import { ApolloClient, ApolloProvider } from "@apollo/client";
-import { PropsWithChildren, useState } from "react";
-import { Mutation, Query } from "@apollo/client/react/components";
 
+import { ApolloClient } from "../../../../core";
 import { ApolloError } from "../../../../errors";
 import { DataProxy } from "../../../../cache";
+import { ApolloProvider } from "../../../context";
 import {
   itAsync,
   MockedProvider,
   MockLink,
   mockSingleLink,
 } from "../../../../testing";
-import { Hermes } from "../../../../../../src";
+import { Query } from "../../Query";
+import { Mutation } from "../../Mutation";
+import { Hermes as Cache } from "../../../../../../src";
 
 const mutation = gql`
   mutation createTodo($text: String!) {
@@ -70,7 +71,7 @@ const mocks = [
   },
 ];
 
-const cache = new Hermes({ addTypename: false });
+const cache = new Cache({ addTypename: false });
 
 describe("General Mutation testing", () => {
   it("pick prop client over context client", async () => {
@@ -113,7 +114,7 @@ describe("General Mutation testing", () => {
     function mockClient(m: any) {
       return new ApolloClient({
         link: new MockLink(m, false),
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
     }
 
@@ -1043,7 +1044,7 @@ describe("General Mutation testing", () => {
     const refetchQueries = ["people"];
 
     let count = 0;
-    const testFailures: any[] = [];
+    let testFailures: any[] = [];
 
     const Component: React.FC<PropsWithChildren<PropsWithChildren<any>>> = (
       props
@@ -1311,7 +1312,7 @@ describe("General Mutation testing", () => {
     });
     const client1 = new ApolloClient({
       link: link1,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const data3 = {
@@ -1331,7 +1332,7 @@ describe("General Mutation testing", () => {
 
     const client2 = new ApolloClient({
       link: link2,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     let count = 0;
@@ -1385,7 +1386,7 @@ describe("General Mutation testing", () => {
     });
     const client1 = new ApolloClient({
       link: link1,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const link2 = mockSingleLink({
@@ -1394,7 +1395,7 @@ describe("General Mutation testing", () => {
     });
     const client2 = new ApolloClient({
       link: link2,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     let count = 0;
@@ -1478,7 +1479,6 @@ describe("General Mutation testing", () => {
         );
         didError = true;
       }
-
       render() {
         return (
           <Mutation mutation={this.state.query}>
@@ -1511,6 +1511,7 @@ describe("General Mutation testing", () => {
       // expect(waitFor(() => didError)).resolves.toBe(true);
       //
       // ...however it also causes the test to fail against React 17.
+      // eslint-disable-next-line testing-library/await-async-utils
       expect(didError).toBe(true);
     });
 
@@ -1601,6 +1602,7 @@ describe("General Mutation testing", () => {
       // expect(waitFor(() => didError)).resolves.toBe(true);
       //
       // ...however it also causes the test to fail against React 17.
+      // eslint-disable-next-line testing-library/await-async-utils
       expect(didError).toBe(true);
     });
     console.log = errorLogger;
@@ -1640,6 +1642,7 @@ describe("General Mutation testing", () => {
                       finished = true;
                     });
                     expect(onCompletedFn).toHaveBeenCalledWith;
+                    // eslint-disable-next-line testing-library/await-async-utils
                     this.setState({ called: true }, checker);
                   });
                   return null;
@@ -1663,6 +1666,7 @@ describe("General Mutation testing", () => {
           // expect(waitFor(() => finished)).resolves.toBe(true);
           //
           // ...however it also causes the test to fail against React 17.
+          // eslint-disable-next-line testing-library/await-async-utils
           expect(finished).toBe(true);
         },
         { interval: 1 }
@@ -1674,6 +1678,7 @@ describe("General Mutation testing", () => {
           // expect(waitFor(() => success)).resolves.toBe(true);
           //
           // ...however it also causes the test to fail against React 17.
+          // eslint-disable-next-line testing-library/await-async-utils
           expect(success).toBe(true);
         },
         { interval: 1 }
@@ -1681,7 +1686,6 @@ describe("General Mutation testing", () => {
     });
   });
 
-  // eslint-disable-next-line jest/no-identical-title
   it("calls the onError prop if the mutation encounters an error", async () => {
     let finished = false;
     let onErrorCalled = false;
@@ -1725,6 +1729,7 @@ describe("General Mutation testing", () => {
         // expect(waitFor(() => onErrorCalled)).resolves.toBe(true);
         //
         // ...however it also causes the test to fail against React 17.
+        // eslint-disable-next-line testing-library/await-async-utils
         expect(onErrorCalled).toBe(true);
       },
       { interval: 1 }
@@ -1736,6 +1741,7 @@ describe("General Mutation testing", () => {
         // expect(waitFor(() => finished)).resolves.toBe(true);
         //
         // ...however it also causes the test to fail against React 17.
+        // eslint-disable-next-line testing-library/await-async-utils
         expect(finished).toBe(true);
       },
       { interval: 1 }

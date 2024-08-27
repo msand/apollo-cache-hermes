@@ -1,12 +1,12 @@
 import { Observable } from "relay-runtime";
 import type { RequestParameters, GraphQLResponse } from "relay-runtime";
-
 import {
   handleError,
   readMultipartBody,
 } from "../../../link/http/parseAndCheckHttpResponse";
 import { maybe } from "../../index";
 import { serializeFetchParameter } from "../../../core/index";
+
 import type { OperationVariables } from "../../../core/index";
 import type { Body } from "../../../link/http/selectHttpOptionsAndBody";
 import { generateOptionsForMultipartSubscription } from "../shared";

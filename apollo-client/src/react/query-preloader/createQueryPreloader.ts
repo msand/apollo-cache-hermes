@@ -1,6 +1,5 @@
-import { ApolloClient } from "@apollo/client";
-
 import type {
+  ApolloClient,
   DefaultContext,
   DocumentNode,
   ErrorPolicy,

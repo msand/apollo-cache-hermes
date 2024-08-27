@@ -55,11 +55,13 @@ it.each([
     new Observable<number>((observer) => {
       observer.next(1);
       observer.next(2);
+      // @ts-ignore
       observer[gotten](3);
     })
   );
   await expect(stream.takeNext()).resolves.toBe(1);
   await expect(stream.takeNext()).resolves.toBe(2);
+  // @ts-ignore
   await expect(stream[expected]()).rejects.toEqual(expect.any(Error));
 });
 
@@ -72,10 +74,12 @@ it.each([
     new Observable<number>((observer) => {
       observer.next(1);
       observer.next(2);
+      // @ts-ignore
       observer[gotten](3);
     })
   );
   await expect(stream.takeNext()).resolves.toBe(1);
   await expect(stream.takeNext()).resolves.toBe(2);
+  // @ts-ignore this should just not throw
   await stream[expected]();
 });

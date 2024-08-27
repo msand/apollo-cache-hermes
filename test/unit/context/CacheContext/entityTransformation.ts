@@ -1,7 +1,7 @@
-import { addTypenameToDocument } from '@apollo/client/utilities';
 import * as _ from 'lodash';
 import { expect } from 'chai';
 
+import { addTypenameToDocument } from '../../../../apollo-client/src/utilities';
 import { CacheContext } from '../../../../src/context';
 import { GraphSnapshot } from '../../../../src/GraphSnapshot';
 import { read, write } from '../../../../src/operations';

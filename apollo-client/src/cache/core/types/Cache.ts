@@ -1,7 +1,7 @@
-import type { ApolloCache } from "../cache";
-
 import { DataProxy } from "./DataProxy";
+import type { DataProxy as DataProxyType } from "./DataProxy";
 import type { AllFieldsModifier, Modifiers } from "./common";
+import type { ApolloCache } from "../cache";
 
 export namespace Cache {
   export type WatchCallback<TData = any> = (
@@ -105,12 +105,12 @@ export namespace Cache {
     ) => any;
   }
 
-  export import DiffResult = DataProxy.DiffResult;
-  export import ReadQueryOptions = DataProxy.ReadQueryOptions;
-  export import ReadFragmentOptions = DataProxy.ReadFragmentOptions;
-  export import WriteQueryOptions = DataProxy.WriteQueryOptions;
-  export import WriteFragmentOptions = DataProxy.WriteFragmentOptions;
-  export import UpdateQueryOptions = DataProxy.UpdateQueryOptions;
-  export import UpdateFragmentOptions = DataProxy.UpdateFragmentOptions;
-  export import Fragment = DataProxy.Fragment;
+  export type DiffResult<T> = DataProxyType.DiffResult<T>;
+  export type ReadQueryOptions<T, V> = DataProxyType.ReadQueryOptions<T, V>;
+  export type ReadFragmentOptions<T, V> = DataProxyType.ReadFragmentOptions<T, V>;
+  export type WriteQueryOptions<T, V> = DataProxyType.WriteQueryOptions<T, V>;
+  export type WriteFragmentOptions<T, V> = DataProxyType.WriteFragmentOptions<T, V>;
+  export type UpdateQueryOptions<T, V> = DataProxyType.UpdateQueryOptions<T, V>;
+  export type UpdateFragmentOptions<T, V> = DataProxyType.UpdateFragmentOptions<T, V>;
+  export type Fragment<T, V> = DataProxyType.Fragment<T, V>;
 }

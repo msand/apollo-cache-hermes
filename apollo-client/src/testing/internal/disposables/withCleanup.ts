@@ -1,17 +1,3 @@
-/*
- * Ugly workaround until https://github.com/jestjs/jest/issues/14874 is fixed
- */
-
-const disposeSymbol: unique symbol = Symbol("Symbol.dispose");
-const asyncDisposeSymbol: unique symbol = Symbol("Symbol.asyncDispose");
-type Writable<T> = {
-  -readonly [TKey in keyof T]: T[TKey];
-};
-(Symbol as Writable<SymbolConstructor>).asyncDispose ??=
-  asyncDisposeSymbol as unknown as SymbolConstructor["asyncDispose"];
-(Symbol as Writable<SymbolConstructor>).dispose ??=
-  disposeSymbol as unknown as SymbolConstructor["dispose"];
-
 /** @internal */
 export function withCleanup<T extends object>(
   item: T,

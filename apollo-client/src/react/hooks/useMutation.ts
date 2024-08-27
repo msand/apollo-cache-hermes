@@ -1,21 +1,24 @@
 import * as React from "rehackt";
 import type { DocumentNode } from "graphql";
 import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
-import { equal } from "@wry/equality";
-import {
-  ApolloCache,
+import type {
   MutationFunctionOptions,
   MutationHookOptions,
+  MutationResult,
   MutationTuple,
-  mergeOptions,
-  MutationOptions,
-} from "@apollo/client";
+  NoInfer,
+} from "../types/types";
 
-import type { MutationResult, NoInfer } from "../types/types";
-import type { DefaultContext, OperationVariables } from "../../core/index";
+import type {
+  ApolloCache,
+  DefaultContext,
+  MutationOptions,
+  OperationVariables,
+} from "../../core/index";
+import { mergeOptions } from "../../utilities/index";
+import { equal } from "@wry/equality";
 import { DocumentType, verifyDocumentType } from "../parser/index";
 import { ApolloError } from "../../errors/index";
-
 import { useApolloClient } from "./useApolloClient";
 import { useIsomorphicLayoutEffect } from "./internal/useIsomorphicLayoutEffect";
 

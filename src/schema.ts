@@ -1,3 +1,5 @@
+import { NormalizedCacheObject, StoreValue } from '../apollo-client/src';
+
 import { QueryInfo } from './context';
 import { NodeReference } from './nodes';
 import { ParsedQuery } from './ParsedQueryNode';
@@ -54,11 +56,11 @@ export interface RawOperation {
  * A processed query, ready for consumption by the cache, with values for any
  * variables already substituted in.
  */
-export interface OperationInstance<TSerialized> {
+export interface OperationInstance {
   /** The id of the node to begin the query at. */
   readonly rootId: NodeId;
   /** A parsed GraphQL document, declaring an operation to execute. */
-  readonly info: QueryInfo<TSerialized>;
+  readonly info: QueryInfo;
   /** Parsed form of the query, with values substituted for any variables. */
   readonly parsedQuery: ParsedQuery;
   /** Whether the operation contains _no_ parameterized values. */
@@ -85,8 +87,8 @@ export namespace Serializable {
    *
    * This is used when doing extract and restore cache's stage
    */
-  export interface GraphSnapshot {
-    [key: string]: Serializable.NodeSnapshot;
+  export type GraphSnapshot = NormalizedCacheObject & {
+    [key: string]: Serializable.NodeSnapshot,
   }
 
   /**
@@ -100,11 +102,12 @@ export namespace Serializable {
   }
 
   export interface NodeSnapshot {
-    type: Serializable.NodeSnapshotType;
+    type?: Serializable.NodeSnapshotType;
     inbound?: NodeReference[];
     outbound?: NodeReference[];
     parameterized?: NodeReference[];
     data?: NestedValue<JsonValue | undefined>;
+    [storeFieldName: string]: StoreValue;
   }
 }
 

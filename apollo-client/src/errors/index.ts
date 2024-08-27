@@ -42,7 +42,7 @@ export function graphQLResultHasProtocolErrors<T>(
 }
 
 export function isApolloError(err: Error): err is ApolloError {
-  return Object.prototype.hasOwnProperty.call(err, "graphQLErrors");
+  return err.hasOwnProperty("graphQLErrors");
 }
 
 // Sets the error message on this error according to the
@@ -79,7 +79,6 @@ export class ApolloError extends Error {
     message: string;
     extensions?: GraphQLErrorExtensions[];
   }>;
-
   public clientErrors: ReadonlyArray<Error>;
   public networkError: Error | ServerParseError | ServerError | null;
 
@@ -110,7 +109,6 @@ export class ApolloError extends Error {
 
     // We're not using `Object.setPrototypeOf` here as it isn't fully
     // supported on Android (see issue #3236).
-    // eslint-disable-next-line no-proto
     (this as any).__proto__ = ApolloError.prototype;
   }
 }

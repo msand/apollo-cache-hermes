@@ -7,12 +7,12 @@ import fetchMock from "fetch-mock";
 import crypto from "crypto";
 
 import { ApolloProvider } from "../../../react/context";
-import { InMemoryCache as Cache } from "../../../cache/inmemory/inMemoryCache";
+import { Hermes as Cache } from "../../../../../src";
+import { ApolloClient } from "../../../core/ApolloClient";
 import { createHttpLink } from "../../http/createHttpLink";
 import { graphql } from "../../../react/hoc/graphql";
 import { getDataFromTree } from "../../../react/ssr/getDataFromTree";
 import { createPersistedQueryLink as createPersistedQuery, VERSION } from "..";
-import {ApolloClient} from "@apollo/client";
 
 function sha256(data: string) {
   const hash = crypto.createHash("sha256");

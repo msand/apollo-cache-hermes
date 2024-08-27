@@ -1,12 +1,14 @@
-import * as React from "react";
+import React from "react";
 import { render, waitFor } from "@testing-library/react";
 import gql from "graphql-tag";
 import { DocumentNode } from "graphql";
-import { ApolloClient, ApolloProvider } from "@apollo/client";
-import { ChildProps, graphql } from "@apollo/client/react/hoc";
 
+import { ApolloClient } from "../../../core";
+import { ApolloProvider } from "../../context";
+import { Hermes as Cache } from "../../../../../src";
 import { itAsync, mockSingleLink } from "../../../testing";
-import { Hermes } from "../../../../../src";
+import { graphql } from "../graphql";
+import { ChildProps } from "../types";
 
 describe("fragments", () => {
   // XXX in a later version, we should support this for composition
@@ -29,7 +31,7 @@ describe("fragments", () => {
     });
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     try {
@@ -40,7 +42,6 @@ describe("fragments", () => {
             expect(props.data!.loading).toBeFalsy();
             expect(props.data!.allPeople).toEqual(expectedData.allPeople);
           }
-
           render() {
             return null;
           }
@@ -91,7 +92,7 @@ describe("fragments", () => {
       });
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       const Container = graphql<{}, Data>(query)(
@@ -101,7 +102,6 @@ describe("fragments", () => {
             expect(this.props.data!.allPeople).toEqual(data.allPeople);
             done = true;
           }
-
           render() {
             return null;
           }

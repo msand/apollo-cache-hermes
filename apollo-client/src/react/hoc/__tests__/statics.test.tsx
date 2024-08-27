@@ -3,7 +3,7 @@ import gql from "graphql-tag";
 
 import { graphql } from "../graphql";
 
-const sampleOperation = gql`
+let sampleOperation = gql`
   {
     user {
       name

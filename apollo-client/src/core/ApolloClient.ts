@@ -1,23 +1,18 @@
-import type { ExecutionResult, DocumentNode } from "graphql";
-import {
-  ApolloCache,
-  ApolloLink,
-  DataProxy,
-  DocumentTransform,
-  execute,
-  Reference,
-} from "@apollo/client";
-
 import { invariant, newInvariantError } from "../utilities/globals/index";
+
+import type { ExecutionResult, DocumentNode } from "graphql";
+
 import type { FetchResult, GraphQLRequest } from "../link/core/index";
-import type { Observable } from "../utilities/index";
+import { ApolloLink, execute } from "../link/core/index";
+import type { ApolloCache, DataProxy, Reference } from "../cache/index";
+import type { DocumentTransform, Observable } from "../utilities/index";
 import { version } from "../version";
 import type { UriFunction } from "../link/http/index";
 import { HttpLink } from "../link/http/index";
-import { mergeOptions } from "../utilities/index";
-import { getApolloClientMemoryInternals } from "../utilities/caching/getMemoryInternals";
 
 import { QueryManager } from "./QueryManager";
+import type { ObservableQuery } from "./ObservableQuery";
+
 import type {
   ApolloQueryResult,
   DefaultContext,
@@ -28,6 +23,7 @@ import type {
   InternalRefetchQueriesResult,
   RefetchQueriesInclude,
 } from "./types";
+
 import type {
   QueryOptions,
   WatchQueryOptions,
@@ -35,6 +31,7 @@ import type {
   SubscriptionOptions,
   WatchQueryFetchPolicy,
 } from "./watchQueryOptions";
+
 import type { FragmentMatcher } from "./LocalState";
 import { LocalState } from "./LocalState";
 
@@ -129,13 +126,12 @@ export interface ApolloClientOptions<TCacheShape> {
 // previously declared and exported from this module, and then reexported from
 // @apollo/client/core. Since we need to preserve that API anyway, the easiest
 // solution is to reexport mergeOptions where it was previously declared (here).
-// eslint-disable-next-line import/order
+import { mergeOptions } from "../utilities/index";
+import { getApolloClientMemoryInternals } from "../utilities/caching/getMemoryInternals";
 import type {
   WatchFragmentOptions,
   WatchFragmentResult,
 } from "../cache/core/cache";
-import {ObservableQuery} from "./ObservableQuery";
-
 export { mergeOptions };
 
 /**
@@ -251,7 +247,6 @@ export class ApolloClient<TCacheShape> implements DataProxy {
 
     this.localState = new LocalState({
       cache,
-      // @ts-ignore TODO
       client: this,
       resolvers,
       fragmentMatcher,

@@ -1,3 +1,5 @@
+import { invariant } from "../utilities/globals/index";
+
 import type {
   DocumentNode,
   OperationDefinitionNode,
@@ -12,16 +14,9 @@ import type {
   ExecutableDefinitionNode,
 } from "graphql";
 import { visit, BREAK, isSelectionNode } from "graphql";
-import {
-  ApolloCache,
-  ApolloClient,
-  FetchResult,
-  StoreObject,
-} from "@apollo/client";
-import { FragmentMap } from "@apollo/client/utilities";
 
-import { invariant } from "../utilities/globals/index";
-import type {} from "../utilities/index";
+import type { ApolloCache } from "../cache/index";
+import type { FragmentMap, StoreObject } from "../utilities/index";
 import {
   argumentsObjectFromField,
   buildQueryFromSelectionSet,
@@ -37,9 +32,10 @@ import {
   resultKeyNameFromField,
   shouldInclude,
 } from "../utilities/index";
-import { cacheSlot } from "../cache/index";
-
+import type { ApolloClient } from "./ApolloClient";
 import type { Resolvers, OperationVariables } from "./types";
+import type { FetchResult } from "../link/core/index";
+import { cacheSlot } from "../cache/index";
 
 export type Resolver = (
   rootValue?: any,
@@ -375,7 +371,7 @@ export class LocalState<TCacheShape> {
       }
     };
 
-    return Promise.all(selectionSet.selections.map(execute)).then(() => {
+    return Promise.all(selectionSet.selections.map(execute)).then(function () {
       return mergeDeepArray(resultsToMerge);
     });
   }

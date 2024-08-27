@@ -1,8 +1,7 @@
 import gql from "graphql-tag";
 import { print } from "graphql";
-import { ApolloLink } from "@apollo/client";
 
-import { execute } from "../../core";
+import { ApolloLink, execute } from "../../core";
 import { Operation, FetchResult, GraphQLRequest } from "../../core/types";
 import { Observable } from "../../../utilities";
 import { itAsync } from "../../../testing";
@@ -343,7 +342,7 @@ describe("OperationBatcher", () => {
         let key = true;
         const batchKey = () => {
           key = !key;
-          return `${!key}`;
+          return "" + !key;
         };
 
         const myBatcher = new OperationBatcher({
@@ -861,7 +860,7 @@ describe("BatchLink", () => {
       return Observable.of(operation.variables.count);
     });
 
-    const runBatchSize = () => {
+    let runBatchSize = () => {
       const size = sizes.pop();
       if (!size) resolve();
 
@@ -1046,13 +1045,13 @@ describe("BatchLink", () => {
         let key = true;
         const batchKey = () => {
           key = !key;
-          return `${!key}`;
+          return "" + !key;
         };
 
         const link = ApolloLink.from([
           new BatchLink({
             batchInterval: 1,
-            // if batchKey does not work, then the batch size would be 3
+            //if batchKey does not work, then the batch size would be 3
             batchMax: 2,
             batchHandler,
             batchKey,

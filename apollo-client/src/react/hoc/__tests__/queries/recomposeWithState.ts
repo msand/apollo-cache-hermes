@@ -4,8 +4,8 @@
 import React, { createFactory, Component } from "react";
 
 const setStatic =
-  (key: string, value: string) =>
-  <T>(BaseComponent: React.ComponentClass<T>) => {
+  (key: string, value: string) => (BaseComponent: React.ComponentClass) => {
+    // @ts-ignore
     BaseComponent[key] = value;
     return BaseComponent;
   };
@@ -13,7 +13,7 @@ const setStatic =
 const setDisplayName = (displayName: string) =>
   setStatic("displayName", displayName);
 
-const getDisplayName = <T>(Component: React.ComponentClass<T>) => {
+const getDisplayName = (Component: React.ComponentClass) => {
   if (typeof Component === "string") {
     return Component;
   }
@@ -25,25 +25,14 @@ const getDisplayName = <T>(Component: React.ComponentClass<T>) => {
   return Component.displayName || Component.name || "Component";
 };
 
-const wrapDisplayName = <T>(
-  BaseComponent: React.ComponentClass<T>,
+const wrapDisplayName = (
+  BaseComponent: React.ComponentClass,
   hocName: string
 ) => `${hocName}(${getDisplayName(BaseComponent)})`;
 
 export const withState =
-  <
-    T extends { [k in SN]: Initial } & {
-      [k in SUN]: (val: Initial) => Initial;
-    },
-    SN extends string,
-    SUN extends string,
-    Initial,
-  >(
-    stateName: SN,
-    stateUpdaterName: SUN,
-    initialState: Initial
-  ) =>
-  (BaseComponent: React.ComponentClass<T>) => {
+  (stateName: string, stateUpdaterName: string, initialState: unknown) =>
+  (BaseComponent: React.ComponentClass) => {
     const factory = createFactory(BaseComponent);
     class WithState extends Component<
       Record<string, unknown>,
@@ -73,7 +62,7 @@ export const withState =
           ...this.props,
           [stateName]: this.state.stateValue,
           [stateUpdaterName]: this.updateStateValue,
-        } as T);
+        });
       }
     }
 

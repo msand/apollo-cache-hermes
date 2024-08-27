@@ -1,15 +1,10 @@
 import * as React from "react";
-import { GraphQLError, buildSchema } from "graphql";
-import userEvent from "@testing-library/user-event";
-import { act, screen } from "@testing-library/react";
 import {
-  FallbackProps,
-  ErrorBoundary as ReactErrorBoundary,
-} from "react-error-boundary";
-import { InvariantError } from "ts-invariant";
-import { ApolloClient } from "@apollo/client";
-
-import { ApolloError, gql } from "../../../core/index";
+  ApolloClient,
+  ApolloError,
+  gql,
+} from "../../../core/index";
+import { Hermes } from "../../../../../src";
 import type { TypedDocumentNode } from "../../../core/index";
 import {
   Profiler,
@@ -18,10 +13,17 @@ import {
   spyOnConsole,
 } from "../../internal/index";
 import { createTestSchema } from "../createTestSchema";
+import { GraphQLError, buildSchema } from "graphql";
 import type { UseSuspenseQueryResult } from "../../../react/index";
 import { useMutation, useSuspenseQuery } from "../../../react/index";
+import userEvent from "@testing-library/user-event";
+import { act, screen } from "@testing-library/react";
 import { createSchemaFetch } from "../createSchemaFetch";
-import { Hermes } from "../../../../../src";
+import {
+  FallbackProps,
+  ErrorBoundary as ReactErrorBoundary,
+} from "react-error-boundary";
+import { InvariantError } from "ts-invariant";
 
 const typeDefs = /* GraphQL */ `
   type User {
@@ -672,7 +674,7 @@ describe("schema proxy", () => {
       }
     `;
 
-    const name = "Jane Doe";
+    let name = "Jane Doe";
 
     const forkedSchema = schema.fork({
       resolvers: {

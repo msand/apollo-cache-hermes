@@ -1,11 +1,9 @@
-// eslint-disable-next-line import/no-extraneous-dependencies
 import * as PropTypes from "prop-types";
 import type * as ReactTypes from "react";
 
 import type { OperationVariables } from "../../core/index";
-import { useSubscription } from "../hooks/index";
-
 import type { SubscriptionComponentOptions } from "./types";
+import { useSubscription } from "../hooks/index";
 
 /**
  * @deprecated

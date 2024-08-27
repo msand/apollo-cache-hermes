@@ -1,14 +1,12 @@
-import type { SubscriptionObserver } from "zen-observable-ts";
-import { ApolloLink } from "@apollo/client";
-
 import type { Operation, FetchResult, NextLink } from "../core/index";
+import { ApolloLink } from "../core/index";
 import type { ObservableSubscription } from "../../utilities/index";
 import { Observable } from "../../utilities/index";
-
 import type { DelayFunction, DelayFunctionOptions } from "./delayFunction";
 import { buildDelayFunction } from "./delayFunction";
 import type { RetryFunction, RetryFunctionOptions } from "./retryFunction";
 import { buildRetryFunction } from "./retryFunction";
+import type { SubscriptionObserver } from "zen-observable-ts";
 
 export namespace RetryLink {
   export interface Options {

@@ -1,12 +1,15 @@
-import * as React from "react";
+import React from "react";
 import { render, waitFor } from "@testing-library/react";
 import gql from "graphql-tag";
 import { DocumentNode } from "graphql";
-import { ApolloClient, ApolloProvider, ApolloLink } from "@apollo/client";
-import { graphql, ChildProps } from "@apollo/client/react/hoc";
 
-import { Hermes } from "../../../../../../src";
+import { ApolloClient } from "../../../../core";
+import { ApolloProvider } from "../../../context";
+import { Hermes as Cache } from "../../../../../../src";
+import { ApolloLink } from "../../../../link/core";
 import { itAsync, mockSingleLink } from "../../../../testing";
+import { graphql } from "../../graphql";
+import { ChildProps } from "../../types";
 
 describe("[queries] skip", () => {
   itAsync(
@@ -28,7 +31,7 @@ describe("[queries] skip", () => {
       });
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
       interface Props {
         skip: boolean;
@@ -42,7 +45,6 @@ describe("[queries] skip", () => {
           componentDidUpdate() {
             queryExecuted = true;
           }
-
           render() {
             expect(this.props.data).toBeUndefined();
             return null;
@@ -89,7 +91,7 @@ describe("[queries] skip", () => {
       // const oldQuery = link.query;
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       interface Props {
@@ -102,7 +104,6 @@ describe("[queries] skip", () => {
           componentDidUpdate() {
             done = true;
           }
-
           render() {
             return null;
           }
@@ -115,7 +116,6 @@ describe("[queries] skip", () => {
         componentDidMount() {
           this.setState({ foo: 43 });
         }
-
         render() {
           return <Container foo={this.state.foo} />;
         }
@@ -160,7 +160,7 @@ describe("[queries] skip", () => {
 
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       let count = 0;
@@ -197,7 +197,6 @@ describe("[queries] skip", () => {
               reject(err);
             }
           }
-
           render() {
             renderCount++;
             return null;
@@ -214,7 +213,6 @@ describe("[queries] skip", () => {
         componentDidMount() {
           this.setState({ person: { id: 1 } });
         }
-
         render() {
           return <Container person={this.state.person} />;
         }
@@ -249,7 +247,7 @@ describe("[queries] skip", () => {
       });
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       let queryExecuted = false;
@@ -282,7 +280,6 @@ describe("[queries] skip", () => {
           componentDidUpdate() {
             queryExecuted = true;
           }
-
           render() {
             expect(this.props.data).toBeFalsy();
             return null;
@@ -333,7 +330,7 @@ describe("[queries] skip", () => {
 
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       let queryWasSkipped = true;
@@ -359,7 +356,6 @@ describe("[queries] skip", () => {
             expect(queryWasSkipped).toBeTruthy();
             done = true;
           }
-
           render() {
             return null;
           }
@@ -371,7 +367,6 @@ describe("[queries] skip", () => {
         componentDidMount() {
           this.setState({ foo: "baz" });
         }
-
         render() {
           return <Container foo={this.state.foo} />;
         }
@@ -406,7 +401,7 @@ describe("[queries] skip", () => {
       });
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       let queryExecuted = false;
@@ -415,7 +410,6 @@ describe("[queries] skip", () => {
           componentDidUpdate() {
             queryExecuted = true;
           }
-
           render() {
             expect(this.props.data).toBeFalsy();
             return null;
@@ -463,7 +457,7 @@ describe("[queries] skip", () => {
       });
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       let hasSkipped = false;
@@ -479,11 +473,12 @@ describe("[queries] skip", () => {
             if (this.props.skip) {
               hasSkipped = true;
               prevProps.setSkip(false);
-            } else if (!hasSkipped) {
-              prevProps.setSkip(true);
+            } else {
+              if (!hasSkipped) {
+                prevProps.setSkip(true);
+              }
             }
           }
-
           render() {
             return null;
           }
@@ -546,7 +541,7 @@ describe("[queries] skip", () => {
       );
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
       });
 
       let hasSkipped = false;
@@ -569,17 +564,18 @@ describe("[queries] skip", () => {
               hasSkipped = true;
               // change back to skip: false, with a different variable
               prevProps.setState({ skip: false, first: 2 });
-            } else if (hasSkipped) {
-              if (!this.props.data!.loading) {
-                expect(this.props.data!.allPeople).toEqual(dataTwo.allPeople);
-                done = true;
-              }
             } else {
-              expect(this.props.data!.allPeople).toEqual(dataOne.allPeople);
-              prevProps.setState({ skip: true });
+              if (hasSkipped) {
+                if (!this.props.data!.loading) {
+                  expect(this.props.data!.allPeople).toEqual(dataTwo.allPeople);
+                  done = true;
+                }
+              } else {
+                expect(this.props.data!.allPeople).toEqual(dataOne.allPeople);
+                prevProps.setState({ skip: true });
+              }
             }
           }
-
           render() {
             return null;
           }
@@ -654,7 +650,7 @@ describe("[queries] skip", () => {
 
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }),
+        cache: new Cache({ addTypename: false }),
         queryDeduplication: false,
       });
 
@@ -802,7 +798,7 @@ describe("[queries] skip", () => {
 
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     const Container = graphql<Vars, Data>(query, {
@@ -818,7 +814,6 @@ describe("[queries] skip", () => {
             expect(data!.allPeople).toEqual(data3.allPeople);
           }
         }
-
         render() {
           return null;
         }
@@ -868,7 +863,7 @@ describe("[queries] skip", () => {
     const link = mockSingleLink();
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Cache({ addTypename: false }),
     });
 
     interface Props {
@@ -883,11 +878,9 @@ describe("[queries] skip", () => {
         componentDidMount() {
           this.props.hide();
         }
-
         componentWillUnmount() {
           done = true;
         }
-
         render() {
           return null;
         }

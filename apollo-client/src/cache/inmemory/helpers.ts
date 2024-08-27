@@ -3,8 +3,11 @@ import type {
   FragmentDefinitionNode,
   SelectionSetNode,
 } from "graphql";
-import { NormalizedCache } from "@apollo/client/cache";
-import type { KeyFieldsContext } from "@apollo/client/cache/inmemory/policies";
+
+import type { NormalizedCache, InMemoryCacheConfig } from "./types";
+
+import type { KeyFieldsContext } from "./policies";
+import type { FragmentRegistryAPI } from "./fragmentRegistry";
 
 import type {
   Reference,
@@ -25,9 +28,6 @@ import {
   getFragmentDefinitions,
   isArray,
 } from "../../utilities/index";
-
-import type { InMemoryCacheConfig } from "./types";
-import type { FragmentRegistryAPI } from "./fragmentRegistry";
 
 export const { hasOwnProperty: hasOwn } = Object.prototype;
 

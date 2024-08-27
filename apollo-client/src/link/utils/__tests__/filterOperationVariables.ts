@@ -1,5 +1,4 @@
 import gql from "graphql-tag";
-
 import { filterOperationVariables } from "../filterOperationVariables";
 
 const sampleQueryWithVariables = gql`

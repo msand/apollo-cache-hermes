@@ -1,31 +1,22 @@
-import * as React from "react";
-import { useEffect } from "react";
+import React, { useEffect } from "react";
 import { GraphQLError } from "graphql";
 import gql from "graphql-tag";
-import {
-  act,
-  render,
-  waitFor,
-  screen,
-  renderHook,
-} from "@testing-library/react";
+import { act } from "@testing-library/react";
+import { render, waitFor, screen, renderHook } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import fetchMock from "fetch-mock";
-import {
-  ApolloClient,
-  ApolloProvider,
-  ApolloLink,
-  ObservableQuery,
-} from "@apollo/client";
-import { BatchHttpLink } from "@apollo/client/link/batch-http";
 
 import {
+  ApolloClient,
+  ApolloLink,
   ApolloQueryResult,
   Cache,
   NetworkStatus,
   Observable,
+  ObservableQuery,
   TypedDocumentNode,
 } from "../../../core";
+import { Hermes } from "../../../../../src";
 import {
   itAsync,
   MockedProvider,
@@ -34,11 +25,12 @@ import {
   subscribeAndCount,
   MockedResponse,
 } from "../../../testing";
+import { ApolloProvider } from "../../context";
 import { useQuery } from "../useQuery";
 import { useMutation } from "../useMutation";
+import { BatchHttpLink } from "../../../link/batch-http";
 import { FetchResult } from "../../../link/core";
 import { profileHook, spyOnConsole } from "../../../testing/internal";
-import { Hermes } from "../../../../../src";
 
 describe("useMutation Hook", () => {
   interface Todo {
@@ -777,7 +769,7 @@ describe("useMutation Hook", () => {
         const [mutate, result] = await ProfiledHook.takeSnapshot();
         createTodo = mutate;
         reset = result.reset;
-        // initial value
+        //initial value
         expect(result.data).toBe(undefined);
         expect(result.loading).toBe(false);
         expect(result.called).toBe(false);
@@ -1644,7 +1636,6 @@ describe("useMutation Hook", () => {
               expect(data).toBeUndefined();
               createTodo({ variables });
 
-              // eslint-disable-next-line no-case-declarations
               const dataInStore = client.cache.extract(true);
               expect(dataInStore["Todo:1"]).toEqual(
                 optimisticResponse.createTodo
@@ -2835,7 +2826,7 @@ describe("useMutation Hook", () => {
 });
 
 describe.skip("Type Tests", () => {
-  it("NoInfer prevents adding arbitrary additional variables", () => {
+  test("NoInfer prevents adding arbitrary additional variables", () => {
     const typedNode = {} as TypedDocumentNode<{ foo: string }, { bar: number }>;
     useMutation(typedNode, {
       variables: {

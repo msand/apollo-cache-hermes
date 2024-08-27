@@ -1,3 +1,5 @@
+import { newInvariantError } from "../globals/index";
+
 import type {
   DirectiveNode,
   FieldNode,
@@ -19,12 +21,10 @@ import type {
   FragmentSpreadNode,
 } from "graphql";
 
-import { newInvariantError } from "../globals/index";
 import { isNonNullObject } from "../common/objects";
-import { canonicalStringify } from "../common/canonicalStringify";
-
 import type { FragmentMap } from "./fragments";
 import { getFragmentFromSelection } from "./fragments";
+import { canonicalStringify } from "../common/canonicalStringify";
 
 export interface Reference {
   readonly __ref: string;
@@ -219,11 +219,11 @@ const KNOWN_DIRECTIVES: string[] = [
 let storeKeyNameStringify: (value: any) => string = canonicalStringify;
 
 export const getStoreKeyName = Object.assign(
-  (
+  function (
     fieldName: string,
     args?: Record<string, any> | null,
     directives?: Directives
-  ): string => {
+  ): string {
     if (
       args &&
       directives &&

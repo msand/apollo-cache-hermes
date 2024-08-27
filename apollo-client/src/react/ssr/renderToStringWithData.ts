@@ -1,8 +1,6 @@
 import type * as ReactTypes from "react";
-// eslint-disable-next-line import/no-extraneous-dependencies
-import { renderToString } from "react-dom/server";
-
 import { getMarkupFromTree } from "./getDataFromTree";
+import { renderToString } from "react-dom/server";
 
 export function renderToStringWithData(
   component: ReactTypes.ReactElement<any>

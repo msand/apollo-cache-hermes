@@ -1,18 +1,18 @@
 import { mergeDeep, mergeDeepArray, DeepMerger } from "../mergeDeep";
 
-describe("mergeDeep", () => {
-  it("should return an object if first argument falsy", () => {
+describe("mergeDeep", function () {
+  it("should return an object if first argument falsy", function () {
     expect(mergeDeep()).toEqual({});
     expect(mergeDeep(null)).toEqual({});
     expect(mergeDeep(null, { foo: 42 })).toEqual({ foo: 42 });
   });
 
-  it("should preserve identity for single arguments", () => {
+  it("should preserve identity for single arguments", function () {
     const arg = Object.create(null);
     expect(mergeDeep(arg)).toBe(arg);
   });
 
-  it("should preserve identity when merging non-conflicting objects", () => {
+  it("should preserve identity when merging non-conflicting objects", function () {
     const a = { a: { name: "ay" } };
     const b = { b: { name: "bee" } };
     const c = mergeDeep(a, b);
@@ -24,7 +24,7 @@ describe("mergeDeep", () => {
     });
   });
 
-  it("should shallow-copy conflicting fields", () => {
+  it("should shallow-copy conflicting fields", function () {
     const a = { conflict: { fromA: [1, 2, 3] } };
     const b = { conflict: { fromB: [4, 5] } };
     const c = mergeDeep(a, b);
@@ -40,50 +40,77 @@ describe("mergeDeep", () => {
     });
   });
 
-  it("should resolve conflicts among more than two objects", () => {
-    type Value = { value: number };
-    type Nested = { [p: string]: Value | Nested };
-    type Conflicts = Nested & {
-      conflict: Nested & { nested: Nested };
-    };
-    const sources: Conflicts[] = [];
+  it("should resolve conflicts among more than two objects", function () {
+    const sources: {
+      [p: string]: {
+        value: number
+      }
+      | {
+        [p: string]: {
+          value: number
+        }
+        | {
+          [p: string]: {
+            value: number
+          }
+        }
+        nested: {
+          [p: string]: {
+            value: number
+          }
+        }
+      }
+      conflict: {
+        [p: string]: {
+          value: number
+        }
+        | {
+          [p: string]: {
+            value: number
+          }
+        }
+        nested: {
+          [p: string]: {
+            value: number
+          }
+        }
+      }
+    }[] = [];
 
     for (let i = 0; i < 100; ++i) {
-      const items: Conflicts = {
-        [`unique${i}`]: { value: i },
+      sources.push({
+        ["unique" + i]: { value: i },
         conflict: {
-          [`from${i}`]: { value: i },
+          ["from" + i]: { value: i },
           nested: {
-            [`nested${i}`]: { value: i },
+            ["nested" + i]: { value: i },
           },
         },
-      };
-      sources.push(items);
+      });
     }
 
     const merged = mergeDeep(...sources);
 
     sources.forEach((source, i) => {
-      expect(merged[`unique${i}`].value).toBe(i);
-      expect(source[`unique${i}`]).toBe(merged[`unique${i}`]);
+      expect(merged["unique" + i].value).toBe(i);
+      expect(source["unique" + i]).toBe(merged["unique" + i]);
 
       expect(merged.conflict).not.toBe(source.conflict);
-      expect(merged.conflict[`from${i}`].value).toBe(i);
-      expect(merged.conflict[`from${i}`]).toBe(source.conflict[`from${i}`]);
+      expect(merged.conflict["from" + i].value).toBe(i);
+      expect(merged.conflict["from" + i]).toBe(source.conflict["from" + i]);
 
       expect(merged.conflict.nested).not.toBe(source.conflict.nested);
-      expect(merged.conflict.nested[`nested${i}`].value).toBe(i);
-      expect(merged.conflict.nested[`nested${i}`]).toBe(
-        source.conflict.nested[`nested${i}`]
+      expect(merged.conflict.nested["nested" + i].value).toBe(i);
+      expect(merged.conflict.nested["nested" + i]).toBe(
+        source.conflict.nested["nested" + i]
       );
     });
   });
 
-  it("can merge array elements", () => {
+  it("can merge array elements", function () {
     const a = [{ a: 1 }, { a: "ay" }, "a"];
     const b = [{ b: 2 }, { b: "bee" }, "b"];
     const c = [{ c: 3 }, { c: "cee" }, "c"];
-
     const d = { 1: { d: "dee" } };
 
     expect(mergeDeep(a, b, c, d)).toEqual([
@@ -93,7 +120,7 @@ describe("mergeDeep", () => {
     ]);
   });
 
-  it("lets the last conflicting value win", () => {
+  it("lets the last conflicting value win", function () {
     expect(mergeDeep("a", "b", "c")).toBe("c");
 
     expect(
@@ -113,8 +140,7 @@ describe("mergeDeep", () => {
     expect(
       mergeDeep(
         ['a', ['b', 'c'], 'd'],
-        // eslint-disable-next-line no-sparse-arrays
-        [/* empty*/, ['B'], 'D'],
+        [/*empty*/, ['B'], 'D'],
       )
     ).toEqual(
       ['a', ['B', 'c'], 'D'],
@@ -124,15 +150,14 @@ describe("mergeDeep", () => {
     expect(
       mergeDeep(
         ['a', ['b', 'c'], 'd'],
-        // eslint-disable-next-line no-sparse-arrays
-        ['A', [/* empty*/, 'C']],
+        ['A', [/*empty*/, 'C']],
       )
     ).toEqual(
       ['A', ['b', 'C'], 'd'],
     );
   });
 
-  it("mergeDeep returns the intersection of its argument types", () => {
+  it("mergeDeep returns the intersection of its argument types", function () {
     const abc = mergeDeep({ str: "hi", a: 1 }, { a: 3, b: 2 }, { b: 1, c: 2 });
     // The point of this test is that the following lines type-check without
     // resorting to any `any` loopholes:
@@ -142,7 +167,7 @@ describe("mergeDeep", () => {
     expect(abc.c / 2).toBe(1);
   });
 
-  it("mergeDeepArray returns the supertype of its argument types", () => {
+  it("mergeDeepArray returns the supertype of its argument types", function () {
     class F {
       check() {
         return "ok";
@@ -154,7 +179,7 @@ describe("mergeDeep", () => {
     expect(mergeDeepArray(fs).check()).toBe("ok");
   });
 
-  it("supports custom reconciler functions", () => {
+  it("supports custom reconciler functions", function () {
     const merger = new DeepMerger(function (target, source, key) {
       const targetValue = target[key];
       const sourceValue = source[key];
@@ -184,7 +209,7 @@ describe("mergeDeep", () => {
     });
   });
 
-  it("returns original object references when possible", () => {
+  it("returns original object references when possible", function () {
     const target = {
       a: 1,
       b: {
@@ -251,8 +276,7 @@ describe("mergeDeep", () => {
 
     expect(
       mergeDeep(targetWithArrays, {
-        // eslint-disable-next-line no-sparse-arrays
-        e: [, , /* hole*/ /* hole*/ 9],
+        e: [, , /*hole*/ /*hole*/ 9],
       })
     ).toBe(targetWithArrays);
 
@@ -319,7 +343,7 @@ describe("mergeDeep", () => {
     ).toBe(targetWithArrays);
   });
 
-  it("provides optional context to reconciler function", () => {
+  it("provides optional context to reconciler function", function () {
     const contextObject = {
       contextWithSpaces: "c o n t e x t",
     };

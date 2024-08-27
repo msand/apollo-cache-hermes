@@ -1,4 +1,6 @@
-import { ApolloLink, Observable, FetchResult, Operation } from "@apollo/client";
+import { Observable } from "../../../utilities/index";
+import type { FetchResult, Operation } from "../../../link/core/index";
+import { ApolloLink } from "../../../link/core/index";
 
 export interface MockedSubscription {
   request: Operation;

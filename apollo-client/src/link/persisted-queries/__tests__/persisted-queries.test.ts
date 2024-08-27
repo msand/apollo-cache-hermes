@@ -4,14 +4,13 @@ import { times } from "lodash";
 import fetchMock from "fetch-mock";
 import crypto from "crypto";
 
-import { execute } from "../../core";
+import { ApolloLink, execute } from "../../core";
 import { Observable } from "../../../utilities";
 import { createHttpLink } from "../../http/createHttpLink";
 
 import { createPersistedQueryLink as createPersistedQuery, VERSION } from "..";
 import { itAsync } from "../../../testing";
 import { toPromise } from "../../utils";
-import {ApolloLink} from "@apollo/client";
 
 // Necessary configuration in order to mock multiple requests
 // to a single (/graphql) endpoint

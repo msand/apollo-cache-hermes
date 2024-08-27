@@ -1,5 +1,4 @@
 import type { FetchResult } from "../../link/core/index";
-
 import { isNonEmptyArray } from "./arrays";
 import { isExecutionPatchIncrementalResult } from "./incrementalResult";
 

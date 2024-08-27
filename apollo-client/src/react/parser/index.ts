@@ -1,11 +1,11 @@
+import { invariant } from "../../utilities/globals/index";
+
 import type {
   DocumentNode,
   DefinitionNode,
   VariableDefinitionNode,
   OperationDefinitionNode,
 } from "graphql";
-
-import { invariant } from "../../utilities/globals/index";
 import {
   AutoCleanedWeakCache,
   cacheSizes,
@@ -62,7 +62,7 @@ export function parser(document: DocumentNode): IDocumentDefinition {
   const cached = cache.get(document);
   if (cached) return cached;
 
-  let type, name;
+  let variables, type, name;
 
   invariant(
     !!document && !!document.kind,
@@ -137,7 +137,7 @@ export function parser(document: DocumentNode): IDocumentDefinition {
   );
 
   const definition = definitions[0] as OperationDefinitionNode;
-  const variables = definition.variableDefinitions || [];
+  variables = definition.variableDefinitions || [];
 
   if (definition.name && definition.name.kind === "Name") {
     name = definition.name.value;
@@ -164,7 +164,7 @@ export function verifyDocumentType(document: DocumentNode, type: DocumentType) {
   const usedOperationName = operationName(operation.type);
   invariant(
     operation.type === type,
-    `Running a %s requires a graphql %s, but a %s was used instead.`,
+    `Running a %s requires a graphql ` + `%s, but a %s was used instead.`,
     requiredOperationName,
     requiredOperationName,
     usedOperationName

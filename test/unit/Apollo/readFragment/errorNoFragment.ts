@@ -39,7 +39,7 @@ describe(`readFragment when no fragment is provided`, () => {
           }
         `),
       });
-    }).to.throw(/An error occurred! For more details, see the full error text at /i);
+    }).to.throw(/An error occurred! For more details, see the full error text at |Found a query operation named 'viewer'. No operations are allowed when using a fragment as a query. Only fragments are allowed./i);
   });
 
 });

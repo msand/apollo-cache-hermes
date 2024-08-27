@@ -1,33 +1,72 @@
 import gql from "graphql-tag";
+import { EntityStore, supportsResultCaching } from "../entityStore";
 import { DocumentNode } from "graphql";
-import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
-import { InvariantError } from "ts-invariant";
-import { ApolloCache } from "@apollo/client";
-
-import { EntityStore } from "../entityStore";
 import { StoreObject } from "../types";
+import { ApolloCache } from "../../core/cache";
 import { Cache } from "../../core/types/Cache";
 import {
   Reference,
   makeReference,
   isReference,
   StoreValue,
-  stringifyForDisplay,
-} from "../../../utilities";
+} from "../../../utilities/graphql/storeUtils";
 import { MissingFieldError } from "../..";
+import { TypedDocumentNode } from "@graphql-typed-document-node/core";
+import { stringifyForDisplay } from "../../../utilities";
+import { InvariantError } from "../../../utilities/globals";
 import { spyOnConsole } from "../../../testing/internal";
 import { Hermes } from "../../../../../src";
 
 describe("EntityStore", () => {
+  it("should support result caching if so configured", () => {
+    const cache = new Hermes();
+
+    const storeWithResultCaching = new EntityStore.Root({
+      policies: cache.policies,
+      resultCaching: true,
+    });
+
+    const storeWithoutResultCaching = new EntityStore.Root({
+      policies: cache.policies,
+      resultCaching: false,
+    });
+
+    expect(supportsResultCaching({ some: "arbitrary object " })).toBe(false);
+    expect(supportsResultCaching(storeWithResultCaching)).toBe(true);
+    expect(supportsResultCaching(storeWithoutResultCaching)).toBe(false);
+
+    const layerWithCaching = storeWithResultCaching.addLayer(
+      "with caching",
+      () => {}
+    );
+    expect(supportsResultCaching(layerWithCaching)).toBe(true);
+    const anotherLayer = layerWithCaching.addLayer("another layer", () => {});
+    expect(supportsResultCaching(anotherLayer)).toBe(true);
+    expect(
+      anotherLayer.removeLayer("with caching").removeLayer("another layer")
+    ).toBe(storeWithResultCaching.stump);
+    expect(supportsResultCaching(storeWithResultCaching)).toBe(true);
+
+    const layerWithoutCaching = storeWithoutResultCaching.addLayer(
+      "with caching",
+      () => {}
+    );
+    expect(supportsResultCaching(layerWithoutCaching)).toBe(false);
+    expect(layerWithoutCaching.removeLayer("with caching")).toBe(
+      storeWithoutResultCaching.stump
+    );
+    expect(supportsResultCaching(storeWithoutResultCaching)).toBe(false);
+  });
+
   function newBookAuthorCache() {
     const cache = new Hermes({
-      // resultCaching: true,
+      resultCaching: true,
       dataIdFromObject(value: any) {
         switch (value && value.__typename) {
           case "Book":
-            return `Book:${value.isbn}`;
+            return "Book:" + value.isbn;
           case "Author":
-            return `Author:${value.name}`;
+            return "Author:" + value.name;
         }
       },
     });
@@ -183,9 +222,9 @@ describe("EntityStore", () => {
     // demonstrate that the recomputed cache results are unchanged.
     const originalReader = cache["storeReader"];
     expect(
-      cache.gc(/* {
+      cache.gc({
         resetResultCache: true,
-      } */)
+      })
     ).toEqual([]);
     expect(cache["storeReader"]).not.toBe(originalReader);
     const resultAfterResetResultCache = read();
@@ -194,10 +233,10 @@ describe("EntityStore", () => {
 
     // Now discard cache.storeReader.canon as well.
     expect(
-      cache.gc(/* {
+      cache.gc({
         resetResultCache: true,
         resetResultIdentities: true,
-      } */)
+      })
     ).toEqual([]);
 
     const resultAfterFullGC = read();
@@ -562,7 +601,7 @@ describe("EntityStore", () => {
 
     // Retain the Spineless book on the optimistic layer (for the first time)
     // but release it on the root layer.
-    expect(cache.retain("Book:0735211280" /* TODO , true*/)).toBe(1);
+    expect(cache.retain("Book:0735211280", true)).toBe(1);
     expect(cache.release("Book:0735211280")).toBe(0);
 
     // The Spineless book is still protected by the reference from author Juli
@@ -1010,7 +1049,7 @@ describe("EntityStore", () => {
     `;
 
     const cache = new Hermes({
-      // canonizeResults: true,
+      canonizeResults: true,
       typePolicies: {
         Query: {
           fields: {
@@ -2421,7 +2460,7 @@ describe("EntityStore", () => {
     const isbnsWeHaveRead: string[] = [];
 
     const cache = new Hermes({
-      // canonizeResults: true,
+      canonizeResults: true,
       typePolicies: {
         Query: {
           fields: {

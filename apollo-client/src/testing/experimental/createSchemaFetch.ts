@@ -1,6 +1,5 @@
 import { execute, validate } from "graphql";
 import type { GraphQLError, GraphQLSchema } from "graphql";
-
 import { ApolloError, gql } from "../../core/index";
 import { withCleanup } from "../internal/index";
 import { wait } from "../core/wait";

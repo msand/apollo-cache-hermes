@@ -1,10 +1,12 @@
-import * as React from "react";
-import { Suspense } from "react";
+import React from "react";
 import { act, render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { ApolloClient } from "@apollo/client";
-
-import { NetworkStatus, TypedDocumentNode, gql } from "../../../core";
+import {
+  ApolloClient,
+  NetworkStatus,
+  TypedDocumentNode,
+  gql,
+} from "../../../core";
+import { Hermes } from "../../../../../src";
 import { MockLink, MockedResponse } from "../../../testing";
 import {
   PaginatedCaseData,
@@ -17,14 +19,15 @@ import {
 } from "../../../testing/internal";
 import { useQueryRefHandlers } from "../useQueryRefHandlers";
 import { UseReadQueryResult, useReadQuery } from "../useReadQuery";
+import { Suspense } from "react";
 import { createQueryPreloader } from "../../query-preloader/createQueryPreloader";
+import userEvent from "@testing-library/user-event";
 import { QueryRef } from "../../internal";
 import { useBackgroundQuery } from "../useBackgroundQuery";
 import { useLoadableQuery } from "../useLoadableQuery";
 import { concatPagination } from "../../../utilities";
-import { Hermes } from "../../../../../src";
 
-it("does not interfere with updates from useReadQuery", async () => {
+test("does not interfere with updates from useReadQuery", async () => {
   const { query, mocks } = setupSimpleCase();
 
   const client = new ApolloClient({
@@ -112,7 +115,7 @@ it("does not interfere with updates from useReadQuery", async () => {
   }
 });
 
-it("refetches and resuspends when calling refetch", async () => {
+test("refetches and resuspends when calling refetch", async () => {
   const { query, mocks: defaultMocks } = setupSimpleCase();
 
   const user = userEvent.setup();
@@ -202,7 +205,7 @@ it("refetches and resuspends when calling refetch", async () => {
   }
 });
 
-it('honors refetchWritePolicy set to "merge"', async () => {
+test('honors refetchWritePolicy set to "merge"', async () => {
   const query: TypedDocumentNode<
     { primes: number[] },
     { min: number; max: number }
@@ -328,7 +331,7 @@ it('honors refetchWritePolicy set to "merge"', async () => {
   await expect(Profiler).not.toRerender();
 });
 
-it('honors refetchWritePolicy set to "overwrite"', async () => {
+test('honors refetchWritePolicy set to "overwrite"', async () => {
   const query: TypedDocumentNode<
     { primes: number[] },
     { min: number; max: number }
@@ -451,7 +454,7 @@ it('honors refetchWritePolicy set to "overwrite"', async () => {
   await expect(Profiler).not.toRerender();
 });
 
-it('defaults refetchWritePolicy to "overwrite"', async () => {
+test('defaults refetchWritePolicy to "overwrite"', async () => {
   const query: TypedDocumentNode<
     { primes: number[] },
     { min: number; max: number }
@@ -573,7 +576,7 @@ it('defaults refetchWritePolicy to "overwrite"', async () => {
   await expect(Profiler).not.toRerender();
 });
 
-it("`refetch` works with startTransition", async () => {
+test("`refetch` works with startTransition", async () => {
   type Variables = {
     id: string;
   };
@@ -730,7 +733,7 @@ it("`refetch` works with startTransition", async () => {
   await expect(Profiler).not.toRerender();
 });
 
-it("`refetch` works with startTransition from useBackgroundQuery and usePreloadedQueryHandlers", async () => {
+test("`refetch` works with startTransition from useBackgroundQuery and usePreloadedQueryHandlers", async () => {
   const { query, mocks: defaultMocks } = setupSimpleCase();
 
   const user = userEvent.setup();
@@ -900,7 +903,7 @@ it("`refetch` works with startTransition from useBackgroundQuery and usePreloade
   await expect(Profiler).not.toRerender();
 });
 
-it("refetches from queryRefs produced by useBackgroundQuery", async () => {
+test("refetches from queryRefs produced by useBackgroundQuery", async () => {
   const { query, mocks: defaultMocks } = setupSimpleCase();
 
   const user = userEvent.setup();
@@ -987,7 +990,7 @@ it("refetches from queryRefs produced by useBackgroundQuery", async () => {
   }
 });
 
-it("refetches from queryRefs produced by useLoadableQuery", async () => {
+test("refetches from queryRefs produced by useLoadableQuery", async () => {
   const { query, mocks: defaultMocks } = setupSimpleCase();
 
   const user = userEvent.setup();
@@ -1080,7 +1083,7 @@ it("refetches from queryRefs produced by useLoadableQuery", async () => {
   }
 });
 
-it("resuspends when calling `fetchMore`", async () => {
+test("resuspends when calling `fetchMore`", async () => {
   const { query, link } = setupPaginatedCase();
 
   const user = userEvent.setup();
@@ -1183,7 +1186,7 @@ it("resuspends when calling `fetchMore`", async () => {
   }
 });
 
-it("properly uses `updateQuery` when calling `fetchMore`", async () => {
+test("properly uses `updateQuery` when calling `fetchMore`", async () => {
   const { query, link } = setupPaginatedCase();
 
   const user = userEvent.setup();
@@ -1284,7 +1287,7 @@ it("properly uses `updateQuery` when calling `fetchMore`", async () => {
   }
 });
 
-it("properly uses cache field policies when calling `fetchMore` without `updateQuery`", async () => {
+test("properly uses cache field policies when calling `fetchMore` without `updateQuery`", async () => {
   const { query, link } = setupPaginatedCase();
 
   const user = userEvent.setup();
@@ -1389,7 +1392,7 @@ it("properly uses cache field policies when calling `fetchMore` without `updateQ
   }
 });
 
-it("paginates from queryRefs produced by useBackgroundQuery", async () => {
+test("paginates from queryRefs produced by useBackgroundQuery", async () => {
   const { query, link } = setupPaginatedCase();
 
   const user = userEvent.setup();
@@ -1492,7 +1495,7 @@ it("paginates from queryRefs produced by useBackgroundQuery", async () => {
   }
 });
 
-it("paginates from queryRefs produced by useLoadableQuery", async () => {
+test("paginates from queryRefs produced by useLoadableQuery", async () => {
   const { query, link } = setupPaginatedCase();
 
   const user = userEvent.setup();
@@ -1603,7 +1606,7 @@ it("paginates from queryRefs produced by useLoadableQuery", async () => {
   }
 });
 
-it("`fetchMore` works with startTransition", async () => {
+test("`fetchMore` works with startTransition", async () => {
   const { query, link } = setupPaginatedCase();
 
   const user = userEvent.setup();
@@ -1733,7 +1736,7 @@ it("`fetchMore` works with startTransition", async () => {
   await expect(Profiler).not.toRerender();
 });
 
-it("`fetchMore` works with startTransition from useBackgroundQuery and useQueryRefHandlers", async () => {
+test("`fetchMore` works with startTransition from useBackgroundQuery and useQueryRefHandlers", async () => {
   const { query, link } = setupPaginatedCase();
 
   const user = userEvent.setup();

@@ -1,6 +1,8 @@
 import gql from "graphql-tag";
-import { ApolloClient, ApolloLink, Observable } from "@apollo/client";
 
+import { Observable } from "../../utilities";
+import { ApolloLink } from "../../link/core";
+import { ApolloClient } from "../../core";
 import { itAsync } from "../../testing";
 import { Hermes } from "../../../../src";
 
