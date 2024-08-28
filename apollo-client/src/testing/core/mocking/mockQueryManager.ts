@@ -1,8 +1,8 @@
-import type { QueryManagerOptions } from "../../../core/QueryManager.js";
-import { QueryManager } from "../../../core/QueryManager.js";
-import type { MockedResponse } from "./mockLink.js";
-import { mockSingleLink } from "./mockLink.js";
-import { LocalState } from "../../../core/LocalState.js";
+import type { QueryManagerOptions } from "../../../core/QueryManager";
+import { QueryManager } from "../../../core/QueryManager";
+import type { MockedResponse } from "./mockLink";
+import { mockSingleLink } from "./mockLink";
+import { LocalState } from "../../../core/LocalState";
 import { Hermes } from "apollo-cache-hermes";
 
 export const getDefaultOptionsForQueryManagerTests = <TStore>(

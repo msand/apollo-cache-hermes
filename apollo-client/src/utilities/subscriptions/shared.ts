@@ -1,4 +1,4 @@
-import { fallbackHttpConfig } from "../../link/http/selectHttpOptionsAndBody.js";
+import { fallbackHttpConfig } from "../../link/http/selectHttpOptionsAndBody";
 
 export type CreateMultipartSubscriptionOptions = {
   fetch?: WindowOrWorkerGlobalScope["fetch"];

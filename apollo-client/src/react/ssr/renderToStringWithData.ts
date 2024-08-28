@@ -1,5 +1,5 @@
 import type * as ReactTypes from "react";
-import { getMarkupFromTree } from "./getDataFromTree.js";
+import { getMarkupFromTree } from "./getDataFromTree";
 import { renderToString } from "react-dom/server";
 
 export function renderToStringWithData(

@@ -1,20 +1,20 @@
 import * as React from "react";
-import { ApolloClient, ApolloError, gql } from "../../../core/index.js";
+import { ApolloClient, ApolloError, gql } from "../../../core/index";
 import { Hermes } from "apollo-cache-hermes";
-import type { TypedDocumentNode } from "../../../core/index.js";
+import type { TypedDocumentNode } from "../../../core/index";
 import {
   Profiler,
   createProfiler,
   renderWithClient,
   spyOnConsole,
-} from "../../internal/index.js";
-import { createTestSchema } from "../createTestSchema.js";
+} from "../../internal/index";
+import { createTestSchema } from "../createTestSchema";
 import { buildSchema } from "graphql";
-import type { UseSuspenseQueryResult } from "../../../react/index.js";
-import { useMutation, useSuspenseQuery } from "../../../react/index.js";
+import type { UseSuspenseQueryResult } from "../../../react/index";
+import { useMutation, useSuspenseQuery } from "../../../react/index";
 import userEvent from "@testing-library/user-event";
 import { act, screen } from "@testing-library/react";
-import { createSchemaFetch } from "../createSchemaFetch.js";
+import { createSchemaFetch } from "../createSchemaFetch";
 import {
   FallbackProps,
   ErrorBoundary as ReactErrorBoundary,

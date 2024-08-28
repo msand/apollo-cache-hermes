@@ -1,4 +1,4 @@
-import { invariant } from "../globals/index.js";
+import { invariant } from "../globals/index";
 
 import type {
   DocumentNode,
@@ -23,11 +23,11 @@ import {
   getFragmentDefinition,
   getFragmentDefinitions,
   getMainDefinition,
-} from "./getFromAST.js";
-import { isField } from "./storeUtils.js";
-import type { FragmentMap } from "./fragments.js";
-import { createFragmentMap } from "./fragments.js";
-import { isArray, isNonEmptyArray } from "../common/arrays.js";
+} from "./getFromAST";
+import { isField } from "./storeUtils";
+import type { FragmentMap } from "./fragments";
+import { createFragmentMap } from "./fragments";
+import { isArray, isNonEmptyArray } from "../common/arrays";
 
 // https://github.com/graphql/graphql-js/blob/8d7c8fccf5a9846a50785de04abda58a7eb13fc0/src/language/visitor.ts#L20-L23
 interface EnterLeaveVisitor<TVisitedNode extends ASTNode> {

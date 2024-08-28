@@ -1,10 +1,10 @@
-import "../../utilities/globals/index.js";
+import "../../utilities/globals/index";
 
-export { graphql } from "./graphql.js";
+export { graphql } from "./graphql";
 
-export { withQuery } from "./query-hoc.js";
-export { withMutation } from "./mutation-hoc.js";
-export { withSubscription } from "./subscription-hoc.js";
-export { withApollo } from "./withApollo.js";
+export { withQuery } from "./query-hoc";
+export { withMutation } from "./mutation-hoc";
+export { withSubscription } from "./subscription-hoc";
+export { withApollo } from "./withApollo";
 
-export * from "./types.js";
+export * from "./types";

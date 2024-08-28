@@ -1,9 +1,9 @@
 import * as PropTypes from "prop-types";
 import type * as ReactTypes from "react";
 
-import type { OperationVariables } from "../../core/index.js";
-import type { SubscriptionComponentOptions } from "./types.js";
-import { useSubscription } from "../hooks/index.js";
+import type { OperationVariables } from "../../core/index";
+import type { SubscriptionComponentOptions } from "./types";
+import { useSubscription } from "../hooks/index";
 
 /**
  * @deprecated

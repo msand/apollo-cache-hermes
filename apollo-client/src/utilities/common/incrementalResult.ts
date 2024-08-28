@@ -4,10 +4,10 @@ import type {
   ExecutionPatchResult,
   ApolloPayloadResult,
   FetchResult,
-} from "../../link/core/index.js";
-import { isNonNullObject } from "./objects.js";
-import { isNonEmptyArray } from "./arrays.js";
-import { DeepMerger } from "./mergeDeep.js";
+} from "../../link/core/index";
+import { isNonNullObject } from "./objects";
+import { isNonEmptyArray } from "./arrays";
+import { DeepMerger } from "./mergeDeep";
 
 export function isExecutionPatchIncrementalResult<T>(
   value: FetchResult<T>

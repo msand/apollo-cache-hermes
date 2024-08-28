@@ -1,19 +1,19 @@
-import { newInvariantError, invariant } from "../../utilities/globals/index.js";
+import { newInvariantError, invariant } from "../../utilities/globals/index";
 
-import type { Observer } from "../../utilities/index.js";
-import { Observable } from "../../utilities/index.js";
+import type { Observer } from "../../utilities/index";
+import { Observable } from "../../utilities/index";
 import type {
   NextLink,
   Operation,
   RequestHandler,
   FetchResult,
   GraphQLRequest,
-} from "./types.js";
+} from "./types";
 import {
   validateOperation,
   createOperation,
   transformOperation,
-} from "../utils/index.js";
+} from "../utils/index";
 
 function passthrough(op: Operation, forward: NextLink) {
   return (forward ? forward(op) : Observable.of()) as Observable<FetchResult>;

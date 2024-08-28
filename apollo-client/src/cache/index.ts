@@ -1,40 +1,40 @@
-import "../utilities/globals/index.js";
+import "../utilities/globals/index";
 
 export type {
   Transaction,
   WatchFragmentOptions,
   WatchFragmentResult,
-} from "./core/cache.js";
-export { ApolloCache } from "./core/cache.js";
+} from "./core/cache";
+export { ApolloCache } from "./core/cache";
 // eslint-disable-next-line @typescript-eslint/consistent-type-exports
-export { Cache } from "./core/types/Cache.js";
-export type { DataProxy } from "./core/types/DataProxy.js";
+export { Cache } from "./core/types/Cache";
+export type { DataProxy } from "./core/types/DataProxy";
 export type {
   MissingTree,
   Modifier,
   Modifiers,
   ModifierDetails,
   ReadFieldOptions,
-} from "./core/types/common.js";
-export { MissingFieldError } from "./core/types/common.js";
+} from "./core/types/common";
+export { MissingFieldError } from "./core/types/common";
 
-export type { Reference } from "../utilities/index.js";
+export type { Reference } from "../utilities/index";
 export {
   isReference,
   makeReference,
   canonicalStringify,
-} from "../utilities/index.js";
+} from "../utilities/index";
 
-export { EntityStore } from "./inmemory/entityStore.js";
+export { EntityStore } from "./inmemory/entityStore";
 export {
   fieldNameFromStoreName,
   defaultDataIdFromObject,
-} from "./inmemory/helpers.js";
+} from "./inmemory/helpers";
 
-export { InMemoryCache } from "./inmemory/inMemoryCache.js";
+export { InMemoryCache } from "./inmemory/inMemoryCache";
 
-export type { ReactiveVar } from "./inmemory/reactiveVars.js";
-export { makeVar, cacheSlot } from "./inmemory/reactiveVars.js";
+export type { ReactiveVar } from "./inmemory/reactiveVars";
+export { makeVar, cacheSlot } from "./inmemory/reactiveVars";
 
 export type {
   TypePolicies,
@@ -44,10 +44,10 @@ export type {
   FieldMergeFunction,
   FieldFunctionOptions,
   PossibleTypesMap,
-} from "./inmemory/policies.js";
-export { Policies } from "./inmemory/policies.js";
+} from "./inmemory/policies";
+export { Policies } from "./inmemory/policies";
 
-export type { FragmentRegistryAPI } from "./inmemory/fragmentRegistry.js";
-export { createFragmentRegistry } from "./inmemory/fragmentRegistry.js";
+export type { FragmentRegistryAPI } from "./inmemory/fragmentRegistry";
+export { createFragmentRegistry } from "./inmemory/fragmentRegistry";
 
-export * from "./inmemory/types.js";
+export * from "./inmemory/types";

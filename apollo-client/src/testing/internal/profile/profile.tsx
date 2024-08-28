@@ -5,12 +5,12 @@ import { TextEncoder, TextDecoder } from "util";
 global.TextEncoder ??= TextEncoder;
 // @ts-ignore
 global.TextDecoder ??= TextDecoder;
-import type { Render, BaseRender } from "./Render.js";
-import { RenderInstance } from "./Render.js";
-import { applyStackTrace, captureStackTrace } from "./traces.js";
-import type { ProfilerContextValue } from "./context.js";
-import { ProfilerContextProvider, useProfilerContext } from "./context.js";
-import { disableActWarnings } from "../disposables/index.js";
+import type { Render, BaseRender } from "./Render";
+import { RenderInstance } from "./Render";
+import { applyStackTrace, captureStackTrace } from "./traces";
+import type { ProfilerContextValue } from "./context";
+import { ProfilerContextProvider, useProfilerContext } from "./context";
+import { disableActWarnings } from "../disposables/index";
 
 type ValidSnapshot = void | (object & { /* not a function */ call?: never });
 

@@ -1,4 +1,4 @@
-import { invariant } from "../../../utilities/globals/index.js";
+import { invariant } from "../../../utilities/globals/index";
 
 import { equal } from "@wry/equality";
 
@@ -6,8 +6,8 @@ import type {
   Operation,
   GraphQLRequest,
   FetchResult,
-} from "../../../link/core/index.js";
-import { ApolloLink } from "../../../link/core/index.js";
+} from "../../../link/core/index";
+import { ApolloLink } from "../../../link/core/index";
 
 import {
   Observable,
@@ -20,7 +20,7 @@ import {
   getDefaultValues,
   removeDirectivesFromDocument,
   checkDocument,
-} from "../../../utilities/index.js";
+} from "../../../utilities/index";
 
 /** @internal */
 type CovariantUnaryFunction<out Arg, out Ret> = { fn(arg: Arg): Ret }["fn"];

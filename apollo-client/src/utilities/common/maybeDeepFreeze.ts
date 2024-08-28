@@ -1,4 +1,4 @@
-import { isNonNullObject } from "./objects.js";
+import { isNonNullObject } from "./objects";
 
 function deepFreeze(value: any) {
   const workSet = new Set([value]);

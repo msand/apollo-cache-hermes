@@ -11,9 +11,9 @@ import type {
   SelectionSetNode,
 } from "graphql";
 
-import type { ApolloQueryResult, OperationVariables } from "./types.js";
+import type { ApolloQueryResult, OperationVariables } from "./types";
 
-import type { FragmentMap } from "../utilities/index.js";
+import type { FragmentMap } from "../utilities/index";
 import {
   createFragmentMap,
   getFragmentDefinitions,
@@ -22,7 +22,7 @@ import {
   isField,
   resultKeyNameFromField,
   shouldInclude,
-} from "../utilities/index.js";
+} from "../utilities/index";
 
 // Returns true if aResult and bResult are deeply equal according to the fields
 // selected by the given query, ignoring any fields marked as @nonreactive.

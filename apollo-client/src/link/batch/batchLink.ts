@@ -1,10 +1,10 @@
-import type { Operation, FetchResult, NextLink } from "../core/index.js";
-import { ApolloLink } from "../core/index.js";
-import type { Observable } from "../../utilities/index.js";
-import type { BatchHandler } from "./batching.js";
-import { OperationBatcher } from "./batching.js";
-export type { BatchableRequest, BatchHandler } from "./batching.js";
-export { OperationBatcher } from "./batching.js";
+import type { Operation, FetchResult, NextLink } from "../core/index";
+import { ApolloLink } from "../core/index";
+import type { Observable } from "../../utilities/index";
+import type { BatchHandler } from "./batching";
+import { OperationBatcher } from "./batching";
+export type { BatchableRequest, BatchHandler } from "./batching";
+export { OperationBatcher } from "./batching";
 
 export namespace BatchLink {
   export interface Options {

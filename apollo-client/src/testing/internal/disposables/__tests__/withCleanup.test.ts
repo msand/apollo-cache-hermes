@@ -1,4 +1,4 @@
-import { withCleanup } from "../index.js";
+import { withCleanup } from "../index";
 describe("withCleanup", () => {
   it("calls cleanup", () => {
     let cleanedUp = false;

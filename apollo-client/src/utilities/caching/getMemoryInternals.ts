@@ -4,10 +4,10 @@ import type {
   DocumentTransform,
   ApolloLink,
   ApolloCache,
-} from "../../core/index.js";
-import type { ApolloClient } from "../../core/index.js";
-import type { CacheSizes } from "./sizes.js";
-import { cacheSizes, defaultCacheSizes } from "./sizes.js";
+} from "../../core/index";
+import type { ApolloClient } from "../../core/index";
+import type { CacheSizes } from "./sizes";
+import { cacheSizes, defaultCacheSizes } from "./sizes";
 
 const globalCaches: {
   print?: () => number;

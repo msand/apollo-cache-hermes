@@ -1,4 +1,4 @@
-import { invariant } from "../../utilities/globals/index.js";
+import { invariant } from "../../utilities/globals/index";
 
 import type {
   DocumentNode,
@@ -10,8 +10,8 @@ import {
   AutoCleanedWeakCache,
   cacheSizes,
   defaultCacheSizes,
-} from "../../utilities/index.js";
-import { registerGlobalCache } from "../../utilities/caching/getMemoryInternals.js";
+} from "../../utilities/index";
+import { registerGlobalCache } from "../../utilities/caching/getMemoryInternals";
 
 export enum DocumentType {
   Query,

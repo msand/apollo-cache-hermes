@@ -3,14 +3,14 @@ import type { RequestParameters, GraphQLResponse } from "relay-runtime";
 import {
   handleError,
   readMultipartBody,
-} from "../../../link/http/parseAndCheckHttpResponse.js";
-import { maybe } from "../../index.js";
-import { serializeFetchParameter } from "../../../core/index.js";
+} from "../../../link/http/parseAndCheckHttpResponse";
+import { maybe } from "../../index";
+import { serializeFetchParameter } from "../../../core/index";
 
-import type { OperationVariables } from "../../../core/index.js";
-import type { Body } from "../../../link/http/selectHttpOptionsAndBody.js";
-import { generateOptionsForMultipartSubscription } from "../shared.js";
-import type { CreateMultipartSubscriptionOptions } from "../shared.js";
+import type { OperationVariables } from "../../../core/index";
+import type { Body } from "../../../link/http/selectHttpOptionsAndBody";
+import { generateOptionsForMultipartSubscription } from "../shared";
+import type { CreateMultipartSubscriptionOptions } from "../shared";
 
 const backupFetch = maybe(() => fetch);
 

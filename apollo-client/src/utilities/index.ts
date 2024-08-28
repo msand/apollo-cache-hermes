@@ -1,9 +1,9 @@
-export { DEV, maybe } from "./globals/index.js";
+export { DEV, maybe } from "./globals/index";
 
 export type {
   DirectiveInfo,
   InclusionDirectives,
-} from "./graphql/directives.js";
+} from "./graphql/directives";
 export {
   shouldInclude,
   hasDirectives,
@@ -12,17 +12,17 @@ export {
   hasClientExports,
   getDirectiveNames,
   getInclusionDirectives,
-} from "./graphql/directives.js";
+} from "./graphql/directives";
 
-export type { DocumentTransformCacheKey } from "./graphql/DocumentTransform.js";
-export { DocumentTransform } from "./graphql/DocumentTransform.js";
+export type { DocumentTransformCacheKey } from "./graphql/DocumentTransform";
+export { DocumentTransform } from "./graphql/DocumentTransform";
 
-export type { FragmentMap, FragmentMapFunction } from "./graphql/fragments.js";
+export type { FragmentMap, FragmentMapFunction } from "./graphql/fragments";
 export {
   createFragmentMap,
   getFragmentQueryDocument,
   getFragmentFromSelection,
-} from "./graphql/fragments.js";
+} from "./graphql/fragments";
 
 export {
   checkDocument,
@@ -33,9 +33,9 @@ export {
   getFragmentDefinition,
   getMainDefinition,
   getDefaultValues,
-} from "./graphql/getFromAST.js";
+} from "./graphql/getFromAST";
 
-export { print } from "./graphql/print.js";
+export { print } from "./graphql/print";
 
 export type {
   StoreObject,
@@ -44,7 +44,7 @@ export type {
   StoreValue,
   Directives,
   VariableValue,
-} from "./graphql/storeUtils.js";
+} from "./graphql/storeUtils";
 export {
   makeReference,
   isDocumentNode,
@@ -57,7 +57,7 @@ export {
   resultKeyNameFromField,
   getStoreKeyName,
   getTypenameFromResult,
-} from "./graphql/storeUtils.js";
+} from "./graphql/storeUtils";
 
 export type {
   RemoveNodeConfig,
@@ -69,7 +69,7 @@ export type {
   RemoveFragmentSpreadConfig,
   RemoveFragmentDefinitionConfig,
   RemoveVariableDefinitionConfig,
-} from "./graphql/transform.js";
+} from "./graphql/transform";
 export {
   addTypenameToDocument,
   buildQueryFromSelectionSet,
@@ -78,64 +78,64 @@ export {
   removeArgumentsFromDocument,
   removeFragmentSpreadFromDocument,
   removeClientSetsFromDocument,
-} from "./graphql/transform.js";
+} from "./graphql/transform";
 
 export {
   isMutationOperation,
   isQueryOperation,
   isSubscriptionOperation,
-} from "./graphql/operations.js";
+} from "./graphql/operations";
 
 export {
   concatPagination,
   offsetLimitPagination,
   relayStylePagination,
-} from "./policies/pagination.js";
+} from "./policies/pagination";
 
 export type {
   Observer,
   ObservableSubscription,
-} from "./observables/Observable.js";
-export { Observable } from "./observables/Observable.js";
+} from "./observables/Observable";
+export { Observable } from "./observables/Observable";
 
-export type { PromiseWithState } from "./promises/decoration.js";
+export type { PromiseWithState } from "./promises/decoration";
 export {
   isStatefulPromise,
   createFulfilledPromise,
   createRejectedPromise,
   wrapPromiseWithState,
-} from "./promises/decoration.js";
+} from "./promises/decoration";
 
-export * from "./common/mergeDeep.js";
-export * from "./common/cloneDeep.js";
-export * from "./common/maybeDeepFreeze.js";
-export * from "./observables/iteration.js";
-export * from "./observables/asyncMap.js";
-export * from "./observables/Concast.js";
-export * from "./observables/subclassing.js";
-export * from "./common/arrays.js";
-export * from "./common/objects.js";
-export * from "./common/errorHandling.js";
-export * from "./common/canUse.js";
-export * from "./common/compact.js";
-export * from "./common/makeUniqueId.js";
-export * from "./common/stringifyForDisplay.js";
-export * from "./common/mergeOptions.js";
-export * from "./common/incrementalResult.js";
+export * from "./common/mergeDeep";
+export * from "./common/cloneDeep";
+export * from "./common/maybeDeepFreeze";
+export * from "./observables/iteration";
+export * from "./observables/asyncMap";
+export * from "./observables/Concast";
+export * from "./observables/subclassing";
+export * from "./common/arrays";
+export * from "./common/objects";
+export * from "./common/errorHandling";
+export * from "./common/canUse";
+export * from "./common/compact";
+export * from "./common/makeUniqueId";
+export * from "./common/stringifyForDisplay";
+export * from "./common/mergeOptions";
+export * from "./common/incrementalResult";
 
-export { canonicalStringify } from "./common/canonicalStringify.js";
-export { omitDeep } from "./common/omitDeep.js";
-export { stripTypename } from "./common/stripTypename.js";
+export { canonicalStringify } from "./common/canonicalStringify";
+export { omitDeep } from "./common/omitDeep";
+export { stripTypename } from "./common/stripTypename";
 
-export * from "./types/IsStrictlyAny.js";
-export type { DeepOmit } from "./types/DeepOmit.js";
-export type { DeepPartial } from "./types/DeepPartial.js";
-export type { OnlyRequiredProperties } from "./types/OnlyRequiredProperties.js";
+export * from "./types/IsStrictlyAny";
+export type { DeepOmit } from "./types/DeepOmit";
+export type { DeepPartial } from "./types/DeepPartial";
+export type { OnlyRequiredProperties } from "./types/OnlyRequiredProperties";
 
 export {
   AutoCleanedStrongCache,
   AutoCleanedWeakCache,
   cacheSizes,
   defaultCacheSizes,
-} from "./caching/index.js";
-export type { CacheSizes } from "./caching/index.js";
+} from "./caching/index";
+export type { CacheSizes } from "./caching/index";

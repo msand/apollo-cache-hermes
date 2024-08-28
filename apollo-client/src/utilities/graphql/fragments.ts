@@ -1,4 +1,4 @@
-import { invariant, newInvariantError } from "../globals/index.js";
+import { invariant, newInvariantError } from "../globals/index";
 
 import type {
   DocumentNode,

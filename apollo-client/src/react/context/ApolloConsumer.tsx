@@ -1,10 +1,10 @@
-import { invariant } from "../../utilities/globals/index.js";
+import { invariant } from "../../utilities/globals/index";
 
 import * as React from "rehackt";
 import type * as ReactTypes from "react";
 
-import type { ApolloClient } from "../../core/index.js";
-import { getApolloContext } from "./ApolloContext.js";
+import type { ApolloClient } from "../../core/index";
+import { getApolloContext } from "./ApolloContext";
 
 export interface ApolloConsumerProps {
   children: (client: ApolloClient<object>) => ReactTypes.ReactNode;

@@ -1,6 +1,6 @@
-import type { DataProxy } from "./DataProxy.js";
-import type { AllFieldsModifier, Modifiers } from "./common.js";
-import type { ApolloCache } from "../cache.js";
+import type { DataProxy } from "./DataProxy";
+import type { AllFieldsModifier, Modifiers } from "./common";
+import type { ApolloCache } from "../cache";
 
 export namespace Cache {
   // @ts-ignore

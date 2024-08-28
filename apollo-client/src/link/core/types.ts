@@ -1,9 +1,9 @@
 import type { GraphQLFormattedError } from "graphql";
 import type { DocumentNode } from "graphql";
-import type { DefaultContext } from "../../core/index.js";
+import type { DefaultContext } from "../../core/index";
 export type { DocumentNode };
 
-import type { Observable } from "../../utilities/index.js";
+import type { Observable } from "../../utilities/index";
 
 export type Path = ReadonlyArray<string | number>;
 

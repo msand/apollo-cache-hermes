@@ -1,9 +1,9 @@
 import gql from "graphql-tag";
 import "@testing-library/jest-dom";
-import { loadErrorMessageHandler } from "../../dev/loadErrorMessageHandler.js";
-import "../../testing/matchers/index.js";
-import { areApolloErrorsEqual } from "./areApolloErrorsEqual.js";
-import { areGraphQLErrorsEqual } from "./areGraphQlErrorsEqual.js";
+import { loadErrorMessageHandler } from "../../dev/loadErrorMessageHandler";
+import "../../testing/matchers/index";
+import { areApolloErrorsEqual } from "./areApolloErrorsEqual";
+import { areGraphQLErrorsEqual } from "./areGraphQlErrorsEqual";
 
 // Turn off warnings for repeated fragment names
 gql.disableFragmentWarnings();

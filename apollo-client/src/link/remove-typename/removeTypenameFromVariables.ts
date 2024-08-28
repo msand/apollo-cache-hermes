@@ -1,14 +1,14 @@
 import { wrap } from "optimism";
 import type { DocumentNode, TypeNode } from "graphql";
 import { Kind, visit } from "graphql";
-import { ApolloLink } from "../core/index.js";
+import { ApolloLink } from "../core/index";
 import {
   stripTypename,
   isPlainObject,
   cacheSizes,
   defaultCacheSizes,
-} from "../../utilities/index.js";
-import type { OperationVariables } from "../../core/index.js";
+} from "../../utilities/index";
+import type { OperationVariables } from "../../core/index";
 import { WeakCache } from "@wry/caches";
 
 export const KEEP = "__KEEP";

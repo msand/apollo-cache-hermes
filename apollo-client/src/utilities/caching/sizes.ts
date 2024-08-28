@@ -1,4 +1,4 @@
-import { global } from "../globals/index.js";
+import { global } from "../globals/index";
 
 declare global {
   interface Window {

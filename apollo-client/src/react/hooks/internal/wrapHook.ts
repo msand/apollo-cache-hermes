@@ -5,11 +5,11 @@ import type {
   useReadQuery,
   useFragment,
   useQueryRefHandlers,
-} from "../index.js";
-import type { QueryManager } from "../../../core/QueryManager.js";
-import type { ApolloClient } from "../../../core/ApolloClient.js";
-import type { ObservableQuery } from "../../../core/ObservableQuery.js";
-import type { createQueryPreloader } from "../../query-preloader/createQueryPreloader.js";
+} from "../index";
+import type { QueryManager } from "../../../core/QueryManager";
+import type { ApolloClient } from "../../../core/ApolloClient";
+import type { ObservableQuery } from "../../../core/ObservableQuery";
+import type { createQueryPreloader } from "../../query-preloader/createQueryPreloader";
 
 const wrapperSymbol = Symbol.for("apollo.hook.wrappers");
 

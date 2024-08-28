@@ -1,5 +1,5 @@
-import { newInvariantError } from "../../utilities/globals/index.js";
-import type { GraphQLRequest } from "../core/index.js";
+import { newInvariantError } from "../../utilities/globals/index";
+import type { GraphQLRequest } from "../core/index";
 
 export function validateOperation(operation: GraphQLRequest): GraphQLRequest {
   const OPERATION_FIELDS = [

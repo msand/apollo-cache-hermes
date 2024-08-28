@@ -1,7 +1,7 @@
 import { __rest } from "tslib";
 
-import type { FieldPolicy, Reference } from "../../cache/index.js";
-import { mergeDeep } from "../common/mergeDeep.js";
+import type { FieldPolicy, Reference } from "../../cache/index";
+import { mergeDeep } from "../common/mergeDeep";
 
 type KeyArgs = FieldPolicy<any>["keyArgs"];
 

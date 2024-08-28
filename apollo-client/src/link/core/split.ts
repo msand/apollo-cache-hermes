@@ -1,3 +1,3 @@
-import { ApolloLink } from "./ApolloLink.js";
+import { ApolloLink } from "./ApolloLink";
 
 export const split = ApolloLink.split;

@@ -4,8 +4,8 @@ import {
   AutoCleanedWeakCache,
   cacheSizes,
   defaultCacheSizes,
-} from "../caching/index.js";
-import { registerGlobalCache } from "../caching/getMemoryInternals.js";
+} from "../caching/index";
+import { registerGlobalCache } from "../caching/getMemoryInternals";
 
 let printCache!: AutoCleanedWeakCache<ASTNode, string>;
 export const print = Object.assign(

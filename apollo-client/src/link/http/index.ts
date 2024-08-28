@@ -1,19 +1,19 @@
-import "../../utilities/globals/index.js";
+import "../../utilities/globals/index";
 
-export type { ServerParseError } from "./parseAndCheckHttpResponse.js";
-export { parseAndCheckHttpResponse } from "./parseAndCheckHttpResponse.js";
-export type { ClientParseError } from "./serializeFetchParameter.js";
-export { serializeFetchParameter } from "./serializeFetchParameter.js";
-export type { HttpOptions, UriFunction } from "./selectHttpOptionsAndBody.js";
+export type { ServerParseError } from "./parseAndCheckHttpResponse";
+export { parseAndCheckHttpResponse } from "./parseAndCheckHttpResponse";
+export type { ClientParseError } from "./serializeFetchParameter";
+export { serializeFetchParameter } from "./serializeFetchParameter";
+export type { HttpOptions, UriFunction } from "./selectHttpOptionsAndBody";
 export {
   fallbackHttpConfig,
   defaultPrinter,
   selectHttpOptionsAndBody,
   selectHttpOptionsAndBodyInternal, // needed by ../batch-http but not public
-} from "./selectHttpOptionsAndBody.js";
-export { checkFetcher } from "./checkFetcher.js";
-export { createSignalIfSupported } from "./createSignalIfSupported.js";
-export { selectURI } from "./selectURI.js";
-export { createHttpLink } from "./createHttpLink.js";
-export { HttpLink } from "./HttpLink.js";
-export { rewriteURIForGET } from "./rewriteURIForGET.js";
+} from "./selectHttpOptionsAndBody";
+export { checkFetcher } from "./checkFetcher";
+export { createSignalIfSupported } from "./createSignalIfSupported";
+export { selectURI } from "./selectURI";
+export { createHttpLink } from "./createHttpLink";
+export { HttpLink } from "./HttpLink";
+export { rewriteURIForGET } from "./rewriteURIForGET";

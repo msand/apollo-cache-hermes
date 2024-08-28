@@ -1,4 +1,4 @@
-import { newInvariantError } from "../../utilities/globals/index.js";
+import { newInvariantError } from "../../utilities/globals/index";
 
 export const checkFetcher = (fetcher: typeof fetch | undefined) => {
   if (!fetcher && typeof fetch === "undefined") {

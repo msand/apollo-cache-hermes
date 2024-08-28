@@ -1,8 +1,8 @@
 import { execute, GraphQLError, validate } from "graphql";
 import type { GraphQLFormattedError, GraphQLSchema } from "graphql";
-import { gql } from "../../core/index.js";
-import { withCleanup } from "../internal/index.js";
-import { wait } from "../core/wait.js";
+import { gql } from "../../core/index";
+import { withCleanup } from "../internal/index";
+import { wait } from "../core/wait";
 
 /**
  * A function that accepts a static `schema` and a `mockFetchOpts` object and

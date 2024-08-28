@@ -1,4 +1,4 @@
-export { disableActWarnings } from "./disableActWarnings.js";
-export { spyOnConsole } from "./spyOnConsole.js";
-export { withCleanup } from "./withCleanup.js";
-export { enableFakeTimers } from "./enableFakeTimers.js";
+export { disableActWarnings } from "./disableActWarnings";
+export { spyOnConsole } from "./spyOnConsole";
+export { withCleanup } from "./withCleanup";
+export { enableFakeTimers } from "./enableFakeTimers";

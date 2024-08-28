@@ -1,5 +1,5 @@
-export type { RemoveTypenameFromVariablesOptions } from "./removeTypenameFromVariables.js";
+export type { RemoveTypenameFromVariablesOptions } from "./removeTypenameFromVariables";
 export {
   removeTypenameFromVariables,
   KEEP,
-} from "./removeTypenameFromVariables.js";
+} from "./removeTypenameFromVariables";

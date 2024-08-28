@@ -1,5 +1,5 @@
-export { Query } from "./Query.js";
-export { Mutation } from "./Mutation.js";
-export { Subscription } from "./Subscription.js";
+export { Query } from "./Query";
+export { Mutation } from "./Mutation";
+export { Subscription } from "./Subscription";
 
-export * from "./types.js";
+export * from "./types";

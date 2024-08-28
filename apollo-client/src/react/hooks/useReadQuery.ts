@@ -4,14 +4,14 @@ import {
   getWrappedPromise,
   unwrapQueryRef,
   updateWrappedQueryRef,
-} from "../internal/index.js";
-import type { QueryRef } from "../internal/index.js";
-import { __use, wrapHook } from "./internal/index.js";
-import { toApolloError } from "./useSuspenseQuery.js";
-import { useSyncExternalStore } from "./useSyncExternalStore.js";
-import type { ApolloError } from "../../errors/index.js";
-import type { NetworkStatus } from "../../core/index.js";
-import { useApolloClient } from "./useApolloClient.js";
+} from "../internal/index";
+import type { QueryRef } from "../internal/index";
+import { __use, wrapHook } from "./internal/index";
+import { toApolloError } from "./useSuspenseQuery";
+import { useSyncExternalStore } from "./useSyncExternalStore";
+import type { ApolloError } from "../../errors/index";
+import type { NetworkStatus } from "../../core/index";
+import { useApolloClient } from "./useApolloClient";
 
 export interface UseReadQueryResult<TData = unknown> {
   /**

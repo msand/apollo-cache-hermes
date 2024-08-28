@@ -1,9 +1,9 @@
 import type * as ReactTypes from "react";
 
-import type { ObservableQuery, OperationVariables } from "../../core/index.js";
-import type { QueryDataOptions } from "../types/types.js";
+import type { ObservableQuery, OperationVariables } from "../../core/index";
+import type { QueryDataOptions } from "../types/types";
 import { Trie } from "@wry/trie";
-import { canonicalStringify } from "../../cache/index.js";
+import { canonicalStringify } from "../../cache/index";
 
 // TODO: A vestigial interface from when hooks were implemented with utility
 // classes, which should be deleted in the future.

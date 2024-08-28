@@ -1,15 +1,15 @@
 import type { DocumentNode, GraphQLFormattedError } from "graphql";
 
-import type { ApolloCache } from "../cache/index.js";
-import type { FetchResult } from "../link/core/index.js";
-import type { ApolloError } from "../errors/index.js";
-import type { QueryInfo } from "./QueryInfo.js";
-import type { NetworkStatus } from "./networkStatus.js";
-import type { Resolver } from "./LocalState.js";
-import type { ObservableQuery } from "./ObservableQuery.js";
-import type { QueryOptions } from "./watchQueryOptions.js";
-import type { Cache } from "../cache/index.js";
-import type { IsStrictlyAny } from "../utilities/index.js";
+import type { ApolloCache } from "../cache/index";
+import type { FetchResult } from "../link/core/index";
+import type { ApolloError } from "../errors/index";
+import type { QueryInfo } from "./QueryInfo";
+import type { NetworkStatus } from "./networkStatus";
+import type { Resolver } from "./LocalState";
+import type { ObservableQuery } from "./ObservableQuery";
+import type { QueryOptions } from "./watchQueryOptions";
+import type { Cache } from "../cache/index";
+import type { IsStrictlyAny } from "../utilities/index";
 
 export type { TypedDocumentNode } from "@graphql-typed-document-node/core";
 

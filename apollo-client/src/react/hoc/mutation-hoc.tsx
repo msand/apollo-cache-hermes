@@ -3,23 +3,23 @@ import type * as ReactTypes from "react";
 import type { DocumentNode } from "graphql";
 import hoistNonReactStatics from "hoist-non-react-statics";
 
-import { parser } from "../parser/index.js";
-import type { DefaultContext, OperationVariables } from "../../core/types.js";
+import { parser } from "../parser/index";
+import type { DefaultContext, OperationVariables } from "../../core/types";
 import type {
   BaseMutationOptions,
   MutationFunction,
   MutationResult,
-} from "../types/types.js";
-import { Mutation } from "../components/index.js";
+} from "../types/types";
+import { Mutation } from "../components/index";
 
 import {
   defaultMapPropsToOptions,
   getDisplayName,
   calculateVariablesFromProps,
   GraphQLBase,
-} from "./hoc-utils.js";
-import type { OperationOption, OptionProps, MutateProps } from "./types.js";
-import type { ApolloCache } from "../../core/index.js";
+} from "./hoc-utils";
+import type { OperationOption, OptionProps, MutateProps } from "./types";
+import type { ApolloCache } from "../../core/index";
 
 /**
  * @deprecated

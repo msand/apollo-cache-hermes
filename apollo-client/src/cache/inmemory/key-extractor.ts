@@ -1,18 +1,18 @@
-import { invariant } from "../../utilities/globals/index.js";
+import { invariant } from "../../utilities/globals/index";
 
 import {
   argumentsObjectFromField,
   DeepMerger,
   isNonEmptyArray,
   isNonNullObject,
-} from "../../utilities/index.js";
+} from "../../utilities/index";
 
-import { hasOwn, isArray } from "./helpers.js";
+import { hasOwn, isArray } from "./helpers";
 import type {
   KeySpecifier,
   KeyFieldsFunction,
   KeyArgsFunction,
-} from "./policies.js";
+} from "./policies";
 
 // Mapping from JSON-encoded KeySpecifier strings to associated information.
 const specifierInfoCache: Record<

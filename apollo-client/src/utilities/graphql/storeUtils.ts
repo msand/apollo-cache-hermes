@@ -1,4 +1,4 @@
-import { newInvariantError } from "../globals/index.js";
+import { newInvariantError } from "../globals/index";
 
 import type {
   DirectiveNode,
@@ -21,10 +21,10 @@ import type {
   FragmentSpreadNode,
 } from "graphql";
 
-import { isNonNullObject } from "../common/objects.js";
-import type { FragmentMap } from "./fragments.js";
-import { getFragmentFromSelection } from "./fragments.js";
-import { canonicalStringify } from "../common/canonicalStringify.js";
+import { isNonNullObject } from "../common/objects";
+import type { FragmentMap } from "./fragments";
+import { getFragmentFromSelection } from "./fragments";
+import { canonicalStringify } from "../common/canonicalStringify";
 
 export interface Reference {
   readonly __ref: string;

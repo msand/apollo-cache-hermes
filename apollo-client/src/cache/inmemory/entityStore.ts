@@ -1,4 +1,4 @@
-import { invariant } from "../../utilities/globals/index.js";
+import { invariant } from "../../utilities/globals/index";
 import type { OptimisticDependencyFunction } from "optimism";
 import { dep } from "optimism";
 import { equal } from "@wry/equality";
@@ -8,7 +8,7 @@ import type {
   StoreValue,
   StoreObject,
   Reference,
-} from "../../utilities/index.js";
+} from "../../utilities/index";
 import {
   isReference,
   makeReference,
@@ -16,11 +16,11 @@ import {
   maybeDeepFreeze,
   canUseWeakMap,
   isNonNullObject,
-} from "../../utilities/index.js";
-import type { NormalizedCache, NormalizedCacheObject } from "./types.js";
-import { hasOwn, fieldNameFromStoreName } from "./helpers.js";
-import type { Policies, StorageType } from "./policies.js";
-import type { Cache } from "../core/types/Cache.js";
+} from "../../utilities/index";
+import type { NormalizedCache, NormalizedCacheObject } from "./types";
+import { hasOwn, fieldNameFromStoreName } from "./helpers";
+import type { Policies, StorageType } from "./policies";
+import type { Cache } from "../core/types/Cache";
 import type {
   SafeReadonly,
   Modifier,
@@ -31,7 +31,7 @@ import type {
   InvalidateModifier,
   DeleteModifier,
   ModifierDetails,
-} from "../core/types/common.js";
+} from "../core/types/common";
 import type { DocumentNode, FieldNode, SelectionSetNode } from "graphql";
 
 export const DELETE: DeleteModifier = Object.create(null);

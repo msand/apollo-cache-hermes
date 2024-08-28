@@ -11,7 +11,7 @@ As we only use this file in our internal tests, we can safely ignore it.
 
 import { within, screen } from "@testing-library/dom";
 import { JSDOM, VirtualConsole } from "jsdom";
-import { applyStackTrace, captureStackTrace } from "./traces.js";
+import { applyStackTrace, captureStackTrace } from "./traces";
 
 /** @internal */
 export interface BaseRender {

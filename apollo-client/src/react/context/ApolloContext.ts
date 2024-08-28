@@ -1,9 +1,9 @@
 import * as React from "rehackt";
 import type * as ReactTypes from "react";
-import type { ApolloClient } from "../../core/index.js";
-import { canUseSymbol } from "../../utilities/index.js";
-import type { RenderPromises } from "../ssr/index.js";
-import { invariant } from "../../utilities/globals/index.js";
+import type { ApolloClient } from "../../core/index";
+import { canUseSymbol } from "../../utilities/index";
+import type { RenderPromises } from "../ssr/index";
+import { invariant } from "../../utilities/globals/index";
 
 export interface ApolloContextValue {
   client?: ApolloClient<object>;

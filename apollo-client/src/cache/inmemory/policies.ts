@@ -1,4 +1,4 @@
-import { invariant, newInvariantError } from "../../utilities/globals/index.js";
+import { invariant, newInvariantError } from "../../utilities/globals/index";
 
 import type {
   InlineFragmentNode,
@@ -12,7 +12,7 @@ import type {
   StoreValue,
   StoreObject,
   Reference,
-} from "../../utilities/index.js";
+} from "../../utilities/index";
 import {
   storeKeyNameFromField,
   argumentsObjectFromField,
@@ -20,13 +20,13 @@ import {
   getStoreKeyName,
   isNonNullObject,
   stringifyForDisplay,
-} from "../../utilities/index.js";
+} from "../../utilities/index";
 import type {
   IdGetter,
   MergeInfo,
   NormalizedCache,
   ReadMergeModifyContext,
-} from "./types.js";
+} from "./types";
 import {
   hasOwn,
   fieldNameFromStoreName,
@@ -35,9 +35,9 @@ import {
   TypeOrFieldNameRegExp,
   defaultDataIdFromObject,
   isArray,
-} from "./helpers.js";
-import { cacheSlot } from "./reactiveVars.js";
-import type { InMemoryCache } from "./inMemoryCache.js";
+} from "./helpers";
+import { cacheSlot } from "./reactiveVars";
+import type { InMemoryCache } from "./inMemoryCache";
 import type {
   SafeReadonly,
   FieldSpecifier,
@@ -45,13 +45,13 @@ import type {
   ReadFieldFunction,
   ReadFieldOptions,
   CanReadFunction,
-} from "../core/types/common.js";
-import type { WriteContext } from "./writeToStore.js";
+} from "../core/types/common";
+import type { WriteContext } from "./writeToStore";
 
 import {
   keyArgsFnFromSpecifier,
   keyFieldsFnFromSpecifier,
-} from "./key-extractor.js";
+} from "./key-extractor";
 
 export type TypePolicies = {
   [__typename: string]: TypePolicy;

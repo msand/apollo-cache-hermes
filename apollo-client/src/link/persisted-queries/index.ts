@@ -1,26 +1,26 @@
-import { invariant } from "../../utilities/globals/index.js";
+import { invariant } from "../../utilities/globals/index";
 
-import { print } from "../../utilities/index.js";
+import { print } from "../../utilities/index";
 import type {
   DocumentNode,
   FormattedExecutionResult,
   GraphQLFormattedError,
 } from "graphql";
 
-import type { Operation } from "../core/index.js";
-import { ApolloLink } from "../core/index.js";
+import type { Operation } from "../core/index";
+import { ApolloLink } from "../core/index";
 import type {
   Observer,
   ObservableSubscription,
-} from "../../utilities/index.js";
-import { Observable, compact, isNonEmptyArray } from "../../utilities/index.js";
-import type { NetworkError } from "../../errors/index.js";
-import type { ServerError } from "../utils/index.js";
+} from "../../utilities/index";
+import { Observable, compact, isNonEmptyArray } from "../../utilities/index";
+import type { NetworkError } from "../../errors/index";
+import type { ServerError } from "../utils/index";
 import {
   cacheSizes,
   AutoCleanedWeakCache,
   defaultCacheSizes,
-} from "../../utilities/index.js";
+} from "../../utilities/index";
 
 export const VERSION = 1;
 

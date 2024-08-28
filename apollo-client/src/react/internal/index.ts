@@ -1,10 +1,10 @@
-export { getSuspenseCache } from "./cache/getSuspenseCache.js";
-export type { CacheKey, QueryKey } from "./cache/types.js";
+export { getSuspenseCache } from "./cache/getSuspenseCache";
+export type { CacheKey, QueryKey } from "./cache/types";
 export type {
   QueryReference,
   QueryRef,
   PreloadedQueryRef,
-} from "./cache/QueryReference.js";
+} from "./cache/QueryReference";
 export {
   InternalQueryReference,
   getWrappedPromise,
@@ -12,6 +12,6 @@ export {
   updateWrappedQueryRef,
   wrapQueryRef,
   assertWrappedQueryRef,
-} from "./cache/QueryReference.js";
-export type { SuspenseCacheOptions } from "./cache/SuspenseCache.js";
-export type { HookWrappers } from "../hooks/internal/wrapHook.js";
+} from "./cache/QueryReference";
+export type { SuspenseCacheOptions } from "./cache/SuspenseCache";
+export type { HookWrappers } from "../hooks/internal/wrapHook";

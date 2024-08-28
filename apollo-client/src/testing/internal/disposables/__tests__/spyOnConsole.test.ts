@@ -1,4 +1,4 @@
-import { spyOnConsole } from "../index.js";
+import { spyOnConsole } from "../index";
 
 const originalLog = console.log;
 const originalWarn = console.warn;
