@@ -1,9 +1,5 @@
 import * as React from "react";
-import {
-  ApolloClient,
-  ApolloError,
-  gql,
-} from "../../../core/index";
+import { ApolloClient, ApolloError, gql } from "../../../core/index";
 import { Hermes } from "../../../../../src";
 import type { TypedDocumentNode } from "../../../core/index";
 import {
@@ -13,7 +9,7 @@ import {
   spyOnConsole,
 } from "../../internal/index";
 import { createTestSchema } from "../createTestSchema";
-import { GraphQLError, buildSchema } from "graphql";
+import { buildSchema } from "graphql";
 import type { UseSuspenseQueryResult } from "../../../react/index";
 import { useMutation, useSuspenseQuery } from "../../../react/index";
 import userEvent from "@testing-library/user-event";
@@ -740,7 +736,9 @@ describe("schema proxy", () => {
 
       expect(snapshot.error).toEqual(
         new ApolloError({
-          graphQLErrors: [new GraphQLError("Could not resolve type")],
+          graphQLErrors: [
+            { message: "Could not resolve type", path: ["viewer", "book"] },
+          ],
         })
       );
     }
@@ -816,7 +814,7 @@ describe("schema proxy", () => {
       expect(snapshot.error).toEqual(
         new ApolloError({
           graphQLErrors: [
-            new GraphQLError('Expected { foo: "bar" } to be a GraphQL schema.'),
+            { message: 'Expected { foo: "bar" } to be a GraphQL schema.' },
           ],
         })
       );

@@ -1,6 +1,8 @@
 import gql from "graphql-tag";
 
 import { Hermes } from "../../../../../src";
+import { ApolloCache } from "../../core/cache";
+import type { NormalizedCacheObject } from "../types";
 
 describe("optimistic cache layers", () => {
   it("return === results for repeated reads", () => {
@@ -28,7 +30,7 @@ describe("optimistic cache layers", () => {
       }
     `;
 
-    function readOptimistic(cache: Hermes) {
+    function readOptimistic(cache: ApolloCache<NormalizedCacheObject>) {
       return cache.readQuery<{ book: any }>({ query }, true);
     }
 
@@ -86,7 +88,7 @@ describe("optimistic cache layers", () => {
         },
       });
 
-      result2666InTransaction = readOptimistic(proxy as Hermes);
+      result2666InTransaction = readOptimistic(proxy);
       expect(result2666InTransaction).toEqual({
         book: {
           __typename: "Book",
@@ -120,7 +122,7 @@ describe("optimistic cache layers", () => {
         },
       });
 
-      resultCatch22 = readOptimistic(proxy as Hermes);
+      resultCatch22 = readOptimistic(proxy);
       expect(resultCatch22).toEqual({
         book: {
           __typename: "Book",

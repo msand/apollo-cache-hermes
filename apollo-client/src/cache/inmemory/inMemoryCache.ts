@@ -46,7 +46,9 @@ export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
 
   public storeReader!: StoreReader;
   public storeWriter!: StoreWriter;
-  public readonly addTypenameTransform = new DocumentTransform(addTypenameToDocument);
+  public readonly addTypenameTransform = new DocumentTransform(
+    addTypenameToDocument
+  );
 
   public maybeBroadcastWatch!: OptimisticWrapperFunction<
     [Cache.WatchOptions, BroadcastOptions?],
@@ -414,7 +416,10 @@ export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
   public txCount = 0;
 
   public batch<TUpdateResult>(
-    options: Cache.BatchOptions<ApolloCache<NormalizedCacheObject>, TUpdateResult>
+    options: Cache.BatchOptions<
+      ApolloCache<NormalizedCacheObject>,
+      TUpdateResult
+    >
   ): TUpdateResult {
     const {
       update,

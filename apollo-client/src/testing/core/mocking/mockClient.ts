@@ -17,7 +17,6 @@ export function createMockClient<TData>(
     }).setOnError((error) => {
       throw error;
     }),
-    // @ts-ignore
     cache: new Hermes({ addTypename: false }),
   });
 }

@@ -17,7 +17,7 @@ import {
   fixObservableSubclass,
   getQueryDefinition,
 } from "../utilities/index";
-import type { ApolloError } from "../errors/index";
+import { ApolloError, isApolloError } from "../errors/index";
 import type { QueryManager } from "./QueryManager";
 import type {
   ApolloQueryResult,
@@ -162,6 +162,8 @@ export class ObservableQuery<
     // active state
     this.waitForOwnResult = skipCacheDataFor(options.fetchPolicy);
     this.isTornDown = false;
+
+    this.subscribeToMore = this.subscribeToMore.bind(this);
 
     const {
       watchQuery: { fetchPolicy: defaultFetchPolicy = "cache-first" } = {},
@@ -482,6 +484,16 @@ Did you mean to call refetch(variables) instead of refetch({ variables })?`,
 
     const updatedQuerySet = new Set<DocumentNode>();
 
+    const updateQuery = fetchMoreOptions?.updateQuery;
+    const isCached = this.options.fetchPolicy !== "no-cache";
+
+    if (!isCached) {
+      invariant(
+        updateQuery,
+        "You must provide an `updateQuery` function when using `fetchMore` with a `no-cache` fetch policy."
+      );
+    }
+
     return this.queryManager
       .fetchQuery(qid, combinedOptions, NetworkStatus.fetchMore)
       .then((fetchMoreResult) => {
@@ -491,48 +503,72 @@ Did you mean to call refetch(variables) instead of refetch({ variables })?`,
           queryInfo.networkStatus = originalNetworkStatus;
         }
 
-        // Performing this cache update inside a cache.batch transaction ensures
-        // any affected cache.watch watchers are notified at most once about any
-        // updates. Most watchers will be using the QueryInfo class, which
-        // responds to notifications by calling reobserveCacheFirst to deliver
-        // fetchMore cache results back to this ObservableQuery.
-        this.queryManager.cache.batch({
-          update: (cache) => {
-            const { updateQuery } = fetchMoreOptions;
-            if (updateQuery) {
-              cache.updateQuery(
-                {
-                  query: this.query,
-                  variables: this.variables,
-                  returnPartialData: true,
-                  optimistic: false,
-                },
-                (previous) =>
-                  updateQuery(previous!, {
-                    fetchMoreResult: fetchMoreResult.data,
-                    variables: combinedOptions.variables as TFetchVars,
-                  })
-              );
-            } else {
-              // If we're using a field policy instead of updateQuery, the only
-              // thing we need to do is write the new data to the cache using
-              // combinedOptions.variables (instead of this.variables, which is
-              // what this.updateQuery uses, because it works by abusing the
-              // original field value, keyed by the original variables).
-              cache.writeQuery({
-                query: combinedOptions.query,
-                variables: combinedOptions.variables,
-                data: fetchMoreResult.data,
-              });
-            }
-          },
+        if (isCached) {
+          // Performing this cache update inside a cache.batch transaction ensures
+          // any affected cache.watch watchers are notified at most once about any
+          // updates. Most watchers will be using the QueryInfo class, which
+          // responds to notifications by calling reobserveCacheFirst to deliver
+          // fetchMore cache results back to this ObservableQuery.
+          this.queryManager.cache.batch({
+            update: (cache) => {
+              const { updateQuery } = fetchMoreOptions;
+              if (updateQuery) {
+                cache.updateQuery(
+                  {
+                    query: this.query,
+                    variables: this.variables,
+                    returnPartialData: true,
+                    optimistic: false,
+                  },
+                  (previous) =>
+                    updateQuery(previous!, {
+                      fetchMoreResult: fetchMoreResult.data,
+                      variables: combinedOptions.variables as TFetchVars,
+                    })
+                );
+              } else {
+                // If we're using a field policy instead of updateQuery, the only
+                // thing we need to do is write the new data to the cache using
+                // combinedOptions.variables (instead of this.variables, which is
+                // what this.updateQuery uses, because it works by abusing the
+                // original field value, keyed by the original variables).
+                cache.writeQuery({
+                  query: combinedOptions.query,
+                  variables: combinedOptions.variables,
+                  data: fetchMoreResult.data,
+                });
+              }
+            },
 
-          onWatchUpdated: (watch) => {
-            // Record the DocumentNode associated with any watched query whose
-            // data were updated by the cache writes above.
-            updatedQuerySet.add(watch.query);
-          },
-        });
+            onWatchUpdated: (watch) => {
+              // Record the DocumentNode associated with any watched query whose
+              // data were updated by the cache writes above.
+              updatedQuerySet.add(watch.query);
+            },
+          });
+        } else {
+          // There is a possibility `lastResult` may not be set when
+          // `fetchMore` is called which would cause this to crash. This should
+          // only happen if we haven't previously reported a result. We don't
+          // quite know what the right behavior should be here since this block
+          // of code runs after the fetch result has executed on the network.
+          // We plan to let it crash in the meantime.
+          //
+          // If we get bug reports due to the `data` property access on
+          // undefined, this should give us a real-world scenario that we can
+          // use to test against and determine the right behavior. If we do end
+          // up changing this behavior, this may require, for example, an
+          // adjustment to the types on `updateQuery` since that function
+          // expects that the first argument always contains previous result
+          // data, but not `undefined`.
+          const lastResult = this.getLast("result")!;
+          const data = updateQuery!(lastResult.data, {
+            fetchMoreResult: fetchMoreResult.data,
+            variables: combinedOptions.variables as TFetchVars,
+          });
+
+          this.reportResult({ ...lastResult, data }, this.variables);
+        }
 
         return fetchMoreResult;
       })
@@ -542,7 +578,7 @@ Did you mean to call refetch(variables) instead of refetch({ variables })?`,
         // likely because the written data were the same as what was already in
         // the cache, we still want fetchMore to deliver its final loading:false
         // result with the unchanged data.
-        if (!updatedQuerySet.has(this.query)) {
+        if (isCached && !updatedQuerySet.has(this.query)) {
           reobserveCacheFirst(this);
         }
       });
@@ -908,7 +944,10 @@ Did you mean to call refetch(variables) instead of refetch({ variables })?`,
         options.fetchPolicy !== "standby" &&
         // If we're changing the fetchPolicy anyway, don't try to change it here
         // using applyNextFetchPolicy. The explicit options.fetchPolicy wins.
-        options.fetchPolicy === oldFetchPolicy
+        (options.fetchPolicy === oldFetchPolicy ||
+          // A `nextFetchPolicy` function has even higher priority, though,
+          // so in that case `applyNextFetchPolicy` must be called.
+          typeof options.nextFetchPolicy === "function")
       ) {
         this.applyNextFetchPolicy("variables-changed", options);
         if (newNetworkStatus === void 0) {
@@ -935,6 +974,12 @@ Did you mean to call refetch(variables) instead of refetch({ variables })?`,
       },
       error: (error) => {
         if (equal(this.variables, variables)) {
+          // Coming from `getResultsFromLink`, `error` here should always be an `ApolloError`.
+          // However, calling `concast.cancel` can inject another type of error, so we have to
+          // wrap it again here.
+          if (!isApolloError(error)) {
+            error = new ApolloError({ networkError: error });
+          }
           finishWaitingForOwnResult();
           this.reportError(error, variables);
         }

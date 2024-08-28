@@ -16,6 +16,7 @@ import { Hermes } from "../../../../../src";
 
 // mocks
 import { MockSubscriptionLink } from "../../../testing/core";
+import { getDefaultOptionsForQueryManagerTests } from "../../../testing/core/mocking/mockQueryManager";
 
 describe("Subscription lifecycles", () => {
   itAsync(
@@ -40,10 +41,12 @@ describe("Subscription lifecycles", () => {
       };
 
       const link = new MockSubscriptionLink();
-      const queryManager = new QueryManager({
-        cache: new Hermes({ addTypename: false }),
-        link,
-      });
+      const queryManager = new QueryManager(
+        getDefaultOptionsForQueryManagerTests({
+          cache: new Hermes({ addTypename: false }),
+          link,
+        })
+      );
 
       // step 1, get some data
       const observable = queryManager.watchQuery<any>({

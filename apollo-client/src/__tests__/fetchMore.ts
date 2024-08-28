@@ -15,11 +15,7 @@ import {
   concatPagination,
 } from "../utilities";
 
-import {
-  ApolloCache,
-  InMemoryCacheConfig,
-  FieldMergeFunction,
-} from "../cache";
+import { ApolloCache, InMemoryCacheConfig, FieldMergeFunction } from "../cache";
 import { Hermes } from "../../../src";
 
 import { itAsync, mockSingleLink, subscribeAndCount } from "../testing";

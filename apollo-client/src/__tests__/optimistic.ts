@@ -9,6 +9,7 @@ import {
   ApolloLink,
   ApolloCache,
   MutationQueryReducersMap,
+  TypedDocumentNode,
 } from "../core";
 
 import { QueryManager } from "../core/QueryManager";
@@ -1090,6 +1091,25 @@ describe("optimistic mutation results", () => {
         resolve();
       }
     );
+
+    it("allows IgnoreModifier as return value when inferring from a TypedDocumentNode mutation", () => {
+      const mutation: TypedDocumentNode<{ bar: string }> = gql`
+        mutation foo {
+          foo {
+            bar
+          }
+        }
+      `;
+
+      const client = new ApolloClient({
+        cache: new Hermes(),
+      });
+
+      client.mutate({
+        mutation,
+        optimisticResponse: (vars, { IGNORE }) => IGNORE,
+      });
+    });
   });
 
   describe("optimistic updates using `updateQueries`", () => {
@@ -1264,9 +1284,7 @@ describe("optimistic mutation results", () => {
           updateQueries,
         })
         .then((res: any) => {
-          const currentDataInStore = (client.cache as Hermes).extract(
-            true
-          );
+          const currentDataInStore = (client.cache as Hermes).extract(true);
           expect((currentDataInStore["TodoList5"] as any).todos.length).toEqual(
             5
           );
@@ -1714,9 +1732,7 @@ describe("optimistic mutation results", () => {
           update,
         })
         .then((res: any) => {
-          const currentDataInStore = (client.cache as Hermes).extract(
-            true
-          );
+          const currentDataInStore = (client.cache as Hermes).extract(true);
           expect((currentDataInStore["TodoList5"] as any).todos.length).toBe(5);
           expect((currentDataInStore["Todo99"] as any).text).toBe(
             "This one was created with a mutation."

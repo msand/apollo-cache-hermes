@@ -29,7 +29,9 @@ import {
   subscribeAndCount,
   wait,
 } from "../../testing";
-import mockQueryManager from "../../testing/core/mocking/mockQueryManager";
+import mockQueryManager, {
+  getDefaultOptionsForQueryManagerTests,
+} from "../../testing/core/mocking/mockQueryManager";
 import mockWatchQuery from "../../testing/core/mocking/mockWatchQuery";
 import wrap from "../../testing/core/wrap";
 
@@ -38,8 +40,11 @@ import { SubscriptionObserver } from "zen-observable-ts";
 import { waitFor } from "@testing-library/react";
 import { ObservableStream } from "../../testing/internal";
 
-export const mockFetchQuery = (queryManager: QueryManager<NormalizedCacheObject>) => {
-  const fetchConcastWithInfo: QueryManager<NormalizedCacheObject>["fetchConcastWithInfo"] = queryManager["fetchConcastWithInfo"];
+export const mockFetchQuery = (
+  queryManager: QueryManager<NormalizedCacheObject>
+) => {
+  const fetchConcastWithInfo: QueryManager<NormalizedCacheObject>["fetchConcastWithInfo"] =
+    queryManager["fetchConcastWithInfo"];
   const fetchQueryByPolicy: QueryManager<NormalizedCacheObject>["fetchQueryByPolicy"] =
     (queryManager as any).fetchQueryByPolicy;
 
@@ -92,15 +97,20 @@ describe("ObservableQuery", () => {
   const error = new GraphQLError("is offline.", undefined, null, null, [
     "people_one",
   ]);
+  const wrappedError = new ApolloError({
+    graphQLErrors: [error],
+  });
 
   const createQueryManager = ({ link }: { link: ApolloLink }) => {
-    return new QueryManager({
-      link,
-      assumeImmutableResults: true,
-      cache: new Hermes({
-        addTypename: false,
-      }),
-    });
+    return new QueryManager(
+      getDefaultOptionsForQueryManagerTests({
+        link,
+        assumeImmutableResults: true,
+        cache: new Hermes({
+          addTypename: false,
+        }),
+      })
+    );
   };
 
   describe("setOptions", () => {
@@ -1090,14 +1100,16 @@ describe("ObservableQuery", () => {
 
     it("calling refetch with different variables before the query itself resolved will only yield the result for the new variables", async () => {
       const observers: SubscriptionObserver<FetchResult<typeof dataOne>>[] = [];
-      const queryManager = new QueryManager({
-        cache: new Hermes(),
-        link: new ApolloLink((operation, forward) => {
-          return new Observable((observer) => {
-            observers.push(observer);
-          });
-        }),
-      });
+      const queryManager = new QueryManager(
+        getDefaultOptionsForQueryManagerTests({
+          cache: new Hermes(),
+          link: new ApolloLink((operation, forward) => {
+            return new Observable((observer) => {
+              observers.push(observer);
+            });
+          }),
+        })
+      );
       const observableQuery = queryManager.watchQuery({
         query,
         variables: { id: 1 },
@@ -1125,14 +1137,16 @@ describe("ObservableQuery", () => {
 
     it("calling refetch multiple times with different variables will return only results for the most recent variables", async () => {
       const observers: SubscriptionObserver<FetchResult<typeof dataOne>>[] = [];
-      const queryManager = new QueryManager({
-        cache: new Hermes(),
-        link: new ApolloLink((operation, forward) => {
-          return new Observable((observer) => {
-            observers.push(observer);
-          });
-        }),
-      });
+      const queryManager = new QueryManager(
+        getDefaultOptionsForQueryManagerTests({
+          cache: new Hermes(),
+          link: new ApolloLink((operation, forward) => {
+            return new Observable((observer) => {
+              observers.push(observer);
+            });
+          }),
+        })
+      );
       const observableQuery = queryManager.watchQuery({
         query,
         variables: { id: 1 },
@@ -1697,10 +1711,12 @@ describe("ObservableQuery", () => {
           // manually to be able to turn off warnings for this test.
           const mocks = [makeMock("a", "b", "c"), makeMock("d", "e")];
           const firstRequest = mocks[0].request;
-          const queryManager = new QueryManager({
-            cache: new Hermes({ addTypename: false }),
-            link: new MockLink(mocks, true, { showWarnings: false }),
-          });
+          const queryManager = new QueryManager(
+            getDefaultOptionsForQueryManagerTests({
+              cache: new Hermes({ addTypename: false }),
+              link: new MockLink(mocks, true, { showWarnings: false }),
+            })
+          );
 
           const observableWithVarsVar = queryManager.watchQuery({
             query: firstRequest.query,
@@ -2136,9 +2152,9 @@ describe("ObservableQuery", () => {
         .result()
         .then(() => reject("Observable did not error when it should have"))
         .catch((currentError) => {
-          expect(currentError).toEqual(error);
+          expect(currentError).toEqual(wrappedError);
           const lastError = observable.getLastError();
-          expect(lastError).toEqual(error);
+          expect(lastError).toEqual(wrappedError);
           resolve();
         })
         .catch(reject);
@@ -2177,9 +2193,9 @@ describe("ObservableQuery", () => {
               )
             )
             .catch((currentError) => {
-              expect(currentError).toEqual(error);
+              expect(currentError).toEqual(wrappedError);
               const lastError = observable.getLastError();
-              expect(lastError).toEqual(error);
+              expect(lastError).toEqual(wrappedError);
               resolve();
             })
             .catch(reject)
@@ -2738,7 +2754,9 @@ describe("ObservableQuery", () => {
           const cache = new Hermes({});
           cache.writeQuery({ query, data: cacheValues.initial });
 
-          const queryManager = new QueryManager({ link, cache });
+          const queryManager = new QueryManager(
+            getDefaultOptionsForQueryManagerTests({ link, cache })
+          );
           const observableQuery = queryManager.watchQuery({
             query,
             fetchPolicy,

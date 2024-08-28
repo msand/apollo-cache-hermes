@@ -1,6 +1,6 @@
 import { invariant, newInvariantError } from "../utilities/globals/index";
 
-import type { ExecutionResult, DocumentNode } from "graphql";
+import type { DocumentNode, FormattedExecutionResult } from "graphql";
 
 import type { FetchResult, GraphQLRequest } from "../link/core/index";
 import { ApolloLink, execute } from "../link/core/index";
@@ -39,6 +39,22 @@ export interface DefaultOptions {
   watchQuery?: Partial<WatchQueryOptions<any, any>>;
   query?: Partial<QueryOptions<any, any>>;
   mutate?: Partial<MutationOptions<any, any, any>>;
+}
+
+export interface DevtoolsOptions {
+  /**
+   * If `true`, the [Apollo Client Devtools](https://www.apollographql.com/docs/react/development-testing/developer-tooling/#apollo-client-devtools) browser extension can connect to this `ApolloClient` instance.
+   *
+   * The default value is `false` in production and `true` in development if there is a `window` object.
+   */
+  enabled?: boolean;
+
+  /**
+   * Optional name for this `ApolloClient` instance in the devtools. This is
+   * useful when you instantiate multiple clients and want to be able to
+   * identify them by name.
+   */
+  name?: string;
 }
 
 let hasSuggestedDevtools = false;
@@ -85,6 +101,7 @@ export interface ApolloClientOptions<TCacheShape> {
    * If `true`, the [Apollo Client Devtools](https://www.apollographql.com/docs/react/development-testing/developer-tooling/#apollo-client-devtools) browser extension can connect to Apollo Client.
    *
    * The default value is `false` in production and `true` in development (if there is a `window` object).
+   * @deprecated Please use the `devtools.enabled` option.
    */
   connectToDevTools?: boolean;
   /**
@@ -120,6 +137,13 @@ export interface ApolloClientOptions<TCacheShape> {
    */
   version?: string;
   documentTransform?: DocumentTransform;
+
+  /**
+   * Configuration used by the [Apollo Client Devtools extension](https://www.apollographql.com/docs/react/development-testing/developer-tooling/#apollo-client-devtools) for this client.
+   *
+   * @since 3.11.0
+   */
+  devtools?: DevtoolsOptions;
 }
 
 // Though mergeOptions now resides in @apollo/client/utilities, it was
@@ -148,6 +172,7 @@ export class ApolloClient<TCacheShape> implements DataProxy {
   public queryDeduplication: boolean;
   public defaultOptions: DefaultOptions;
   public readonly typeDefs: ApolloClientOptions<TCacheShape>["typeDefs"];
+  public readonly devtoolsConfig: DevtoolsOptions;
 
   private queryManager: QueryManager<TCacheShape>;
   private devToolsHookCb?: Function;
@@ -201,9 +226,7 @@ export class ApolloClient<TCacheShape> implements DataProxy {
       // Expose the client instance as window.__APOLLO_CLIENT__ and call
       // onBroadcast in queryManager.broadcastQueries to enable browser
       // devtools, but disable them by default in production.
-      connectToDevTools = typeof window === "object" &&
-        !(window as any).__APOLLO_CLIENT__ &&
-        __DEV__,
+      connectToDevTools,
       queryDeduplication = true,
       defaultOptions,
       defaultContext,
@@ -213,6 +236,7 @@ export class ApolloClient<TCacheShape> implements DataProxy {
       fragmentMatcher,
       name: clientAwarenessName,
       version: clientAwarenessVersion,
+      devtools,
     } = options;
 
     let { link } = options;
@@ -228,6 +252,14 @@ export class ApolloClient<TCacheShape> implements DataProxy {
     this.queryDeduplication = queryDeduplication;
     this.defaultOptions = defaultOptions || Object.create(null);
     this.typeDefs = typeDefs;
+    this.devtoolsConfig = {
+      ...devtools,
+      enabled: devtools?.enabled || connectToDevTools,
+    };
+
+    if (this.devtoolsConfig.enabled === undefined) {
+      this.devtoolsConfig.enabled = __DEV__;
+    }
 
     if (ssrForceFetchDelay) {
       setTimeout(
@@ -267,7 +299,7 @@ export class ApolloClient<TCacheShape> implements DataProxy {
       localState: this.localState,
       assumeImmutableResults,
       onBroadcast:
-        connectToDevTools ?
+        this.devtoolsConfig.enabled ?
           () => {
             if (this.devToolsHookCb) {
               this.devToolsHookCb({
@@ -283,61 +315,63 @@ export class ApolloClient<TCacheShape> implements DataProxy {
         : void 0,
     });
 
-    if (connectToDevTools) this.connectToDevTools();
+    if (this.devtoolsConfig.enabled) this.connectToDevTools();
   }
 
   private connectToDevTools() {
-    if (typeof window === "object") {
-      type DevToolsConnector = {
-        push(client: ApolloClient<any>): void;
-      };
-      const windowWithDevTools = window as Window & {
-        [devtoolsSymbol]?: DevToolsConnector;
-        __APOLLO_CLIENT__?: ApolloClient<any>;
-      };
-      const devtoolsSymbol = Symbol.for("apollo.devtools");
-      (windowWithDevTools[devtoolsSymbol] =
-        windowWithDevTools[devtoolsSymbol] || ([] as DevToolsConnector)).push(
-        this
-      );
-      windowWithDevTools.__APOLLO_CLIENT__ = this;
+    if (typeof window === "undefined") {
+      return;
     }
+
+    type DevToolsConnector = {
+      push(client: ApolloClient<any>): void;
+    };
+    const windowWithDevTools = window as Window & {
+      [devtoolsSymbol]?: DevToolsConnector;
+      __APOLLO_CLIENT__?: ApolloClient<any>;
+    };
+    const devtoolsSymbol = Symbol.for("apollo.devtools");
+    (windowWithDevTools[devtoolsSymbol] =
+      windowWithDevTools[devtoolsSymbol] || ([] as DevToolsConnector)).push(
+      this
+    );
+    windowWithDevTools.__APOLLO_CLIENT__ = this;
 
     /**
      * Suggest installing the devtools for developers who don't have them
      */
     if (!hasSuggestedDevtools && __DEV__) {
       hasSuggestedDevtools = true;
-      setTimeout(() => {
-        if (
-          typeof window !== "undefined" &&
-          window.document &&
-          window.top === window.self &&
-          !(window as any).__APOLLO_DEVTOOLS_GLOBAL_HOOK__ &&
-          /^(https?|file):$/.test(window.location.protocol)
-        ) {
-          const nav = window.navigator;
-          const ua = nav && nav.userAgent;
-          let url: string | undefined;
-          if (typeof ua === "string") {
-            if (ua.indexOf("Chrome/") > -1) {
-              url =
-                "https://chrome.google.com/webstore/detail/" +
-                "apollo-client-developer-t/jdkknkkbebbapilgoeccciglkfbmbnfm";
-            } else if (ua.indexOf("Firefox/") > -1) {
-              url =
-                "https://addons.mozilla.org/en-US/firefox/addon/apollo-developer-tools/";
+      if (
+        window.document &&
+        window.top === window.self &&
+        /^(https?|file):$/.test(window.location.protocol)
+      ) {
+        setTimeout(() => {
+          if (!(window as any).__APOLLO_DEVTOOLS_GLOBAL_HOOK__) {
+            const nav = window.navigator;
+            const ua = nav && nav.userAgent;
+            let url: string | undefined;
+            if (typeof ua === "string") {
+              if (ua.indexOf("Chrome/") > -1) {
+                url =
+                  "https://chrome.google.com/webstore/detail/" +
+                  "apollo-client-developer-t/jdkknkkbebbapilgoeccciglkfbmbnfm";
+              } else if (ua.indexOf("Firefox/") > -1) {
+                url =
+                  "https://addons.mozilla.org/en-US/firefox/addon/apollo-developer-tools/";
+              }
+            }
+            if (url) {
+              invariant.log(
+                "Download the Apollo DevTools for a better development " +
+                  "experience: %s",
+                url
+              );
             }
           }
-          if (url) {
-            invariant.log(
-              "Download the Apollo DevTools for a better development " +
-                "experience: %s",
-              url
-            );
-          }
-        }
-      }, 10000);
+        }, 10000);
+      }
     }
   }
 
@@ -571,7 +605,9 @@ export class ApolloClient<TCacheShape> implements DataProxy {
     this.devToolsHookCb = cb;
   }
 
-  public __requestRaw(payload: GraphQLRequest): Observable<ExecutionResult> {
+  public __requestRaw(
+    payload: GraphQLRequest
+  ): Observable<FormattedExecutionResult> {
     return execute(this.link, payload);
   }
 

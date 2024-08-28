@@ -29,6 +29,7 @@ export { isApolloError, ApolloError } from "../errors/index";
 export type {
   // All the exports (types) from ../cache, minus cacheSlot,
   // which we want to keep semi-private.
+  Cache,
   Transaction,
   DataProxy,
   InMemoryCacheConfig,
@@ -44,7 +45,6 @@ export type {
   WatchFragmentResult,
 } from "../cache/index";
 export {
-  Cache,
   ApolloCache,
   InMemoryCache,
   MissingFieldError,

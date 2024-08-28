@@ -12,6 +12,7 @@ import { Kind } from "graphql";
 import { Observable } from "../utilities";
 import { ApolloLink } from "../link/core";
 import { HttpLink } from "../link/http";
+import { createFragmentRegistry } from "../cache";
 import { itAsync } from "../testing";
 import { ObservableStream, spyOnConsole } from "../testing/internal";
 import { TypedDocumentNode } from "@graphql-typed-document-node/core";
@@ -2419,6 +2420,216 @@ describe("ApolloClient", () => {
         new Error("Timeout waiting for next event")
       );
     });
+    it("works with `variables`", async () => {
+      const cache = new Hermes();
+      const client = new ApolloClient({
+        cache,
+        link: ApolloLink.empty(),
+      });
+      const ItemFragment = gql`
+        fragment ItemFragment on Item {
+          id
+          text(language: $language)
+        }
+      `;
+
+      cache.writeFragment({
+        fragment: ItemFragment,
+        data: {
+          __typename: "Item",
+          id: 5,
+          text: "Item #5",
+        },
+        variables: { language: "Esperanto" },
+      });
+
+      const observable = client.watchFragment({
+        fragment: ItemFragment,
+        from: { __typename: "Item", id: 5 },
+        variables: { language: "Esperanto" },
+      });
+
+      const stream = new ObservableStream(observable);
+
+      {
+        const result = await stream.takeNext();
+
+        expect(result).toStrictEqual({
+          data: {
+            __typename: "Item",
+            id: 5,
+            text: "Item #5",
+          },
+          complete: true,
+        });
+      }
+    });
+    it("supports the @includes directive with `variables`", async () => {
+      const cache = new Hermes();
+      const client = new ApolloClient({
+        cache,
+        link: ApolloLink.empty(),
+      });
+      const ItemFragment = gql`
+        fragment ItemFragment on Item {
+          id
+          text @include(if: $withText)
+        }
+      `;
+
+      cache.writeFragment({
+        fragment: ItemFragment,
+        data: {
+          __typename: "Item",
+          id: 5,
+          text: "Item #5",
+        },
+        variables: { withText: true },
+      });
+      cache.writeFragment({
+        fragment: ItemFragment,
+        data: {
+          __typename: "Item",
+          id: 5,
+        },
+        variables: { withText: false },
+      });
+
+      const observable = client.watchFragment({
+        fragment: ItemFragment,
+        from: { __typename: "Item", id: 5 },
+        variables: { withText: true },
+      });
+
+      const stream = new ObservableStream(observable);
+
+      {
+        const result = await stream.takeNext();
+
+        expect(result).toStrictEqual({
+          data: {
+            __typename: "Item",
+            id: 5,
+            text: "Item #5",
+          },
+          complete: true,
+        });
+      }
+    });
+
+    it("works with nested fragments", async () => {
+      const cache = new Hermes();
+      const client = new ApolloClient({
+        cache,
+        link: ApolloLink.empty(),
+      });
+
+      const ItemNestedFragment = gql`
+        fragment ItemNestedFragment on Item {
+          complete
+        }
+      `;
+
+      const ItemFragment = gql`
+        fragment ItemFragment on Item {
+          id
+          text
+          ...ItemNestedFragment
+        }
+
+        ${ItemNestedFragment}
+      `;
+
+      cache.writeFragment({
+        fragment: ItemFragment,
+        fragmentName: "ItemFragment",
+        data: {
+          __typename: "Item",
+          id: 5,
+          text: "Item #5",
+          complete: true,
+        },
+      });
+
+      const observable = client.watchFragment({
+        fragment: ItemFragment,
+        fragmentName: "ItemFragment",
+        from: { __typename: "Item", id: 5 },
+      });
+
+      const stream = new ObservableStream(observable);
+
+      {
+        const result = await stream.takeNext();
+
+        expect(result).toEqual({
+          data: {
+            __typename: "Item",
+            id: 5,
+            text: "Item #5",
+            complete: true,
+          },
+          complete: true,
+        });
+      }
+    });
+
+    it("can use the fragment registry for nested fragments", async () => {
+      const fragments = createFragmentRegistry();
+      const cache = new Hermes({ fragments });
+
+      fragments.register(gql`
+        fragment ItemNestedFragment on Item {
+          complete
+        }
+      `);
+
+      const client = new ApolloClient({
+        cache,
+        link: ApolloLink.empty(),
+      });
+
+      const ItemFragment = gql`
+        fragment ItemFragment on Item {
+          id
+          text
+          ...ItemNestedFragment
+        }
+      `;
+
+      cache.writeFragment({
+        fragment: ItemFragment,
+        fragmentName: "ItemFragment",
+        data: {
+          __typename: "Item",
+          id: 5,
+          text: "Item #5",
+          complete: true,
+        },
+      });
+
+      const observable = client.watchFragment({
+        fragment: ItemFragment,
+        fragmentName: "ItemFragment",
+        from: { __typename: "Item", id: 5 },
+      });
+
+      const stream = new ObservableStream(observable);
+
+      {
+        const result = await stream.takeNext();
+
+        expect(result).toEqual({
+          data: {
+            __typename: "Item",
+            id: 5,
+            text: "Item #5",
+            complete: true,
+          },
+          complete: true,
+        });
+      }
+    });
   });
 
   describe("defaultOptions", () => {
@@ -2639,7 +2850,9 @@ describe("ApolloClient", () => {
                   expect(invariantDebugSpy).toHaveBeenCalledTimes(1);
                   expect(invariantDebugSpy).toHaveBeenCalledWith(
                     "In client.refetchQueries, Promise.all promise rejected with error %o",
-                    new ApolloError({ errorMessage: "refetch failed" })
+                    new ApolloError({
+                      networkError: new Error("refetch failed"),
+                    })
                   );
                   resolve();
                 } catch (err) {

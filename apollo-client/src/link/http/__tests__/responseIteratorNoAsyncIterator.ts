@@ -15,9 +15,9 @@ import { Readable } from "stream";
 // which do not execute when isAsyncIterableIterator is true
 // See: https://github.com/facebook/jest/issues/2582#issuecomment-655110424
 
-jest.mock("../../../utilities/index.js", () => ({
+jest.mock("../../../utilities/index", () => ({
   __esModule: true,
-  ...jest.requireActual("../../../utilities/index.js"),
+  ...jest.requireActual("../../../utilities/index"),
   canUseAsyncIteratorSymbol: false,
 }));
 

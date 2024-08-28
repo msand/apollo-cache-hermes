@@ -1,5 +1,5 @@
 import React, { Fragment, ReactNode, useEffect, useRef, useState } from "react";
-import { DocumentNode, GraphQLError } from "graphql";
+import { DocumentNode, GraphQLError, GraphQLFormattedError } from "graphql";
 import gql from "graphql-tag";
 import { act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -7,10 +7,12 @@ import { render, screen, waitFor, renderHook } from "@testing-library/react";
 import {
   ApolloClient,
   ApolloError,
+  ApolloQueryResult,
   NetworkStatus,
   OperationVariables,
   TypedDocumentNode,
   WatchQueryFetchPolicy,
+  WatchQueryOptions,
 } from "../../../core";
 import { Hermes } from "../../../../../src";
 import { ApolloProvider } from "../../context";
@@ -31,14 +33,17 @@ import { useMutation } from "../useMutation";
 import {
   createProfiler,
   disableActWarnings,
+  PaginatedCaseData,
   profileHook,
+  setupPaginatedCase,
   spyOnConsole,
 } from "../../../testing/internal";
 import { useApolloClient } from "../useApolloClient";
 import { useLazyQuery } from "../useLazyQuery";
+import { mockFetchQuery } from "../../../core/__tests__/ObservableQuery";
+import { InvariantError } from "../../../utilities/globals";
 
 const IS_REACT_17 = React.version.startsWith("17");
-const IS_REACT_19 = React.version.startsWith("19");
 
 describe("useQuery Hook", () => {
   describe("General use", () => {
@@ -1536,33 +1541,7 @@ describe("useQuery Hook", () => {
 
       function checkObservableQueries(expectedLinkCount: number) {
         const obsQueries = client.getObservableQueries("all");
-        /*
-This is due to a timing change in React 19
-
-In React 18, you observe this pattern:
-
-  1.  render
-  2.  useState initializer
-  3.  component continues to render with first state
-  4.  strictMode: render again
-  5.  strictMode: call useState initializer again
-  6.  component continues to render with second state
-
-now, in React 19 it looks like this:
-
-  1.  render
-  2.  useState initializer
-  3.  strictMode: call useState initializer again
-  4.  component continues to render with one of these two states
-  5.  strictMode: render again
-  6.  component continues to render with the same state as during the first render
-
-Since useQuery breaks the rules of React and mutably creates an ObservableQuery on the state during render if none is present, React 18 did create two, while React 19 only creates one.
-
-This is pure coincidence though, and the useQuery rewrite that doesn't break the rules of hooks as much and creates the ObservableQuery as part of the state initializer will end up with behaviour closer to the old React 18 behaviour again.
-
-*/
-        expect(obsQueries.size).toBe(IS_REACT_19 ? 1 : 2);
+        expect(obsQueries.size).toBe(2);
 
         const activeSet = new Set<typeof result.current.observable>();
         const inactiveSet = new Set<typeof result.current.observable>();
@@ -4072,6 +4051,297 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       );
       expect(result.current.networkStatus).toBe(NetworkStatus.ready);
       expect(result.current.data).toEqual({ letters: ab.concat(cd) });
+    });
+
+    // https://github.com/apollographql/apollo-client/issues/11965
+    it("should only execute single network request when calling fetchMore with no-cache fetch policy", async () => {
+      let fetches: Array<{ variables: Record<string, unknown> }> = [];
+      const { query, data } = setupPaginatedCase();
+
+      const link = new ApolloLink((operation) => {
+        fetches.push({ variables: operation.variables });
+
+        const { offset = 0, limit = 2 } = operation.variables;
+        const letters = data.slice(offset, offset + limit);
+
+        return new Observable((observer) => {
+          setTimeout(() => {
+            observer.next({ data: { letters } });
+            observer.complete();
+          }, 10);
+        });
+      });
+
+      const client = new ApolloClient({ cache: new Hermes(), link });
+
+      const ProfiledHook = profileHook(() =>
+        useQuery(query, { fetchPolicy: "no-cache", variables: { limit: 2 } })
+      );
+
+      render(<ProfiledHook />, {
+        wrapper: ({ children }) => (
+          <ApolloProvider client={client}>{children}</ApolloProvider>
+        ),
+      });
+
+      // loading
+      await ProfiledHook.takeSnapshot();
+      // finished loading
+      await ProfiledHook.takeSnapshot();
+
+      expect(fetches).toStrictEqual([{ variables: { limit: 2 } }]);
+
+      const { fetchMore } = ProfiledHook.getCurrentSnapshot();
+
+      await act(() =>
+        fetchMore({
+          variables: { offset: 2 },
+          updateQuery: (_, { fetchMoreResult }) => fetchMoreResult,
+        })
+      );
+
+      expect(fetches).toStrictEqual([
+        { variables: { limit: 2 } },
+        { variables: { limit: 2, offset: 2 } },
+      ]);
+    });
+
+    it("uses updateQuery to update the result of the query with no-cache queries", async () => {
+      const { query, link } = setupPaginatedCase();
+
+      const client = new ApolloClient({ cache: new Hermes(), link });
+
+      const ProfiledHook = profileHook(() =>
+        useQuery(query, {
+          notifyOnNetworkStatusChange: true,
+          fetchPolicy: "no-cache",
+          variables: { limit: 2 },
+        })
+      );
+
+      render(<ProfiledHook />, {
+        wrapper: ({ children }) => (
+          <ApolloProvider client={client}>{children}</ApolloProvider>
+        ),
+      });
+
+      {
+        const { loading, networkStatus, data } =
+          await ProfiledHook.takeSnapshot();
+
+        expect(loading).toBe(true);
+        expect(networkStatus).toBe(NetworkStatus.loading);
+        expect(data).toBeUndefined();
+      }
+
+      {
+        const { loading, networkStatus, data } =
+          await ProfiledHook.takeSnapshot();
+
+        expect(loading).toBe(false);
+        expect(networkStatus).toBe(NetworkStatus.ready);
+        expect(data).toStrictEqual({
+          letters: [
+            { __typename: "Letter", letter: "A", position: 1 },
+            { __typename: "Letter", letter: "B", position: 2 },
+          ],
+        });
+      }
+
+      let fetchMorePromise!: Promise<ApolloQueryResult<PaginatedCaseData>>;
+      const { fetchMore } = ProfiledHook.getCurrentSnapshot();
+
+      act(() => {
+        fetchMorePromise = fetchMore({
+          variables: { offset: 2 },
+          updateQuery: (prev, { fetchMoreResult }) => ({
+            letters: prev.letters.concat(fetchMoreResult.letters),
+          }),
+        });
+      });
+
+      {
+        const { loading, networkStatus, data } =
+          await ProfiledHook.takeSnapshot();
+
+        expect(loading).toBe(true);
+        expect(networkStatus).toBe(NetworkStatus.fetchMore);
+        expect(data).toStrictEqual({
+          letters: [
+            { __typename: "Letter", letter: "A", position: 1 },
+            { __typename: "Letter", letter: "B", position: 2 },
+          ],
+        });
+      }
+
+      {
+        const { loading, networkStatus, data, observable } =
+          await ProfiledHook.takeSnapshot();
+
+        expect(loading).toBe(false);
+        expect(networkStatus).toBe(NetworkStatus.ready);
+        expect(data).toEqual({
+          letters: [
+            { __typename: "Letter", letter: "A", position: 1 },
+            { __typename: "Letter", letter: "B", position: 2 },
+            { __typename: "Letter", letter: "C", position: 3 },
+            { __typename: "Letter", letter: "D", position: 4 },
+          ],
+        });
+
+        // Ensure we store the merged result as the last result
+        expect(observable.getCurrentResult(false).data).toEqual({
+          letters: [
+            { __typename: "Letter", letter: "A", position: 1 },
+            { __typename: "Letter", letter: "B", position: 2 },
+            { __typename: "Letter", letter: "C", position: 3 },
+            { __typename: "Letter", letter: "D", position: 4 },
+          ],
+        });
+      }
+
+      await expect(fetchMorePromise).resolves.toStrictEqual({
+        data: {
+          letters: [
+            { __typename: "Letter", letter: "C", position: 3 },
+            { __typename: "Letter", letter: "D", position: 4 },
+          ],
+        },
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+      });
+
+      await expect(ProfiledHook).not.toRerender();
+
+      act(() => {
+        fetchMorePromise = fetchMore({
+          variables: { offset: 4 },
+          updateQuery: (_, { fetchMoreResult }) => fetchMoreResult,
+        });
+      });
+
+      {
+        const { data, loading, networkStatus } =
+          await ProfiledHook.takeSnapshot();
+
+        expect(loading).toBe(true);
+        expect(networkStatus).toBe(NetworkStatus.fetchMore);
+        expect(data).toEqual({
+          letters: [
+            { __typename: "Letter", letter: "A", position: 1 },
+            { __typename: "Letter", letter: "B", position: 2 },
+            { __typename: "Letter", letter: "C", position: 3 },
+            { __typename: "Letter", letter: "D", position: 4 },
+          ],
+        });
+      }
+
+      {
+        const { data, loading, networkStatus, observable } =
+          await ProfiledHook.takeSnapshot();
+
+        expect(loading).toBe(false);
+        expect(networkStatus).toBe(NetworkStatus.ready);
+        expect(data).toEqual({
+          letters: [
+            { __typename: "Letter", letter: "E", position: 5 },
+            { __typename: "Letter", letter: "F", position: 6 },
+          ],
+        });
+
+        expect(observable.getCurrentResult(false).data).toEqual({
+          letters: [
+            { __typename: "Letter", letter: "E", position: 5 },
+            { __typename: "Letter", letter: "F", position: 6 },
+          ],
+        });
+      }
+
+      await expect(fetchMorePromise).resolves.toStrictEqual({
+        data: {
+          letters: [
+            { __typename: "Letter", letter: "E", position: 5 },
+            { __typename: "Letter", letter: "F", position: 6 },
+          ],
+        },
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+      });
+
+      await expect(ProfiledHook).not.toRerender();
+    });
+
+    it("throws when using fetchMore without updateQuery for no-cache queries", async () => {
+      const { query, link } = setupPaginatedCase();
+
+      const client = new ApolloClient({ cache: new Hermes(), link });
+
+      const ProfiledHook = profileHook(() =>
+        useQuery(query, { fetchPolicy: "no-cache", variables: { limit: 2 } })
+      );
+
+      render(<ProfiledHook />, {
+        wrapper: ({ children }) => (
+          <ApolloProvider client={client}>{children}</ApolloProvider>
+        ),
+      });
+
+      // loading
+      await ProfiledHook.takeSnapshot();
+      // finished loading
+      await ProfiledHook.takeSnapshot();
+
+      const { fetchMore } = ProfiledHook.getCurrentSnapshot();
+
+      expect(() => fetchMore({ variables: { offset: 2 } })).toThrow(
+        new InvariantError(
+          "You must provide an `updateQuery` function when using `fetchMore` with a `no-cache` fetch policy."
+        )
+      );
+    });
+
+    it("does not write to cache when using fetchMore with no-cache queries", async () => {
+      const { query, data } = setupPaginatedCase();
+
+      const link = new ApolloLink((operation) => {
+        const { offset = 0, limit = 2 } = operation.variables;
+        const letters = data.slice(offset, offset + limit);
+
+        return new Observable((observer) => {
+          setTimeout(() => {
+            observer.next({ data: { letters } });
+            observer.complete();
+          }, 10);
+        });
+      });
+
+      const client = new ApolloClient({ cache: new Hermes(), link });
+
+      const ProfiledHook = profileHook(() =>
+        useQuery(query, { fetchPolicy: "no-cache", variables: { limit: 2 } })
+      );
+
+      render(<ProfiledHook />, {
+        wrapper: ({ children }) => (
+          <ApolloProvider client={client}>{children}</ApolloProvider>
+        ),
+      });
+
+      // initial loading
+      await ProfiledHook.takeSnapshot();
+
+      // Initial result
+      await ProfiledHook.takeSnapshot();
+
+      const { fetchMore } = ProfiledHook.getCurrentSnapshot();
+      await act(() =>
+        fetchMore({
+          variables: { offset: 2 },
+          updateQuery: (_, { fetchMoreResult }) => fetchMoreResult,
+        })
+      );
+
+      expect(client.extract()).toStrictEqual({});
     });
 
     it("regression test for issue #8600", async () => {
@@ -7098,6 +7368,131 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       expect(reasons).toEqual(["variables-changed", "after-fetch"]);
     });
+
+    it("should prioritize a `nextFetchPolicy` function over a `fetchPolicy` option when changing variables", async () => {
+      const query = gql`
+        {
+          hello
+        }
+      `;
+      const link = new MockLink([
+        {
+          request: { query, variables: { id: 1 } },
+          result: { data: { hello: "from link" } },
+          delay: 10,
+        },
+        {
+          request: { query, variables: { id: 2 } },
+          result: { data: { hello: "from link2" } },
+          delay: 10,
+        },
+      ]);
+
+      const client = new ApolloClient({
+        cache: new Hermes(),
+        link,
+      });
+
+      const mocks = mockFetchQuery(client["queryManager"]);
+
+      const expectQueryTriggered = (
+        nth: number,
+        fetchPolicy: WatchQueryFetchPolicy
+      ) => {
+        expect(mocks.fetchQueryByPolicy).toHaveBeenCalledTimes(nth);
+        expect(mocks.fetchQueryByPolicy).toHaveBeenNthCalledWith(
+          nth,
+          expect.anything(),
+          expect.objectContaining({ fetchPolicy }),
+          expect.any(Number)
+        );
+      };
+      let nextFetchPolicy: WatchQueryOptions<
+        OperationVariables,
+        any
+      >["nextFetchPolicy"] = (_, context) => {
+        if (context.reason === "variables-changed") {
+          return "cache-and-network";
+        } else if (context.reason === "after-fetch") {
+          return "cache-only";
+        }
+        throw new Error("should never happen");
+      };
+      nextFetchPolicy = jest.fn(nextFetchPolicy);
+
+      const { result, rerender } = renderHook<
+        QueryResult,
+        {
+          variables: { id: number };
+        }
+      >(
+        ({ variables }) =>
+          useQuery(query, {
+            fetchPolicy: "network-only",
+            variables,
+            notifyOnNetworkStatusChange: true,
+            nextFetchPolicy,
+          }),
+        {
+          initialProps: {
+            variables: { id: 1 },
+          },
+          wrapper: ({ children }) => (
+            <ApolloProvider client={client}>{children}</ApolloProvider>
+          ),
+        }
+      );
+      // first network request triggers with initial fetchPolicy
+      expectQueryTriggered(1, "network-only");
+
+      await waitFor(() => {
+        expect(result.current.networkStatus).toBe(NetworkStatus.ready);
+      });
+
+      expect(nextFetchPolicy).toHaveBeenCalledTimes(1);
+      expect(nextFetchPolicy).toHaveBeenNthCalledWith(
+        1,
+        "network-only",
+        expect.objectContaining({
+          reason: "after-fetch",
+        })
+      );
+      // `nextFetchPolicy(..., {reason: "after-fetch"})` changed it to
+      // cache-only
+      expect(result.current.observable.options.fetchPolicy).toBe("cache-only");
+
+      rerender({
+        variables: { id: 2 },
+      });
+
+      expect(nextFetchPolicy).toHaveBeenNthCalledWith(
+        2,
+        // has been reset to the initial `fetchPolicy` of "network-only" because
+        // we changed variables, then `nextFetchPolicy` is called
+        "network-only",
+        expect.objectContaining({
+          reason: "variables-changed",
+        })
+      );
+      // the return value of `nextFetchPolicy(..., {reason: "variables-changed"})`
+      expectQueryTriggered(2, "cache-and-network");
+
+      await waitFor(() => {
+        expect(result.current.networkStatus).toBe(NetworkStatus.ready);
+      });
+
+      expect(nextFetchPolicy).toHaveBeenCalledTimes(3);
+      expect(nextFetchPolicy).toHaveBeenNthCalledWith(
+        3,
+        "cache-and-network",
+        expect.objectContaining({
+          reason: "after-fetch",
+        })
+      );
+      // `nextFetchPolicy(..., {reason: "after-fetch"})` changed it to
+      // cache-only
+      expect(result.current.observable.options.fetchPolicy).toBe("cache-only");
+    });
   });
 
   describe("Missing Fields", () => {
@@ -9685,6 +10080,133 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         );
       }
     );
+  });
+
+  test("calling `clearStore` while a query is running puts the hook into an error state", async () => {
+    const query = gql`
+      query {
+        hello
+      }
+    `;
+
+    const link = new MockSubscriptionLink();
+    let requests = 0;
+    link.onSetup(() => requests++);
+    const client = new ApolloClient({
+      link,
+      cache: new Hermes(),
+    });
+    const ProfiledHook = profileHook(() => useQuery(query));
+    render(<ProfiledHook />, {
+      wrapper: ({ children }) => (
+        <ApolloProvider client={client}>{children}</ApolloProvider>
+      ),
+    });
+
+    expect(requests).toBe(1);
+    {
+      const result = await ProfiledHook.takeSnapshot();
+      expect(result.loading).toBe(true);
+      expect(result.data).toBeUndefined();
+    }
+
+    client.clearStore();
+
+    {
+      const result = await ProfiledHook.takeSnapshot();
+      expect(result.loading).toBe(false);
+      expect(result.data).toBeUndefined();
+      expect(result.error).toEqual(
+        new ApolloError({
+          networkError: new InvariantError(
+            "Store reset while query was in flight (not completed in link chain)"
+          ),
+        })
+      );
+    }
+
+    link.simulateResult({ result: { data: { hello: "Greetings" } } }, true);
+    await expect(ProfiledHook).not.toRerender({ timeout: 50 });
+    expect(requests).toBe(1);
+  });
+
+  // https://github.com/apollographql/apollo-client/issues/11938
+  it("does not emit `data` on previous fetch when a 2nd fetch is kicked off and the result returns an error when errorPolicy is none", async () => {
+    const query = gql`
+      query {
+        user {
+          id
+          name
+        }
+      }
+    `;
+
+    const graphQLError: GraphQLFormattedError = { message: "Cannot get name" };
+
+    const mocks = [
+      {
+        request: { query },
+        result: {
+          data: { user: { __typename: "User", id: "1", name: null } },
+          errors: [graphQLError],
+        },
+        delay: 10,
+        maxUsageCount: Number.POSITIVE_INFINITY,
+      },
+    ];
+
+    const ProfiledHook = profileHook(() =>
+      useQuery(query, { notifyOnNetworkStatusChange: true })
+    );
+
+    render(<ProfiledHook />, {
+      wrapper: ({ children }) => (
+        <MockedProvider mocks={mocks}>{children}</MockedProvider>
+      ),
+    });
+
+    {
+      const { loading, data, error } = await ProfiledHook.takeSnapshot();
+
+      expect(loading).toBe(true);
+      expect(data).toBeUndefined();
+      expect(error).toBeUndefined();
+    }
+
+    {
+      const { loading, data, error } = await ProfiledHook.takeSnapshot();
+
+      expect(loading).toBe(false);
+      expect(data).toBeUndefined();
+      expect(error).toEqual(new ApolloError({ graphQLErrors: [graphQLError] }));
+    }
+
+    const { refetch } = ProfiledHook.getCurrentSnapshot();
+
+    refetch().catch(() => {});
+    refetch().catch(() => {});
+
+    {
+      const { loading, networkStatus, data, error } =
+        await ProfiledHook.takeSnapshot();
+
+      expect(loading).toBe(true);
+      expect(data).toBeUndefined();
+      expect(networkStatus).toBe(NetworkStatus.refetch);
+      expect(error).toBeUndefined();
+    }
+
+    {
+      const { loading, networkStatus, data, error } =
+        await ProfiledHook.takeSnapshot();
+
+      expect(loading).toBe(false);
+      expect(data).toBeUndefined();
+      expect(networkStatus).toBe(NetworkStatus.error);
+      expect(error).toEqual(new ApolloError({ graphQLErrors: [graphQLError] }));
+    }
+
+    await expect(ProfiledHook).not.toRerender({ timeout: 200 });
   });
 });
 

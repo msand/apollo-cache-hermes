@@ -1,11 +1,11 @@
 import { cloneDeep, assign } from "lodash";
 import {
   GraphQLError,
-  ExecutionResult,
   DocumentNode,
   Kind,
   print,
   visit,
+  FormattedExecutionResult,
 } from "graphql";
 import gql from "graphql-tag";
 
@@ -28,11 +28,7 @@ import {
   removeDirectivesFromDocument,
 } from "../utilities";
 import { ApolloLink } from "../link/core";
-import {
-  createFragmentRegistry,
-  makeVar,
-  PossibleTypesMap,
-} from "../cache";
+import { createFragmentRegistry, makeVar, PossibleTypesMap } from "../cache";
 import { ApolloError } from "../errors";
 import { Hermes } from "../../../src";
 
@@ -455,18 +451,14 @@ describe("client", () => {
 
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }).restore(
-        initialState.data
-      ),
+      cache: new Hermes({ addTypename: false }).restore(initialState.data),
     });
 
     return client
       .query({ query })
       .then((result) => {
         expect(result.data).toEqual(data);
-        expect(finalState.data).toEqual(
-          (client.cache as Hermes).extract()
-        );
+        expect(finalState.data).toEqual((client.cache as Hermes).extract());
       })
       .then(resolve, reject);
   });
@@ -518,9 +510,7 @@ describe("client", () => {
 
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }).restore(
-          initialState.data
-        ),
+        cache: new Hermes({ addTypename: false }).restore(initialState.data),
       });
 
       return client
@@ -588,9 +578,7 @@ describe("client", () => {
 
       const client = new ApolloClient({
         link,
-        cache: new Hermes({ addTypename: false }).restore(
-          initialState.data
-        ),
+        cache: new Hermes({ addTypename: false }).restore(initialState.data),
       });
 
       expect(client.restore(initialState.data)).toEqual(
@@ -752,7 +740,7 @@ describe("client", () => {
       cache: new Hermes({ addTypename: false }),
     });
 
-    return client.query({ query }).then((result: ExecutionResult) => {
+    return client.query({ query }).then((result: FormattedExecutionResult) => {
       expect(result.data).toEqual(data);
     });
   });
@@ -2855,7 +2843,7 @@ describe("client", () => {
 
           const lastError = observable.getLastError();
           expect(lastError).toBeInstanceOf(ApolloError);
-          expect(lastError!.networkError).toEqual(error);
+          expect(lastError!.networkError).toEqual((error as any).networkError);
 
           const lastResult = observable.getLastResult();
           expect(lastResult).toBeTruthy();
@@ -6411,7 +6399,7 @@ function clientRoundtrip(
   resolve: (result: any) => any,
   reject: (reason: any) => any,
   query: DocumentNode,
-  data: ExecutionResult,
+  data: FormattedExecutionResult,
   variables?: any,
   possibleTypes?: PossibleTypesMap
 ) {

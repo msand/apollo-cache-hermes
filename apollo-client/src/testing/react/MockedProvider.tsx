@@ -53,7 +53,6 @@ export class MockedProvider extends React.Component<
       connectToDevTools = false,
     } = this.props;
     const client = new ApolloClient({
-      // @ts-ignore
       cache: cache || new Hermes({ addTypename }),
       defaultOptions,
       connectToDevTools,

@@ -1,14 +1,14 @@
-import type { ExecutionResult } from "graphql";
+import type { FormattedExecutionResult, GraphQLFormattedError } from "graphql";
 
-import type { NetworkError, GraphQLErrors } from "../../errors/index";
+import type { NetworkError } from "../../errors/index";
 import { Observable } from "../../utilities/index";
 import type { Operation, FetchResult, NextLink } from "../core/index";
 import { ApolloLink } from "../core/index";
 
 export interface ErrorResponse {
-  graphQLErrors?: GraphQLErrors;
+  graphQLErrors?: ReadonlyArray<GraphQLFormattedError>;
   networkError?: NetworkError;
-  response?: ExecutionResult;
+  response?: FormattedExecutionResult;
   operation: Operation;
   forward: NextLink;
 }

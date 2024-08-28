@@ -2,7 +2,7 @@ import type { SuspenseCacheOptions } from "../index";
 import { SuspenseCache } from "./SuspenseCache";
 import type { ApolloClient } from "../../../core/ApolloClient";
 
-declare module "../../../core/ApolloClient.js" {
+declare module "../../../core/ApolloClient" {
   interface DefaultOptions {
     react?: {
       suspense?: Readonly<SuspenseCacheOptions>;
