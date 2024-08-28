@@ -8,9 +8,12 @@ FILES=("${OPTIONS_ARGS[@]}")
 if [[ "${#FILES[@]}" = "0" ]]; then
   FILES+=($(
     find . \
+      -not -path "./apollo-client/*" \
       -not -path "*/node_modules/*" \
       \( -name "*.ts" -not -name "*.d.ts" \) \
-      -or -name "*.tsx"
+      -or -name "*.tsx" \
+      -not -path "./apollo-client/*" \
+      -not -path "*/node_modules/*"
   ))
 fi
 

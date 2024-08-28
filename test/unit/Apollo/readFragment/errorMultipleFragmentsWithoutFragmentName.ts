@@ -46,7 +46,7 @@ describe(`readFragment with ambiguous fragments`, () => {
           }
         `),
       });
-    }).to.throw(/An error occurred! For more details, see the full error text at /i);
+    }).to.throw(/An error occurred! For more details, see the full error text at |Found 2 fragments. `fragmentName` must be provided when there is not exactly 1 fragment./i);
   });
 
 });

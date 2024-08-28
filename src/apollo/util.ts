@@ -1,5 +1,4 @@
-import { getFragmentQueryDocument } from '@apollo/client/utilities';
-
+import { getFragmentQueryDocument } from '../../apollo-client/src/utilities';
 import { JsonObject } from '../primitive';
 import { NodeId, RawOperation, StaticNodeId } from '../schema';
 import { DocumentNode } from '../util';
@@ -7,7 +6,7 @@ import { DocumentNode } from '../util';
 /**
  * Builds a query.
  */
-export function buildRawOperationFromQuery(document: DocumentNode, variables?: JsonObject, rootId?: NodeId): RawOperation {
+export function buildRawOperationFromQuery(document: DocumentNode, variables?: any, rootId?: NodeId): RawOperation {
   return {
     rootId: rootId || StaticNodeId.QueryRoot,
     document,

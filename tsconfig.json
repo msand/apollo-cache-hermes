@@ -7,13 +7,14 @@
     "skipLibCheck": true,
     "moduleResolution": "node",
     "importHelpers": true,
+    "sourceMap": true,
     "declaration": true,
     "declarationMap": true,
-    "target": "es6",
-    "module": "commonjs",
+    "target": "es2015",
+    "module": "es2015",
     "esModuleInterop": true,
     "experimentalDecorators": true,
-    "inlineSourceMap": true,
+    "outDir": "./dist",
     "lib": [
       "dom",
       "es2015",
@@ -21,12 +22,12 @@
       "ES2021.WeakRef",
       "scripthost"
     ],
-    "newLine": "LF",
-    "noImplicitReturns": false,
-    "noImplicitThis": true,
-    "pretty": true,
     "jsx": "react",
     "strict": true,
-    "types": ["jest", "node", "./matchers.d.ts"]
+    "pretty": true,
+    "newLine": "LF",
+    "noImplicitThis": true,
+    "noImplicitReturns": false,
+    "types": ["jest", "node", "./apollo-client/matchers.d.ts"]
   }
 }

@@ -1,10 +1,7 @@
 import * as equality from '@wry/equality';
-import { makeReference } from '@apollo/client';
-import type { FieldFunctionOptions, FieldPolicy, FieldReadFunction, TypePolicy } from '@apollo/client/cache/inmemory/policies';
-import type { Reference, StoreValue } from '@apollo/client';
-import type { ReadFieldOptions } from '@apollo/client/cache/core/types/common';
-import type { StoreObject } from '@apollo/client/utilities';
 
+import { makeReference } from '../../apollo-client/src/cache';
+import type { FieldFunctionOptions, FieldPolicy, FieldReadFunction, TypePolicy, Reference, StoreValue, StoreObject, ReadFieldOptions } from '../../apollo-client/src/cache';
 import type { CacheContext } from '../context';
 import type { GraphSnapshot as GraphSnapshotType } from '../GraphSnapshot';
 import type { NodeReference, EntitySnapshot as EntitySnapshotType, NodeSnapshot } from '../nodes';
@@ -49,10 +46,10 @@ const ensureIdConstistencyMsg = `Ensure id is included (or not included) consist
 /**
  * A newly modified snapshot.
  */
-export interface EditedSnapshot<TSerialized = GraphSnapshotType> {
+export interface EditedSnapshot {
   snapshot: GraphSnapshotType;
   editedNodeIds: Set<NodeId>;
-  writtenQueries: Set<OperationInstance<TSerialized>>;
+  writtenQueries: Set<OperationInstance>;
   ref: Reference | undefined;
 }
 
@@ -95,8 +92,8 @@ function getVisibleProxy(value: JsonValue | NestedObject<JsonScalar> | undefined
     return value;
   }
   return new Proxy(value, {
-    get: (target, p: string) => {
-      return hasOwn.call(target, p) ? target[p] : target[map[p]];
+    get: (target: { [ p: string | number ]: any }, p: string | number | symbol) => {
+      return typeof p === 'symbol' ? undefined : hasOwn.call(target, p) ? target[p] : target[map[p]];
     },
   });
 }
@@ -107,7 +104,7 @@ function getVisibleProxy(value: JsonValue | NestedObject<JsonScalar> | undefined
  * Performs the minimal set of edits to generate new immutable versions of each
  * node, while preserving immutability of the parent snapshot.
  */
-export class SnapshotEditor<TSerialized> {
+export class SnapshotEditor {
 
   /**
    * Tracks all node snapshots that have changed vs the parent snapshot.
@@ -129,12 +126,12 @@ export class SnapshotEditor<TSerialized> {
   private _rebuiltNodeIds = new Set<NodeId>();
 
   /** The queries that were written, and should now be considered complete. */
-  private _writtenQueries = new Set<OperationInstance<TSerialized>>();
+  private _writtenQueries = new Set<OperationInstance>();
   private _pathToId = Object.create(null);
 
   constructor(
     /** The configuration/context to use when editing snapshots. */
-    private _context: CacheContext<TSerialized>,
+    private _context: CacheContext,
     /** The snapshot to base edits off of. */
     private _parent: GraphSnapshotType,
   ) {}
@@ -990,7 +987,7 @@ export class SnapshotEditor<TSerialized> {
   /**
    * Commits the transaction, returning a new immutable snapshot.
    */
-  commit(ref?: NodeId | undefined): EditedSnapshot<TSerialized> {
+  commit(ref?: NodeId | undefined): EditedSnapshot {
     // At this point, every node that has had any of its properties change now
     // exists in _newNodes.  In order to preserve immutability, we need to walk
     // all nodes that transitively reference an edited node, and update their

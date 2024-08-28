@@ -1,37 +1,30 @@
-import { addTypenameToDocument } from '@apollo/client/utilities';
 import isEqual from '@wry/equality';
-import { TypePolicies } from '@apollo/client';
 
+import { TypePolicies, InMemoryCacheConfig, IdGetter, Reference, ReadFieldOptions } from '../../apollo-client/src/cache';
+import { KeyFieldsContext, KeySpecifier } from '../../apollo-client/src/cache/inmemory/policies';
+import { addTypenameToDocument, StoreObject } from '../../apollo-client/src/utilities';
 import { ApolloTransaction } from '../apollo/Transaction';
 import { CacheSnapshot } from '../CacheSnapshot';
 import { areChildrenDynamic, expandVariables } from '../ParsedQueryNode';
 import { JsonObject } from '../primitive';
-import { EntityId, NodeId, OperationInstance, RawOperation } from '../schema';
-import { DocumentNode, isObject } from '../util';
-import { GraphSnapshot } from '../GraphSnapshot';
+import { EntityId, NodeId, OperationInstance, RawOperation, Serializable } from '../schema';
+import { DocumentNode, isObject, isReference } from '../util';
 
 import { ConsoleTracer } from './ConsoleTracer';
 import { QueryInfo } from './QueryInfo';
 import { Tracer } from './Tracer';
 
-// Augment DocumentNode type with Hermes's properties
-// Because react-apollo can call us without doing transformDocument
-// to be safe, we will always call transformDocument then flag that
-// we have already done so to not repeating the process.
-declare module 'graphql/language/ast' {
-  export interface DocumentNode {
-    /** Indicating that query has already ran transformDocument */
-    hasBeenTransformed?: boolean;
-  }
-}
+export type KeyFieldsFunction = (
+    object: Readonly<StoreObject>,
+    context: KeyFieldsContext
+) => KeySpecifier | false | ReturnType<IdGetter>;
 
 export namespace CacheContext {
 
-  export type EntityIdForNode = (node: JsonObject) => EntityId | undefined;
-  export type EntityIdForValue = (value: any) => EntityId | undefined;
-  export type EntityIdMapper = (node: JsonObject) => string | number | undefined;
+  export type EntityIdForValue = (value: any, context?: KeyFieldsContext) => EntityId | undefined;
+  export type EntityIdMapper = KeyFieldsFunction;
   export type EntityTransformer = (node: JsonObject) => void;
-  export type OnChangeCallback = (newCacheShapshot: CacheSnapshot, editedNodeIds: Set<String>) => void;
+  export type OnChangeCallback = (newCacheSnapshot: CacheSnapshot, editedNodeIds: Set<String>) => void;
 
   /**
    * Expected to return an EntityId or undefined, but we loosen the restrictions
@@ -47,24 +40,41 @@ export namespace CacheContext {
   /**
    * Callback that is triggered when an entity is edited within the cache.
    */
-  export interface EntityUpdater<TSerialized = GraphSnapshot> {
+  export interface EntityUpdater {
     // TODO: It's a bit odd that this is the _only_ Apollo-specific interface
     // that we're exposing.  Do we want to keep that?  It does mirror a
     // mutation's update callback nicely.
-    (dataProxy: ApolloTransaction<TSerialized>, entity: any, previous: any): void;
+    (dataProxy: ApolloTransaction, entity: any, previous: any): void;
   }
 
-  export interface EntityUpdaters<TSerialized = GraphSnapshot> {
-    [typeName: string]: EntityUpdater<TSerialized>;
+  export interface EntityUpdaters {
+    [typeName: string]: EntityUpdater;
   }
+
+  export type PossibleTypesMap = {
+    [supertype: string]: string[],
+  };
 
   /**
    * Configuration for a Hermes cache.
    */
-  export interface Configuration<TSerialized = GraphSnapshot> {
-
+  export interface Configuration {
+    resultCaching?: boolean;
+    possibleTypes?: PossibleTypesMap;
     typePolicies?: TypePolicies;
-
+    /**
+    * @deprecated
+    * Please use `cacheSizes` instead.
+    */
+    resultCacheMaxSize?: number;
+    /**
+     * @deprecated
+     * Using `canonizeResults` can result in memory leaks, so we generally do not
+     * recommend using this option anymore.
+     * A future version of Apollo Client will contain a similar feature.
+     */
+    canonizeResults?: boolean;
+    fragments?: InMemoryCacheConfig['fragments'];
     /** Whether __typename should be injected into nodes in queries. */
     addTypename?: boolean;
 
@@ -111,12 +121,12 @@ export namespace CacheContext {
      * Note that these callbacks are called immediately before a transaction is
      * committed.  You will not see their effect _during_ a transaction.
      */
-    entityUpdaters?: EntityUpdaters<TSerialized>;
+    entityUpdaters?: EntityUpdaters;
 
     /**
      * Callback that is triggered when there is a change in the cache.
      *
-     * This allow the cache to be integrated with external tools such as Redux.
+     * This allows the cache to be integrated with external tools such as Redux.
      * It allows other tools to be notified when there are changes.
      */
     onChange?: OnChangeCallback;
@@ -150,6 +160,7 @@ export namespace CacheContext {
      * Ignored if `tracer` is supplied.
      */
     logger?: ConsoleTracer.Logger;
+
   }
 
 }
@@ -157,7 +168,7 @@ export namespace CacheContext {
 /**
  * Configuration and shared state used throughout the cache's operation.
  */
-export class CacheContext<TSerialized = GraphSnapshot> {
+export class CacheContext {
 
   /** Retrieve the EntityId for a given node, if any. */
   readonly entityIdForValue: CacheContext.EntityIdForValue;
@@ -175,7 +186,7 @@ export class CacheContext<TSerialized = GraphSnapshot> {
   readonly resolverRedirects: CacheContext.ResolverRedirects;
 
   /** Configured entity updaters. */
-  readonly entityUpdaters: CacheContext.EntityUpdaters<TSerialized>;
+  readonly entityUpdaters: CacheContext.EntityUpdaters;
 
   /** Configured on-change callback */
   readonly onChange: CacheContext.OnChangeCallback | undefined;
@@ -190,15 +201,15 @@ export class CacheContext<TSerialized = GraphSnapshot> {
   readonly addTypename: boolean;
 
   /** All currently known & processed GraphQL documents. */
-  private readonly _queryInfoMap = new Map<string, QueryInfo<TSerialized>>();
+  private readonly _queryInfoMap = new Map<string, QueryInfo>();
   /** All currently known & parsed queries, for identity mapping. */
-  private readonly _operationMap = new Map<string, OperationInstance<TSerialized>[]>();
+  private readonly _operationMap = new Map<string, OperationInstance[]>();
 
   public readonly dirty = new Map<NodeId, Set<string>>();
 
   public readonly typePolicies: TypePolicies | undefined;
 
-  constructor(config: CacheContext.Configuration<TSerialized> = {}) {
+  constructor(config: CacheContext.Configuration = {}) {
     // Infer dev mode from NODE_ENV, by convention.
     const nodeEnv = typeof process !== 'undefined' ? process.env.NODE_ENV : 'development';
 
@@ -223,7 +234,10 @@ export class CacheContext<TSerialized = GraphSnapshot> {
    * Cache consumers should call this on any operation document prior to calling
    * any other method in the cache.
    */
-  transformDocument(document: DocumentNode): DocumentNode {
+  transformDocument(document: DocumentNode & {
+    /** Indicating that query has already run transformDocument */
+    hasBeenTransformed?: boolean,
+  }): DocumentNode {
     if (this.addTypename && !document.hasBeenTransformed) {
       const transformedDocument = addTypenameToDocument(document);
       transformedDocument.hasBeenTransformed = true;
@@ -238,7 +252,7 @@ export class CacheContext<TSerialized = GraphSnapshot> {
    * To aid in various cache lookups, the result is memoized by all of its
    * values, and can be used as an identity for a specific operation.
    */
-  parseOperation(raw: RawOperation): OperationInstance<TSerialized> {
+  parseOperation(raw: RawOperation): OperationInstance {
     // It appears like Apollo or someone upstream is cloning or otherwise
     // modifying the queries that are passed down.  Thus, the operation source
     // is a more reliable cache key…
@@ -281,7 +295,7 @@ export class CacheContext<TSerialized = GraphSnapshot> {
   /**
    * Retrieves a memoized QueryInfo for a given GraphQL document.
    */
-  private _queryInfo(cacheKey: string, raw: RawOperation): QueryInfo<TSerialized> {
+  private _queryInfo(cacheKey: string, raw: RawOperation): QueryInfo {
     if (!this._queryInfoMap.has(cacheKey)) {
       this._queryInfoMap.set(cacheKey, new QueryInfo(this, raw));
     }
@@ -326,11 +340,33 @@ export function _makeEntityIdMapper(
         return __typename ? `${__typename}:${id}` : `${id}`;
       }
   );
-  return function entityIdForNode(node: JsonObject) {
+
+  return function entityIdForNode(node: JsonObject, context: KeyFieldsContext = {
+    readField: (
+      fieldNameOrOptions: string | ReadFieldOptions,
+      from: StoreObject | Reference = node
+    ) => {
+      if (typeof fieldNameOrOptions === 'object') {
+        from = fieldNameOrOptions.from ?? from;
+        fieldNameOrOptions = fieldNameOrOptions.fieldName;
+      }
+      if (!from) {
+        return undefined;
+      }
+
+      if (isReference(from)) {
+        return undefined;
+      } else {
+        return from[fieldNameOrOptions];
+      }
+    },
+    storeObject: node,
+    typename: undefined,
+  }) {
     if (!isObject(node)) return undefined;
 
     // We don't trust upstream implementations.
-    const entityId = mapper(node);
+    const entityId = mapper(node, context);
     if (typeof entityId === 'string') return entityId;
     if (typeof entityId === 'number') return String(entityId);
     return undefined;

@@ -1,8 +1,7 @@
-import { Cache, Transaction } from '@apollo/client';
-
+import { Cache, Transaction } from '../../apollo-client/src/cache';
 import { CacheTransaction } from '../CacheTransaction';
 import { PathPart, JsonValue } from '../primitive';
-import { NodeId } from '../schema';
+import { NodeId, Serializable } from '../schema';
 import { DocumentNode, verboseTypeof, deepGet, iterParameterized } from '../util';
 
 import { ApolloQueryable } from './Queryable';
@@ -19,11 +18,11 @@ function getOriginalFieldArguments(id: NodeId): { [argName: string]: string } | 
 /**
  * Apollo-specific transaction interface.
  */
-export class ApolloTransaction<TSerialized> extends ApolloQueryable<TSerialized> {
+export class ApolloTransaction extends ApolloQueryable {
 
   constructor(
     /** The underlying transaction. */
-    protected _queryable: CacheTransaction<TSerialized>,
+    protected _queryable: CacheTransaction,
   ) {
     super();
   }
@@ -36,11 +35,11 @@ export class ApolloTransaction<TSerialized> extends ApolloQueryable<TSerialized>
     throw new Error(`removeOptimistic() is not allowed within a transaction`);
   }
 
-  performTransaction(transaction: Transaction<TSerialized>): void {
+  performTransaction(transaction: Transaction<Serializable.GraphSnapshot>): void {
     transaction(this);
   }
 
-  recordOptimisticTransaction(_transaction: Transaction<TSerialized>, _id: string): void {
+  recordOptimisticTransaction(_transaction: Transaction<Serializable.GraphSnapshot>, _id: string): void {
     throw new Error(`recordOptimisticTransaction() is not allowed within a transaction`);
   }
 

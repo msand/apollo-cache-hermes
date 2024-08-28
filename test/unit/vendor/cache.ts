@@ -2,10 +2,10 @@
 
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import gql, { disableFragmentWarnings } from 'graphql-tag';
-import { Cache, isReference, makeReference, Reference, TypePolicies } from '@apollo/client';
 import { expectTypeOf } from 'expect-type';
 import { DocumentNode } from 'graphql';
 
+import { Cache, isReference, makeReference, Reference, TypePolicies } from '../../../apollo-client/src';
 import { Hermes } from '../../../src';
 import { CacheContext } from '../../../src/context';
 import { cloneDeep } from '../../helpers/cloneDeep';

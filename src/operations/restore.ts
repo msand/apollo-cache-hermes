@@ -6,6 +6,7 @@ import { OptimisticUpdateQueue } from '../OptimisticUpdateQueue';
 import { JsonObject, JsonScalar, JsonValue, NestedArray, NestedObject, NestedValue, PathPart } from '../primitive';
 import { NodeId, Serializable } from '../schema';
 import * as util from '../util';
+import { NormalizedCacheObject } from '../../apollo-client/src';
 
 import { nodeIdForParameterizedValue } from './SnapshotEditor';
 
@@ -32,7 +33,7 @@ const {
  *    different sub-class of NodeSnapshot.
  * @throws Will throw an error if there is undefined in sparse array
  */
-export function restore<TSerialized>(serializedState: Serializable.GraphSnapshot, cacheContext: CacheContext<TSerialized>) {
+export function restore(serializedState: NormalizedCacheObject | Serializable.GraphSnapshot, cacheContext: CacheContext) {
   const { nodesMap, editedNodeIds } = createGraphSnapshotNodes(serializedState, cacheContext);
   const graphSnapshot = new GraphSnapshot(nodesMap);
 
@@ -42,7 +43,7 @@ export function restore<TSerialized>(serializedState: Serializable.GraphSnapshot
   };
 }
 
-function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.GraphSnapshot, cacheContext: CacheContext<TSerialized>) {
+function createGraphSnapshotNodes(serializedState: NormalizedCacheObject | Serializable.GraphSnapshot, cacheContext: CacheContext) {
   const nodesMap: NodeSnapshotMap = Object.create(null);
   const editedNodeIds = new Set<NodeId>();
 
@@ -51,6 +52,9 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
   // Create entity nodes in the GraphSnapshot
   for (const nodeId in serializedState) {
     const state = serializedState[nodeId];
+    if (state === undefined) {
+      continue;
+    }
     const { type, data, inbound, outbound, parameterized } = state;
 
     let nodeSnapshot;
@@ -93,7 +97,9 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
                 references.push(reverse);
               }
             }
-          } else {
+          } else if (val !== undefined) {
+            // TODO
+            // @ts-ignore
             parsed[key] = val;
           }
         }
@@ -115,19 +121,22 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
 }
 
 function set(data: NestedArray<JsonScalar> | NestedObject<JsonScalar>, path: PathPart[], value: JsonValue | undefined) {
-  let obj = data;
+  if (value === undefined) {
+    return;
+  }
+  let obj: NestedObject<JsonScalar> = data as NestedObject<JsonScalar>;
   const l = path.length - 1;
   for (let i = 0; i < l; i++) {
     const key = path[i];
     if (!(key in obj)) {
-      obj[key] = typeof key === 'string' ? {} : [];
+      (obj as NestedObject<JsonScalar>)[key] = typeof key === 'string' ? {} : [];
     }
-    obj = obj[key];
+    obj = (obj as NestedObject<JsonScalar>)[key] as NestedObject<JsonScalar>;
   }
   obj[path[l]] = value;
 }
 
-function restoreEntityReferences<TSerialized>(nodesMap: NodeSnapshotMap, cacheContext: CacheContext<TSerialized>) {
+function restoreEntityReferences(nodesMap: NodeSnapshotMap, cacheContext: CacheContext) {
   const { entityTransformer, entityIdForValue } = cacheContext;
 
   for (const nodeId in nodesMap) {

@@ -24,11 +24,11 @@ describe(`readFragment with multiple fragments`, () => {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
         inbound: [{ id: QueryRootId, path: ['viewer'] }],
         outbound: [{ id: 'shipment0', path: ['shipment'] }],
-        data: { id: 123, name: 'Gouda', __typename: 'Viewer' },
+        data: { id: '123', name: 'Gouda', __typename: 'Viewer' },
       },
       'shipment0': {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
-        inbound: [{ id: 123, path: ['shipment'] }],
+        inbound: [{ id: '123', path: ['shipment'] }],
         data: {
           id: 'shipment0',
           destination: 'Seattle',
@@ -56,7 +56,7 @@ describe(`readFragment with multiple fragments`, () => {
         }
       `),
     })).to.be.deep.eq({
-      id: 123,
+      id: '123',
       name: 'Gouda',
       __typename: 'Viewer',
       shipment: {

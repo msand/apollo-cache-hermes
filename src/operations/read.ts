@@ -1,10 +1,7 @@
-import { makeReference } from '@apollo/client';
-import type { FieldFunctionOptions } from '@apollo/client/cache/inmemory/policies';
-import type { Reference, StoreValue } from '@apollo/client';
-import type { StoreObject } from '@apollo/client/utilities';
-import type { ReadFieldOptions } from '@apollo/client/cache/core/types/common';
 import type { DocumentNode } from 'graphql';
 
+import { makeReference } from '../../apollo-client/src/cache';
+import type { FieldFunctionOptions, Reference, StoreValue, StoreObject, ReadFieldOptions } from '../../apollo-client/src/cache';
 import type { CacheContext } from '../context';
 import type { GraphSnapshot, NodeSnapshotMap } from '../GraphSnapshot';
 import type { ParsedQuery, ParsedQueryNode } from '../ParsedQueryNode';
@@ -86,24 +83,24 @@ export interface QueryResultWithNodeIds extends QueryResult {
 /**
  * Get you some data.
  */
-export function read<TSerialized>(
-  context: CacheContext<TSerialized>,
+export function read(
+  context: CacheContext,
   raw: RawOperation,
   snapshot: GraphSnapshot,
   tempStore?: NodeSnapshotMap,
   includeNodeIds?: true,
 ): QueryResultWithNodeIds;
 
-export function read<TSerialized>(
-  context: CacheContext<TSerialized>,
+export function read(
+  context: CacheContext,
   raw: RawOperation,
   snapshot: GraphSnapshot,
   tempStore?: NodeSnapshotMap,
   includeNodeIds?: boolean,
 ): QueryResult;
 
-export function read<TSerialized>(
-  context: CacheContext<TSerialized>,
+export function read(
+  context: CacheContext,
   raw: RawOperation,
   snapshot: GraphSnapshot,
   tempStore: NodeSnapshotMap = Object.create(null),
@@ -184,9 +181,9 @@ class OverlayWalkNode {
  * and new properties pointing to the parameterized values (or objects that
  * contain them).
  */
-export function _walkAndOverlayDynamicValues<TSerialized>(
-  query: OperationInstance<TSerialized>,
-  context: CacheContext<TSerialized>,
+export function _walkAndOverlayDynamicValues(
+  query: OperationInstance,
+  context: CacheContext,
   snapshot: GraphSnapshot,
   result: JsonObject | undefined,
   dynamicNodeIds: Set<NodeId>,
@@ -277,9 +274,12 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
     args: {},
     cache: null as any,
     canRead(value: StoreValue): boolean {
-      return isReference(value)
-        ? snapshot.has(value.__ref)
-        : typeof value === 'object' && value !== null;
+      if (isReference(value)) {
+        const ref = value.__ref;
+        return snapshot.has(ref);
+      } else {
+        return typeof value === 'object' && value !== null;
+      }
     },
     field: null,
     fieldName: '',
@@ -472,7 +472,7 @@ function _flattenGraphQLObject(value: UnknownGraphQLObject, path: PathPart[]): F
   return flattened;
 }
 
-function _recursivelyWrapValue<T extends JsonValue, TSerialized>(value: T | undefined, context: CacheContext<TSerialized>): T {
+function _recursivelyWrapValue<T extends JsonValue>(value: T | undefined, context: CacheContext): T {
   if (!Array.isArray(value)) {
     return _wrapValue(value, context);
   }
@@ -487,7 +487,7 @@ function _recursivelyWrapValue<T extends JsonValue, TSerialized>(value: T | unde
   return newValue as unknown as T;
 }
 
-function _wrapValue<T extends JsonValue, TSerialized>(value: T | undefined, context: CacheContext<TSerialized>): T {
+function _wrapValue<T extends JsonValue>(value: T | undefined, context: CacheContext): T {
   if (value === undefined) {
     return {} as T;
   }
@@ -508,9 +508,9 @@ function _wrapValue<T extends JsonValue, TSerialized>(value: T | undefined, cont
  * Determines whether `result` satisfies the properties requested by
  * `selection`.
  */
-export function _visitSelection<TSerialized>(
-  query: OperationInstance<TSerialized>,
-  context: CacheContext<TSerialized>,
+export function _visitSelection(
+  query: OperationInstance,
+  context: CacheContext,
   result?: JsonObject,
   nodeIds?: Set<NodeId>,
   missing?: MissingFieldError[],

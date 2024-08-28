@@ -1,4 +1,4 @@
-import deepFreeze = require('deep-freeze-strict');
+import deepFreeze from 'deep-freeze-strict';
 
 import { NodeSnapshot } from './nodes';
 import { QueryResult, QueryResultWithNodeIds } from './operations/read';
@@ -16,7 +16,7 @@ export type NodeSnapshotMap = { [Key in NodeId]: NodeSnapshot; };
 export class GraphSnapshot {
 
   /** Cached results for queries. */
-  public readonly readCache = new Map<OperationInstance<GraphSnapshot>, QueryResult | QueryResultWithNodeIds>();
+  public readonly readCache = new Map<OperationInstance, QueryResult | QueryResultWithNodeIds>();
 
   /**
    * @internal
@@ -67,5 +67,4 @@ export class GraphSnapshot {
   freeze(): void {
     deepFreeze(this._values);
   }
-
 }

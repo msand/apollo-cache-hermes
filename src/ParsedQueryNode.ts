@@ -95,8 +95,8 @@ export class VariableArgument {
 /**
  * Parsed a GraphQL AST selection into a tree of ParsedQueryNode instances.
  */
-export function parseQuery<TSerialized>(
-  context: CacheContext<TSerialized>,
+export function parseQuery(
+  context: CacheContext,
   fragments: FragmentMap,
   selectionSet: SelectionSetNode,
 ): {
@@ -127,9 +127,9 @@ function unlessEmpty(propMap: { [p: string]: string }) {
  * Recursively builds a mapping of field names to ParsedQueryNodes for the given
  * selection set.
  */
-function _buildNodeMap<TSerialized>(
+function _buildNodeMap(
   variables: Set<string>,
-  context: CacheContext<TSerialized>,
+  context: CacheContext,
   fragments: FragmentMap,
   propMap: { [p: string]: string },
   selectionSet?: SelectionSetNode,
