@@ -1,4 +1,4 @@
-import { withCleanup } from "./withCleanup";
+import { withCleanup } from "./withCleanup.js";
 
 declare global {
   interface DateConstructor {

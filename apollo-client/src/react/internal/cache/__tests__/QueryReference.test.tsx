@@ -1,9 +1,5 @@
-import {
-  ApolloClient,
-  ApolloLink,
-  Observable,
-} from "../../../../core";
-import { Hermes } from "../../../../../../src";
+import { ApolloClient, ApolloLink, Observable } from "../../../../core";
+import { Hermes } from "apollo-cache-hermes";
 import { setupSimpleCase } from "../../../../testing/internal";
 import {
   InternalQueryReference,

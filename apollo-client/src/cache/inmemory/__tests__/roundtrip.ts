@@ -4,7 +4,7 @@ import gql from "graphql-tag";
 import { EntityStore } from "../entityStore";
 import { StoreReader } from "../readFromStore";
 import { StoreWriter } from "../writeToStore";
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 import { writeQueryToStore, readQueryFromStore, withError } from "./helpers";
 import { spyOnConsole } from "../../../testing/internal";
 

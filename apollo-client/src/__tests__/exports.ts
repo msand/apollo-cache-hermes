@@ -36,7 +36,7 @@ import * as utilities from "../utilities";
 import * as utilitiesGlobals from "../utilities/globals";
 import * as urqlUtilities from "../utilities/subscriptions/urql";
 
-const entryPoints = require("../../config/entryPoints");
+const entryPoints = require("../../config/entryPoints.js");
 
 type Namespace = object;
 

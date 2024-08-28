@@ -16,7 +16,7 @@ import {
   ApolloReducerConfig,
   NormalizedCacheObject,
 } from "../../../cache/inmemory/types";
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 // mocks
 import mockQueryManager, {

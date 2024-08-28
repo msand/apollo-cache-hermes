@@ -5,30 +5,30 @@ import type {
   OperationVariables,
   TypedDocumentNode,
   WatchQueryOptions,
-} from "../../core/index";
-import { useApolloClient } from "./useApolloClient";
+} from "../../core/index.js";
+import { useApolloClient } from "./useApolloClient.js";
 import {
   assertWrappedQueryRef,
   getSuspenseCache,
   unwrapQueryRef,
   updateWrappedQueryRef,
   wrapQueryRef,
-} from "../internal/index";
-import type { CacheKey, QueryRef } from "../internal/index";
-import type { LoadableQueryHookOptions } from "../types/types";
-import { __use, useRenderGuard } from "./internal/index";
-import { useWatchQueryOptions } from "./useSuspenseQuery";
+} from "../internal/index.js";
+import type { CacheKey, QueryRef } from "../internal/index.js";
+import type { LoadableQueryHookOptions } from "../types/types.js";
+import { __use, useRenderGuard } from "./internal/index.js";
+import { useWatchQueryOptions } from "./useSuspenseQuery.js";
 import type {
   FetchMoreFunction,
   RefetchFunction,
   SubscribeToMoreFunction,
-} from "./useSuspenseQuery";
-import { canonicalStringify } from "../../cache/index";
+} from "./useSuspenseQuery.js";
+import { canonicalStringify } from "../../cache/index.js";
 import type {
   DeepPartial,
   OnlyRequiredProperties,
-} from "../../utilities/index";
-import { invariant } from "../../utilities/globals/index";
+} from "../../utilities/index.js";
+import { invariant } from "../../utilities/globals/index.js";
 
 export type LoadQueryFunction<TVariables extends OperationVariables> = (
   // Use variadic args to handle cases where TVariables is type `never`, in

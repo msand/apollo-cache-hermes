@@ -1,4 +1,4 @@
-import "../utilities/globals/index";
+import "../utilities/globals/index.js";
 
 import type {
   GraphQLError,
@@ -6,10 +6,10 @@ import type {
   GraphQLFormattedError,
 } from "graphql";
 
-import { isNonNullObject } from "../utilities/index";
-import type { ServerParseError } from "../link/http/index";
-import type { ServerError } from "../link/utils/index";
-import type { FetchResult } from "../link/core/index";
+import { isNonNullObject } from "../utilities/index.js";
+import type { ServerParseError } from "../link/http/index.js";
+import type { ServerError } from "../link/utils/index.js";
+import type { FetchResult } from "../link/core/index.js";
 
 // This Symbol allows us to pass transport-specific errors from the link chain
 // into QueryManager/client internals without risking a naming collision within

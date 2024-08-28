@@ -17,7 +17,7 @@ import { itAsync } from "../testing";
 import { ObservableStream, spyOnConsole } from "../testing/internal";
 import { TypedDocumentNode } from "@graphql-typed-document-node/core";
 import { invariant } from "../utilities/globals";
-import { Hermes } from "../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 describe("ApolloClient", () => {
   describe("constructor", () => {

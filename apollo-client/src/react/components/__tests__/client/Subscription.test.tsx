@@ -8,7 +8,7 @@ import { ApolloLink, DocumentNode, Operation } from "../../../../link/core";
 import { itAsync, MockSubscriptionLink } from "../../../../testing";
 import { Subscription } from "../../Subscription";
 import { profile, spyOnConsole } from "../../../../testing/internal";
-import { Hermes as Cache } from "../../../../../../src";
+import { Hermes as Cache } from "apollo-cache-hermes";
 
 const results = [
   "Luke Skywalker",

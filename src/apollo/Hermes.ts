@@ -40,21 +40,21 @@ type BroadcastOptions = Pick<
 /**
  * Apollo-specific interface to the cache.
  */
-export class Hermes extends ApolloQueryable {
-  public data!: EntityStore;
-  public optimisticData!: EntityStore;
+export class Hermes extends ApolloQueryable implements InMemoryCache {
+  data!: EntityStore;
+  optimisticData!: EntityStore;
   /** The underlying Hermes cache. */
   public _queryable: Cache;
 
-  public readonly config: CacheContext.Configuration;
-  public readonly watches = new Set<CacheInterface.WatchOptions>();
-  public readonly addTypename: boolean;
+  config: CacheContext.Configuration;
+  watches = new Set<CacheInterface.WatchOptions>();
+  addTypename: boolean;
 
-  public storeReader!: StoreReader;
-  public storeWriter!: StoreWriter;
-  public readonly addTypenameTransform = new DocumentTransform(addTypenameToDocument);
+  storeReader!: StoreReader;
+  storeWriter!: StoreWriter;
+  addTypenameTransform = new DocumentTransform(addTypenameToDocument);
 
-  public maybeBroadcastWatch!: OptimisticWrapperFunction<
+  maybeBroadcastWatch!: OptimisticWrapperFunction<
       [CacheInterface.WatchOptions, BroadcastOptions?],
       any,
       [CacheInterface.WatchOptions]
@@ -375,7 +375,7 @@ export class Hermes extends ApolloQueryable {
     this._queryable.rollback(idToRemove);
   }
 
-  public txCount = 0;
+  txCount = 0;
 
   public batch<TUpdateResult>(
     options: CacheInterface.BatchOptions<ApolloCache<NormalizedCacheObject>, TUpdateResult>

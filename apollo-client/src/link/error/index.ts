@@ -1,9 +1,9 @@
 import type { FormattedExecutionResult, GraphQLFormattedError } from "graphql";
 
-import type { NetworkError } from "../../errors/index";
-import { Observable } from "../../utilities/index";
-import type { Operation, FetchResult, NextLink } from "../core/index";
-import { ApolloLink } from "../core/index";
+import type { NetworkError } from "../../errors/index.js";
+import { Observable } from "../../utilities/index.js";
+import type { Operation, FetchResult, NextLink } from "../core/index.js";
+import { ApolloLink } from "../core/index.js";
 
 export interface ErrorResponse {
   graphQLErrors?: ReadonlyArray<GraphQLFormattedError>;

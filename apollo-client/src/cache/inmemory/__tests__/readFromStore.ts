@@ -1,7 +1,7 @@
 import { assign, omit } from "lodash";
 import gql from "graphql-tag";
 
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 import { StoreObject } from "../types";
 import { StoreReader } from "../readFromStore";
 import { Cache } from "../../core/types/Cache";

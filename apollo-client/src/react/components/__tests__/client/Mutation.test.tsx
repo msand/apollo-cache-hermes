@@ -20,7 +20,7 @@ import {
 } from "../../../../testing";
 import { Query } from "../../Query";
 import { Mutation } from "../../Mutation";
-import { Hermes as Cache } from "../../../../../../src";
+import { Hermes as Cache } from "apollo-cache-hermes";
 
 const mutation = gql`
   mutation createTodo($text: String!) {

@@ -5,7 +5,7 @@ import { InvariantError } from "ts-invariant";
 import { ApolloClient } from "../../../core";
 import { ApolloLink } from "../../../link/core";
 import { ApolloProvider } from "../../context";
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 import { useApolloClient } from "../useApolloClient";
 
 describe("useApolloClient Hook", () => {

@@ -2,7 +2,7 @@ import { ApolloClient, ApolloLink, gql, NetworkStatus } from "../../../core";
 import { getFragmentDefinitions, Observable } from "../../../utilities";
 import { createFragmentRegistry } from "../../index";
 import { itAsync, subscribeAndCount } from "../../../testing";
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 describe("FragmentRegistry", () => {
   it("can be passed to Hermes", () => {

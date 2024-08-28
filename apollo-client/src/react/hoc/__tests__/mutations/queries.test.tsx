@@ -9,7 +9,7 @@ import {
   ApolloCache,
 } from "../../../../core";
 import { ApolloProvider } from "../../../context";
-import { Hermes as Cache } from "../../../../../../src";
+import { Hermes as Cache } from "apollo-cache-hermes";
 import { itAsync, createMockClient, mockSingleLink } from "../../../../testing";
 import { graphql } from "../../graphql";
 import { ChildProps } from "../../types";

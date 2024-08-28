@@ -19,7 +19,7 @@ import { ApolloClient } from "../../core";
 import { ApolloCache } from "../../cache";
 import { itAsync } from "../../testing";
 import { spyOnConsole } from "../../testing/internal";
-import { Hermes } from "../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 describe("General functionality", () => {
   it("should not impact normal non-@client use", () => {

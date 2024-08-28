@@ -95,6 +95,7 @@
     "@wry/caches": "^1.0.0",
     "@wry/equality": "^0.5.6",
     "@wry/trie": "^0.5.0",
+    "apollo-cache-hermes": "file:../src",
     "graphql-tag": "^2.12.6",
     "hoist-non-react-statics": "^3.3.2",
     "optimism": "^0.18.0",

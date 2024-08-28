@@ -1,17 +1,17 @@
-import { invariant, newInvariantError } from "../utilities/globals/index";
+import { invariant, newInvariantError } from "../utilities/globals/index.js";
 
 import type { DocumentNode, FormattedExecutionResult } from "graphql";
 
-import type { FetchResult, GraphQLRequest } from "../link/core/index";
-import { ApolloLink, execute } from "../link/core/index";
-import type { ApolloCache, DataProxy, Reference } from "../cache/index";
-import type { DocumentTransform, Observable } from "../utilities/index";
-import { version } from "../version";
-import type { UriFunction } from "../link/http/index";
-import { HttpLink } from "../link/http/index";
+import type { FetchResult, GraphQLRequest } from "../link/core/index.js";
+import { ApolloLink, execute } from "../link/core/index.js";
+import type { ApolloCache, DataProxy, Reference } from "../cache/index.js";
+import type { DocumentTransform, Observable } from "../utilities/index.js";
+import { version } from "../version.js";
+import type { UriFunction } from "../link/http/index.js";
+import { HttpLink } from "../link/http/index.js";
 
-import { QueryManager } from "./QueryManager";
-import type { ObservableQuery } from "./ObservableQuery";
+import { QueryManager } from "./QueryManager.js";
+import type { ObservableQuery } from "./ObservableQuery.js";
 
 import type {
   ApolloQueryResult,
@@ -22,7 +22,7 @@ import type {
   RefetchQueriesResult,
   InternalRefetchQueriesResult,
   RefetchQueriesInclude,
-} from "./types";
+} from "./types.js";
 
 import type {
   QueryOptions,
@@ -30,10 +30,10 @@ import type {
   MutationOptions,
   SubscriptionOptions,
   WatchQueryFetchPolicy,
-} from "./watchQueryOptions";
+} from "./watchQueryOptions.js";
 
-import type { FragmentMatcher } from "./LocalState";
-import { LocalState } from "./LocalState";
+import type { FragmentMatcher } from "./LocalState.js";
+import { LocalState } from "./LocalState.js";
 
 export interface DefaultOptions {
   watchQuery?: Partial<WatchQueryOptions<any, any>>;
@@ -150,12 +150,12 @@ export interface ApolloClientOptions<TCacheShape> {
 // previously declared and exported from this module, and then reexported from
 // @apollo/client/core. Since we need to preserve that API anyway, the easiest
 // solution is to reexport mergeOptions where it was previously declared (here).
-import { mergeOptions } from "../utilities/index";
-import { getApolloClientMemoryInternals } from "../utilities/caching/getMemoryInternals";
+import { mergeOptions } from "../utilities/index.js";
+import { getApolloClientMemoryInternals } from "../utilities/caching/getMemoryInternals.js";
 import type {
   WatchFragmentOptions,
   WatchFragmentResult,
-} from "../cache/core/cache";
+} from "../cache/core/cache.js";
 export { mergeOptions };
 
 /**

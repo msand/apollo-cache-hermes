@@ -5,24 +5,24 @@ import type {
   StoreObject,
   Reference,
   DeepPartial,
-} from "../../utilities/index";
+} from "../../utilities/index.js";
 import {
   Observable,
   cacheSizes,
   defaultCacheSizes,
   getFragmentQueryDocument,
   mergeDeepArray,
-} from "../../utilities/index";
-import type { DataProxy } from "./types/DataProxy";
-import type { Cache } from "./types/Cache";
+} from "../../utilities/index.js";
+import type { DataProxy } from "./types/DataProxy.js";
+import type { Cache } from "./types/Cache.js";
 import { WeakCache } from "@wry/caches";
-import { getApolloCacheMemoryInternals } from "../../utilities/caching/getMemoryInternals";
+import { getApolloCacheMemoryInternals } from "../../utilities/caching/getMemoryInternals.js";
 import type {
   OperationVariables,
   TypedDocumentNode,
-} from "../../core/types";
-import type { MissingTree } from "./types/common";
-import { equalByQuery } from "../../core/equalByQuery";
+} from "../../core/types.js";
+import type { MissingTree } from "./types/common.js";
+import { equalByQuery } from "../../core/equalByQuery.js";
 
 export type Transaction<T> = (c: ApolloCache<T>) => void;
 

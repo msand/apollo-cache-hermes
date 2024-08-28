@@ -12,7 +12,7 @@ import { QueryManager } from "../../QueryManager";
 import { ObservableQuery } from "../../ObservableQuery";
 import { ObservableSubscription } from "../../../utilities";
 import { itAsync } from "../../../testing";
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 // mocks
 import { MockSubscriptionLink } from "../../../testing/core";

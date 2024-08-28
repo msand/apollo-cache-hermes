@@ -1,30 +1,30 @@
-import { invariant } from "../../utilities/globals/index";
+import { invariant } from "../../utilities/globals/index.js";
 
 import type { DefinitionNode } from "graphql";
 
-import { ApolloLink } from "../core/index";
-import { Observable, hasDirectives } from "../../utilities/index";
-import { serializeFetchParameter } from "./serializeFetchParameter";
-import { selectURI } from "./selectURI";
+import { ApolloLink } from "../core/index.js";
+import { Observable, hasDirectives } from "../../utilities/index.js";
+import { serializeFetchParameter } from "./serializeFetchParameter.js";
+import { selectURI } from "./selectURI.js";
 import {
   handleError,
   readMultipartBody,
   parseAndCheckHttpResponse,
-} from "./parseAndCheckHttpResponse";
-import { checkFetcher } from "./checkFetcher";
-import type { HttpOptions } from "./selectHttpOptionsAndBody";
+} from "./parseAndCheckHttpResponse.js";
+import { checkFetcher } from "./checkFetcher.js";
+import type { HttpOptions } from "./selectHttpOptionsAndBody.js";
 import {
   selectHttpOptionsAndBodyInternal,
   defaultPrinter,
   fallbackHttpConfig,
-} from "./selectHttpOptionsAndBody";
-import { rewriteURIForGET } from "./rewriteURIForGET";
-import { fromError, filterOperationVariables } from "../utils/index";
+} from "./selectHttpOptionsAndBody.js";
+import { rewriteURIForGET } from "./rewriteURIForGET.js";
+import { fromError, filterOperationVariables } from "../utils/index.js";
 import {
   maybe,
   getMainDefinition,
   removeClientSetsFromDocument,
-} from "../../utilities/index";
+} from "../../utilities/index.js";
 
 const backupFetch = maybe(() => fetch);
 

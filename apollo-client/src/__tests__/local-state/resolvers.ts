@@ -17,7 +17,7 @@ import { ApolloLink } from "../../link/core";
 import { itAsync } from "../../testing";
 import mockQueryManager from "../../testing/core/mocking/mockQueryManager";
 import wrap from "../../testing/core/wrap";
-import { Hermes } from "../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 // Helper method that sets up a mockQueryManager and then passes on the
 // results to an observer.

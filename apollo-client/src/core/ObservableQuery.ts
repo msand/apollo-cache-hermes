@@ -1,13 +1,13 @@
-import { invariant } from "../utilities/globals/index";
+import { invariant } from "../utilities/globals/index.js";
 import type { DocumentNode } from "graphql";
 import { equal } from "@wry/equality";
 
-import { NetworkStatus, isNetworkRequestInFlight } from "./networkStatus";
+import { NetworkStatus, isNetworkRequestInFlight } from "./networkStatus.js";
 import type {
   Concast,
   Observer,
   ObservableSubscription,
-} from "../utilities/index";
+} from "../utilities/index.js";
 import {
   cloneDeep,
   compact,
@@ -16,26 +16,26 @@ import {
   iterateObserversSafely,
   fixObservableSubclass,
   getQueryDefinition,
-} from "../utilities/index";
-import { ApolloError, isApolloError } from "../errors/index";
-import type { QueryManager } from "./QueryManager";
+} from "../utilities/index.js";
+import { ApolloError, isApolloError } from "../errors/index.js";
+import type { QueryManager } from "./QueryManager.js";
 import type {
   ApolloQueryResult,
   OperationVariables,
   TypedDocumentNode,
-} from "./types";
+} from "./types.js";
 import type {
   WatchQueryOptions,
   FetchMoreQueryOptions,
   SubscribeToMoreOptions,
   NextFetchPolicyContext,
   WatchQueryFetchPolicy,
-} from "./watchQueryOptions";
-import type { QueryInfo } from "./QueryInfo";
-import type { MissingFieldError } from "../cache/index";
-import type { MissingTree } from "../cache/core/types/common";
-import { equalByQuery } from "./equalByQuery";
-import type { TODO } from "../utilities/types/TODO";
+} from "./watchQueryOptions.js";
+import type { QueryInfo } from "./QueryInfo.js";
+import type { MissingFieldError } from "../cache/index.js";
+import type { MissingTree } from "../cache/core/types/common.js";
+import { equalByQuery } from "./equalByQuery.js";
+import type { TODO } from "../utilities/types/TODO.js";
 
 const { assign, hasOwnProperty } = Object;
 

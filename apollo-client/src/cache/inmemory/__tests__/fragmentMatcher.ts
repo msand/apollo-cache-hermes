@@ -3,7 +3,7 @@ import gql from "graphql-tag";
 import { itAsync } from "../../../testing";
 import { visit, FragmentDefinitionNode } from "graphql";
 import { hasOwn } from "../helpers";
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 describe("fragment matching", () => {
   it("can match exact types with or without possibleTypes", () => {

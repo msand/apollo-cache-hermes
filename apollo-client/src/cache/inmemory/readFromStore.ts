@@ -1,4 +1,4 @@
-import { invariant, newInvariantError } from "../../utilities/globals/index";
+import { invariant, newInvariantError } from "../../utilities/globals/index.js";
 
 import type { DocumentNode, FieldNode, SelectionSetNode } from "graphql";
 import { Kind } from "graphql";
@@ -10,7 +10,7 @@ import type {
   StoreObject,
   FragmentMap,
   FragmentMapFunction,
-} from "../../utilities/index";
+} from "../../utilities/index.js";
 import {
   isField,
   resultKeyNameFromField,
@@ -31,29 +31,29 @@ import {
   canonicalStringify,
   cacheSizes,
   defaultCacheSizes,
-} from "../../utilities/index";
-import type { Cache } from "../core/types/Cache";
+} from "../../utilities/index.js";
+import type { Cache } from "../core/types/Cache.js";
 import type {
   DiffQueryAgainstStoreOptions,
   InMemoryCacheConfig,
   NormalizedCache,
   ReadMergeModifyContext,
-} from "./types";
+} from "./types.js";
 import {
   maybeDependOnExistenceOfEntity,
   supportsResultCaching,
-} from "./entityStore";
+} from "./entityStore.js";
 import {
   isArray,
   extractFragmentContext,
   getTypenameFromStoreObject,
   shouldCanonizeResults,
-} from "./helpers";
-import type { Policies } from "./policies";
-import type { InMemoryCache } from "./inMemoryCache";
-import type { MissingTree } from "../core/types/common";
-import { MissingFieldError } from "../core/types/common";
-import { ObjectCanon } from "./object-canon";
+} from "./helpers.js";
+import type { Policies } from "./policies.js";
+import type { InMemoryCache } from "./inMemoryCache.js";
+import type { MissingTree } from "../core/types/common.js";
+import { MissingFieldError } from "../core/types/common.js";
+import { ObjectCanon } from "./object-canon.js";
 
 export type VariableMap = { [name: string]: any };
 

@@ -19,7 +19,7 @@ import {
 import { ApolloLink, FetchResult } from "../../link/core";
 import { NormalizedCacheObject } from "../../cache";
 import { ApolloError } from "../../errors";
-import { Hermes } from "../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 import {
   itAsync,
@@ -46,7 +46,7 @@ export const mockFetchQuery = (
   const fetchConcastWithInfo: QueryManager<NormalizedCacheObject>["fetchConcastWithInfo"] =
     queryManager["fetchConcastWithInfo"];
   const fetchQueryByPolicy: QueryManager<NormalizedCacheObject>["fetchQueryByPolicy"] =
-    (queryManager as any).fetchQueryByPolicy;
+    queryManager["fetchQueryByPolicy"];
 
   const mock = <
     T extends typeof fetchConcastWithInfo | typeof fetchQueryByPolicy,

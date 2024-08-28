@@ -1,4 +1,4 @@
-import { withCleanup } from "./withCleanup";
+import { withCleanup } from "./withCleanup.js";
 
 const noOp = () => {};
 const restore = (spy: jest.SpyInstance) => spy.mockRestore();

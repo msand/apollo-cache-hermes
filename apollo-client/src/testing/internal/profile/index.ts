@@ -3,13 +3,13 @@ export type {
   Profiler,
   ProfiledComponent,
   ProfiledHook,
-} from "./profile";
+} from "./profile.js";
 export {
   createProfiler,
   profile,
   profileHook,
   useTrackRenders,
   WaitForRenderTimeoutError,
-} from "./profile";
+} from "./profile.js";
 
-export type { SyncScreen } from "./Render";
+export type { SyncScreen } from "./Render.js";

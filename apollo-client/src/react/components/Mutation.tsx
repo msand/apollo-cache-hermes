@@ -1,9 +1,9 @@
 import * as PropTypes from "prop-types";
 import type * as ReactTypes from "react";
 
-import type { OperationVariables } from "../../core/index";
-import type { MutationComponentOptions } from "./types";
-import { useMutation } from "../hooks/index";
+import type { OperationVariables } from "../../core/index.js";
+import type { MutationComponentOptions } from "./types.js";
+import { useMutation } from "../hooks/index.js";
 
 /**
  * @deprecated

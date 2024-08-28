@@ -1,3 +1,3 @@
-export { AutoCleanedStrongCache, AutoCleanedWeakCache } from "./caches";
-export type { CacheSizes } from "./sizes";
-export { cacheSizes, defaultCacheSizes } from "./sizes";
+export { AutoCleanedStrongCache, AutoCleanedWeakCache } from "./caches.js";
+export type { CacheSizes } from "./sizes.js";
+export { cacheSizes, defaultCacheSizes } from "./sizes.js";

@@ -1,10 +1,10 @@
-import { invariant } from "../../utilities/globals/index";
+import { invariant } from "../../utilities/globals/index.js";
 import * as React from "rehackt";
 import type * as ReactTypes from "react";
 import hoistNonReactStatics from "hoist-non-react-statics";
 
-import { ApolloConsumer } from "../context/index";
-import type { OperationOption, WithApolloClient } from "./types";
+import { ApolloConsumer } from "../context/index.js";
+import type { OperationOption, WithApolloClient } from "./types.js";
 
 function getDisplayName<P>(WrappedComponent: ReactTypes.ComponentType<P>) {
   return WrappedComponent.displayName || WrappedComponent.name || "Component";

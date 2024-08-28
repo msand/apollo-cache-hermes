@@ -4,7 +4,7 @@ import { Observable } from "../../utilities";
 import { ApolloLink } from "../../link/core";
 import { ApolloClient } from "../../core";
 import { itAsync } from "../../testing";
-import { Hermes } from "../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 describe("Basic functionality", () => {
   itAsync("should not break subscriptions", (resolve, reject) => {

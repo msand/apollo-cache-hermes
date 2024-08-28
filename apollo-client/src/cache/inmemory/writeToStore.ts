@@ -1,4 +1,4 @@
-import { invariant, newInvariantError } from "../../utilities/globals/index";
+import { invariant, newInvariantError } from "../../utilities/globals/index.js";
 import { equal } from "@wry/equality";
 import { Trie } from "@wry/trie";
 import type { SelectionSetNode, FieldNode } from "graphql";
@@ -10,7 +10,7 @@ import type {
   StoreValue,
   StoreObject,
   Reference,
-} from "../../utilities/index";
+} from "../../utilities/index.js";
 import {
   getFragmentFromSelection,
   getDefaultValues,
@@ -26,27 +26,27 @@ import {
   isNonEmptyArray,
   argumentsObjectFromField,
   canonicalStringify,
-} from "../../utilities/index";
+} from "../../utilities/index.js";
 
 import type {
   NormalizedCache,
   ReadMergeModifyContext,
   MergeTree,
   InMemoryCacheConfig,
-} from "./types";
+} from "./types.js";
 import {
   isArray,
   makeProcessedFieldsMerger,
   fieldNameFromStoreName,
   storeValueIsStoreObject,
   extractFragmentContext,
-} from "./helpers";
-import type { StoreReader } from "./readFromStore";
-import type { InMemoryCache } from "./inMemoryCache";
-import type { EntityStore } from "./entityStore";
-import type { Cache } from "../../core/index";
-import { normalizeReadFieldOptions } from "./policies";
-import type { ReadFieldFunction } from "../core/types/common";
+} from "./helpers.js";
+import type { StoreReader } from "./readFromStore.js";
+import type { InMemoryCache } from "./inMemoryCache.js";
+import type { EntityStore } from "./entityStore.js";
+import type { Cache } from "../../core/index.js";
+import { normalizeReadFieldOptions } from "./policies.js";
+import type { ReadFieldFunction } from "../core/types/common.js";
 
 export interface WriteContext extends ReadMergeModifyContext {
   readonly written: {

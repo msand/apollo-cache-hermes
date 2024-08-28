@@ -6,7 +6,7 @@ import { itAsync } from "../../testing";
 import { ApolloLink } from "../../link/core";
 import { ApolloClient } from "../../core";
 import { spyOnConsole } from "../../testing/internal";
-import { Hermes } from "../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 describe("@client @export tests", () => {
   itAsync(

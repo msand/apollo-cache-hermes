@@ -9,7 +9,7 @@ import {
   TypedDocumentNode,
   gql,
 } from "../../../core";
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 import {
   MockLink,
   MockSubscriptionLink,

@@ -3,7 +3,7 @@ import { makeExecutableSchema } from "@graphql-tools/schema";
 import { ApolloClient, Resolvers, gql } from "../core";
 import { NormalizedCacheObject } from "../cache";
 import { SchemaLink } from "../link/schema";
-import { Hermes } from "../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 describe("resultCache cleaning", () => {
   const fragments = gql`

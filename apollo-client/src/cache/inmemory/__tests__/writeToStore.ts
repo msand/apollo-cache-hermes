@@ -22,7 +22,7 @@ import {
 import { itAsync } from "../../../testing/core";
 import { StoreWriter } from "../writeToStore";
 import { defaultNormalizedCacheFactory, writeQueryToStore } from "./helpers";
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 import { TypedDocumentNode } from "../../../core";
 import { extractFragmentContext } from "../helpers";
 import { KeyFieldsFunction } from "../policies";

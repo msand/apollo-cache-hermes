@@ -1,14 +1,14 @@
 import * as React from "react";
 
-import type { DefaultOptions } from "../../core/index";
-import { ApolloClient } from "../../core/index";
-import { ApolloProvider } from "../../react/context/index";
-import type { MockedResponse } from "../core/index";
-import { MockLink } from "../core/index";
-import type { ApolloLink } from "../../link/core/index";
-import type { Resolvers } from "../../core/index";
-import type { ApolloCache } from "../../cache/index";
-import { Hermes } from "../../../../src";
+import type { DefaultOptions } from "../../core/index.js";
+import { ApolloClient } from "../../core/index.js";
+import { ApolloProvider } from "../../react/context/index.js";
+import type { MockedResponse } from "../core/index.js";
+import { MockLink } from "../core/index.js";
+import type { ApolloLink } from "../../link/core/index.js";
+import type { Resolvers } from "../../core/index.js";
+import type { ApolloCache } from "../../cache/index.js";
+import { Hermes } from "apollo-cache-hermes";
 
 export interface MockedProviderProps<TSerializedCache = {}> {
   mocks?: ReadonlyArray<MockedResponse<any, any>>;

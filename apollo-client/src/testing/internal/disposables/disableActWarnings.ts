@@ -1,4 +1,4 @@
-import { withCleanup } from "./withCleanup";
+import { withCleanup } from "./withCleanup.js";
 
 /**
  * Temporarily disable act warnings.

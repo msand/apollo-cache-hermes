@@ -4,10 +4,10 @@ import type {
   SelectionSetNode,
 } from "graphql";
 
-import type { NormalizedCache, InMemoryCacheConfig } from "./types";
+import type { NormalizedCache, InMemoryCacheConfig } from "./types.js";
 
-import type { KeyFieldsContext } from "./policies";
-import type { FragmentRegistryAPI } from "./fragmentRegistry";
+import type { KeyFieldsContext } from "./policies.js";
+import type { FragmentRegistryAPI } from "./fragmentRegistry.js";
 
 import type {
   Reference,
@@ -15,7 +15,7 @@ import type {
   StoreObject,
   FragmentMap,
   FragmentMapFunction,
-} from "../../utilities/index";
+} from "../../utilities/index.js";
 import {
   isReference,
   isField,
@@ -27,7 +27,7 @@ import {
   createFragmentMap,
   getFragmentDefinitions,
   isArray,
-} from "../../utilities/index";
+} from "../../utilities/index.js";
 
 export const { hasOwnProperty: hasOwn } = Object.prototype;
 

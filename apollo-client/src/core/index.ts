@@ -1,12 +1,12 @@
 /* Core */
 
-export type { ApolloClientOptions, DefaultOptions } from "./ApolloClient";
-export { ApolloClient, mergeOptions } from "./ApolloClient";
+export type { ApolloClientOptions, DefaultOptions } from "./ApolloClient.js";
+export { ApolloClient, mergeOptions } from "./ApolloClient.js";
 export type {
   FetchMoreOptions,
   UpdateQueryOptions,
-} from "./ObservableQuery";
-export { ObservableQuery } from "./ObservableQuery";
+} from "./ObservableQuery.js";
+export { ObservableQuery } from "./ObservableQuery.js";
 export type {
   QueryOptions,
   WatchQueryOptions,
@@ -19,17 +19,16 @@ export type {
   ErrorPolicy,
   FetchMoreQueryOptions,
   SubscribeToMoreOptions,
-} from "./watchQueryOptions";
-export { NetworkStatus, isNetworkRequestSettled } from "./networkStatus";
-export * from "./types";
-export type { Resolver, FragmentMatcher } from "./LocalState";
-export { isApolloError, ApolloError } from "../errors/index";
+} from "./watchQueryOptions.js";
+export { NetworkStatus, isNetworkRequestSettled } from "./networkStatus.js";
+export * from "./types.js";
+export type { Resolver, FragmentMatcher } from "./LocalState.js";
+export { isApolloError, ApolloError } from "../errors/index.js";
 /* Cache */
 
 export type {
   // All the exports (types) from ../cache, minus cacheSlot,
   // which we want to keep semi-private.
-  Cache,
   Transaction,
   DataProxy,
   InMemoryCacheConfig,
@@ -43,28 +42,32 @@ export type {
   PossibleTypesMap,
   WatchFragmentOptions,
   WatchFragmentResult,
-} from "../cache/index";
+} from "../cache/index.js";
+// eslint-disable-next-line @typescript-eslint/consistent-type-exports
+export {
+  Cache,
+} from "../cache/index.js";
 export {
   ApolloCache,
   InMemoryCache,
   MissingFieldError,
   defaultDataIdFromObject,
   makeVar,
-} from "../cache/index";
+} from "../cache/index.js";
 
-export * from "../cache/inmemory/types";
+export * from "../cache/inmemory/types.js";
 
 /* Link */
 
-export * from "../link/core/index";
-export * from "../link/http/index";
-export type { ServerError } from "../link/utils/index";
+export * from "../link/core/index.js";
+export * from "../link/http/index.js";
+export type { ServerError } from "../link/utils/index.js";
 export {
   fromError,
   toPromise,
   fromPromise,
   throwServerError,
-} from "../link/utils/index";
+} from "../link/utils/index.js";
 
 /* Utilities */
 
@@ -74,13 +77,13 @@ export type {
   ObservableSubscription,
   Reference,
   StoreObject,
-} from "../utilities/index";
+} from "../utilities/index.js";
 export {
   DocumentTransform,
   Observable,
   isReference,
   makeReference,
-} from "../utilities/index";
+} from "../utilities/index.js";
 
 /* Supporting */
 

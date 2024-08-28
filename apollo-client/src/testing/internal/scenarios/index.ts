@@ -1,6 +1,6 @@
-import { ApolloLink, Observable, gql } from "../../../core/index";
-import type { TypedDocumentNode } from "../../../core/index";
-import type { MockedResponse } from "../../core/index";
+import { ApolloLink, Observable, gql } from "../../../core/index.js";
+import type { TypedDocumentNode } from "../../../core/index.js";
+import type { MockedResponse } from "../../core/index.js";
 
 export interface SimpleCaseData {
   greeting: string;

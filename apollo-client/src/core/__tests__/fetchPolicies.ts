@@ -2,7 +2,7 @@ import gql from "graphql-tag";
 
 import { ApolloClient, NetworkStatus } from "../../core";
 import { ApolloLink } from "../../link/core";
-import { Hermes } from "../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 import { Observable } from "../../utilities";
 import { subscribeAndCount, itAsync, mockSingleLink } from "../../testing";
 import { TypedDocumentNode } from "@graphql-typed-document-node/core";

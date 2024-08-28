@@ -1,4 +1,4 @@
-import { wrapPromiseWithState } from "../../../utilities/index";
+import { wrapPromiseWithState } from "../../../utilities/index.js";
 import * as React from "rehackt";
 
 type Use = <T>(promise: Promise<T>) => T;

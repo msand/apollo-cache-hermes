@@ -15,7 +15,7 @@ import { TypedDocumentNode } from "@graphql-typed-document-node/core";
 import { stringifyForDisplay } from "../../../utilities";
 import { InvariantError } from "../../../utilities/globals";
 import { spyOnConsole } from "../../../testing/internal";
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 describe("EntityStore", () => {
   it("should support result caching if so configured", () => {

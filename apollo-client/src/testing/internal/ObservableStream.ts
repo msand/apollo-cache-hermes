@@ -1,4 +1,4 @@
-import type { Observable } from "../../utilities/index";
+import type { Observable } from "../../utilities/index.js";
 
 interface TakeOptions {
   timeout?: number;

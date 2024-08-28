@@ -1,7 +1,7 @@
 import type { ASTNode } from "graphql";
-import { print } from "../../utilities/index";
+import { print } from "../../utilities/index.js";
 
-import type { Operation } from "../core/index";
+import type { Operation } from "../core/index.js";
 
 export interface Printer {
   (node: ASTNode, originalPrint: typeof print): string;

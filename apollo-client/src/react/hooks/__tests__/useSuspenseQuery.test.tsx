@@ -14,7 +14,7 @@ import { InvariantError } from "ts-invariant";
 import { equal } from "@wry/equality";
 import { expectTypeOf } from "expect-type";
 
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 import {
   gql,
   ApolloCache,

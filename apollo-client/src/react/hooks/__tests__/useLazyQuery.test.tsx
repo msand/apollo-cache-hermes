@@ -3,7 +3,7 @@ import { GraphQLError } from "graphql";
 import gql from "graphql-tag";
 import { act, render, renderHook, waitFor } from "@testing-library/react";
 
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 import {
   ApolloClient,
   ApolloError,

@@ -7,7 +7,7 @@ import type {
   OperationVariables,
   DefaultContext,
   ApolloCache,
-} from "../../core/index";
+} from "../../core/index.js";
 import type {
   QueryFunctionOptions,
   QueryResult,
@@ -16,7 +16,7 @@ import type {
   MutationResult,
   BaseSubscriptionOptions,
   SubscriptionResult,
-} from "../types/types";
+} from "../types/types.js";
 
 export interface QueryComponentOptions<
   TData = any,

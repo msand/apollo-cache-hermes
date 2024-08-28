@@ -17,7 +17,7 @@ import {
   ObservableQuery,
   TypedDocumentNode,
 } from "../../../core";
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 import {
   itAsync,
   MockedProvider,

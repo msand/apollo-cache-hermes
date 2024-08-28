@@ -1,12 +1,12 @@
 import gql from "graphql-tag";
 
-import { Hermes } from "../../../../../src";
+import { InMemoryCache } from "../inMemoryCache";
 import { ApolloCache } from "../../core/cache";
 import type { NormalizedCacheObject } from "../types";
 
 describe("optimistic cache layers", () => {
   it("return === results for repeated reads", () => {
-    const cache = new Hermes({
+    const cache = new InMemoryCache({
       resultCaching: true,
       canonizeResults: true,
       dataIdFromObject(value: any) {
@@ -34,7 +34,7 @@ describe("optimistic cache layers", () => {
       return cache.readQuery<{ book: any }>({ query }, true);
     }
 
-    function readRealistic(cache: Hermes) {
+    function readRealistic(cache: InMemoryCache) {
       return cache.readQuery<{ book: any }>({ query }, false);
     }
 
@@ -206,7 +206,7 @@ describe("optimistic cache layers", () => {
   });
 
   it("dirties appropriate IDs when optimistic layers are removed", () => {
-    const cache = new Hermes({
+    const cache = new InMemoryCache({
       resultCaching: true,
       canonizeResults: true,
       dataIdFromObject(value: any) {
@@ -448,7 +448,7 @@ describe("optimistic cache layers", () => {
 
   describe("eviction during optimistic updates", function () {
     it("should not evict from lower layers", function () {
-      const cache = new Hermes();
+      const cache = new InMemoryCache();
 
       const query = gql`
         query {

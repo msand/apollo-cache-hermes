@@ -1,5 +1,5 @@
 import { ApolloClient, gql } from "../../core";
-import { Hermes } from "../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 /**
  * Creates an apollo-client instance with a local query resolver named 'localQuery'.

@@ -7,7 +7,7 @@ import { ApolloClient } from "../../../core";
 import { ApolloProvider } from "../../context";
 import { useLazyQuery } from "../../hooks";
 import { renderToStringWithData } from "../../ssr";
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 describe("useLazyQuery Hook SSR", () => {
   const CAR_QUERY: DocumentNode = gql`

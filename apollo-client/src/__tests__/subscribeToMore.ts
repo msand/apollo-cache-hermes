@@ -4,7 +4,7 @@ import { DocumentNode, OperationDefinitionNode } from "graphql";
 import { ApolloClient } from "../core";
 import { ApolloLink, Operation } from "../link/core";
 import { itAsync, mockSingleLink, mockObservableLink } from "../testing";
-import { Hermes } from "../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 const isSub = (operation: Operation) =>
   (operation.query as DocumentNode).definitions

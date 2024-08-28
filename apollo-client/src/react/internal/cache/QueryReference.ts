@@ -5,18 +5,18 @@ import type {
   ObservableQuery,
   OperationVariables,
   WatchQueryOptions,
-} from "../../../core/index";
+} from "../../../core/index.js";
 import type {
   ObservableSubscription,
   PromiseWithState,
-} from "../../../utilities/index";
+} from "../../../utilities/index.js";
 import {
   createFulfilledPromise,
   createRejectedPromise,
-} from "../../../utilities/index";
-import type { QueryKey } from "./types";
-import { wrapPromiseWithState } from "../../../utilities/index";
-import { invariant } from "../../../utilities/globals/invariantWrappers";
+} from "../../../utilities/index.js";
+import type { QueryKey } from "./types.js";
+import { wrapPromiseWithState } from "../../../utilities/index.js";
+import { invariant } from "../../../utilities/globals/invariantWrappers.js";
 
 type QueryRefPromise<TData> = PromiseWithState<ApolloQueryResult<TData>>;
 

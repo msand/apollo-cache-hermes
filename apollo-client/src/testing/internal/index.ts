@@ -1,6 +1,6 @@
-export * from "./profile/index";
-export * from "./disposables/index";
-export { ObservableStream } from "./ObservableStream";
+export * from "./profile/index.js";
+export * from "./disposables/index.js";
+export { ObservableStream } from "./ObservableStream.js";
 
 export type {
   SimpleCaseData,
@@ -8,15 +8,15 @@ export type {
   PaginatedCaseVariables,
   VariablesCaseData,
   VariablesCaseVariables,
-} from "./scenarios/index";
+} from "./scenarios/index.js";
 export {
   setupSimpleCase,
   setupVariablesCase,
   setupPaginatedCase,
-} from "./scenarios/index";
+} from "./scenarios/index.js";
 
 export type {
   RenderWithClientOptions,
   RenderWithMocksOptions,
-} from "./renderHelpers";
-export { renderWithClient, renderWithMocks } from "./renderHelpers";
+} from "./renderHelpers.js";
+export { renderWithClient, renderWithMocks } from "./renderHelpers.js";

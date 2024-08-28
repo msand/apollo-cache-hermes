@@ -1,15 +1,15 @@
-import { invariant } from "../../utilities/globals/index";
+import { invariant } from "../../utilities/globals/index.js";
 import * as React from "rehackt";
 import type { DocumentNode } from "graphql";
 import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
 import { equal } from "@wry/equality";
 
-import { DocumentType, verifyDocumentType } from "../parser/index";
+import { DocumentType, verifyDocumentType } from "../parser/index.js";
 import type {
   NoInfer,
   SubscriptionHookOptions,
   SubscriptionResult,
-} from "../types/types";
+} from "../types/types.js";
 import type {
   ApolloClient,
   DefaultContext,
@@ -17,13 +17,13 @@ import type {
   FetchPolicy,
   FetchResult,
   OperationVariables,
-} from "../../core/index";
-import { ApolloError, Observable } from "../../core/index";
-import { useApolloClient } from "./useApolloClient";
-import { useDeepMemo } from "./internal/useDeepMemo";
-import { useSyncExternalStore } from "./useSyncExternalStore";
-import { toApolloError } from "./useQuery";
-import { useIsomorphicLayoutEffect } from "./internal/useIsomorphicLayoutEffect";
+} from "../../core/index.js";
+import { ApolloError, Observable } from "../../core/index.js";
+import { useApolloClient } from "./useApolloClient.js";
+import { useDeepMemo } from "./internal/useDeepMemo.js";
+import { useSyncExternalStore } from "./useSyncExternalStore.js";
+import { toApolloError } from "./useQuery.js";
+import { useIsomorphicLayoutEffect } from "./internal/useIsomorphicLayoutEffect.js";
 
 /**
  * > Refer to the [Subscriptions](https://www.apollographql.com/docs/react/data/subscriptions/) section for a more in-depth overview of `useSubscription`.

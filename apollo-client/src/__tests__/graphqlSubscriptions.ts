@@ -7,7 +7,7 @@ import { itAsync, mockObservableLink } from "../testing";
 import { GraphQLError } from "graphql";
 import { spyOnConsole } from "../testing/internal";
 import { getDefaultOptionsForQueryManagerTests } from "../testing/core/mocking/mockQueryManager";
-import { Hermes } from "../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 describe("GraphQL Subscriptions", () => {
   const results = [

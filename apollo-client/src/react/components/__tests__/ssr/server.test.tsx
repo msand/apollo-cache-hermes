@@ -12,7 +12,7 @@ import {
 import gql from "graphql-tag";
 
 import { ApolloClient } from "../../../../core";
-import { Hermes as Cache } from "../../../../../../src";
+import { Hermes as Cache } from "apollo-cache-hermes";
 import { ApolloProvider } from "../../../context";
 import { ApolloLink } from "../../../../link/core";
 import { Observable } from "../../../../utilities";

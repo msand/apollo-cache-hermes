@@ -1,4 +1,4 @@
-import { maybe } from "../globals/index";
+import { maybe } from "../globals/index.js";
 
 const isReactNative = maybe(() => navigator.product) == "ReactNative";
 

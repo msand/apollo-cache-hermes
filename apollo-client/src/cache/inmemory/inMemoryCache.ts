@@ -1,17 +1,17 @@
-import { invariant } from "../../utilities/globals/index";
+import { invariant } from "../../utilities/globals/index.js";
 
 // Make builtins like Map and Set safe to use with non-extensible objects.
-import "./fixPolyfills";
+import "./fixPolyfills.js";
 
 import type { DocumentNode } from "graphql";
 import type { OptimisticWrapperFunction } from "optimism";
 import { wrap } from "optimism";
 import { equal } from "@wry/equality";
 
-import { ApolloCache } from "../core/cache";
-import type { Cache } from "../core/types/Cache";
-import { MissingFieldError } from "../core/types/common";
-import type { StoreObject, Reference } from "../../utilities/index";
+import { ApolloCache } from "../core/cache.js";
+import type { Cache } from "../core/types/Cache.js";
+import { MissingFieldError } from "../core/types/common.js";
+import type { StoreObject, Reference } from "../../utilities/index.js";
 import {
   addTypenameToDocument,
   isReference,
@@ -20,16 +20,16 @@ import {
   print,
   cacheSizes,
   defaultCacheSizes,
-} from "../../utilities/index";
-import type { InMemoryCacheConfig, NormalizedCacheObject } from "./types";
-import { StoreReader } from "./readFromStore";
-import { StoreWriter } from "./writeToStore";
-import { EntityStore, supportsResultCaching } from "./entityStore";
-import { makeVar, forgetCache, recallCache } from "./reactiveVars";
-import { Policies } from "./policies";
-import { hasOwn, normalizeConfig, shouldCanonizeResults } from "./helpers";
-import type { OperationVariables } from "../../core/index";
-import { getInMemoryCacheMemoryInternals } from "../../utilities/caching/getMemoryInternals";
+} from "../../utilities/index.js";
+import type { InMemoryCacheConfig, NormalizedCacheObject } from "./types.js";
+import { StoreReader } from "./readFromStore.js";
+import { StoreWriter } from "./writeToStore.js";
+import { EntityStore, supportsResultCaching } from "./entityStore.js";
+import { makeVar, forgetCache, recallCache } from "./reactiveVars.js";
+import { Policies } from "./policies.js";
+import { hasOwn, normalizeConfig, shouldCanonizeResults } from "./helpers.js";
+import type { OperationVariables } from "../../core/index.js";
+import { getInMemoryCacheMemoryInternals } from "../../utilities/caching/getMemoryInternals.js";
 
 type BroadcastOptions = Pick<
   Cache.BatchOptions<ApolloCache<NormalizedCacheObject>>,
@@ -37,20 +37,20 @@ type BroadcastOptions = Pick<
 >;
 
 export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
-  public data!: EntityStore;
-  public optimisticData!: EntityStore;
+  data!: EntityStore;
+  optimisticData!: EntityStore;
 
-  public readonly config: InMemoryCacheConfig;
-  public readonly watches = new Set<Cache.WatchOptions>();
-  public readonly addTypename: boolean;
+  config: InMemoryCacheConfig;
+  watches = new Set<Cache.WatchOptions>();
+  addTypename: boolean;
 
-  public storeReader!: StoreReader;
-  public storeWriter!: StoreWriter;
-  public readonly addTypenameTransform = new DocumentTransform(
+  storeReader!: StoreReader;
+  storeWriter!: StoreWriter;
+  addTypenameTransform = new DocumentTransform(
     addTypenameToDocument
   );
 
-  public maybeBroadcastWatch!: OptimisticWrapperFunction<
+  maybeBroadcastWatch!: OptimisticWrapperFunction<
     [Cache.WatchOptions, BroadcastOptions?],
     any,
     [Cache.WatchOptions]
@@ -413,7 +413,7 @@ export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
     }
   }
 
-  public txCount = 0;
+  txCount = 0;
 
   public batch<TUpdateResult>(
     options: Cache.BatchOptions<
@@ -533,7 +533,7 @@ export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
     return this.addTypenameToDocument(this.addFragmentsToDocument(document));
   }
 
-  public broadcastWatches(options?: BroadcastOptions) {
+  broadcastWatches(options?: BroadcastOptions) {
     if (!this.txCount) {
       this.watches.forEach((c) => this.maybeBroadcastWatch(c, options));
     }

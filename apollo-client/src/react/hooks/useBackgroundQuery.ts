@@ -5,26 +5,26 @@ import type {
   OperationVariables,
   TypedDocumentNode,
   WatchQueryOptions,
-} from "../../core/index";
-import { useApolloClient } from "./useApolloClient";
+} from "../../core/index.js";
+import { useApolloClient } from "./useApolloClient.js";
 import {
   getSuspenseCache,
   unwrapQueryRef,
   updateWrappedQueryRef,
   wrapQueryRef,
-} from "../internal/index";
-import type { CacheKey, QueryRef } from "../internal/index";
-import type { BackgroundQueryHookOptions, NoInfer } from "../types/types";
-import { wrapHook } from "./internal/index";
-import { useWatchQueryOptions } from "./useSuspenseQuery";
+} from "../internal/index.js";
+import type { CacheKey, QueryRef } from "../internal/index.js";
+import type { BackgroundQueryHookOptions, NoInfer } from "../types/types.js";
+import { wrapHook } from "./internal/index.js";
+import { useWatchQueryOptions } from "./useSuspenseQuery.js";
 import type {
   FetchMoreFunction,
   RefetchFunction,
   SubscribeToMoreFunction,
-} from "./useSuspenseQuery";
-import { canonicalStringify } from "../../cache/index";
-import type { DeepPartial } from "../../utilities/index";
-import type { SkipToken } from "./constants";
+} from "./useSuspenseQuery.js";
+import { canonicalStringify } from "../../cache/index.js";
+import type { DeepPartial } from "../../utilities/index.js";
+import type { SkipToken } from "./constants.js";
 
 export type UseBackgroundQueryResult<
   TData = unknown,

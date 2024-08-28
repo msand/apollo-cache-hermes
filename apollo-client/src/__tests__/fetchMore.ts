@@ -16,7 +16,7 @@ import {
 } from "../utilities";
 
 import { ApolloCache, InMemoryCacheConfig, FieldMergeFunction } from "../cache";
-import { Hermes } from "../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 import { itAsync, mockSingleLink, subscribeAndCount } from "../testing";
 

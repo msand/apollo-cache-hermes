@@ -1,11 +1,11 @@
 import { Trie } from "@wry/trie";
-import { canUseWeakMap, canUseWeakSet } from "../common/canUse";
-import { checkDocument } from "./getFromAST";
-import { invariant } from "../globals/index";
+import { canUseWeakMap, canUseWeakSet } from "../common/canUse.js";
+import { checkDocument } from "./getFromAST.js";
+import { invariant } from "../globals/index.js";
 import type { DocumentNode } from "graphql";
 import { WeakCache } from "@wry/caches";
 import { wrap } from "optimism";
-import { cacheSizes } from "../caching/index";
+import { cacheSizes } from "../caching/index.js";
 
 export type DocumentTransformCacheKey = ReadonlyArray<unknown>;
 

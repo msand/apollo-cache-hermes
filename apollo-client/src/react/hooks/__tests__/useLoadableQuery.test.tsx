@@ -43,7 +43,7 @@ import { useLoadableQuery } from "../useLoadableQuery";
 import type { UseReadQueryResult } from "../useReadQuery";
 import { useReadQuery } from "../useReadQuery";
 import { ApolloProvider } from "../../context";
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 import { LoadableQueryHookFetchPolicy } from "../../types/types";
 import { QueryRef } from "../../../react";
 import {

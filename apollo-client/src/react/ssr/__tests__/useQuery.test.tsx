@@ -8,7 +8,7 @@ import {
   mockSingleLink,
 } from "../../../testing";
 import { ApolloClient } from "../../../core";
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 import { ApolloProvider, getApolloContext } from "../../context";
 import { useApolloClient, useQuery } from "../../hooks";
 import { renderToStringWithData } from "..";

@@ -1,12 +1,12 @@
 import type { DocumentNode } from "graphql";
 import type * as ReactTypes from "react";
 
-import { parser, DocumentType } from "../parser/index";
-import { withQuery } from "./query-hoc";
-import { withMutation } from "./mutation-hoc";
-import { withSubscription } from "./subscription-hoc";
-import type { OperationOption, DataProps, MutateProps } from "./types";
-import type { OperationVariables } from "../../core/index";
+import { parser, DocumentType } from "../parser/index.js";
+import { withQuery } from "./query-hoc.js";
+import { withMutation } from "./mutation-hoc.js";
+import { withSubscription } from "./subscription-hoc.js";
+import type { OperationOption, DataProps, MutateProps } from "./types.js";
+import type { OperationVariables } from "../../core/index.js";
 
 /**
  * @deprecated

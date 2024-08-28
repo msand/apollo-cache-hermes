@@ -1,6 +1,6 @@
 // externals
 import gql from "graphql-tag";
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 // mocks
 import { itAsync, MockSubscriptionLink } from "../../../testing/core";

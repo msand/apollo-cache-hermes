@@ -1,7 +1,7 @@
 import { NormalizedCacheObject, StoreObject } from "../types";
 import { EntityStore } from "../entityStore";
 import { Policies } from "../policies";
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 describe("Optimistic EntityStore layering", () => {
   function makeLayer(root: EntityStore) {

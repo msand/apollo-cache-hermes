@@ -2,14 +2,14 @@ export type {
   MockedResponse,
   MockLinkOptions,
   ResultFunction,
-} from "./mocking/mockLink";
-export { MockLink, mockSingleLink } from "./mocking/mockLink";
+} from "./mocking/mockLink.js";
+export { MockLink, mockSingleLink } from "./mocking/mockLink.js";
 export {
   MockSubscriptionLink,
   mockObservableLink,
-} from "./mocking/mockSubscriptionLink";
-export { createMockClient } from "./mocking/mockClient";
-export { default as subscribeAndCount } from "./subscribeAndCount";
-export { itAsync } from "./itAsync";
-export { wait, tick } from "./wait";
-export * from "./withConsoleSpy";
+} from "./mocking/mockSubscriptionLink.js";
+export { createMockClient } from "./mocking/mockClient.js";
+export { default as subscribeAndCount } from "./subscribeAndCount.js";
+export { itAsync } from "./itAsync.js";
+export { wait, tick } from "./wait.js";
+export * from "./withConsoleSpy.js";

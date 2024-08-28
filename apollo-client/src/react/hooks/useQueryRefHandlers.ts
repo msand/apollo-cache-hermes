@@ -5,17 +5,17 @@ import {
   unwrapQueryRef,
   updateWrappedQueryRef,
   wrapQueryRef,
-} from "../internal/index";
-import type { QueryRef } from "../internal/index";
-import type { OperationVariables } from "../../core/types";
+} from "../internal/index.js";
+import type { QueryRef } from "../internal/index.js";
+import type { OperationVariables } from "../../core/types.js";
 import type {
   RefetchFunction,
   FetchMoreFunction,
   SubscribeToMoreFunction,
-} from "./useSuspenseQuery";
-import type { FetchMoreQueryOptions } from "../../core/watchQueryOptions";
-import { useApolloClient } from "./useApolloClient";
-import { wrapHook } from "./internal/index";
+} from "./useSuspenseQuery.js";
+import type { FetchMoreQueryOptions } from "../../core/watchQueryOptions.js";
+import { useApolloClient } from "./useApolloClient.js";
+import { wrapHook } from "./internal/index.js";
 
 export interface UseQueryRefHandlersResult<
   TData = unknown,

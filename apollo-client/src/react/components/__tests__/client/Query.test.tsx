@@ -6,7 +6,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { ApolloClient, NetworkStatus } from "../../../../core";
 import { ApolloError } from "../../../../errors";
 import { ApolloLink } from "../../../../link/core";
-import { Hermes } from "../../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 import { ApolloProvider } from "../../../context";
 import { itAsync, MockedProvider, mockSingleLink } from "../../../../testing";
 import { Query } from "../../Query";

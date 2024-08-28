@@ -5,7 +5,7 @@ import { DocumentNode } from "graphql";
 
 import { ApolloClient } from "../../../../core";
 import { ApolloProvider } from "../../../context";
-import { Hermes as Cache } from "../../../../../../src";
+import { Hermes as Cache } from "apollo-cache-hermes";
 import { ApolloLink } from "../../../../link/core";
 import { itAsync, MockSubscriptionLink } from "../../../../testing";
 import { graphql } from "../../graphql";

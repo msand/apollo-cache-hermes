@@ -5,7 +5,7 @@ import {
   DocumentTransform,
   gql,
 } from "../../../core";
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 import { createPersistedQueryLink } from "../../../link/persisted-queries";
 import { removeTypenameFromVariables } from "../../../link/remove-typename";
 import crypto from "crypto";

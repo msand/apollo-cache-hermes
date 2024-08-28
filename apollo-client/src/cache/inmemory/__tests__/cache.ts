@@ -12,7 +12,7 @@ import {
 } from "../../../core";
 import { Cache } from "../../../cache";
 import { InMemoryCacheConfig } from "../types";
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 import { StoreReader } from "../readFromStore";
 import { StoreWriter } from "../writeToStore";

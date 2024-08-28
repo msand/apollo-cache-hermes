@@ -12,7 +12,7 @@ import {
 import { getDataFromTree } from "../../../ssr";
 import { itAsync, mockSingleLink } from "../../../../testing";
 import { Query } from "../../Query";
-import { Hermes as Cache } from "../../../../../../src";
+import { Hermes as Cache } from "apollo-cache-hermes";
 
 describe("SSR", () => {
   describe("`getDataFromTree`", () => {

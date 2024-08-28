@@ -30,7 +30,7 @@ import {
 import { ApolloLink } from "../link/core";
 import { createFragmentRegistry, makeVar, PossibleTypesMap } from "../cache";
 import { ApolloError } from "../errors";
-import { Hermes } from "../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 import {
   itAsync,

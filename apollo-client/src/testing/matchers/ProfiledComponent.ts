@@ -1,11 +1,11 @@
 import type { MatcherFunction } from "expect";
-import { WaitForRenderTimeoutError } from "../internal/index";
+import { WaitForRenderTimeoutError } from "../internal/index.js";
 import type {
   NextRenderOptions,
   Profiler,
   ProfiledComponent,
   ProfiledHook,
-} from "../internal/index";
+} from "../internal/index.js";
 
 export const toRerender: MatcherFunction<[options?: NextRenderOptions]> =
   async function (actual, options) {

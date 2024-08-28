@@ -7,8 +7,8 @@ import type {
   ApolloQueryResult,
   OperationVariables,
   WatchQueryOptions,
-} from "../../core/index";
-import { mergeOptions } from "../../utilities/index";
+} from "../../core/index.js";
+import { mergeOptions } from "../../utilities/index.js";
 import type {
   LazyQueryHookExecOptions,
   LazyQueryHookOptions,
@@ -16,17 +16,16 @@ import type {
   NoInfer,
   QueryHookOptions,
   QueryResult,
-} from "../types/types";
-import type { InternalResult, ObsQueryWithMeta } from "./useQuery";
+} from "../types/types.js";
+import type { InternalResult, ObsQueryWithMeta } from "./useQuery.js";
 import {
-    createMakeWatchQueryOptions,
-    getDefaultFetchPolicy,
-    getObsQueryOptions,
-    toQueryResult,
-    useQueryInternals,
-} from "./useQuery";
-import { useIsomorphicLayoutEffect } from "./internal/useIsomorphicLayoutEffect";
-
+  createMakeWatchQueryOptions,
+  getDefaultFetchPolicy,
+  getObsQueryOptions,
+  toQueryResult,
+  useQueryInternals,
+} from "./useQuery.js";
+import { useIsomorphicLayoutEffect } from "./internal/useIsomorphicLayoutEffect.js";
 
 // The following methods, when called will execute the query, regardless of
 // whether the useLazyQuery execute function was called before.

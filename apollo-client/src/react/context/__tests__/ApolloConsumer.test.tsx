@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 
 import { ApolloLink } from "../../../link/core";
 import { ApolloClient } from "../../../core";
-import { Hermes as Cache } from "../../../../../src";
+import { Hermes as Cache } from "apollo-cache-hermes";
 import { ApolloProvider } from "../ApolloProvider";
 import { ApolloConsumer } from "../ApolloConsumer";
 import { getApolloContext } from "../ApolloContext";

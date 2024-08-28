@@ -4,7 +4,7 @@ import {
   makeReference,
   StoreObject,
 } from "../../../cache";
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 import { relayStylePagination, TRelayPageInfo } from "../pagination";
 
 describe("relayStylePagination", () => {

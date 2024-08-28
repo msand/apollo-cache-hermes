@@ -14,7 +14,7 @@ import {
   WatchQueryFetchPolicy,
   WatchQueryOptions,
 } from "../../../core";
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 import { ApolloProvider } from "../../context";
 import { Observable, Reference, concatPagination } from "../../../utilities";
 import { ApolloLink } from "../../../link/core";

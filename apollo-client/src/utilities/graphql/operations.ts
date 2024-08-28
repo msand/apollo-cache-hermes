@@ -1,5 +1,5 @@
-import type { DocumentNode } from "../../core/index";
-import { getOperationDefinition } from "./getFromAST";
+import type { DocumentNode } from "../../core/index.js";
+import { getOperationDefinition } from "./getFromAST.js";
 
 function isOperation(
   document: DocumentNode,

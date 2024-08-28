@@ -36,7 +36,7 @@ import { useBackgroundQuery } from "../useBackgroundQuery";
 import { UseReadQueryResult, useReadQuery } from "../useReadQuery";
 import { ApolloProvider } from "../../context";
 import { QueryRef, QueryReference } from "../../internal";
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 import { SuspenseQueryHookFetchPolicy } from "../../types/types";
 import equal from "@wry/equality";
 import {

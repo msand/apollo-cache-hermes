@@ -6,7 +6,7 @@ import gql from "graphql-tag";
 import { itAsync, MockedResponse, MockLink } from "../../core";
 import { MockedProvider } from "../MockedProvider";
 import { useQuery } from "../../../react/hooks";
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 import { QueryResult } from "../../../react/types/types";
 import { ApolloLink, FetchResult } from "../../../link/core";
 import { Observable } from "zen-observable-ts";

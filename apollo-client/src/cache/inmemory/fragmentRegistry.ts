@@ -8,12 +8,12 @@ import { visit } from "graphql";
 
 import { wrap } from "optimism";
 
-import type { FragmentMap } from "../../utilities/index";
+import type { FragmentMap } from "../../utilities/index.js";
 import {
   cacheSizes,
   defaultCacheSizes,
   getFragmentDefinitions,
-} from "../../utilities/index";
+} from "../../utilities/index.js";
 import { WeakCache } from "@wry/caches";
 
 export interface FragmentRegistryAPI {

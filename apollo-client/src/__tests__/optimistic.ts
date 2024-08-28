@@ -15,7 +15,7 @@ import {
 import { QueryManager } from "../core/QueryManager";
 
 import { Cache } from "../cache";
-import { Hermes } from "../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 import {
   Observable,

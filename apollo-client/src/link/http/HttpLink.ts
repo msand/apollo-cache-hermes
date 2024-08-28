@@ -1,6 +1,6 @@
-import { ApolloLink } from "../core/index";
-import type { HttpOptions } from "./selectHttpOptionsAndBody";
-import { createHttpLink } from "./createHttpLink";
+import { ApolloLink } from "../core/index.js";
+import type { HttpOptions } from "./selectHttpOptionsAndBody.js";
+import { createHttpLink } from "./createHttpLink.js";
 
 export class HttpLink extends ApolloLink {
   constructor(public options: HttpOptions = {}) {

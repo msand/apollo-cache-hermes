@@ -2,10 +2,10 @@ import * as React from "react";
 import type { ReactElement } from "react";
 import { render } from "@testing-library/react";
 import type { Queries, RenderOptions, queries } from "@testing-library/react";
-import type { ApolloClient } from "../../core/index";
-import { ApolloProvider } from "../../react/index";
-import type { MockedProviderProps } from "../react/MockedProvider";
-import { MockedProvider } from "../react/MockedProvider";
+import type { ApolloClient } from "../../core/index.js";
+import { ApolloProvider } from "../../react/index.js";
+import type { MockedProviderProps } from "../react/MockedProvider.js";
+import { MockedProvider } from "../react/MockedProvider.js";
 
 export interface RenderWithClientOptions<
   Q extends Queries = typeof queries,

@@ -17,10 +17,10 @@
  * callbacks
  */
 /** */
-import { invariant } from "../../utilities/globals/index";
+import { invariant } from "../../utilities/globals/index.js";
 
 import * as React from "rehackt";
-import { useSyncExternalStore } from "./useSyncExternalStore";
+import { useSyncExternalStore } from "./useSyncExternalStore.js";
 import { equal } from "@wry/equality";
 
 import type {
@@ -28,34 +28,34 @@ import type {
   DefaultOptions,
   OperationVariables,
   WatchQueryFetchPolicy,
-} from "../../core/index";
-import { mergeOptions } from "../../utilities/index";
-import { getApolloContext } from "../context/index";
-import { ApolloError } from "../../errors/index";
+} from "../../core/index.js";
+import { mergeOptions } from "../../utilities/index.js";
+import { getApolloContext } from "../context/index.js";
+import { ApolloError } from "../../errors/index.js";
 import type {
   ApolloQueryResult,
   ObservableQuery,
   DocumentNode,
   TypedDocumentNode,
   WatchQueryOptions,
-} from "../../core/index";
-import { NetworkStatus } from "../../core/index";
+} from "../../core/index.js";
+import { NetworkStatus } from "../../core/index.js";
 import type {
   QueryHookOptions,
   QueryResult,
   ObservableQueryFields,
   NoInfer,
-} from "../types/types";
+} from "../types/types.js";
 
-import { DocumentType, verifyDocumentType } from "../parser/index";
-import { useApolloClient } from "./useApolloClient";
+import { DocumentType, verifyDocumentType } from "../parser/index.js";
+import { useApolloClient } from "./useApolloClient.js";
 import {
   compact,
   isNonEmptyArray,
   maybeDeepFreeze,
-} from "../../utilities/index";
-import { wrapHook } from "./internal/index";
-import type { RenderPromises } from "../ssr/RenderPromises";
+} from "../../utilities/index.js";
+import { wrapHook } from "./internal/index.js";
+import type { RenderPromises } from "../ssr/RenderPromises.js";
 
 const {
   prototype: { hasOwnProperty },

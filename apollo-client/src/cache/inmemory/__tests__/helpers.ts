@@ -7,7 +7,7 @@ import { EntityStore } from "../entityStore";
 import { StoreReader } from "../readFromStore";
 import { StoreWriter } from "../writeToStore";
 import { Cache } from "../../../core";
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 export function defaultNormalizedCacheFactory(
   seed?: NormalizedCacheObject

@@ -1,4 +1,4 @@
-import { invariant } from "../globals/index";
+import { invariant } from "../globals/index.js";
 
 // Provides the methods that allow QueryManager to handle the `skip` and
 // `include` directives within GraphQL.

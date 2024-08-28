@@ -2,10 +2,10 @@ import {
   invariant,
   newInvariantError,
   InvariantError,
-} from "./invariantWrappers";
+} from "./invariantWrappers.js";
 
-export { maybe } from "./maybe";
-export { default as global } from "./global";
+export { maybe } from "./maybe.js";
+export { default as global } from "./global.js";
 export { invariant, newInvariantError, InvariantError };
 
 /**

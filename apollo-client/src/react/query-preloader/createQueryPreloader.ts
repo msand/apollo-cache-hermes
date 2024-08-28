@@ -8,15 +8,15 @@ import type {
   TypedDocumentNode,
   WatchQueryFetchPolicy,
   WatchQueryOptions,
-} from "../../core/index";
+} from "../../core/index.js";
 import type {
   DeepPartial,
   OnlyRequiredProperties,
-} from "../../utilities/index";
-import { InternalQueryReference, wrapQueryRef } from "../internal/index";
-import type { PreloadedQueryRef } from "../internal/index";
-import type { NoInfer } from "../index";
-import { wrapHook } from "../hooks/internal/index";
+} from "../../utilities/index.js";
+import { InternalQueryReference, wrapQueryRef } from "../internal/index.js";
+import type { PreloadedQueryRef } from "../internal/index.js";
+import type { NoInfer } from "../index.js";
+import { wrapHook } from "../hooks/internal/index.js";
 
 type VariablesOption<TVariables extends OperationVariables> =
   [TVariables] extends [never] ?

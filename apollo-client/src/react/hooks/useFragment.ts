@@ -1,18 +1,18 @@
 import * as React from "rehackt";
-import type { DeepPartial } from "../../utilities/index";
-import { mergeDeepArray } from "../../utilities/index";
+import type { DeepPartial } from "../../utilities/index.js";
+import { mergeDeepArray } from "../../utilities/index.js";
 import type {
   Cache,
   Reference,
   StoreObject,
   MissingTree,
-} from "../../cache/index";
+} from "../../cache/index.js";
 
-import { useApolloClient } from "./useApolloClient";
-import { useSyncExternalStore } from "./useSyncExternalStore";
-import type { ApolloClient, OperationVariables } from "../../core/index";
-import type { NoInfer } from "../types/types";
-import { useDeepMemo, wrapHook } from "./internal/index";
+import { useApolloClient } from "./useApolloClient.js";
+import { useSyncExternalStore } from "./useSyncExternalStore.js";
+import type { ApolloClient, OperationVariables } from "../../core/index.js";
+import type { NoInfer } from "../types/types.js";
+import { useDeepMemo, wrapHook } from "./internal/index.js";
 import equal from "@wry/equality";
 
 export interface UseFragmentOptions<TData, TVars>

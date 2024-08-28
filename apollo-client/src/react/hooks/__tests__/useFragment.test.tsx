@@ -12,7 +12,7 @@ import { act } from "@testing-library/react";
 import { UseFragmentOptions, useFragment } from "../useFragment";
 import { MockedProvider } from "../../../testing";
 import { ApolloProvider } from "../../context";
-import { Hermes } from "../../../../../src";
+import { Hermes } from "apollo-cache-hermes";
 import {
   gql,
   TypedDocumentNode,

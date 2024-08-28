@@ -9,7 +9,7 @@ import {
   TypedDocumentNode,
   ObservableQuery,
 } from "../core";
-import { Hermes } from "../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 describe("client.refetchQueries", () => {
   itAsync("is public and callable", (resolve, reject) => {

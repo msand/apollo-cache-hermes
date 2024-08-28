@@ -10,7 +10,7 @@ import {
 } from "../utilities";
 import { itAsync, subscribeAndCount, mockSingleLink } from "../testing";
 import { spyOnConsole } from "../testing/internal";
-import { Hermes } from "../../../src";
+import { Hermes } from "apollo-cache-hermes";
 
 describe("mutation results", () => {
   const query = gql`
