@@ -3,6 +3,7 @@ import type * as jest from 'jest';
 declare global {
   const expect: typeof jest.expect;
   const jestExpect: typeof jest.expect;
+  // const __DEV__: boolean;
   interface Window {
     __DEV__?: boolean;
   }

@@ -46,9 +46,7 @@ export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
 
   storeReader!: StoreReader;
   storeWriter!: StoreWriter;
-  addTypenameTransform = new DocumentTransform(
-    addTypenameToDocument
-  );
+  addTypenameTransform = new DocumentTransform(addTypenameToDocument);
 
   maybeBroadcastWatch!: OptimisticWrapperFunction<
     [Cache.WatchOptions, BroadcastOptions?],

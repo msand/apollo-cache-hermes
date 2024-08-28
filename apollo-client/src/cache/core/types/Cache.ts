@@ -3,6 +3,8 @@ import type { AllFieldsModifier, Modifiers } from "./common.js";
 import type { ApolloCache } from "../cache.js";
 
 export namespace Cache {
+  // @ts-ignore
+  const _ = ""; // Make typescript export something
   export type WatchCallback<TData = any> = (
     diff: Cache.DiffResult<TData>,
     lastDiff?: Cache.DiffResult<TData>
