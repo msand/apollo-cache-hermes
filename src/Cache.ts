@@ -5,7 +5,7 @@ import { CacheSnapshot } from './CacheSnapshot';
 import { CacheTransaction } from './CacheTransaction';
 import { CacheContext } from './context';
 import { GraphSnapshot, NodeSnapshotMap } from './GraphSnapshot';
-import { extract, migrate, MigrationMap, prune, QueryObserver, read, restore } from './operations';
+import { extract, migrate, MigrationMap, prune, QueryObserver, read, restore, SnapshotEditor } from './operations';
 import { OptimisticUpdateQueue } from './OptimisticUpdateQueue';
 import { JsonObject, JsonValue } from './primitive';
 import { Queryable } from './Queryable';
@@ -100,9 +100,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     const idsToRemove = Object.keys(snapshot);
 
     if (idsToRemove.length) {
-      this.transaction(false, (t) => {
-        idsToRemove.forEach(id => t.evict({ id }));
-      });
+      return this._deleteFromBaseline(idsToRemove);
     }
     return idsToRemove;
   }
@@ -298,6 +296,42 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
   }
 
   // Internal
+
+  /**
+   * Batch-delete nodes from the baseline via a single SnapshotEditor so the
+   * snapshot is rebuilt once rather than per evict() call.
+   */
+  private _deleteFromBaseline(nodeIds: string[]): string[] {
+    const baseline = this._snapshot.baseline;
+    const editor = new SnapshotEditor(this._context, baseline);
+    const deleted: string[] = [];
+    for (const id of nodeIds) {
+      // Reachability walk uses the optimistic snapshot, so skip
+      // IDs that exist only in the optimistic layer.
+      if (baseline.getNodeSnapshot(id)) {
+        editor.delete(id);
+        deleted.push(id);
+      }
+    }
+    const { snapshot: newBaseline, editedNodeIds } = editor.commit();
+    this._applyBaseline(newBaseline, editedNodeIds);
+    return deleted;
+  }
+
+  /**
+   * Replace the baseline, rebuild the optimistic layer on top, and update
+   * the cache snapshot. Parallels CacheTransaction._buildOptimisticSnapshot.
+   */
+  private _applyBaseline(baseline: GraphSnapshot, editedNodeIds: Set<NodeId>) {
+    const { optimisticQueue } = this._snapshot;
+    if (optimisticQueue.hasUpdates()) {
+      const optResult = optimisticQueue.apply(this._context, baseline);
+      addToSet(editedNodeIds, optResult.editedNodeIds);
+      this._setSnapshot(new CacheSnapshot(baseline, optResult.snapshot, optimisticQueue), editedNodeIds, false);
+    } else {
+      this._setSnapshot(new CacheSnapshot(baseline, baseline, optimisticQueue), editedNodeIds, false);
+    }
+  }
 
   /**
    * Unregister an observer.

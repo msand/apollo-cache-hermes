@@ -889,6 +889,13 @@ export class SnapshotEditor<TSerialized> {
   }
 
   /**
+   * Whether a node has been marked for deletion in this editor session.
+   */
+  private _isNodeDeleted(id: NodeId): boolean {
+    return id in this._newNodes && this._newNodes[id] === undefined;
+  }
+
+  /**
    * Update all nodes with edited references, and ensure that the bookkeeping of
    * the new and _past_ references are properly updated.
    *
@@ -898,13 +905,18 @@ export class SnapshotEditor<TSerialized> {
     const orphanedNodeIds: Set<NodeId> = new Set();
 
     for (const { containerId, path, prevNodeId, nextNodeId, noWrite } of referenceEdits) {
+      // During bulk deletes, the container may already be deleted by a prior
+      // delete() call in the same editor session. Skip entirely.
+      if (this._isNodeDeleted(containerId)) continue;
+
       if (!noWrite) {
         const target = nextNodeId ? this._getNodeData(nextNodeId) : null;
         this._setValue(containerId, path, target);
       }
       const container = this._ensureNewSnapshot(containerId);
 
-      if (prevNodeId) {
+      // Skip reference bookkeeping for nodes already deleted in this session.
+      if (prevNodeId && !this._isNodeDeleted(prevNodeId)) {
         removeNodeReference('outbound', container, prevNodeId, path);
         const prevTarget = this._ensureNewSnapshot(prevNodeId);
         removeNodeReference('inbound', prevTarget, containerId, path);
@@ -913,7 +925,7 @@ export class SnapshotEditor<TSerialized> {
         }
       }
 
-      if (nextNodeId) {
+      if (nextNodeId && !this._isNodeDeleted(nextNodeId)) {
         addNodeReference('outbound', container, nextNodeId, path);
         const nextTarget = this._ensureNewSnapshot(nextNodeId);
         addNodeReference('inbound', nextTarget, containerId, path);
