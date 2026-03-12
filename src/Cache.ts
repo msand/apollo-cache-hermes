@@ -83,13 +83,8 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
   // explicitly retained (see retain and release, above). Returns an array of
   // dataId strings that were removed from the store.
   public gc() {
-    const gcStart = performance.now();
-
-    // Phase 1: Reachability walk
-    const walkStart = performance.now();
     const ids = this.getRootIdSet();
     const snapshot = { ...this._snapshot.optimistic._values };
-    const totalNodeCount = Object.keys(snapshot).length;
     ids.forEach((id) => {
       if (hasOwn.call(snapshot, id)) {
         // Because we are iterating over an ECMAScript Set, the IDs we add here
@@ -103,35 +98,11 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
       }
     });
     const idsToRemove = Object.keys(snapshot);
-    const walkEnd = performance.now();
 
-    let result: string[];
     if (idsToRemove.length) {
-      // Phase 2: Delete + commit/rebuild
-      const deleteStart = performance.now();
-      result = this._deleteFromBaseline(idsToRemove);
-      const deleteEnd = performance.now();
-
-      const gcEnd = performance.now();
-      console.log(
-        `[hermes-gc] total=${(gcEnd - gcStart).toFixed(1)}ms | ` +
-        `walk=${(walkEnd - walkStart).toFixed(1)}ms | ` +
-        `delete+rebuild=${(deleteEnd - deleteStart).toFixed(1)}ms | ` +
-        `nodes=${totalNodeCount} | garbage=${idsToRemove.length} | ` +
-        `retained_roots=${ids.size}`
-      );
-    } else {
-      result = idsToRemove;
-      const gcEnd = performance.now();
-      console.log(
-        `[hermes-gc] total=${(gcEnd - gcStart).toFixed(1)}ms | ` +
-        `walk=${(walkEnd - walkStart).toFixed(1)}ms | ` +
-        `delete+rebuild=0ms (no garbage) | ` +
-        `nodes=${totalNodeCount} | garbage=0 | ` +
-        `retained_roots=${ids.size}`
-      );
+      return this._deleteFromBaseline(idsToRemove);
     }
-    return result;
+    return idsToRemove;
   }
 
   identify(object: StoreObject | Reference): string | undefined {
@@ -335,7 +306,6 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     const editor = new SnapshotEditor(this._context, baseline);
     const deleted: string[] = [];
 
-    const editorDeleteStart = performance.now();
     for (const id of nodeIds) {
       // Reachability walk uses the optimistic snapshot, so skip
       // IDs that exist only in the optimistic layer.
@@ -344,22 +314,9 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
         deleted.push(id);
       }
     }
-    const editorDeleteEnd = performance.now();
 
-    const commitStart = performance.now();
     const { snapshot: newBaseline, editedNodeIds } = editor.commit();
-    const commitEnd = performance.now();
-
-    const applyStart = performance.now();
     this._applyBaseline(newBaseline, editedNodeIds);
-    const applyEnd = performance.now();
-
-    console.log(
-      `[hermes-gc-detail] editor.delete=${(editorDeleteEnd - editorDeleteStart).toFixed(1)}ms | ` +
-      `editor.commit=${(commitEnd - commitStart).toFixed(1)}ms | ` +
-      `applyBaseline=${(applyEnd - applyStart).toFixed(1)}ms | ` +
-      `deleted=${deleted.length}`
-    );
     return deleted;
   }
 
