@@ -184,6 +184,10 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
     return this._queryable.gc();
   }
 
+  batchEvict(entityIds: string[], broadcast: boolean = true): boolean {
+    return this._queryable.batchEvict(entityIds, broadcast);
+  }
+
   retain(id: NodeId) {
     return this._queryable.retain(id);
   }
