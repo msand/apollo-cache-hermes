@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "noImplicitAny": false,
+    "strictNullChecks": true,
+    "noUnusedParameters": false,
+    "noUnusedLocals": false,
+    "skipLibCheck": true,
+    "moduleResolution": "node",
+    "importHelpers": true,
+    "declaration": true,
+    "declarationMap": true,
+    "target": "es2017",
+    "module": "commonjs",
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
+    "inlineSourceMap": true,
+    "lib": [
+      "dom",
+      "es2017",
+      "esnext.asynciterable",
+      "ES2021.WeakRef",
+      "scripthost"
+    ],
+    "newLine": "LF",
+    "noImplicitReturns": false,
+    "noImplicitThis": true,
+    "pretty": true,
+    "jsx": "react",
+    "strict": true,
+    "types": ["jest", "node", "./matchers.d.ts"]
+  }
+}
