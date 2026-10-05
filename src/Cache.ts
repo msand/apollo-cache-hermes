@@ -105,7 +105,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
 
     if (idsToRemove.length) {
       this.transaction(false, (t) => {
-        idsToRemove.forEach(id => t.evict({ id }));
+        t.batchEvict(idsToRemove);
       });
     }
     return idsToRemove;
@@ -385,6 +385,14 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
 
   evict(options: CacheInterface.EvictOptions): boolean {
     return this.transaction(options.broadcast ?? true, t => t.evict(options));
+  }
+
+  /**
+   * Evicts several entities in one transaction and one snapshot edit; see
+   * CacheTransaction#batchEvict.
+   */
+  batchEvict(ids: Iterable<NodeId>, broadcast: boolean = true): boolean {
+    return this.transaction(broadcast, t => t.batchEvict(ids));
   }
 
 }
