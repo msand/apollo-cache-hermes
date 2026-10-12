@@ -1,13 +1,7 @@
 import * as equality from '@wry/equality';
 import { makeReference } from '@apollo/client';
-import type {
-  FieldFunctionOptions,
-  FieldPolicy,
-  FieldReadFunction,
-  TypePolicy,
-} from '@apollo/client/cache/inmemory/policies';
-import type { Reference, StoreValue } from '@apollo/client';
-import type { ReadFieldOptions } from '@apollo/client/cache/core/types/common';
+import type { TypePolicy } from '@apollo/client/cache/inmemory/policies';
+import type { Reference } from '@apollo/client';
 import type { StoreObject } from '@apollo/client/utilities';
 
 import type { CacheContext } from '../context';
@@ -21,6 +15,8 @@ import * as schema from '../schema';
 import * as errors from '../errors';
 import * as nodes from '../nodes';
 import * as util from '../util';
+
+import { FieldFunctions, getFieldPolicy, storageFieldName, withReferences } from './fieldFunctions';
 
 // Ensure typescript doesn't emit (0, fn)(...args)
 const isEqual = equality.equal;
@@ -38,6 +34,7 @@ const {
   hasParameterizedReference,
   ifString,
   isNil,
+  isObject,
   isReference,
   iterParameterized,
   iterRefs,
@@ -76,6 +73,13 @@ interface ReferenceEdit {
   /** Whether we know we can skip the write. */
   noWrite?: true;
 }
+
+/**
+ * How a value is merged with the existing value, per its merge policy: like
+ * InMemoryCache, 'replace' replaces unidentified objects (rather than
+ * deep-merging them), and 'merge' also merges them with entities.
+ */
+type MergeMode = 'replace' | 'merge';
 
 // https://github.com/nzakas/eslint-plugin-typescript/issues/69
 export type NodeSnapshotMap = { [Key in NodeId]?: NodeSnapshot };
@@ -139,6 +143,10 @@ export class SnapshotEditor<TSerialized> {
   private _writtenQueries = new Set<OperationInstance<TSerialized>>();
   private _pathToId = Object.create(null);
 
+  /** The variables of the operation being merged, for merge functions. */
+  private _variables: JsonObject | undefined;
+  private _fieldFunctionsInstance: FieldFunctions<TSerialized> | undefined;
+
   constructor(
     /** The configuration/context to use when editing snapshots. */
     private _context: CacheContext<TSerialized>,
@@ -156,6 +164,8 @@ export class SnapshotEditor<TSerialized> {
     prune: boolean,
   ): { warnings?: string[]; ref: NodeId | undefined } {
     const parsed = this._context.parseOperation(query);
+    this._variables = parsed.variables;
+    this._fieldFunctionsInstance = undefined;
 
     // We collect all warnings associated with this operation to avoid
     // overwhelming the log for particularly nasty payloads.
@@ -209,6 +219,7 @@ export class SnapshotEditor<TSerialized> {
     payload: JsonValue | undefined,
     prune: boolean,
     propMap: { [prop: string]: string } | undefined,
+    mode?: MergeMode,
   ) {
     // Don't trust our inputs; we can receive values that aren't JSON
     // serializable via optimistic updates.
@@ -226,13 +237,14 @@ export class SnapshotEditor<TSerialized> {
     const previousValue = this._getPreviousValue(containerId, path);
 
     const isRoot = containerId === StaticNodeId.QueryRoot;
-    const typename = isRoot
-      ? 'Query'
-      : payload && typeof payload === 'object' && '__typename' in payload
-        ? payload.__typename
-        : previousValue && typeof previousValue === 'object' && '__typename' in previousValue
-          ? previousValue.__typename
-          : undefined;
+    const typename =
+      isRoot && path.length === 0
+        ? 'Query'
+        : payload && typeof payload === 'object' && '__typename' in payload
+          ? payload.__typename
+          : previousValue && typeof previousValue === 'object' && '__typename' in previousValue
+            ? previousValue.__typename
+            : undefined;
     // The type that fragments' type conditions are matched against (values
     // nested within the root are not of the Query type).
     const fragmentTypename =
@@ -282,12 +294,13 @@ export class SnapshotEditor<TSerialized> {
         previousValue,
         prune,
         propMap,
+        mode,
       );
       return;
     }
 
     const ref = isReference(payload) ? payload.__ref : undefined;
-    const payloadId =
+    let payloadId =
       ref ??
       this._context.entityIdForValue(getVisibleProxy(payload, propMap)) ??
       (path.length === 0 && !isRoot ? containerId : undefined);
@@ -295,17 +308,33 @@ export class SnapshotEditor<TSerialized> {
       this._context.entityIdForValue(getVisibleProxy(previousValue, propMap)) ??
       (path.length === 0 && !isRoot ? containerId : ifString(deepGet(this._pathToId[containerId], path)));
 
+    // Like InMemoryCache's mergeObjects, merge:true policies merge unidentified
+    // objects and entities together.
+    if (payloadId !== previousId && mode === 'merge' && !isNil(payload) && !isNil(previousValue) && !ref) {
+      if (!payloadId) {
+        payloadId = previousId;
+      } else {
+        payload = { ...(previousValue as JsonObject), ...payload };
+      }
+    }
+
     // Is this an identity change?
     if (payloadId !== previousId) {
-      // It is invalid to transition from a *value* with an id to one without.
-      if (!isNil(payload) && !payloadId) {
+      // Unless a merge policy replaces (or merges) the value, it is invalid to
+      // transition from a *value* with an id to one without.
+      const replacesEntity = !isNil(payload) && !payloadId;
+      if (replacesEntity && !mode) {
         const message = `Unsupported transition from an entity to a non-entity value. ${ensureIdConstistencyMsg}`;
         throw new InvalidPayloadError(message, prefixPath, containerId, path, payload);
       }
       // The reverse is also invalid.
       if (!isNil(previousValue) && !previousId) {
-        const message = `Unsupported transition from a non-entity value to an entity. ${ensureIdConstistencyMsg}`;
-        throw new InvalidPayloadError(message, prefixPath, containerId, path, payload);
+        if (!mode) {
+          const message = `Unsupported transition from a non-entity value to an entity. ${ensureIdConstistencyMsg}`;
+          throw new InvalidPayloadError(message, prefixPath, containerId, path, payload);
+        }
+        // The replaced value may itself contain references.
+        this._removeReferencesWithin(referenceEdits, containerId, path);
       }
       // Double check that our id generator is behaving properly.
       if (payloadId && isNil(payload)) {
@@ -331,11 +360,16 @@ export class SnapshotEditor<TSerialized> {
           path,
           prevNodeId: previousId,
           nextNodeId: payloadId,
+          // An unidentified value replacing the entity is written below.
+          ...(replacesEntity && { noWrite: true as const }),
         });
+      }
+      if (replacesEntity) {
+        this._setValue(containerId, path, {});
       }
 
       // Nothing more to do here; the reference edit will null out this field.
-      if (!payloadId) return;
+      if (isNil(payload)) return;
       // Enough to set the reference, no sub selections to traverse in the ref
       if (ref) return;
 
@@ -345,7 +379,14 @@ export class SnapshotEditor<TSerialized> {
         this._setValue(containerId, path, null);
       }
       return;
+    } else if (ref) {
+      // An unchanged reference.
+      return payloadId;
     }
+
+    // Unidentified objects replaced by a merge policy lose their other fields.
+    const replacedValue = !payloadId && !previousId && mode === 'replace' ? previousValue : undefined;
+    const writtenFields = replacedValue ? new Set<string>() : undefined;
 
     // If we've entered a new node; it becomes our container.
     if (payloadId) {
@@ -353,75 +394,6 @@ export class SnapshotEditor<TSerialized> {
       containerId = payloadId;
       path = [];
     }
-
-    const readFromSnapshot = (obj: Readonly<NodeSnapshot>, key: string) => {
-      const data = obj.data;
-      if (!data || typeof data !== 'object') {
-        return undefined;
-      }
-      if (key in data) {
-        return (data as JsonObject)[key];
-      }
-      const out = obj.outbound?.get(key);
-      if (out) {
-        return this._getNodeData(out.id);
-      }
-      const ref = obj.parameterized?.get(key)?.[0];
-      if (ref !== undefined) {
-        return this._getNodeData(ref.id);
-      }
-      if (containerId === 'ROOT_QUERY' && key === '__typename') {
-        return 'Query';
-      }
-      return undefined;
-    };
-
-    const readField = (
-      fieldNameOrOptions: string | ReadFieldOptions,
-      from: StoreObject | Reference = { __ref: containerId } as Reference,
-    ) => {
-      if (!from) {
-        return undefined;
-      }
-      if (typeof fieldNameOrOptions !== 'string') throw new Error('Not implemented');
-
-      if (isReference(from)) {
-        const obj = this._getNodeSnapshot(from.__ref);
-        if (!obj) {
-          return undefined;
-        }
-        return readFromSnapshot(obj, fieldNameOrOptions);
-      } else {
-        return from[fieldNameOrOptions];
-      }
-    };
-
-    const mergeOptions: FieldFunctionOptions = {
-      args: null,
-      cache: null as any,
-      canRead: (value: StoreValue): boolean => {
-        return isReference(value)
-          ? this._getNodeSnapshot(value.__ref) != null
-          : typeof value === 'object' && value !== null;
-      },
-      field: null,
-      fieldName: '',
-      isReference,
-      readField,
-      storage: this._newNodes,
-      storeFieldName: '',
-      toReference: (value, mergeIntoStore) => {
-        const entityId = this._context.entityIdForValue(value);
-        if (entityId && mergeIntoStore && !isReference(value) && typeof value !== 'string') {
-          this._ensureNewSnapshot(entityId).data = value as JsonValue;
-        }
-        return entityId ? makeRef(entityId) : undefined;
-      },
-      variables: undefined,
-      mergeObjects<T>(existing: T, incoming: T): T {
-        return incoming && { ...existing, ...incoming };
-      },
-    };
 
     // Finally, we can walk into individual values.
     for (const payloadName in parsed) {
@@ -515,16 +487,52 @@ export class SnapshotEditor<TSerialized> {
       // Note that we're careful to fetch the value of our new container; not
       // the outer container.
       const previousFieldValue = this._getPreviousValue(containerIdForField, fieldPath);
-      const fieldPolicy: FieldPolicy<any> | FieldReadFunction<any> | undefined = typePolicy
-        ? typePolicy.fields?.[payloadName]
-        : undefined;
-      const merge =
-        typeof fieldPolicy === 'object' && typeof fieldPolicy?.merge === 'function' ? fieldPolicy?.merge : undefined;
-      if (merge) {
-        mergeOptions.args = node.args ?? null;
-        mergeOptions.fieldName = payloadName;
-        mergeOptions.storeFieldName = payloadName;
-        fieldValue = merge(previousFieldValue, fieldValue, mergeOptions) as JsonValue;
+      writtenFields?.add(schemaName);
+
+      // Like InMemoryCache, fall back to the merge policy of the child's type.
+      const fieldPolicy = getFieldPolicy(this._context.typePolicies, typename, schemaName);
+      let merge = typeof fieldPolicy === 'object' ? fieldPolicy.merge : undefined;
+      if (merge === undefined && node.children && isObject(fieldValue)) {
+        merge = this._context.typePolicies?.[fieldValue.__typename as string]?.merge;
+      }
+      let fieldMode: MergeMode | undefined = merge === true ? 'merge' : merge === false ? 'replace' : undefined;
+      if (typeof merge === 'function') {
+        // Like InMemoryCache, merge functions see References in place of
+        // entities (which are written first), and their result replaces the
+        // existing value.
+        const existing = withReferences(this._getNodeSnapshot(containerIdForField), fieldPath, previousFieldValue);
+        const incoming = node.children
+          ? this._normalizeIncoming(
+              referenceEdits,
+              warnings,
+              fieldPrefixPath,
+              node.children,
+              fieldValue,
+              prune,
+              node.propMap,
+            )
+          : fieldValue;
+        const args = (node.args as JsonObject | undefined) ?? null;
+        const storageKeys = [containerId, ...path, storageFieldName(schemaName, args)];
+        fieldValue = merge(
+          existing,
+          incoming,
+          this._fieldFunctions().options(undefined, schemaName, payloadName, args, storageKeys),
+        ) as JsonValue | undefined;
+        fieldMode = 'replace';
+
+        // Fields merged into undefined are not stored.
+        if (fieldValue === undefined) {
+          writtenFields?.delete(schemaName);
+          if (previousFieldValue !== undefined) {
+            this._removeReferencesWithin(referenceEdits, containerIdForField, fieldPath, true);
+            this._setValue(containerIdForField, fieldPath, undefined, true, true);
+          }
+          continue;
+        }
+      } else if (!fieldMode && mode === 'replace' && !payloadId) {
+        // Nested values of a replaced unidentified object are replaced too.
+        fieldMode = 'replace';
       }
 
       // For fields with sub selections, we walk into them; only leaf fields are
@@ -541,6 +549,7 @@ export class SnapshotEditor<TSerialized> {
           fieldValue,
           prune,
           node.propMap,
+          fieldMode,
         );
 
         // We've hit a leaf field.
@@ -563,11 +572,119 @@ export class SnapshotEditor<TSerialized> {
         if (!hasOwn.call(parsed, payloadName)) {
           const value = payload[payloadName];
           const fieldPath = [...path, payloadName];
+          writtenFields?.add(payloadName);
           this._setValue(containerId, fieldPath, value);
         }
       }
     }
+    if (writtenFields && isObject(replacedValue)) {
+      for (const key of Object.keys(replacedValue)) {
+        if (writtenFields.has(key)) continue;
+        this._removeReferencesWithin(referenceEdits, containerId, [...path, key], true);
+        this._setValue(containerId, [...path, key], undefined, true, true);
+      }
+    }
     return payloadId;
+  }
+
+  /**
+   * Like InMemoryCache, writes the entities within an incoming field value
+   * (for a merge function), returning the value with References in their place.
+   */
+  private _normalizeIncoming(
+    referenceEdits: ReferenceEdit[],
+    warnings: string[],
+    prefixPath: PathPart[],
+    parsed: ParsedQuery,
+    value: JsonValue | undefined,
+    prune: boolean,
+    propMap: { [prop: string]: string } | undefined,
+  ): any {
+    if (Array.isArray(value)) {
+      return value.map(item =>
+        this._normalizeIncoming(referenceEdits, warnings, prefixPath, parsed, item, prune, propMap),
+      );
+    }
+    if (!isObject(value) || isReference(value)) return value;
+
+    const entityId = this._context.entityIdForValue(getVisibleProxy(value, propMap));
+    if (entityId) {
+      this._mergeSubgraph(referenceEdits, warnings, entityId, prefixPath, [], parsed, value, prune, propMap);
+      return makeRef(entityId);
+    }
+
+    let normalized = value;
+    for (const payloadName in parsed) {
+      const { children, propMap: childPropMap } = parsed[payloadName];
+      const child = value[payloadName];
+      if (!children || child === undefined) continue;
+      const normalizedChild = this._normalizeIncoming(
+        referenceEdits,
+        warnings,
+        prefixPath,
+        children,
+        child,
+        prune,
+        childPropMap,
+      );
+      if (normalizedChild !== child) {
+        normalized = normalized === value ? { ...value } : normalized;
+        normalized[payloadName] = normalizedChild;
+      }
+    }
+    return normalized;
+  }
+
+  /**
+   * Removes the references found within (or, with `inclusive`, at or within)
+   * `path` of a node, without writing to it.
+   */
+  private _removeReferencesWithin(
+    referenceEdits: ReferenceEdit[],
+    containerId: NodeId,
+    path: PathPart[],
+    inclusive = false,
+  ) {
+    const container = this._getNodeSnapshot(containerId);
+    if (!container || (!container.outbound && !container.parameterized)) return;
+    for (const reference of iterRefs(container.outbound, container.parameterized)) {
+      if (!pathBeginsWith(reference.path, path)) continue;
+      if (!inclusive && reference.path.length === path.length) continue;
+      referenceEdits.push({
+        containerId,
+        path: reference.path,
+        prevNodeId: reference.id,
+        nextNodeId: undefined,
+        noWrite: true,
+      });
+    }
+  }
+
+  /**
+   * The helpers passed to merge functions.
+   */
+  private _fieldFunctions() {
+    return (this._fieldFunctionsInstance ??= new FieldFunctions(
+      this._context,
+      id => this._getNodeSnapshot(id),
+      this._variables,
+      (value, mergeIntoStore) => {
+        if (typeof value === 'string') return makeRef(value);
+        if (isReference(value)) return value;
+        const entityId = this._context.entityIdForValue(value);
+        if (entityId && mergeIntoStore) this._mergeIntoEntity(entityId, value as StoreObject);
+        return entityId ? makeRef(entityId) : undefined;
+      },
+      (ref, value) => this._mergeIntoEntity(ref.__ref, value),
+    ));
+  }
+
+  /**
+   * Shallowly merges `value` into the data of an entity (creating it if needed).
+   */
+  private _mergeIntoEntity(entityId: NodeId, value: StoreObject) {
+    const data = this._getNodeData(entityId);
+    this._setValue(entityId, [], { ...(isObject(data) ? data : {}), ...value });
   }
 
   /**
@@ -584,6 +701,7 @@ export class SnapshotEditor<TSerialized> {
     previousValue: JsonArray | Nil,
     prune: boolean,
     propMap: { [prop: string]: string } | undefined,
+    mode: MergeMode | undefined,
   ) {
     if (isNil(payload)) {
       // Note that we mark this as an edit, as this method is only ever called
@@ -636,6 +754,7 @@ export class SnapshotEditor<TSerialized> {
         childPayload,
         prune,
         propMap,
+        mode,
       );
     }
   }

@@ -10,6 +10,7 @@ import { JsonObject } from '../primitive';
 import { EntityId, NodeId, OperationInstance, RawOperation } from '../schema';
 import { DocumentNode, isObject } from '../util';
 import { GraphSnapshot } from '../GraphSnapshot';
+import { FieldStorage } from '../operations/fieldFunctions';
 
 import { ConsoleTracer } from './ConsoleTracer';
 import { QueryInfo } from './QueryInfo';
@@ -216,6 +217,9 @@ export class CacheContext<TSerialized = GraphSnapshot> {
 
   /** possibleTypes subtypes that are regular expressions, by their source. */
   private readonly _fuzzySubtypes = new Map<string, RegExp>();
+
+  /** The options.storage objects of read and merge functions. */
+  public readonly fieldStorage = new FieldStorage();
 
   constructor(config: CacheContext.Configuration<TSerialized> = {}) {
     // Infer dev mode from NODE_ENV, by convention.

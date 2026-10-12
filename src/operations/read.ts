@@ -1,8 +1,7 @@
 import { makeReference } from '@apollo/client';
-import type { FieldFunctionOptions } from '@apollo/client/cache/inmemory/policies';
+import type { FieldReadFunction } from '@apollo/client/cache/inmemory/policies';
 import type { Reference, StoreValue } from '@apollo/client';
 import type { StoreObject } from '@apollo/client/utilities';
-import type { ReadFieldOptions } from '@apollo/client/cache/core/types/common';
 import type { DocumentNode } from 'graphql';
 
 import type { CacheContext } from '../context';
@@ -16,10 +15,11 @@ import * as util from '../util';
 import * as nodes from '../nodes';
 
 import * as snapshotEditor from './SnapshotEditor';
+import { FieldFunctions, storageFieldName, withReferences } from './fieldFunctions';
 
 const makeRef = makeReference;
 const { StaticNodeId } = schema;
-const { cloneNodeSnapshot, EntitySnapshot } = nodes;
+const { cloneNodeSnapshot, EntitySnapshot, ParameterizedValueSnapshot } = nodes;
 const { nodeIdForParameterizedValue } = snapshotEditor;
 const { deepGet, isNil, isObject, isReference, lazyImmutableDeepSet, safeStringify, walkOperation } = util;
 
@@ -211,50 +211,6 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
   // w/o a schema compilation step?
   const queue = [new OverlayWalkNode(newResult, id, query.parsedQuery, [])];
 
-  function readFromSnapshot(obj: Readonly<NodeSnapshot>, key: string) {
-    const data = obj.data;
-    if (!data || typeof data !== 'object') {
-      return undefined;
-    }
-    if (key in data) {
-      return (data as JsonObject)[key];
-    }
-    const out = obj.outbound?.get(key);
-    if (out !== undefined) {
-      return snapshot.getNodeData(out.id);
-    }
-    const ref = obj.parameterized?.get(key)?.[0];
-    if (ref !== undefined) {
-      return snapshot.getNodeData(ref.id);
-    }
-    if (isRoot && key === '__typename') {
-      return 'Query';
-    }
-    return undefined;
-  }
-
-  let readFallbackObject: undefined | StoreObject;
-  const readField = (
-    fieldNameOrOptions: string | ReadFieldOptions,
-    from: StoreObject | Reference = (rootSnapshot.data as StoreObject) ?? readFallbackObject,
-  ) => {
-    if (!from) {
-      return undefined;
-    }
-    if (typeof fieldNameOrOptions !== 'string') throw new Error('Not implemented');
-
-    if (isReference(from)) {
-      const ref = from.__ref;
-      const obj = tempStore[ref] ?? snapshot.getNodeSnapshot(ref);
-      if (!obj) {
-        return undefined;
-      }
-      return readFromSnapshot(obj, fieldNameOrOptions);
-    } else {
-      return from[fieldNameOrOptions];
-    }
-  };
-
   function getSnapshot(nodeId: string) {
     return tempStore[nodeId] ?? snapshot.getNodeSnapshot(nodeId);
   }
@@ -270,35 +226,47 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
     return newSnapshot;
   };
 
-  const readOptions: FieldFunctionOptions = {
-    args: {},
-    cache: null as any,
-    canRead(value: StoreValue): boolean {
-      return isReference(value) ? snapshot.has(value.__ref) : typeof value === 'object' && value !== null;
-    },
-    field: null,
-    fieldName: '',
-    isReference,
-    mergeObjects<T>(existing: T, incoming: T): T {
-      return { ...existing, ...incoming };
-    },
-    readField,
-    storage: rootSnapshot,
-    storeFieldName: '',
-    toReference: (value, mergeIntoStore) => {
-      const entityId = context.entityIdForValue(value);
-      if (entityId && mergeIntoStore && !isReference(value) && typeof value !== 'string') {
-        const nodeSnapshot = ensureNewSnapshot(entityId);
-        nodeSnapshot.data = { ...(nodeSnapshot.data as {}), ...value };
-      }
-      const ref = entityId ?? value;
-      return typeof ref === 'string' ? makeRef(ref) : undefined;
-    },
-    variables: query.variables,
+  const mergeIntoEntity = (entityId: NodeId, value: StoreObject) => {
+    const nodeSnapshot = ensureNewSnapshot(entityId);
+    nodeSnapshot.data = { ...(nodeSnapshot.data as {}), ...value } as JsonObject;
   };
 
-  while (queue.length) {
-    const walkNode = queue.pop()!;
+  const fieldFunctions = new FieldFunctions(
+    context,
+    getSnapshot,
+    query.variables,
+    (value, mergeIntoStore) => {
+      if (typeof value === 'string') return makeRef(value);
+      if (isReference(value)) return value;
+      const entityId = context.entityIdForValue(value);
+      if (entityId && mergeIntoStore) mergeIntoEntity(entityId, value as StoreObject);
+      return entityId ? makeRef(entityId) : undefined;
+    },
+    (ref, value) => mergeIntoEntity(ref.__ref, value),
+  );
+
+  // Replaces References (returned by read functions) with the data of the
+  // entities they point to.
+  function resolveReferences(value: any): any {
+    if (isReference(value)) return getSnapshot(value.__ref)?.data;
+    if (!Array.isArray(value)) return value;
+    let resolved = value;
+    for (let i = 0; i < value.length; i++) {
+      const item = resolveReferences(value[i]);
+      if (item !== value[i]) {
+        if (resolved === value) resolved = [...value];
+        resolved[i] = item;
+      }
+    }
+    return resolved;
+  }
+
+  const hasFieldPolicies = Object.values(context.typePolicies ?? {}).some(policy => policy?.fields);
+  const isObjectOrArray = (value: unknown) => value !== null && typeof value === 'object';
+
+  // Walk breadth-first, so read functions run in the order of the results.
+  for (let q = 0; q < queue.length; q++) {
+    const walkNode = queue[q];
     const { value, parsedMap } = walkNode;
     let { containerId, path } = walkNode;
     const valueId = context.entityIdForValue(value);
@@ -313,93 +281,89 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
     }
     const typePolicies = context.typePolicies?.[typeName]?.fields;
 
+    // Read functions are called on a Reference to the entity being walked, or
+    // (for unidentified objects) on the stored object itself.
+    const containerSnapshot = getSnapshot(containerId);
+    const currentObject: StoreObject | Reference =
+      path.length === 0 && !(containerSnapshot instanceof ParameterizedValueSnapshot)
+        ? makeRef(containerId)
+        : (withReferences(containerSnapshot, path, deepGet(containerSnapshot?.data, path)) ?? value);
+    const callReadFunction = (
+      readFn: FieldReadFunction,
+      existing: StoreValue,
+      fieldName: string,
+      node: ParsedQueryNode,
+      key: string,
+    ) => {
+      const args = (node.args as JsonObject | undefined) ?? null;
+      const storageKeys = [containerId, ...path, storageFieldName(fieldName, args)];
+      return resolveReferences(
+        readFn(existing, fieldFunctions.options(currentObject, fieldName, key, args, storageKeys)),
+      );
+    };
+
     for (const key in parsedMap) {
       const node = parsedMap[key];
       // Fields of fragments that don't match the type are not selected.
       if (node.conditions && !context.conditionsMatch(node.conditions, typeName)) continue;
       let child;
-      let fieldName = key;
 
       // This is an alias if we have a schemaName declared.
-      fieldName = node.schemaName ? node.schemaName : key;
+      const fieldName = node.schemaName ? node.schemaName : key;
+      const policy = typePolicies?.[fieldName];
+      const readFn = typeof policy === 'function' ? policy : policy?.read;
 
       let nextContainerId = containerId;
       let nextPath = path;
 
       if (node.args) {
         let childId = nodeIdForParameterizedValue(containerId, [...path, fieldName], node.args);
-        let childSnapshot: Readonly<NodeSnapshot> | undefined;
+        let childSnapshot: Readonly<NodeSnapshot> | undefined = getSnapshot(childId);
 
-        if (typePolicies) {
-          const fieldPolicy = typePolicies[fieldName];
-          const readFn = fieldPolicy && (typeof fieldPolicy === 'object' ? fieldPolicy.read : fieldPolicy);
-          if (readFn) {
-            readOptions.fieldName = fieldName;
-            readOptions.storeFieldName = key;
-            readOptions.args = node.args;
-            readFallbackObject = value;
-            const readResult = readFn(undefined, readOptions);
-            if (isReference(readResult)) {
-              const ref = readResult.__ref;
-              childSnapshot = getSnapshot(ref);
-            } else {
-              child = readResult;
+        if (readFn) {
+          dynamicNodeIds.add(childId);
+          const existing = childSnapshot && withReferences(childSnapshot, [], childSnapshot.data);
+          child = callReadFunction(readFn, existing, fieldName, node, key);
+        } else {
+          if (!childSnapshot) {
+            // Should we fall back to a redirect?
+            const redirect: CacheContext.ResolverRedirect | undefined = deepGet(context.resolverRedirects, [
+              typeName,
+              fieldName,
+            ]) as any;
+            if (redirect) {
+              childId = redirect(node.args);
+              if (!isNil(childId)) {
+                childSnapshot = snapshot.getNodeSnapshot(childId);
+              }
             }
           }
-        }
 
-        if (!childSnapshot) {
-          childSnapshot = snapshot.getNodeSnapshot(childId);
-        }
+          dynamicNodeIds.add(childId);
 
-        if (!childSnapshot) {
-          // Should we fall back to a redirect?
-          const redirect: CacheContext.ResolverRedirect | undefined = deepGet(context.resolverRedirects, [
-            typeName,
-            fieldName,
-          ]) as any;
-          if (redirect) {
-            childId = redirect(node.args);
-            if (!isNil(childId)) {
-              childSnapshot = snapshot.getNodeSnapshot(childId);
-            }
+          // Still no snapshot? Ok we're done here.
+          if (!childSnapshot) {
+            continue;
           }
-        }
-
-        dynamicNodeIds.add(childId);
-
-        // Still no snapshot? Ok we're done here.
-        if (!childSnapshot) {
-          continue;
+          child = childSnapshot.data;
         }
 
         nextContainerId = childId;
         nextPath = [];
-        child = childSnapshot.data;
       } else {
         nextPath = [...path, fieldName];
         child = value[fieldName];
-        const policy = typePolicies?.[fieldName];
-        const readFn = typeof policy === 'function' ? policy : policy?.read;
         if (readFn) {
-          readOptions.fieldName = fieldName;
-          readOptions.storeFieldName = key;
-          readOptions.args = node.args ?? null;
-          readFallbackObject = value;
-          child = readFn(child, readOptions);
+          const existing = withReferences(containerSnapshot, nextPath, child);
+          child = callReadFunction(readFn, existing, fieldName, node, key);
         }
       }
 
-      let ref;
-      if (isReference(child)) {
-        ref = child.__ref;
-        child = snapshot.getNodeSnapshot(ref)?.data;
-      }
-
-      const hasPolicy = child && context.typePolicies?.[child.__typename]?.fields;
+      // Objects (at any depth) may have fields with read functions.
+      const hasPolicy = hasFieldPolicies && node.children && isObjectOrArray(child);
 
       // Have we reached a leaf (either in the query, or in the cache)?
-      if (hasPolicy || ref || _shouldWalkChildren(child, node)) {
+      if (hasPolicy || _shouldWalkChildren(child, node)) {
         child = _recursivelyWrapValue(child, context);
         const allChildValues = _flattenGraphQLObject(child, nextPath);
 
