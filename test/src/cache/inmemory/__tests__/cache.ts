@@ -1115,6 +1115,7 @@ describe('Cache', () => {
       }).toThrow('Found 3 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.');
     });
 
+    // Hermes: unselected fields (here, the `id` of `bar`) are stored too.
     itWithCacheConfig(
       'will write some deeply nested data into the store at any id',
       {
