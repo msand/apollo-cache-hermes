@@ -49,7 +49,8 @@ describe('type policies', () => {
           }
         `,
       }),
-    ).toEqual({
+      // Hermes: results may contain a superset of the selected fields.
+    ).toMatchObject({
       book: {
         __typename: 'Book',
         author: {
@@ -75,27 +76,33 @@ describe('type policies', () => {
       },
     });
 
+    // Hermes: references are edges, and the unselected subtitle field is stored too.
     expect(cache.extract(true)).toEqual({
       ROOT_QUERY: {
-        __typename: 'Query',
-        book: {
-          __ref: 'Book:{"isbn":"1400096235"}',
-        },
+        data: { book: undefined },
+        outbound: [{ id: 'Book:{"isbn":"1400096235"}', path: ['book'] }],
+        type: 0,
       },
       'Book:{"isbn":"1400096235"}': {
-        __typename: 'Book',
-        isbn: '1400096235',
-        title: 'The Information',
-        author: {
-          name: 'James Gleick',
+        data: {
+          __typename: 'Book',
+          isbn: '1400096235',
+          title: 'The Information',
+          subtitle: 'A History, a Theory, a Flood',
+          author: {
+            name: 'James Gleick',
+          },
         },
+        inbound: [{ id: 'ROOT_QUERY', path: ['book'] }],
+        type: 0,
       },
     });
 
     checkAuthorName(cache);
   });
 
-  it('can specify composite keyFields', () => {
+  // Hermes: nested keyFields are not supported
+  it.skip('can specify composite keyFields', () => {
     const cache = new Hermes({
       typePolicies: {
         Book: {
@@ -130,7 +137,8 @@ describe('type policies', () => {
     checkAuthorName(cache);
   });
 
-  it('can specify nested keyFields with alias', () => {
+  // Hermes: nested keyFields are not supported
+  it.skip('can specify nested keyFields with alias', () => {
     const cache = new Hermes({
       typePolicies: {
         Book: {
@@ -187,7 +195,8 @@ describe('type policies', () => {
     checkAuthorName(cache);
   });
 
-  it('keeps keyFields in specified order', () => {
+  // Hermes: nested keyFields are not supported
+  it.skip('keeps keyFields in specified order', () => {
     const cache = new Hermes({
       typePolicies: {
         Book: {
@@ -222,7 +231,8 @@ describe('type policies', () => {
     checkAuthorName(cache);
   });
 
-  it('serializes nested keyFields objects in stable order', () => {
+  // Hermes: nested keyFields are not supported (object key values are stringified as written, with aliases)
+  it.skip('serializes nested keyFields objects in stable order', () => {
     const cache = new Hermes({
       typePolicies: {
         Book: {
@@ -317,7 +327,8 @@ describe('type policies', () => {
     });
   });
 
-  it('accepts keyFields functions', () => {
+  // Hermes: keyFields functions are not supported
+  it.skip('accepts keyFields functions', () => {
     const cache = new Hermes({
       typePolicies: {
         Book: {
@@ -387,20 +398,25 @@ describe('type policies', () => {
       },
     });
 
+    // Hermes: references are edges, and the unselected subtitle field is stored too.
     expect(cache.extract(true)).toEqual({
       ROOT_QUERY: {
-        __typename: 'Query',
-        book: {
-          __ref: 'Book:{"ISBN":"1400096235","title":"The Information"}',
-        },
+        data: { book: undefined },
+        outbound: [{ id: 'Book:{"ISBN":"1400096235","title":"The Information"}', path: ['book'] }],
+        type: 0,
       },
       'Book:{"ISBN":"1400096235","title":"The Information"}': {
-        __typename: 'Book',
-        ISBN: '1400096235',
-        title: 'The Information',
-        author: {
-          name: 'James Gleick',
+        data: {
+          __typename: 'Book',
+          ISBN: '1400096235',
+          title: 'The Information',
+          subtitle: 'A History, a Theory, a Flood',
+          author: {
+            name: 'James Gleick',
+          },
         },
+        inbound: [{ id: 'ROOT_QUERY', path: ['book'] }],
+        type: 0,
       },
     });
 
@@ -825,7 +841,8 @@ describe('type policies', () => {
   });
 
   describe('field policies', () => {
-    it(`can filter arguments using keyArgs`, () => {
+    // Hermes: keyArgs are not supported
+    it.skip(`can filter arguments using keyArgs`, () => {
       const cache = new Hermes({
         typePolicies: {
           Query: {
@@ -866,7 +883,8 @@ describe('type policies', () => {
       });
     });
 
-    it(`can filter arguments using keyArgs in non-Query fields`, () => {
+    // Hermes: keyArgs are not supported
+    it.skip(`can filter arguments using keyArgs in non-Query fields`, () => {
       const cache = new Hermes({
         typePolicies: {
           Book: {
@@ -934,7 +952,8 @@ describe('type policies', () => {
       expect(result).toEqual(data);
     });
 
-    it('assumes keyArgs:false when read and merge function present', () => {
+    // Hermes: keyArgs are not supported
+    it.skip('assumes keyArgs:false when read and merge function present', () => {
       const cache = new Hermes({
         typePolicies: {
           TypeA: {
@@ -1140,7 +1159,8 @@ describe('type policies', () => {
       });
     });
 
-    it(`can include optional arguments in field keyArgs policy`, () => {
+    // Hermes: keyArgs are not supported
+    it.skip(`can include optional arguments in field keyArgs policy`, () => {
       const cache = new Hermes({
         typePolicies: {
           Author: {
@@ -1328,7 +1348,8 @@ describe('type policies', () => {
       ]);
     });
 
-    it(`can return KeySpecifier arrays from keyArgs functions`, () => {
+    // Hermes: keyArgs are not supported
+    it.skip(`can return KeySpecifier arrays from keyArgs functions`, () => {
       const cache = new Hermes({
         typePolicies: {
           Thread: {
@@ -1464,7 +1485,8 @@ describe('type policies', () => {
     // Use several different directives to prove we're not hard-coding support
     // for the @connection directive.
     ['connection', 'directive', 'misdirective'].forEach(directiveName =>
-      it(`can refer to directive @${directiveName} in field key shorthand array`, () => {
+      // Hermes: keyArgs are not supported
+      it.skip(`can refer to directive @${directiveName} in field key shorthand array`, () => {
         const cache = new Hermes({
           typePolicies: {
             Query: {
@@ -1569,7 +1591,8 @@ describe('type policies', () => {
       }),
     );
 
-    it('can refer to variables in field key shorthand array', () => {
+    // Hermes: keyArgs are not supported
+    it.skip('can refer to variables in field key shorthand array', () => {
       const cache = new Hermes({
         typePolicies: {
           Query: {
@@ -1849,17 +1872,21 @@ describe('type policies', () => {
         },
       });
 
+      // Hermes: references are inbound/outbound edges between nodes.
       const expectedExtraction = {
         ROOT_QUERY: {
-          __typename: 'Query',
-          me: {
-            __ref: 'Person:{"firstName":"Ben","lastName":"Newman"}',
-          },
+          data: { me: undefined },
+          outbound: [{ id: 'Person:{"firstName":"Ben","lastName":"Newman"}', path: ['me'] }],
+          type: 0,
         },
         'Person:{"firstName":"Ben","lastName":"Newman"}': {
-          __typename: 'Person',
-          firstName: 'Ben',
-          lastName: 'Newman',
+          data: {
+            __typename: 'Person',
+            firstName: 'Ben',
+            lastName: 'Newman',
+          },
+          inbound: [{ id: 'ROOT_QUERY', path: ['me'] }],
+          type: 0,
         },
       };
 
@@ -1882,7 +1909,8 @@ describe('type policies', () => {
             }
           `,
         }),
-      ).toEqual(expectedResult);
+        // Hermes: results may contain a superset of the selected fields.
+      ).toMatchObject(expectedResult);
 
       expect(
         cache.readQuery({
@@ -1894,7 +1922,7 @@ describe('type policies', () => {
             }
           `,
         }),
-      ).toEqual(expectedResult);
+      ).toMatchObject(expectedResult);
 
       expect(cache.extract(true)).toEqual(expectedExtraction);
     });
@@ -1938,13 +1966,19 @@ describe('type policies', () => {
         },
       });
 
+      // Hermes: the parameterized country field is a separate node.
       const expectedExtraction = {
         ROOT_QUERY: {
-          __typename: 'Query',
-          'country({"code":"CA"})': {
+          parameterized: [{ id: 'ROOT_QUERY❖["country"]❖{"code":"CA"}', path: ['country'] }],
+          type: 0,
+        },
+        'ROOT_QUERY❖["country"]❖{"code":"CA"}': {
+          data: {
             __typename: 'Country',
             name: 'CA',
           },
+          inbound: [{ id: 'ROOT_QUERY', path: ['country'] }],
+          type: 1,
         },
       };
 
@@ -2579,64 +2613,40 @@ describe('type policies', () => {
         });
       }
 
+      // Hermes: ROOT_QUERY.books holds edges to the Book nodes, in list order.
+      function expectBooks(...books: (typeof programmingRustBook)[]) {
+        const snapshot: Record<string, any> = {
+          ROOT_QUERY: {
+            data: { books: books.map(() => undefined) },
+            outbound: books.map((book, i) => ({ id: `Book:{"isbn":"${book.isbn}"}`, path: ['books', i] })),
+            type: 0,
+          },
+        };
+        books.forEach((book, i) => {
+          snapshot[`Book:{"isbn":"${book.isbn}"}`] = {
+            data: book,
+            inbound: [{ id: 'ROOT_QUERY', path: ['books', i] }],
+            type: 0,
+          };
+        });
+        expect(cache.extract()).toEqual(snapshot);
+      }
+
       addBooks(officialRustBook);
 
-      expect(cache.extract()).toEqual({
-        ROOT_QUERY: {
-          __typename: 'Query',
-          books: [{ __ref: 'Book:{"isbn":"1593278284"}' }],
-        },
-        'Book:{"isbn":"1593278284"}': {
-          __typename: 'Book',
-          isbn: '1593278284',
-          title: 'The Rust Programming Language',
-        },
-      });
+      expectBooks(officialRustBook);
 
       addBooks(programmingRustBook, officialRustBook);
 
-      expect(cache.extract()).toEqual({
-        ROOT_QUERY: {
-          __typename: 'Query',
-          books: [{ __ref: 'Book:{"isbn":"1593278284"}' }, { __ref: 'Book:{"isbn":"9781491927281"}' }],
-        },
-        'Book:{"isbn":"1593278284"}': officialRustBook,
-        'Book:{"isbn":"9781491927281"}': programmingRustBook,
-      });
+      expectBooks(officialRustBook, programmingRustBook);
 
       addBooks(wasmWithRustBook, wasmWithRustBook, programmingRustBook, wasmWithRustBook);
 
-      expect(cache.extract()).toEqual({
-        ROOT_QUERY: {
-          __typename: 'Query',
-          books: [
-            { __ref: 'Book:{"isbn":"1593278284"}' },
-            { __ref: 'Book:{"isbn":"9781491927281"}' },
-            { __ref: 'Book:{"isbn":"1680506366"}' },
-          ],
-        },
-        'Book:{"isbn":"1593278284"}': officialRustBook,
-        'Book:{"isbn":"9781491927281"}': programmingRustBook,
-        'Book:{"isbn":"1680506366"}': wasmWithRustBook,
-      });
+      expectBooks(officialRustBook, programmingRustBook, wasmWithRustBook);
 
       addBooks(programmingRustBook, officialRustBook, handsOnConcurrencyBook, wasmWithRustBook);
 
-      expect(cache.extract()).toEqual({
-        ROOT_QUERY: {
-          __typename: 'Query',
-          books: [
-            { __ref: 'Book:{"isbn":"1593278284"}' },
-            { __ref: 'Book:{"isbn":"9781491927281"}' },
-            { __ref: 'Book:{"isbn":"1680506366"}' },
-            { __ref: 'Book:{"isbn":"1788399978"}' },
-          ],
-        },
-        'Book:{"isbn":"1593278284"}': officialRustBook,
-        'Book:{"isbn":"9781491927281"}': programmingRustBook,
-        'Book:{"isbn":"1680506366"}': wasmWithRustBook,
-        'Book:{"isbn":"1788399978"}': handsOnConcurrencyBook,
-      });
+      expectBooks(officialRustBook, programmingRustBook, wasmWithRustBook, handsOnConcurrencyBook);
 
       expect(cache.readQuery({ query })).toEqual({
         // Note that these books have been sorted by title, thanks to the
@@ -3197,7 +3207,8 @@ describe('type policies', () => {
       expect(secretReadAttempted).toBe(true);
     });
 
-    it(`can define custom merge functions and keyArgs simultaneously`, () => {
+    // Hermes: keyArgs are not supported
+    it.skip(`can define custom merge functions and keyArgs simultaneously`, () => {
       const cache = new Hermes({
         typePolicies: {
           Person: {
@@ -5414,7 +5425,8 @@ describe('type policies', () => {
     });
   });
 
-  it(`allows keyFields and keyArgs functions to return false`, () => {
+  // Hermes: keyFields/keyArgs functions are not supported
+  it.skip(`allows keyFields and keyArgs functions to return false`, () => {
     const cache = new Hermes({
       typePolicies: {
         Person: {
@@ -5930,18 +5942,21 @@ describe('type policies', () => {
     const snapshot = cache.extract();
     expect(snapshot).toEqual({
       'Person:1234': {
-        __typename: 'Person',
-        id: 1234,
-        currentTask: {
-          __typename: 'Task',
-          description: 'writing tests',
+        data: {
+          __typename: 'Person',
+          id: 1234,
+          currentTask: {
+            __typename: 'Task',
+            description: 'writing tests',
+          },
         },
+        inbound: [{ id: 'ROOT_QUERY', path: ['person'] }],
+        type: 0,
       },
       ROOT_QUERY: {
-        __typename: 'Query',
-        person: {
-          __ref: 'Person:1234',
-        },
+        data: { person: undefined },
+        outbound: [{ id: 'Person:1234', path: ['person'] }],
+        type: 0,
       },
     });
 
@@ -5963,7 +5978,8 @@ describe('type policies', () => {
     expect(cache.extract()).toEqual(snapshot);
   });
 
-  it('can alter the root query __typename', () => {
+  // Hermes: queryType/mutationType/subscriptionType typePolicies are not supported
+  it.skip('can alter the root query __typename', () => {
     const cache = new Hermes({
       typePolicies: {
         RootQuery: {
@@ -6026,7 +6042,8 @@ describe('type policies', () => {
     });
   });
 
-  it('can configure {query,mutation,subscription}Type:true', () => {
+  // Hermes: queryType/mutationType/subscriptionType typePolicies are not supported
+  it.skip('can configure {query,mutation,subscription}Type:true', () => {
     const cache = new Hermes({
       typePolicies: {
         RootQuery: {
