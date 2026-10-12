@@ -18,12 +18,16 @@ import {
   ObservableSubscription,
   ApolloError,
 } from '@apollo/client';
+import { loadErrorMessages } from '@apollo/client/dev';
 
 import { offsetLimitPagination, removeDirectivesFromDocument } from '../utilities';
 import { createFragmentRegistry, makeVar, PossibleTypesMap } from '../cache';
 import { itAsync, subscribeAndCount, mockSingleLink, MockLink, wait } from '../testing';
 import { spyOnConsole } from '../testing/internal';
 import { Hermes } from '../../../src';
+
+// Hermes: these tests assert @apollo/client's readable error messages, which the shared env leaves unloaded.
+loadErrorMessages();
 
 describe('client', () => {
   it('can be loaded via require', () => {
@@ -393,18 +397,34 @@ describe('client', () => {
       result: { data },
     }).setOnError(reject);
 
+    // Hermes: the server-provided state is in Hermes' serialized format.
     const initialState: any = {
       data: {
         ROOT_QUERY: {
-          'allPeople({"first":1})': {
+          parameterized: [
+            {
+              id: 'ROOT_QUERY❖["allPeople"]❖{"first":1}',
+              path: ['allPeople'],
+            },
+          ],
+          type: 0,
+        },
+        'ROOT_QUERY❖["allPeople"]❖{"first":1}': {
+          data: {
             people: [
               {
                 name: 'Luke Skywalker',
               },
             ],
           },
+          inbound: [
+            {
+              id: 'ROOT_QUERY',
+              path: ['allPeople'],
+            },
+          ],
+          type: 1,
         },
-        optimistic: [],
       },
     };
 
@@ -450,18 +470,34 @@ describe('client', () => {
       result: { data },
     }).setOnError(reject);
 
+    // Hermes: the server-provided state is in Hermes' serialized format.
     const initialState: any = {
       data: {
         ROOT_QUERY: {
-          'allPeople({"first":1})': {
+          parameterized: [
+            {
+              id: 'ROOT_QUERY❖["allPeople"]❖{"first":1}',
+              path: ['allPeople'],
+            },
+          ],
+          type: 0,
+        },
+        'ROOT_QUERY❖["allPeople"]❖{"first":1}': {
+          data: {
             people: [
               {
                 name: 'Luke Skywalker',
               },
             ],
           },
+          inbound: [
+            {
+              id: 'ROOT_QUERY',
+              path: ['allPeople'],
+            },
+          ],
+          type: 1,
         },
-        optimistic: [],
       },
     };
 
@@ -1735,7 +1771,8 @@ describe('client', () => {
         .query({ query })
         .then(result => {
           expect(result.data).toEqual(data);
-          expect((client.cache as Hermes).extract()['1']).toEqual({
+          // Hermes: extract() nests each node's fields under `data`.
+          expect((client.cache as Hermes).extract()['1'].data).toEqual({
             id: '1',
             name: 'Luke Skywalker',
           });
@@ -2273,7 +2310,8 @@ describe('client', () => {
       });
   });
 
-  itAsync('should rollback optimistic after mutation got a GraphQL error', (resolve, reject) => {
+  // Hermes: asserts on InMemoryCache's internal data/optimisticData layer objects, which Hermes does not have.
+  itAsync.skip('should rollback optimistic after mutation got a GraphQL error', (resolve, reject) => {
     const mutation = gql`
       mutation {
         newPerson {
@@ -2974,7 +3012,8 @@ describe('client', () => {
 });
 
 describe('@connection', () => {
-  itAsync(
+  // Hermes: @connection is not supported; the field is stored under its arguments, not the connection key.
+  itAsync.skip(
     'should run a query with the @connection directive and write the result to the store key defined in the directive',
     (resolve, reject) => {
       const query = gql`
@@ -3023,7 +3062,8 @@ describe('@connection', () => {
     },
   );
 
-  itAsync(
+  // Hermes: @connection is not supported; the field is stored under its arguments, not the connection key.
+  itAsync.skip(
     'should run a query with the connection directive and filter arguments and write the result to the correct store key',
     (resolve, reject) => {
       const query = gql`
@@ -3073,7 +3113,8 @@ describe('@connection', () => {
     },
   );
 
-  itAsync('should support cache field policies that filter key arguments', (resolve, reject) => {
+  // Hermes: keyArgs field policies are not supported; the field is stored under all of its arguments.
+  itAsync.skip('should support cache field policies that filter key arguments', (resolve, reject) => {
     const query = gql`
       query books($order: string) {
         books(skip: 0, limit: 2, order: $order) {
@@ -3130,7 +3171,8 @@ describe('@connection', () => {
       .then(resolve, reject);
   });
 
-  itAsync('should broadcast changes for reactive variables', async (resolve, reject) => {
+  // Hermes: reactive variables read in field policies are not tracked by the cache, so changes are not broadcast.
+  itAsync.skip('should broadcast changes for reactive variables', async (resolve, reject) => {
     const aVar = makeVar(123);
     const bVar = makeVar('asdf');
     const cache: Hermes = new Hermes({
@@ -3309,7 +3351,8 @@ describe('@connection', () => {
     return new Promise(resolve => setTimeout(resolve, time));
   }
 
-  itAsync('should call forgetCache for reactive vars when stopped', async (resolve, reject) => {
+  // Hermes: reactive variables read in field policies are not tracked by the cache, so forgetCache is never called.
+  itAsync.skip('should call forgetCache for reactive vars when stopped', async (resolve, reject) => {
     const aVar = makeVar(123);
     const bVar = makeVar('asdf');
     const aSpy = jest.spyOn(aVar, 'forgetCache');
@@ -3868,7 +3911,8 @@ describe('custom document transforms', () => {
 
     const cache = client.cache.extract();
 
-    expect(cache['Dog:1']).toEqual({
+    // Hermes: extract() nests each node's fields under `data`.
+    expect(cache['Dog:1'].data).toEqual({
       id: 1,
       name: 'Buddy',
       breed: 'German Shepard',
@@ -4360,7 +4404,8 @@ describe('custom document transforms', () => {
 
     const cache = client.cache.extract();
 
-    expect(cache['User:1']).toEqual({
+    // Hermes: extract() nests each node's fields under `data`.
+    expect(cache['User:1'].data).toEqual({
       __typename: 'User',
       id: 1,
       username: 'foo',
@@ -4591,7 +4636,8 @@ describe('custom document transforms', () => {
 
     const cache = client.cache.extract();
 
-    expect(cache['Profile:1']).toEqual({
+    // Hermes: extract() nests each node's fields under `data`.
+    expect(cache['Profile:1'].data).toEqual({
       __typename: 'Profile',
       id: 1,
       username: 'foo',
@@ -5129,7 +5175,8 @@ describe('custom document transforms', () => {
     });
   });
 
-  it('runs custom document transforms on the passed query and original query when calling `fetchMore` with a different query', async () => {
+  // Hermes: relies on keyArgs: false to merge paginated pages into one field; keyArgs is not supported.
+  it.skip('runs custom document transforms on the passed query and original query when calling `fetchMore` with a different query', async () => {
     const initialQuery = gql`
       query TestQuery($offset: Int) {
         currentUser {

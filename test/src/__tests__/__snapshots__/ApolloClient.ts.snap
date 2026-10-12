@@ -42,31 +42,33 @@ Object {
 exports[`ApolloClient write then read will not use a default id getter if id and _id are not present 1`] = `
 Object {
   "ROOT_QUERY": Object {
-    "__typename": "Query",
-    "a": 1,
-    "b": 2,
-    "bar": Object {
-      "__typename": "bar",
-      "foo": Object {
-        "__typename": "foo",
-        "k": 12,
-        "l": 13,
-      },
-      "i": 10,
-      "j": 11,
-    },
-    "foo": Object {
-      "__typename": "foo",
+    "data": Object {
+      "a": 1,
+      "b": 2,
       "bar": Object {
         "__typename": "bar",
-        "e": 5,
-        "f": 6,
+        "foo": Object {
+          "__typename": "foo",
+          "k": 12,
+          "l": 13,
+        },
+        "i": 10,
+        "j": 11,
       },
-      "c": 3,
-      "d": 4,
+      "foo": Object {
+        "__typename": "foo",
+        "bar": Object {
+          "__typename": "bar",
+          "e": 5,
+          "f": 6,
+        },
+        "c": 3,
+        "d": 4,
+      },
+      "g": 8,
+      "h": 9,
     },
-    "g": 8,
-    "h": 9,
+    "type": 0,
   },
 }
 `;
@@ -74,23 +76,44 @@ Object {
 exports[`ApolloClient write then read will use a default id getter if __typename and _id are present 1`] = `
 Object {
   "ROOT_QUERY": Object {
-    "__typename": "Query",
-    "a": 1,
-    "b": 2,
-    "foo": Object {
-      "__typename": "foo",
-      "bar": Object {
-        "__ref": "bar:foobar",
+    "data": Object {
+      "a": 1,
+      "b": 2,
+      "foo": Object {
+        "__typename": "foo",
+        "bar": undefined,
+        "c": 3,
+        "d": 4,
       },
-      "c": 3,
-      "d": 4,
     },
+    "outbound": Array [
+      Object {
+        "id": "bar:foobar",
+        "path": Array [
+          "foo",
+          "bar",
+        ],
+      },
+    ],
+    "type": 0,
   },
   "bar:foobar": Object {
-    "__typename": "bar",
-    "_id": "foobar",
-    "e": 5,
-    "f": 6,
+    "data": Object {
+      "__typename": "bar",
+      "_id": "foobar",
+      "e": 5,
+      "f": 6,
+    },
+    "inbound": Array [
+      Object {
+        "id": "ROOT_QUERY",
+        "path": Array [
+          "foo",
+          "bar",
+        ],
+      },
+    ],
+    "type": 0,
   },
 }
 `;
@@ -98,23 +121,44 @@ Object {
 exports[`ApolloClient write then read will use a default id getter if __typename and id are present 1`] = `
 Object {
   "ROOT_QUERY": Object {
-    "__typename": "Query",
-    "a": 1,
-    "b": 2,
-    "foo": Object {
-      "__typename": "foo",
-      "bar": Object {
-        "__ref": "bar:foobar",
+    "data": Object {
+      "a": 1,
+      "b": 2,
+      "foo": Object {
+        "__typename": "foo",
+        "bar": undefined,
+        "c": 3,
+        "d": 4,
       },
-      "c": 3,
-      "d": 4,
     },
+    "outbound": Array [
+      Object {
+        "id": "bar:foobar",
+        "path": Array [
+          "foo",
+          "bar",
+        ],
+      },
+    ],
+    "type": 0,
   },
   "bar:foobar": Object {
-    "__typename": "bar",
-    "e": 5,
-    "f": 6,
-    "id": "foobar",
+    "data": Object {
+      "__typename": "bar",
+      "e": 5,
+      "f": 6,
+      "id": "foobar",
+    },
+    "inbound": Array [
+      Object {
+        "id": "ROOT_QUERY",
+        "path": Array [
+          "foo",
+          "bar",
+        ],
+      },
+    ],
+    "type": 0,
   },
 }
 `;
@@ -122,65 +166,121 @@ Object {
 exports[`ApolloClient write then read will use a default id getter if one is not specified and __typename is present along with either _id or id 1`] = `
 Object {
   "ROOT_QUERY": Object {
-    "__typename": "Query",
-    "a": 1,
-    "b": 2,
-    "bar": Object {
-      "__typename": "bar",
-      "foo": Object {
-        "__ref": "foo:barfoo",
-      },
-      "i": 10,
-      "j": 11,
-    },
-    "foo": Object {
-      "__typename": "foo",
+    "data": Object {
+      "a": 1,
+      "b": 2,
       "bar": Object {
-        "__ref": "bar:foobar",
+        "__typename": "bar",
+        "foo": undefined,
+        "i": 10,
+        "j": 11,
       },
-      "c": 3,
-      "d": 4,
+      "foo": Object {
+        "__typename": "foo",
+        "bar": undefined,
+        "c": 3,
+        "d": 4,
+      },
+      "g": 8,
+      "h": 9,
     },
-    "g": 8,
-    "h": 9,
+    "outbound": Array [
+      Object {
+        "id": "bar:foobar",
+        "path": Array [
+          "foo",
+          "bar",
+        ],
+      },
+      Object {
+        "id": "foo:barfoo",
+        "path": Array [
+          "bar",
+          "foo",
+        ],
+      },
+    ],
+    "type": 0,
   },
   "bar:foobar": Object {
-    "__typename": "bar",
-    "e": 5,
-    "f": 6,
-    "id": "foobar",
+    "data": Object {
+      "__typename": "bar",
+      "e": 5,
+      "f": 6,
+      "id": "foobar",
+    },
+    "inbound": Array [
+      Object {
+        "id": "ROOT_QUERY",
+        "path": Array [
+          "foo",
+          "bar",
+        ],
+      },
+    ],
+    "type": 0,
   },
   "foo:barfoo": Object {
-    "__typename": "foo",
-    "_id": "barfoo",
-    "k": 12,
-    "l": 13,
+    "data": Object {
+      "__typename": "foo",
+      "_id": "barfoo",
+      "k": 12,
+      "l": 13,
+    },
+    "inbound": Array [
+      Object {
+        "id": "ROOT_QUERY",
+        "path": Array [
+          "bar",
+          "foo",
+        ],
+      },
+    ],
+    "type": 0,
   },
 }
 `;
 
 exports[`ApolloClient write then read will write data locally which will then be read back 1`] = `
 Object {
-  "__META": Object {
-    "extraRootIds": Array [
-      "bar",
-      "foo",
-    ],
-  },
   "bar": Object {
-    "__typename": "Bar",
-    "d": 8,
-    "e": 9,
-    "f": 6,
+    "data": Object {
+      "__typename": "Bar",
+      "d": 8,
+      "e": 9,
+      "f": 6,
+    },
+    "inbound": Array [
+      Object {
+        "id": "foo",
+        "path": Array [
+          "bar",
+        ],
+      },
+    ],
+    "outbound": Array [],
+    "parameterized": Array [],
+    "type": 0,
   },
   "foo": Object {
-    "__typename": "Foo",
-    "a": 7,
-    "b": 2,
-    "bar": Object {
-      "__ref": "bar",
+    "data": Object {
+      "__typename": "Foo",
+      "a": 7,
+      "b": 2,
+      "bar": undefined,
+      "c": 3,
     },
-    "c": 3,
+    "inbound": Array [],
+    "outbound": Array [
+      Object {
+        "id": "bar",
+        "path": Array [
+          "bar",
+        ],
+      },
+    ],
+    "parameterized": Array [],
+    "type": 0,
   },
 }
 `;
@@ -188,23 +288,44 @@ Object {
 exports[`ApolloClient write then read will write data to a specific id 1`] = `
 Object {
   "ROOT_QUERY": Object {
-    "__typename": "Query",
-    "a": 1,
-    "b": 2,
-    "foo": Object {
-      "__typename": "foo",
-      "bar": Object {
-        "__ref": "foobar",
+    "data": Object {
+      "a": 1,
+      "b": 2,
+      "foo": Object {
+        "__typename": "foo",
+        "bar": undefined,
+        "c": 3,
+        "d": 4,
       },
-      "c": 3,
-      "d": 4,
     },
+    "outbound": Array [
+      Object {
+        "id": "foobar",
+        "path": Array [
+          "foo",
+          "bar",
+        ],
+      },
+    ],
+    "type": 0,
   },
   "foobar": Object {
-    "__typename": "bar",
-    "e": 5,
-    "f": 6,
-    "key": "foobar",
+    "data": Object {
+      "__typename": "bar",
+      "e": 5,
+      "f": 6,
+      "key": "foobar",
+    },
+    "inbound": Array [
+      Object {
+        "id": "ROOT_QUERY",
+        "path": Array [
+          "foo",
+          "bar",
+        ],
+      },
+    ],
+    "type": 0,
   },
 }
 `;
@@ -232,150 +353,242 @@ exports[`ApolloClient writeFragment should warn when the data provided does not 
 
 exports[`ApolloClient writeFragment will write some deeply nested data into the store at any id 1`] = `
 Object {
-  "__META": Object {
-    "extraRootIds": Array [
-      "foo",
-    ],
-  },
   "bar": Object {
-    "__typename": "Bar",
-    "i": 7,
+    "data": Object {
+      "__typename": "Bar",
+      "i": 7,
+      "id": "bar",
+    },
+    "inbound": Array [
+      Object {
+        "id": "foo",
+        "path": Array [
+          "h",
+        ],
+      },
+    ],
+    "type": 0,
   },
   "foo": Object {
-    "__typename": "Foo",
-    "e": 4,
-    "h": Object {
-      "__ref": "bar",
+    "data": Object {
+      "__typename": "Foo",
+      "e": 4,
+      "h": undefined,
     },
+    "outbound": Array [
+      Object {
+        "id": "bar",
+        "path": Array [
+          "h",
+        ],
+      },
+    ],
+    "type": 0,
   },
 }
 `;
 
 exports[`ApolloClient writeFragment will write some deeply nested data into the store at any id 2`] = `
 Object {
-  "__META": Object {
-    "extraRootIds": Array [
-      "foo",
-    ],
-  },
   "bar": Object {
-    "__typename": "Bar",
-    "i": 7,
-    "j": 8,
-    "k": 9,
+    "data": Object {
+      "__typename": "Bar",
+      "i": 7,
+      "id": "bar",
+      "j": 8,
+      "k": 9,
+    },
+    "inbound": Array [
+      Object {
+        "id": "foo",
+        "path": Array [
+          "h",
+        ],
+      },
+    ],
+    "type": 0,
   },
   "foo": Object {
-    "__typename": "Foo",
-    "e": 4,
-    "f": 5,
-    "g": 6,
-    "h": Object {
-      "__ref": "bar",
+    "data": Object {
+      "__typename": "Foo",
+      "e": 4,
+      "f": 5,
+      "g": 6,
+      "h": undefined,
     },
+    "outbound": Array [
+      Object {
+        "id": "bar",
+        "path": Array [
+          "h",
+        ],
+      },
+    ],
+    "type": 0,
   },
 }
 `;
 
 exports[`ApolloClient writeFragment will write some deeply nested data into the store at any id 3`] = `
 Object {
-  "__META": Object {
-    "extraRootIds": Array [
-      "bar",
-      "foo",
-    ],
-  },
   "bar": Object {
-    "__typename": "Bar",
-    "i": 10,
-    "j": 8,
-    "k": 9,
+    "data": Object {
+      "__typename": "Bar",
+      "i": 10,
+      "id": "bar",
+      "j": 8,
+      "k": 9,
+    },
+    "inbound": Array [
+      Object {
+        "id": "foo",
+        "path": Array [
+          "h",
+        ],
+      },
+    ],
+    "type": 0,
   },
   "foo": Object {
-    "__typename": "Foo",
-    "e": 4,
-    "f": 5,
-    "g": 6,
-    "h": Object {
-      "__ref": "bar",
+    "data": Object {
+      "__typename": "Foo",
+      "e": 4,
+      "f": 5,
+      "g": 6,
+      "h": undefined,
     },
+    "outbound": Array [
+      Object {
+        "id": "bar",
+        "path": Array [
+          "h",
+        ],
+      },
+    ],
+    "type": 0,
   },
 }
 `;
 
 exports[`ApolloClient writeFragment will write some deeply nested data into the store at any id 4`] = `
 Object {
-  "__META": Object {
-    "extraRootIds": Array [
-      "bar",
-      "foo",
-    ],
-  },
   "bar": Object {
-    "__typename": "Bar",
-    "i": 10,
-    "j": 11,
-    "k": 12,
+    "data": Object {
+      "__typename": "Bar",
+      "i": 10,
+      "id": "bar",
+      "j": 11,
+      "k": 12,
+    },
+    "inbound": Array [
+      Object {
+        "id": "foo",
+        "path": Array [
+          "h",
+        ],
+      },
+    ],
+    "type": 0,
   },
   "foo": Object {
-    "__typename": "Foo",
-    "e": 4,
-    "f": 5,
-    "g": 6,
-    "h": Object {
-      "__ref": "bar",
+    "data": Object {
+      "__typename": "Foo",
+      "e": 4,
+      "f": 5,
+      "g": 6,
+      "h": undefined,
     },
+    "outbound": Array [
+      Object {
+        "id": "bar",
+        "path": Array [
+          "h",
+        ],
+      },
+    ],
+    "type": 0,
   },
 }
 `;
 
 exports[`ApolloClient writeFragment will write some deeply nested data into the store at any id 5`] = `
 Object {
-  "__META": Object {
-    "extraRootIds": Array [
-      "bar",
-      "foo",
-    ],
-  },
   "bar": Object {
-    "__typename": "Bar",
-    "i": 7,
-    "j": 8,
-    "k": 9,
+    "data": Object {
+      "__typename": "Bar",
+      "i": 7,
+      "id": "bar",
+      "j": 8,
+      "k": 9,
+    },
+    "inbound": Array [
+      Object {
+        "id": "foo",
+        "path": Array [
+          "h",
+        ],
+      },
+    ],
+    "type": 0,
   },
   "foo": Object {
-    "__typename": "Foo",
-    "e": 4,
-    "f": 5,
-    "g": 6,
-    "h": Object {
-      "__ref": "bar",
+    "data": Object {
+      "__typename": "Foo",
+      "e": 4,
+      "f": 5,
+      "g": 6,
+      "h": undefined,
     },
+    "outbound": Array [
+      Object {
+        "id": "bar",
+        "path": Array [
+          "h",
+        ],
+      },
+    ],
+    "type": 0,
   },
 }
 `;
 
 exports[`ApolloClient writeFragment will write some deeply nested data into the store at any id 6`] = `
 Object {
-  "__META": Object {
-    "extraRootIds": Array [
-      "bar",
-      "foo",
-    ],
-  },
   "bar": Object {
-    "__typename": "Bar",
-    "i": 10,
-    "j": 11,
-    "k": 12,
+    "data": Object {
+      "__typename": "Bar",
+      "i": 10,
+      "id": "bar",
+      "j": 11,
+      "k": 12,
+    },
+    "inbound": Array [
+      Object {
+        "id": "foo",
+        "path": Array [
+          "h",
+        ],
+      },
+    ],
+    "type": 0,
   },
   "foo": Object {
-    "__typename": "Foo",
-    "e": 4,
-    "f": 5,
-    "g": 6,
-    "h": Object {
-      "__ref": "bar",
+    "data": Object {
+      "__typename": "Foo",
+      "e": 4,
+      "f": 5,
+      "g": 6,
+      "h": undefined,
     },
+    "outbound": Array [
+      Object {
+        "id": "bar",
+        "path": Array [
+          "h",
+        ],
+      },
+    ],
+    "type": 0,
   },
 }
 `;
@@ -405,12 +618,14 @@ exports[`ApolloClient writeQuery should warn when the data provided does not mat
 exports[`ApolloClient writeQuery will write some deeply nested data to the store 1`] = `
 Object {
   "ROOT_QUERY": Object {
-    "__typename": "Query",
-    "a": 1,
-    "d": Object {
-      "__typename": "D",
-      "e": 4,
+    "data": Object {
+      "a": 1,
+      "d": Object {
+        "__typename": "D",
+        "e": 4,
+      },
     },
+    "type": 0,
   },
 }
 `;
@@ -418,15 +633,17 @@ Object {
 exports[`ApolloClient writeQuery will write some deeply nested data to the store 2`] = `
 Object {
   "ROOT_QUERY": Object {
-    "__typename": "Query",
-    "a": 1,
-    "d": Object {
-      "__typename": "D",
-      "h": Object {
-        "__typename": "H",
-        "i": 7,
+    "data": Object {
+      "a": 1,
+      "d": Object {
+        "__typename": "D",
+        "h": Object {
+          "__typename": "H",
+          "i": 7,
+        },
       },
     },
+    "type": 0,
   },
 }
 `;
@@ -434,22 +651,24 @@ Object {
 exports[`ApolloClient writeQuery will write some deeply nested data to the store 3`] = `
 Object {
   "ROOT_QUERY": Object {
-    "__typename": "Query",
-    "a": 1,
-    "b": 2,
-    "c": 3,
-    "d": Object {
-      "__typename": "D",
-      "e": 4,
-      "f": 5,
-      "g": 6,
-      "h": Object {
-        "__typename": "H",
-        "i": 7,
-        "j": 8,
-        "k": 9,
+    "data": Object {
+      "a": 1,
+      "b": 2,
+      "c": 3,
+      "d": Object {
+        "__typename": "D",
+        "e": 4,
+        "f": 5,
+        "g": 6,
+        "h": Object {
+          "__typename": "H",
+          "i": 7,
+          "j": 8,
+          "k": 9,
+        },
       },
     },
+    "type": 0,
   },
 }
 `;

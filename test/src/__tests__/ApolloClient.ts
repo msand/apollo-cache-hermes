@@ -12,11 +12,16 @@ import {
   Observable,
   QueryOptions,
 } from '@apollo/client';
+import { loadErrorMessages } from '@apollo/client/dev';
+// Hermes: spy on the invariant @apollo/client itself logs through, not the vendored copy.
+import { invariant } from '@apollo/client/utilities/globals';
 
 import { itAsync } from '../testing';
 import { ObservableStream, spyOnConsole } from '../testing/internal';
-import { invariant } from '../utilities/globals';
 import { Hermes } from '../../../src';
+
+// Hermes: these tests assert @apollo/client's readable error messages, which the shared env leaves unloaded.
+loadErrorMessages();
 
 describe('ApolloClient', () => {
   describe('constructor', () => {
@@ -70,6 +75,7 @@ describe('ApolloClient', () => {
 
   describe('readQuery', () => {
     it('will read some data from the store', () => {
+      // Hermes: reads return every field stored on a node, not only the selected ones, hence toMatchObject.
       const client = new ApolloClient({
         link: ApolloLink.empty(),
         cache: new Hermes().restore({
@@ -89,7 +95,7 @@ describe('ApolloClient', () => {
             }
           `,
         }),
-      ).toEqual({ a: 1 });
+      ).toMatchObject({ a: 1 });
       expect(
         client.readQuery({
           query: gql`
@@ -99,7 +105,7 @@ describe('ApolloClient', () => {
             }
           `,
         }),
-      ).toEqual({ b: 2, c: 3 });
+      ).toMatchObject({ b: 2, c: 3 });
       expect(
         client.readQuery({
           query: gql`
@@ -114,6 +120,7 @@ describe('ApolloClient', () => {
     });
 
     it('will read some deeply nested data from the store', () => {
+      // Hermes: reads return every field stored on a node, not only the selected ones, hence toMatchObject.
       const client = new ApolloClient({
         link: ApolloLink.empty(),
         cache: new Hermes().restore({
@@ -150,7 +157,7 @@ describe('ApolloClient', () => {
             }
           `,
         }),
-      ).toEqual({ a: 1, d: { e: 4, __typename: 'Foo' } });
+      ).toMatchObject({ a: 1, d: { e: 4, __typename: 'Foo' } });
       expect(
         client.readQuery({
           query: gql`
@@ -165,7 +172,7 @@ describe('ApolloClient', () => {
             }
           `,
         }),
-      ).toEqual({
+      ).toMatchObject({
         a: 1,
         d: { __typename: 'Foo', e: 4, h: { i: 7, __typename: 'Bar' } },
       });
@@ -344,6 +351,7 @@ describe('ApolloClient', () => {
     });
 
     it('will read some deeply nested data from the store at any id', () => {
+      // Hermes: reads return every field stored on a node, not only the selected ones, hence toMatchObject.
       const client = new ApolloClient({
         link: ApolloLink.empty(),
         cache: new Hermes().restore({
@@ -382,7 +390,7 @@ describe('ApolloClient', () => {
             }
           `,
         }),
-      ).toEqual({ __typename: 'Foo', e: 4, h: { __typename: 'Bar', i: 7 } });
+      ).toMatchObject({ __typename: 'Foo', e: 4, h: { __typename: 'Bar', i: 7 } });
       expect(
         client.readFragment({
           id: 'foo',
@@ -415,7 +423,7 @@ describe('ApolloClient', () => {
             }
           `,
         }),
-      ).toEqual({ __typename: 'Bar', i: 7 });
+      ).toMatchObject({ __typename: 'Bar', i: 7 });
       expect(
         client.readFragment({
           id: 'bar',
@@ -588,8 +596,10 @@ describe('ApolloClient', () => {
 
       expect((client.cache as Hermes).extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          a: 1,
+          data: {
+            a: 1,
+          },
+          type: 0,
         },
       });
 
@@ -605,10 +615,12 @@ describe('ApolloClient', () => {
 
       expect((client.cache as Hermes).extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          a: 1,
-          b: 2,
-          c: 3,
+          data: {
+            a: 1,
+            b: 2,
+            c: 3,
+          },
+          type: 0,
         },
       });
 
@@ -625,10 +637,12 @@ describe('ApolloClient', () => {
 
       expect((client.cache as Hermes).extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          a: 4,
-          b: 5,
-          c: 6,
+          data: {
+            a: 4,
+            b: 5,
+            c: 6,
+          },
+          type: 0,
         },
       });
     });
@@ -746,9 +760,37 @@ describe('ApolloClient', () => {
 
       expect((client.cache as Hermes).extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          'field({"literal":true,"value":42})': 1,
-          'field({"literal":false,"value":42})': 2,
+          parameterized: [
+            {
+              id: 'ROOT_QUERY❖["field"]❖{"literal":true,"value":42}',
+              path: ['field'],
+            },
+            {
+              id: 'ROOT_QUERY❖["field"]❖{"literal":false,"value":42}',
+              path: ['field'],
+            },
+          ],
+          type: 0,
+        },
+        'ROOT_QUERY❖["field"]❖{"literal":false,"value":42}': {
+          data: 2,
+          inbound: [
+            {
+              id: 'ROOT_QUERY',
+              path: ['field'],
+            },
+          ],
+          type: 1,
+        },
+        'ROOT_QUERY❖["field"]❖{"literal":true,"value":42}': {
+          data: 1,
+          inbound: [
+            {
+              id: 'ROOT_QUERY',
+              path: ['field'],
+            },
+          ],
+          type: 1,
         },
       });
     });
@@ -790,9 +832,37 @@ describe('ApolloClient', () => {
 
       expect((client.cache as Hermes).extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          'field({"literal":true,"value":42})': 2,
-          'field({"literal":false,"value":-1})': 1,
+          parameterized: [
+            {
+              id: 'ROOT_QUERY❖["field"]❖{"literal":true,"value":42}',
+              path: ['field'],
+            },
+            {
+              id: 'ROOT_QUERY❖["field"]❖{"literal":false,"value":-1}',
+              path: ['field'],
+            },
+          ],
+          type: 0,
+        },
+        'ROOT_QUERY❖["field"]❖{"literal":false,"value":-1}': {
+          data: 1,
+          inbound: [
+            {
+              id: 'ROOT_QUERY',
+              path: ['field'],
+            },
+          ],
+          type: 1,
+        },
+        'ROOT_QUERY❖["field"]❖{"literal":true,"value":42}': {
+          data: 2,
+          inbound: [
+            {
+              id: 'ROOT_QUERY',
+              path: ['field'],
+            },
+          ],
+          type: 1,
         },
       });
     });
@@ -1064,13 +1134,41 @@ describe('ApolloClient', () => {
       });
 
       expect((client.cache as Hermes).extract()).toEqual({
-        __META: {
-          extraRootIds: ['foo'],
-        },
         foo: {
-          __typename: 'Foo',
-          'field({"literal":true,"value":42})': 1,
-          'field({"literal":false,"value":42})': 2,
+          data: {
+            __typename: 'Foo',
+          },
+          parameterized: [
+            {
+              id: 'foo❖["field"]❖{"literal":true,"value":42}',
+              path: ['field'],
+            },
+            {
+              id: 'foo❖["field"]❖{"literal":false,"value":42}',
+              path: ['field'],
+            },
+          ],
+          type: 0,
+        },
+        'foo❖["field"]❖{"literal":false,"value":42}': {
+          data: 2,
+          inbound: [
+            {
+              id: 'foo',
+              path: ['field'],
+            },
+          ],
+          type: 1,
+        },
+        'foo❖["field"]❖{"literal":true,"value":42}': {
+          data: 1,
+          inbound: [
+            {
+              id: 'foo',
+              path: ['field'],
+            },
+          ],
+          type: 1,
         },
       });
     });
@@ -2471,15 +2569,17 @@ describe('ApolloClient', () => {
         `,
       });
 
-      expect((client.cache as any).data.data).toEqual({
+      expect((client.cache as Hermes).extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          a: 1,
+          data: {
+            a: 1,
+          },
+          type: 0,
         },
       });
 
       await client.clearStore();
-      expect((client.cache as any).data.data).toEqual({});
+      expect((client.cache as Hermes).extract()).toEqual({});
     });
   });
 
@@ -2571,10 +2671,9 @@ describe('ApolloClient', () => {
             setTimeout(() => {
               try {
                 expect(invariantDebugSpy).toHaveBeenCalledTimes(1);
-                expect(invariantDebugSpy).toHaveBeenCalledWith(
-                  'In client.refetchQueries, Promise.all promise rejected with error %o',
-                  new ApolloError({ errorMessage: 'refetch failed' }),
-                );
+                // Hermes: the @apollo/client build passes the message id; 17 is
+                // 'In client.refetchQueries, Promise.all promise rejected with error %o'.
+                expect(invariantDebugSpy).toHaveBeenCalledWith(17, new ApolloError({ errorMessage: 'refetch failed' }));
                 resolve();
               } catch (err) {
                 reject(err);

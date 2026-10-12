@@ -579,13 +579,17 @@ describe('mutation results', () => {
             expect(time.getTime()).toBe(startTime);
             expect(timeReadCount).toBe(1);
             expect(timeMergeCount).toBe(1);
+            // Hermes: extract() nests each node's fields under `data`.
             expect(cache.extract()).toEqual({
               ROOT_MUTATION: {
-                __typename: 'Mutation',
-                doSomething: {
-                  __typename: 'MutationPayload',
-                  time: startTime,
+                data: {
+                  __typename: 'Mutation',
+                  doSomething: {
+                    __typename: 'MutationPayload',
+                    time: startTime,
+                  },
                 },
+                type: 0,
               },
             });
           },
@@ -605,9 +609,13 @@ describe('mutation results', () => {
             // The contents of the ROOT_MUTATION object exist only briefly, for the
             // duration of the mutation update, and are removed after the mutation
             // write is finished.
+            // Hermes: extract() nests each node's fields under `data`.
             expect(client.cache.extract()).toEqual({
               ROOT_MUTATION: {
-                __typename: 'Mutation',
+                data: {
+                  __typename: 'Mutation',
+                },
+                type: 0,
               },
             });
           },
@@ -658,13 +666,17 @@ describe('mutation results', () => {
             expect(time.getTime()).toBe(startTime);
             expect(timeReadCount).toBe(1);
             expect(timeMergeCount).toBe(1);
+            // Hermes: extract() nests each node's fields under `data`.
             expect(cache.extract()).toEqual({
               ROOT_MUTATION: {
-                __typename: 'Mutation',
-                doSomething: {
-                  __typename: 'MutationPayload',
-                  time: startTime,
+                data: {
+                  __typename: 'Mutation',
+                  doSomething: {
+                    __typename: 'MutationPayload',
+                    time: startTime,
+                  },
                 },
+                type: 0,
               },
             });
           },
@@ -681,13 +693,17 @@ describe('mutation results', () => {
             expect(timeReadCount).toBe(1);
             expect(timeMergeCount).toBe(1);
 
+            // Hermes: extract() nests each node's fields under `data`.
             expect(client.cache.extract()).toEqual({
               ROOT_MUTATION: {
-                __typename: 'Mutation',
-                doSomething: {
-                  __typename: 'MutationPayload',
-                  time: startTime,
+                data: {
+                  __typename: 'Mutation',
+                  doSomething: {
+                    __typename: 'MutationPayload',
+                    time: startTime,
+                  },
                 },
+                type: 0,
               },
             });
           },
@@ -1220,11 +1236,8 @@ describe('mutation results', () => {
       }),
     ])
       .then(results => {
-        expect(client.cache.extract()).toEqual({
-          ROOT_MUTATION: {
-            __typename: 'Mutation',
-          },
-        });
+        // Hermes: root nodes do not store a __typename, so the emptied ROOT_MUTATION is removed entirely.
+        expect(client.cache.extract()).toEqual({});
         expect(results).toEqual([
           { data: { result: 'hello' } },
           { data: { result: 'world' } },
@@ -1298,11 +1311,8 @@ describe('mutation results', () => {
       }),
     ])
       .then(results => {
-        expect(client.cache.extract()).toEqual({
-          ROOT_MUTATION: {
-            __typename: 'Mutation',
-          },
-        });
+        // Hermes: root nodes do not store a __typename, so the emptied ROOT_MUTATION is removed entirely.
+        expect(client.cache.extract()).toEqual({});
         expect(results).toEqual([
           { data: { result: 'hello' } },
           { data: { result: 'world' } },
@@ -1376,11 +1386,8 @@ describe('mutation results', () => {
       }),
     ])
       .then(results => {
-        expect(client.cache.extract()).toEqual({
-          ROOT_MUTATION: {
-            __typename: 'Mutation',
-          },
-        });
+        // Hermes: root nodes do not store a __typename, so the emptied ROOT_MUTATION is removed entirely.
+        expect(client.cache.extract()).toEqual({});
         expect(results).toEqual([
           { data: { result: 'hello' } },
           { data: { result: 'world' } },
