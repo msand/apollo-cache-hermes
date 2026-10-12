@@ -5,7 +5,7 @@ import { UnsatisfiedCacheError } from '../errors';
 import { JsonObject } from '../primitive';
 import { Queryable } from '../Queryable';
 import { NodeId } from '../schema';
-import { DocumentNode } from '../util';
+import { DocumentNode, isObject } from '../util';
 
 import { buildRawOperationFromQuery, buildRawOperationFromFragment } from './util';
 
@@ -31,7 +31,8 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
 
     // Like InMemoryCache, an empty read is an empty (incomplete) object rather than undefined; and
     // like its canonized results, the same (frozen) one each time.
-    return { result: (result ?? EMPTY_RESULT) as unknown as T, complete, missing, fromOptimisticTransaction };
+    const empty = result === undefined || (isObject(result) && Object.keys(result).length === 0);
+    return { result: (empty ? EMPTY_RESULT : result) as unknown as T, complete, missing, fromOptimisticTransaction };
   }
 
   read<TData = any, TVariables = any>(query: Cache.ReadOptions<TVariables, TData>): TData | null {

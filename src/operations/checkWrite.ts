@@ -91,8 +91,9 @@ export function checkWrite<TSerialized>(
   const fragmentMap: FragmentMap = createFragmentMap(getFragmentDefinitions(document));
   const lookupFragment = (name: string) => fragmentMap[name];
 
+  // Like InMemoryCache's policies.fragmentMatches (with possibleTypes).
   const fragmentMatches = (typeCondition: string | undefined, typename: string | undefined) =>
-    !typeCondition || (!!typename && typeCondition === typename);
+    !typeCondition || (!!typename && context.fragmentMatches(typeCondition, typename, true));
 
   const hasReadFunction = (typename: string | undefined, fieldName: string) => {
     const policy = typename ? context.typePolicies?.[typename]?.fields?.[fieldName] : undefined;
