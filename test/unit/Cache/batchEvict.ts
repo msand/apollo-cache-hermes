@@ -9,7 +9,6 @@ import { GraphSnapshot } from '../../../src/GraphSnapshot';
 import { SnapshotEditor } from '../../../src/operations/SnapshotEditor';
 
 describe(`Cache#batchEvict`, () => {
-
   const graph = query(`{
     things { __typename id name shared { __typename id name } }
     holder { __typename id items { __typename id name } }
@@ -17,7 +16,10 @@ describe(`Cache#batchEvict`, () => {
 
   const baseState = {
     things: [1, 2, 3, 4, 5].map(i => ({
-      __typename: 'Thing', id: `${i}`, name: `Thing ${i}`, shared: { __typename: 'Shared', id: 's', name: 'Shared' },
+      __typename: 'Thing',
+      id: `${i}`,
+      name: `Thing ${i}`,
+      shared: { __typename: 'Shared', id: 's', name: 'Shared' },
     })),
     holder: {
       __typename: 'Holder',
@@ -60,7 +62,10 @@ describe(`Cache#batchEvict`, () => {
 
   // The evicted ids reference each other, so the second delete in the shared
   // editor meets reference edits against the node deleted first.
-  for (const ids of [['h', 'i1'], ['i1', 'h']]) {
+  for (const ids of [
+    ['h', 'i1'],
+    ['i1', 'h'],
+  ]) {
     it(`evicts an entity together with an entity it references (${ids.join(', ')})`, () => {
       const expected = createCache();
       evictSeparately(expected, ids);
@@ -90,8 +95,9 @@ describe(`Cache#batchEvict`, () => {
 
     expect(cache.getSnapshot().baseline).to.eq(before.baseline);
     expect(commit.mock.calls.length).to.eq(0);
-    expect(onChange.mock.calls.map(([, edited]) => edited.size))
-      .to.deep.eq(evictOnChange.mock.calls.map(([, edited]) => edited.size));
+    expect(onChange.mock.calls.map(([, edited]) => edited.size)).to.deep.eq(
+      evictOnChange.mock.calls.map(([, edited]) => edited.size),
+    );
 
     const expected = createCache();
     expected.evict({ id: '2' });
@@ -130,7 +136,10 @@ describe(`Cache#batchEvict`, () => {
     batch.batchEvict(['1', '3']);
 
     expect(separateCalls).to.have.members([
-      'Thing 1 -> removed', 'Query root -> present', 'Thing 3 -> removed', 'Query root -> present',
+      'Thing 1 -> removed',
+      'Query root -> present',
+      'Thing 3 -> removed',
+      'Query root -> present',
     ]);
     expect(batchCalls).to.have.members(['Thing 1 -> removed', 'Thing 3 -> removed', 'Query root -> present']);
     expect(batchCalls.length).to.eq(3);
@@ -179,11 +188,9 @@ describe(`Cache#batchEvict`, () => {
     expect(viaBatch.warn.mock.calls.length).to.eq(1);
     expect(viaBatch.warn.mock.calls[0][0]).to.eq(viaEvict.warn.mock.calls[0][0]);
   });
-
 });
 
 describe(`Cache#gc`, () => {
-
   const graph = query(`{
     holder { id items { id name } }
     kept { id }
@@ -222,11 +229,9 @@ describe(`Cache#gc`, () => {
     expect(commit.mock.calls.length).to.eq(1);
     expect(cache.extract(false)).to.deep.eq(expected.extract(false));
   });
-
 });
 
 describe(`optimistic replay of deletes`, () => {
-
   const graph = query(`{ a { id ref { id } } b { id } c { id } }`);
   const aToC = query(`{ a { id ref { id } } }`);
   const cField = query(`{ c { id extra } }`);
@@ -253,27 +258,36 @@ describe(`optimistic replay of deletes`, () => {
     });
 
     expect(cache.transaction(false, 'delete-b', t => deleteOptimistically(t, 'B'))).to.eq(true);
-    expect(cache.transaction(false, 'a-to-c', (t) => {
-      t.write(aToC, { a: { id: 'A', ref: { id: 'C' } } });
-    })).to.eq(true);
+    expect(
+      cache.transaction(false, 'a-to-c', t => {
+        t.write(aToC, { a: { id: 'A', ref: { id: 'C' } } });
+      }),
+    ).to.eq(true);
     expect(cache.transaction(false, 'delete-a', t => deleteOptimistically(t, 'A'))).to.eq(true);
 
     // Replays the three optimistic transactions on the new baseline.
-    expect(cache.transaction(false, (t) => {
-      t.write(other, { other: 1 });
-    })).to.eq(true);
+    expect(
+      cache.transaction(false, t => {
+        t.write(other, { other: 1 });
+      }),
+    ).to.eq(true);
 
     expect(inboundIdsOf(cache, 'C')).to.not.include('A');
     expect(cache.getEntity('A')).to.eq(undefined);
 
     const results: any[] = [];
     cache.watch(aToC, {
-      query: aToC.document, optimistic: true, immediate: false, callback: r => results.push(r),
+      query: aToC.document,
+      optimistic: true,
+      immediate: false,
+      callback: r => results.push(r),
     });
     // Broadcast so the watcher is actually notified of the update.
-    expect(cache.transaction(true, 'update-c', (t) => {
-      t.write(cField, { c: { id: 'C', extra: 1 } });
-    })).to.eq(true);
+    expect(
+      cache.transaction(true, 'update-c', t => {
+        t.write(cField, { c: { id: 'C', extra: 1 } });
+      }),
+    ).to.eq(true);
 
     expect(cache.getEntity('A')).to.eq(undefined);
     const resurrected = (data: any) => data?.a?.id === 'A';
@@ -281,5 +295,4 @@ describe(`optimistic replay of deletes`, () => {
     expect(results.length).to.eq(1);
     expect(resurrected(results[0].result)).to.eq(false);
   });
-
 });

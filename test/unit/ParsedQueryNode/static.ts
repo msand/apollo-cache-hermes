@@ -7,7 +7,6 @@ import { getOperationOrDie } from '../../../src/util';
 import { strictConfig } from '../../helpers';
 
 describe(`parseQuery with static queries`, () => {
-
   const context = new CacheContext(strictConfig);
   function parseOperation(operationString: string) {
     const operation = getOperationOrDie(gql(operationString));
@@ -70,10 +69,9 @@ describe(`parseQuery with static queries`, () => {
         fizz: new ParsedQueryNode(),
       },
       variables: new Set(),
-      propMap:  {
+      propMap: {
         fizz: 'bar',
       },
     });
   });
-
 });

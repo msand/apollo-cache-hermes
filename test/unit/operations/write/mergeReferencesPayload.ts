@@ -12,12 +12,10 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 // It just isn't very fruitful to unit test the individual steps of the write
 // workflow in isolation, given the contextual state that must be passed around.
 describe(`operations.write`, () => {
-
   const context = new CacheContext(strictConfig);
   const empty = new GraphSnapshot();
 
   describe(`merge references payload`, () => {
-
     let baseline: GraphSnapshot, snapshot: GraphSnapshot, editedNodeIds: Set<NodeId>;
     beforeAll(() => {
       const rootValuesQuery = query(`{
@@ -83,7 +81,5 @@ describe(`operations.write`, () => {
       jestExpect(snapshot.getNodeSnapshot('1')).toBeInstanceOf(EntitySnapshot);
       jestExpect(snapshot.getNodeSnapshot('2')).toBeInstanceOf(EntitySnapshot);
     });
-
   });
-
 });

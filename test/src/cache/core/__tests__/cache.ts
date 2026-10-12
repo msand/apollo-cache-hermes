@@ -21,21 +21,17 @@ class TestCache extends ApolloCache<unknown> {
     return undefined;
   }
 
-  public performTransaction(
-    transaction: <TSerialized>(c: ApolloCache<TSerialized>) => void
-  ): void {
+  public performTransaction(transaction: <TSerialized>(c: ApolloCache<TSerialized>) => void): void {
     transaction(this);
   }
 
-  public read<T, TVariables = any>(
-    query: Cache.ReadOptions<TVariables>
-  ): T | null {
+  public read<T, TVariables = any>(query: Cache.ReadOptions<TVariables>): T | null {
     return null;
   }
 
   public recordOptimisticTransaction(
     transaction: <TSerialized>(c: ApolloCache<TSerialized>) => void,
-    id: string
+    id: string,
   ): void {}
 
   public removeOptimistic(id: string): void {}
@@ -49,12 +45,10 @@ class TestCache extends ApolloCache<unknown> {
   }
 
   public watch(watch: Cache.WatchOptions): () => void {
-    return function() {};
+    return function () {};
   }
 
-  public write<TResult = any, TVariables = any>(
-    _: Cache.WriteOptions<TResult, TVariables>
-  ): Reference | undefined {
+  public write<TResult = any, TVariables = any>(_: Cache.WriteOptions<TResult, TVariables>): Reference | undefined {
     return undefined;
   }
 }
@@ -190,9 +184,7 @@ describe('abstract cache', () => {
       test.readQuery = jest.fn();
       test.writeQuery = jest.fn();
 
-      test.updateQuery({ query }, (data) => {
-
-      });
+      test.updateQuery({ query }, data => {});
 
       expect(test.readQuery).toHaveBeenCalled();
       expect(test.writeQuery).not.toHaveBeenCalled();
@@ -214,9 +206,7 @@ describe('abstract cache', () => {
 
       expect(test.readQuery).toHaveBeenCalledWith(expect.objectContaining(options));
 
-      expect(test.writeQuery).toHaveBeenCalledWith(
-        expect.objectContaining({ ...options, data: 'foo' })
-      );
+      expect(test.writeQuery).toHaveBeenCalledWith(expect.objectContaining({ ...options, data: 'foo' }));
     });
 
     it('returns current value in memory if no update was made', () => {
@@ -229,16 +219,14 @@ describe('abstract cache', () => {
       const test = new TestCache();
       let currentValue = 'foo';
       test.readQuery = jest.fn().mockImplementation(() => currentValue);
-      test.writeQuery = jest
-        .fn()
-        .mockImplementation(({ data }) => (currentValue = data));
+      test.writeQuery = jest.fn().mockImplementation(({ data }) => (currentValue = data));
       expect(test.updateQuery({ query }, data => 'bar')).toBe('bar');
     });
 
     it('calls update function with the current value in memory', () => {
       const test = new TestCache();
       test.readQuery = jest.fn().mockReturnValue('foo');
-      test.updateQuery({ query }, (data) => {
+      test.updateQuery({ query }, data => {
         expect(data).toBe('foo');
       });
     });
@@ -279,9 +267,7 @@ describe('abstract cache', () => {
       test.readFragment = jest.fn();
       test.writeFragment = jest.fn();
 
-      test.updateFragment({ id: fragmentId, fragment }, (data) => {
-
-      });
+      test.updateFragment({ id: fragmentId, fragment }, data => {});
 
       expect(test.readFragment).toHaveBeenCalled();
       expect(test.writeFragment).not.toHaveBeenCalled();
@@ -303,41 +289,29 @@ describe('abstract cache', () => {
 
       test.updateFragment(options, data => 'foo');
 
-      expect(test.readFragment).toHaveBeenCalledWith(
-        expect.objectContaining(options)
-      );
+      expect(test.readFragment).toHaveBeenCalledWith(expect.objectContaining(options));
 
-      expect(test.writeFragment).toHaveBeenCalledWith(
-        expect.objectContaining({ ...options, data: 'foo' })
-      );
+      expect(test.writeFragment).toHaveBeenCalledWith(expect.objectContaining({ ...options, data: 'foo' }));
     });
 
     it('returns current value in memory if no update was made', () => {
       const test = new TestCache();
       test.readFragment = jest.fn().mockReturnValue('foo');
-      expect(
-        test.updateFragment({ id: fragmentId, fragment }, (data) => {
-
-        })
-      ).toBe('foo');
+      expect(test.updateFragment({ id: fragmentId, fragment }, data => {})).toBe('foo');
     });
 
     it('returns the updated value in memory if an update was made', () => {
       const test = new TestCache();
       let currentValue = 'foo';
       test.readFragment = jest.fn().mockImplementation(() => currentValue);
-      test.writeFragment = jest
-        .fn()
-        .mockImplementation(({ data }) => (currentValue = data));
-      expect(
-        test.updateFragment({ id: fragmentId, fragment }, data => 'bar')
-      ).toBe('bar');
+      test.writeFragment = jest.fn().mockImplementation(({ data }) => (currentValue = data));
+      expect(test.updateFragment({ id: fragmentId, fragment }, data => 'bar')).toBe('bar');
     });
 
     it('calls update function with the current value in memory', () => {
       const test = new TestCache();
       test.readFragment = jest.fn().mockReturnValue('foo');
-      test.updateFragment({ id: fragmentId, fragment }, (data) => {
+      test.updateFragment({ id: fragmentId, fragment }, data => {
         expect(data).toBe('foo');
       });
     });
@@ -349,14 +323,14 @@ describe.skip('Cache type tests', () => {
     it('field types are inferred correctly from passed entity type', () => {
       const cache = new TestCache();
       cache.modify<{
-        prop1: string,
-        prop2: number,
+        prop1: string;
+        prop2: number;
         child: {
-          someObject: true,
-        },
+          someObject: true;
+        };
         children: {
-          anotherObject: false,
-        }[],
+          anotherObject: false;
+        }[];
       }>({
         fields: {
           prop1(field) {
@@ -368,15 +342,11 @@ describe.skip('Cache type tests', () => {
             return field;
           },
           child(field) {
-            expectTypeOf(field).toEqualTypeOf<
-              { someObject: true } | Reference
-            >();
+            expectTypeOf(field).toEqualTypeOf<{ someObject: true } | Reference>();
             return field;
           },
           children(field) {
-            expectTypeOf(field).toEqualTypeOf<
-              ReadonlyArray<{ anotherObject: false } | Reference>
-            >();
+            expectTypeOf(field).toEqualTypeOf<ReadonlyArray<{ anotherObject: false } | Reference>>();
             return field;
           },
         },
@@ -385,11 +355,11 @@ describe.skip('Cache type tests', () => {
     it('field method needs to return a value of the correct type', () => {
       const cache = new TestCache();
       cache.modify<{
-        p1: string,
-        p2: string,
-        p3: string,
-        p4: string,
-        p5: string,
+        p1: string;
+        p2: string;
+        p3: string;
+        p4: string;
+        p5: string;
       }>({
         fields: {
           p1() {
@@ -430,9 +400,7 @@ describe.skip('Cache type tests', () => {
       cache.modify<ParentEntity>({
         id: 'foo',
         fields(field) {
-          expectTypeOf(field).toEqualTypeOf<
-            string | number | ChildEntity | Reference
-          >();
+          expectTypeOf(field).toEqualTypeOf<string | number | ChildEntity | Reference>();
           return field;
         },
       });
@@ -440,26 +408,24 @@ describe.skip('Cache type tests', () => {
       cache.modify<ChildEntity>({
         id: 'foo',
         fields(field) {
-          expectTypeOf(field).toEqualTypeOf<
-            boolean | symbol | ReadonlyArray<OtherChildEntry | Reference>
-          >();
+          expectTypeOf(field).toEqualTypeOf<boolean | symbol | ReadonlyArray<OtherChildEntry | Reference>>();
           return field;
         },
       });
     });
     it('passing a function as `field` should infer all entity properties as possible input (types)', () => {
       type ParentEntity = {
-        prop1: string,
-        prop2: number,
-        child: ChildEntity,
+        prop1: string;
+        prop2: number;
+        child: ChildEntity;
       };
       type ChildEntity = {
-        prop1: boolean,
-        prop2: symbol,
-        children: OtherChildEntry[],
+        prop1: boolean;
+        prop2: symbol;
+        children: OtherChildEntry[];
       };
       type OtherChildEntry = {
-        foo: false,
+        foo: false;
       };
 
       const cache = new TestCache();
@@ -467,9 +433,7 @@ describe.skip('Cache type tests', () => {
       cache.modify<ParentEntity>({
         id: 'foo',
         fields(field) {
-          expectTypeOf(field).toEqualTypeOf<
-            string | number | ChildEntity | Reference
-          >();
+          expectTypeOf(field).toEqualTypeOf<string | number | ChildEntity | Reference>();
           return field;
         },
       });
@@ -477,9 +441,7 @@ describe.skip('Cache type tests', () => {
       cache.modify<ChildEntity>({
         id: 'foo',
         fields(field) {
-          expectTypeOf(field).toEqualTypeOf<
-            boolean | symbol | ReadonlyArray<OtherChildEntry | Reference>
-          >();
+          expectTypeOf(field).toEqualTypeOf<boolean | symbol | ReadonlyArray<OtherChildEntry | Reference>>();
           return field;
         },
       });

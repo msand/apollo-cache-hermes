@@ -7,13 +7,11 @@ import { query, strictConfig } from '../../../helpers';
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.read`, () => {
-
   const context = new CacheContext(strictConfig);
   const empty = new GraphSnapshot();
 
   describe(`cyclic references`, () => {
     describe(`in a complete cache`, () => {
-
       let cyclicQuery: RawOperation, snapshot: GraphSnapshot;
       beforeAll(() => {
         cyclicQuery = query(`{
@@ -67,11 +65,9 @@ describe(`operations.read`, () => {
         const { entityIds } = read(context, cyclicQuery, snapshot, Object.create(null), true);
         jestExpect(Array.from(entityIds)).toEqual(jestExpect.arrayContaining([QueryRootId, '1', '2']));
       });
-
     });
 
     describe(`in a partial cache`, () => {
-
       let cyclicQuery: RawOperation, snapshot: GraphSnapshot;
       beforeAll(() => {
         cyclicQuery = query(`{
@@ -125,9 +121,6 @@ describe(`operations.read`, () => {
         const { entityIds } = read(context, cyclicQuery, snapshot, Object.create(null), true);
         jestExpect(Array.from(entityIds)).toEqual(jestExpect.arrayContaining([QueryRootId, '1', '2']));
       });
-
     });
-
   });
-
 });

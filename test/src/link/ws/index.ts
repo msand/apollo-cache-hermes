@@ -33,9 +33,7 @@ export import WebSocketParams = WebSocketLink.Configuration;
 export class WebSocketLink extends ApolloLink {
   private subscriptionClient: SubscriptionClient;
 
-  constructor(
-    paramsOrClient: WebSocketLink.Configuration | SubscriptionClient
-  ) {
+  constructor(paramsOrClient: WebSocketLink.Configuration | SubscriptionClient) {
     super();
 
     if (paramsOrClient instanceof SubscriptionClient) {
@@ -44,14 +42,12 @@ export class WebSocketLink extends ApolloLink {
       this.subscriptionClient = new SubscriptionClient(
         paramsOrClient.uri,
         paramsOrClient.options,
-        paramsOrClient.webSocketImpl
+        paramsOrClient.webSocketImpl,
       );
     }
   }
 
   public request(operation: Operation): Observable<FetchResult> | null {
-    return this.subscriptionClient.request(
-      operation
-    ) as Observable<FetchResult>;
+    return this.subscriptionClient.request(operation) as Observable<FetchResult>;
   }
 }

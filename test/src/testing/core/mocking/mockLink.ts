@@ -1,10 +1,5 @@
 import { equal } from '@wry/equality';
-import {
-  Operation,
-  GraphQLRequest,
-  FetchResult,
-  ApolloLink,
-} from '@apollo/client';
+import { Operation, GraphQLRequest, FetchResult, ApolloLink } from '@apollo/client';
 
 import { invariant } from '../../../utilities/globals/index';
 import {
@@ -21,20 +16,11 @@ import {
 /** @internal */
 type CovariantUnaryFunction<out Arg, out Ret> = { fn(arg: Arg): Ret }['fn'];
 
-export type ResultFunction<T, V = Record<string, any>> = CovariantUnaryFunction<
-  V,
-  T
->;
+export type ResultFunction<T, V = Record<string, any>> = CovariantUnaryFunction<V, T>;
 
-export type VariableMatcher<V = Record<string, any>> = CovariantUnaryFunction<
-  V,
-  boolean
->;
+export type VariableMatcher<V = Record<string, any>> = CovariantUnaryFunction<V, boolean>;
 
-export interface MockedResponse<
-  out TData = Record<string, any>,
-  out TVariables = Record<string, any>,
-> {
+export interface MockedResponse<out TData = Record<string, any>, out TVariables = Record<string, any>> {
   request: GraphQLRequest<TVariables>;
   maxUsageCount?: number;
   result?: FetchResult<TData> | ResultFunction<FetchResult<TData>, TVariables>;
@@ -49,9 +35,7 @@ export interface MockLinkOptions {
 }
 
 function requestToKey(request: GraphQLRequest, addTypename: Boolean): string {
-  const queryString
-    = request.query &&
-    print(addTypename ? addTypenameToDocument(request.query) : request.query);
+  const queryString = request.query && print(addTypename ? addTypenameToDocument(request.query) : request.query);
   const requestKey = { query: queryString };
   return JSON.stringify(requestKey);
 }
@@ -65,26 +49,22 @@ export class MockLink extends ApolloLink {
   constructor(
     mockedResponses: ReadonlyArray<MockedResponse<any, any>>,
     addTypename: Boolean = true,
-    options: MockLinkOptions = Object.create(null)
+    options: MockLinkOptions = Object.create(null),
   ) {
     super();
     this.addTypename = addTypename;
     this.showWarnings = options.showWarnings ?? true;
 
     if (mockedResponses) {
-      mockedResponses.forEach((mockedResponse) => {
+      mockedResponses.forEach(mockedResponse => {
         this.addMockedResponse(mockedResponse);
       });
     }
   }
 
   public addMockedResponse(mockedResponse: MockedResponse) {
-    const normalizedMockedResponse
-      = this.normalizeMockedResponse(mockedResponse);
-    const key = requestToKey(
-      normalizedMockedResponse.request,
-      this.addTypename
-    );
+    const normalizedMockedResponse = this.normalizeMockedResponse(mockedResponse);
+    const key = requestToKey(normalizedMockedResponse.request, this.addTypename);
     let mockedResponses = this.mockedResponsesByKey[key];
     if (!mockedResponses) {
       mockedResponses = [];
@@ -99,9 +79,8 @@ export class MockLink extends ApolloLink {
     const unmatchedVars: Array<Record<string, any>> = [];
     const requestVariables = operation.variables || {};
     const mockedResponses = this.mockedResponsesByKey[key];
-    const responseIndex
-      = mockedResponses
-        ? mockedResponses.findIndex((res, index) => {
+    const responseIndex = mockedResponses
+      ? mockedResponses.findIndex((res, index) => {
           const mockedResponseVars = res.request.variables || {};
           if (equal(requestVariables, mockedResponseVars)) {
             return true;
@@ -112,16 +91,15 @@ export class MockLink extends ApolloLink {
           unmatchedVars.push(mockedResponseVars);
           return false;
         })
-        : -1;
+      : -1;
 
-    const response
-      = responseIndex >= 0 ? mockedResponses[responseIndex] : void 0;
+    const response = responseIndex >= 0 ? mockedResponses[responseIndex] : void 0;
 
     // There have been platform- and engine-dependent differences with
     // setInterval(fn, Infinity), so we pass 0 instead (but detect
     // Infinity where we call observer.error or observer.next to pend
     // indefinitely in those cases.)
-    const delay = response?.delay === Infinity ? 0 : response?.delay ?? 0;
+    const delay = response?.delay === Infinity ? 0 : (response?.delay ?? 0);
 
     let configError: Error;
 
@@ -133,19 +111,18 @@ ${
   unmatchedVars.length > 0
     ? `
 Failed to match ${unmatchedVars.length} mock${
-  unmatchedVars.length === 1 ? '' : 's'
-} for this query. The mocked response had the following variables:
+        unmatchedVars.length === 1 ? '' : 's'
+      } for this query. The mocked response had the following variables:
 ${unmatchedVars.map(d => `  ${stringifyForDisplay(d)}`).join('\n')}
 `
     : ''
-}`
+}`,
       );
 
       if (this.showWarnings) {
         console.warn(
-          `${configError.message
-          }\nThis typically indicates a configuration error in your mocks `
-            + `setup, usually due to a typo or mismatched variable.`
+          `${configError.message}\nThis typically indicates a configuration error in your mocks ` +
+            `setup, usually due to a typo or mismatched variable.`,
         );
       }
     } else {
@@ -162,12 +139,12 @@ ${unmatchedVars.map(d => `  ${stringifyForDisplay(d)}`).join('\n')}
 
       if (!response.result && !response.error && response.delay !== Infinity) {
         configError = new Error(
-          `Mocked response should contain either \`result\`, \`error\` or a \`delay\` of \`Infinity\`: ${key}`
+          `Mocked response should contain either \`result\`, \`error\` or a \`delay\` of \`Infinity\`: ${key}`,
         );
       }
     }
 
-    return new Observable((observer) => {
+    return new Observable(observer => {
       const timer = setTimeout(() => {
         if (configError) {
           try {
@@ -188,9 +165,7 @@ ${unmatchedVars.map(d => `  ${stringifyForDisplay(d)}`).join('\n')}
           } else {
             if (response.result) {
               observer.next(
-                typeof response.result === 'function'
-                  ? response.result(operation.variables)
-                  : response.result
+                typeof response.result === 'function' ? response.result(operation.variables) : response.result,
               );
             }
             observer.complete();
@@ -204,13 +179,11 @@ ${unmatchedVars.map(d => `  ${stringifyForDisplay(d)}`).join('\n')}
     });
   }
 
-  private normalizeMockedResponse(
-    mockedResponse: MockedResponse
-  ): MockedResponse {
+  private normalizeMockedResponse(mockedResponse: MockedResponse): MockedResponse {
     const newMockedResponse = cloneDeep(mockedResponse);
     const queryWithoutClientOnlyDirectives = removeDirectivesFromDocument(
       [{ name: 'connection' }, { name: 'nonreactive' }],
-      checkDocument(newMockedResponse.request.query)
+      checkDocument(newMockedResponse.request.query),
     );
     invariant(queryWithoutClientOnlyDirectives, 'query is required');
     newMockedResponse.request.query = queryWithoutClientOnlyDirectives!;
@@ -223,7 +196,7 @@ ${unmatchedVars.map(d => `  ${stringifyForDisplay(d)}`).join('\n')}
     invariant(
       mockedResponse.maxUsageCount > 0,
       `Mock response maxUsageCount must be greater than 0, %s given`,
-      mockedResponse.maxUsageCount
+      mockedResponse.maxUsageCount,
     );
 
     this.normalizeVariableMatching(newMockedResponse);
@@ -233,13 +206,11 @@ ${unmatchedVars.map(d => `  ${stringifyForDisplay(d)}`).join('\n')}
   private normalizeVariableMatching(mockedResponse: MockedResponse) {
     const variables = mockedResponse.request.variables;
     if (mockedResponse.variableMatcher && variables) {
-      throw new Error(
-        'Mocked response should contain either variableMatcher or request.variables'
-      );
+      throw new Error('Mocked response should contain either variableMatcher or request.variables');
     }
 
     if (!mockedResponse.variableMatcher) {
-      mockedResponse.variableMatcher = (vars) => {
+      mockedResponse.variableMatcher = vars => {
         const requestVariables = vars || {};
         const mockedResponseVariables = variables || {};
         return equal(requestVariables, mockedResponseVariables);

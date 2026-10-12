@@ -1,10 +1,6 @@
 import { KeySpecifier } from '../policies';
 import { canonicalStringify } from '../../../utilities';
-import {
-  getSpecifierPaths,
-  collectSpecifierPaths,
-  extractKeyPath,
-} from '../key-extractor';
+import { getSpecifierPaths, collectSpecifierPaths, extractKeyPath } from '../key-extractor';
 
 describe('keyFields and keyArgs extraction', () => {
   it('getSpecifierPaths should work for various specifiers', () => {
@@ -63,9 +59,7 @@ describe('keyFields and keyArgs extraction', () => {
     };
 
     function collect(specifier: KeySpecifier) {
-      return collectSpecifierPaths(specifier, path =>
-        extractKeyPath(object, path)
-      );
+      return collectSpecifierPaths(specifier, path => extractKeyPath(object, path));
     }
 
     function check(specifier: KeySpecifier, expected: Record<string, any>) {
@@ -139,12 +133,12 @@ describe('keyFields and keyArgs extraction', () => {
     expect(extractKeyPath(object, ['array', 'value'])).toEqual([1, 2, 3]);
 
     expect(
-      collectSpecifierPaths(['array', ['value', 'a', 'x', 'z']], (path) => {
+      collectSpecifierPaths(['array', ['value', 'a', 'x', 'z']], path => {
         expect(path.length).toBe(2);
         expect(path[0]).toBe('array');
         expect(['value', 'a', 'x', 'z']).toContain(path[1]);
         return extractKeyPath(object, path);
-      })
+      }),
     ).toEqual({
       array: {
         value: object.array.map(item => item.value),
@@ -170,7 +164,7 @@ describe('keyFields and keyArgs extraction', () => {
         { a: object.array[0].a, value: 1 },
         { value: 2, x: object.array[1].x },
         { value: 3, z: object.array[2].z },
-      ])
+      ]),
     );
 
     // This new ordering also happens to be the canonical/stable ordering,

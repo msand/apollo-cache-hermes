@@ -1,7 +1,4 @@
-import {
-  Transaction,
-  Cache as CacheInterface,
-} from '@apollo/client';
+import { Transaction, Cache as CacheInterface } from '@apollo/client';
 import { Reference, StoreObject } from '@apollo/client/utilities';
 
 import { CacheContext } from '../context';
@@ -68,7 +65,12 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
     onWatchUpdated?: BatchOptions<any>['onWatchUpdated'],
     broadcast: boolean = true,
   ): void {
-    this._queryable.transaction(broadcast, optimisticId, t => transaction(new ApolloTransaction<TSerialized>(t)), onWatchUpdated);
+    this._queryable.transaction(
+      broadcast,
+      optimisticId,
+      t => transaction(new ApolloTransaction<TSerialized>(t)),
+      onWatchUpdated,
+    );
   }
 
   recordOptimisticTransaction(transaction: Transaction<TSerialized>, id: string): void {
@@ -91,19 +93,10 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
 
   private _txCount = 0;
 
-  public batch<TUpdateResult>(
-    options: CacheInterface.BatchOptions<Hermes<TSerialized>, TUpdateResult>
-  ): TUpdateResult {
-    const {
-      update,
-      optimistic = true,
-      onWatchUpdated,
-    } = options;
+  public batch<TUpdateResult>(options: CacheInterface.BatchOptions<Hermes<TSerialized>, TUpdateResult>): TUpdateResult {
+    const { update, optimistic = true, onWatchUpdated } = options;
 
-    const optimisticId
-      = typeof optimistic === 'string'
-        ? optimistic
-        : optimistic ? undefined : null;
+    const optimisticId = typeof optimistic === 'string' ? optimistic : optimistic ? undefined : null;
 
     const alreadyDirty = new Set<CacheInterface.WatchOptions>();
 
@@ -131,12 +124,7 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
 
     ++this._txCount;
     try {
-      this.performTransaction(
-        () => (updateResult = update(this)),
-        optimisticId,
-        onWatchUpdated,
-        !willWatch,
-      );
+      this.performTransaction(() => (updateResult = update(this)), optimisticId, onWatchUpdated, !willWatch);
     } finally {
       --this._txCount;
     }
@@ -161,7 +149,7 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
       // Silently re-dirty any watches that were already dirty before the update
       // was performed, and were not broadcast just now.
       if (alreadyDirty.size) {
-        alreadyDirty.forEach(watch => watch.lastDiff = undefined);
+        alreadyDirty.forEach(watch => (watch.lastDiff = undefined));
       }
     } else {
       // If alreadyDirty is empty or we don't have an onWatchUpdated
@@ -173,10 +161,7 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
     return updateResult!;
   }
 
-  protected broadcastWatches(options?: Pick<
-    BatchOptions<Hermes<TSerialized>>,
-    'optimistic' | 'onWatchUpdated'
-  >) {
+  protected broadcastWatches(options?: Pick<BatchOptions<Hermes<TSerialized>>, 'optimistic' | 'onWatchUpdated'>) {
     this._queryable.broadcastWatches(options);
   }
 

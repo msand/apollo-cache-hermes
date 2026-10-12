@@ -139,22 +139,14 @@ export function selectHttpOptionsAndBody(
   ...configs: Array<HttpConfig>
 ) {
   configs.unshift(fallbackConfig);
-  return selectHttpOptionsAndBodyInternal(
-    operation,
-    defaultPrinter,
-    ...configs
-  );
+  return selectHttpOptionsAndBodyInternal(operation, defaultPrinter, ...configs);
 }
 
-export function selectHttpOptionsAndBodyInternal(
-  operation: Operation,
-  printer: Printer,
-  ...configs: HttpConfig[]
-) {
+export function selectHttpOptionsAndBodyInternal(operation: Operation, printer: Printer, ...configs: HttpConfig[]) {
   let options = {} as HttpConfig & Record<string, any>;
   let http = {} as HttpQueryOptions;
 
-  configs.forEach((config) => {
+  configs.forEach(config => {
     options = {
       ...options,
       ...config.options,
@@ -175,10 +167,7 @@ export function selectHttpOptionsAndBodyInternal(
   });
 
   if (options.headers) {
-    options.headers = removeDuplicateHeaders(
-      options.headers,
-      http.preserveHeaderCase
-    );
+    options.headers = removeDuplicateHeaders(options.headers, http.preserveHeaderCase);
   }
 
   // The body depends on the http options
@@ -201,12 +190,12 @@ export function selectHttpOptionsAndBodyInternal(
 // overwriting it (See #8447 and #8449).
 function removeDuplicateHeaders(
   headers: Record<string, string>,
-  preserveHeaderCase: boolean | undefined
+  preserveHeaderCase: boolean | undefined,
 ): typeof headers {
   // If we're not preserving the case, just remove duplicates w/ normalization.
   if (!preserveHeaderCase) {
     const normalizedHeaders = Object.create(null);
-    Object.keys(Object(headers)).forEach((name) => {
+    Object.keys(Object(headers)).forEach(name => {
       normalizedHeaders[name.toLowerCase()] = headers[name];
     });
     return normalizedHeaders;
@@ -217,7 +206,7 @@ function removeDuplicateHeaders(
   // This allows for non-http-spec-compliant servers that expect intentionally
   // capitalized header names (See #6741).
   const headerData = Object.create(null);
-  Object.keys(Object(headers)).forEach((name) => {
+  Object.keys(Object(headers)).forEach(name => {
     headerData[name.toLowerCase()] = {
       originalName: name,
       value: headers[name],
@@ -225,7 +214,7 @@ function removeDuplicateHeaders(
   });
 
   const normalizedHeaders = Object.create(null);
-  Object.keys(headerData).forEach((name) => {
+  Object.keys(headerData).forEach(name => {
     normalizedHeaders[headerData[name].originalName] = headerData[name].value;
   });
   return normalizedHeaders;

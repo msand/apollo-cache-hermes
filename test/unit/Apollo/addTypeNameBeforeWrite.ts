@@ -1,12 +1,11 @@
 import { expect } from 'chai';
 import gql from 'graphql-tag';
 
-import { Hermes }  from '../../../src';
+import { Hermes } from '../../../src';
 import { StaticNodeId } from '../../../src/schema';
 import { strictConfig } from '../../helpers';
 
 describe(`transform document before write`, () => {
-
   let hermes: Hermes;
   beforeAll(() => {
     hermes = new Hermes({
@@ -31,12 +30,12 @@ describe(`transform document before write`, () => {
       },
       dataId: StaticNodeId.QueryRoot,
     });
-
   });
 
   it(`correctly write with __typename`, () => {
-    expect(hermes.readQuery({
-      query: gql(`
+    expect(
+      hermes.readQuery({
+        query: gql(`
         query getViewer {
           viewer {
             id
@@ -44,7 +43,8 @@ describe(`transform document before write`, () => {
           }
         }
       `),
-    })).to.deep.eq({
+      }),
+    ).to.deep.eq({
       viewer: {
         id: 0,
         name: 'Gouda',
@@ -52,5 +52,4 @@ describe(`transform document before write`, () => {
       },
     });
   });
-
 });

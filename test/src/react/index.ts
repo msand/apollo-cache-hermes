@@ -1,12 +1,7 @@
 import '../utilities/globals/index';
 
 export type { ApolloContextValue } from './context/index';
-export {
-  ApolloProvider,
-  ApolloConsumer,
-  getApolloContext,
-  resetApolloContext,
-} from './context/index';
+export { ApolloProvider, ApolloConsumer, getApolloContext, resetApolloContext } from './context/index';
 
 export * from './hooks/index';
 

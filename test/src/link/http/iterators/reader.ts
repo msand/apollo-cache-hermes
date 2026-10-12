@@ -10,9 +10,7 @@ interface ReaderIterator<T> {
   [Symbol.asyncIterator]?(): AsyncIterator<T>;
 }
 
-export default function readerIterator<T>(
-  reader: ReadableStreamDefaultReader<T>
-): AsyncIterableIterator<T> {
+export default function readerIterator<T>(reader: ReadableStreamDefaultReader<T>): AsyncIterableIterator<T> {
   const iterator: ReaderIterator<T> = {
     next() {
       return reader.read() as Promise<
@@ -25,10 +23,7 @@ export default function readerIterator<T>(
   };
 
   if (canUseAsyncIteratorSymbol) {
-    iterator[Symbol.asyncIterator] = function(): AsyncIterator<
-      T,
-      T | undefined
-      > {
+    iterator[Symbol.asyncIterator] = function (): AsyncIterator<T, T | undefined> {
       return this;
     };
   }

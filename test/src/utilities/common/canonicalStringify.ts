@@ -1,8 +1,4 @@
-import {
-  AutoCleanedStrongCache,
-  cacheSizes,
-  defaultCacheSizes,
-} from '../caching/index';
+import { AutoCleanedStrongCache, cacheSizes, defaultCacheSizes } from '../caching/index';
 import { registerGlobalCache } from '../caching/getMemoryInternals';
 
 /**
@@ -32,10 +28,10 @@ export const canonicalStringify = Object.assign(
       // affecting the logical results of canonicalStringify, but potentially
       // sacrificing performance until the cache is refilled.
       sortingMap = new AutoCleanedStrongCache<string, readonly string[]>(
-        cacheSizes.canonicalStringify || defaultCacheSizes.canonicalStringify
+        cacheSizes.canonicalStringify || defaultCacheSizes.canonicalStringify,
       );
     },
-  }
+  },
 );
 
 if (__DEV__) {
@@ -78,7 +74,7 @@ function stableObjectReplacer(key: string, value: any) {
       const sortedObject = Object.create(proto);
       // Reassigning the keys in sorted order will cause JSON.stringify to
       // serialize them in sorted order.
-      sortedKeys.forEach((key) => {
+      sortedKeys.forEach(key => {
         sortedObject[key] = value[key];
       });
       return sortedObject;
@@ -91,10 +87,6 @@ function stableObjectReplacer(key: string, value: any) {
 // efficient as possible, we use a static function as the callback for
 // keys.every in order to test if the provided keys are already sorted without
 // allocating extra memory for a callback.
-function everyKeyInOrder(
-  key: string,
-  i: number,
-  keys: readonly string[]
-): boolean {
+function everyKeyInOrder(key: string, i: number, keys: readonly string[]): boolean {
   return i === 0 || keys[i - 1] <= key;
 }

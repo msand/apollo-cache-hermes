@@ -17,10 +17,7 @@ import {
 import type { CacheKey, QueryRef } from '../internal/index';
 import type { LoadableQueryHookOptions } from '../types/types';
 import { canonicalStringify } from '../../cache/index';
-import type {
-  DeepPartial,
-  OnlyRequiredProperties,
-} from '../../utilities/index';
+import type { DeepPartial, OnlyRequiredProperties } from '../../utilities/index';
 import { invariant } from '../../utilities/globals/index';
 
 import { __use, useRenderGuard } from './internal/index';
@@ -33,28 +30,27 @@ export type LoadQueryFunction<TVariables extends OperationVariables> = (
   // which case we don't want to allow a variables argument. In other
   // words, we don't want to allow variables to be passed as an argument to this
   // function if the query does not expect variables in the document.
-  ...args: [TVariables] extends [never] ? []
-  : {} extends OnlyRequiredProperties<TVariables> ? [variables?: TVariables]
-  : [variables: TVariables]
+  ...args: [TVariables] extends [never]
+    ? []
+    : {} extends OnlyRequiredProperties<TVariables>
+      ? [variables?: TVariables]
+      : [variables: TVariables]
 ) => void;
 
 type ResetFunction = () => void;
 
-export type UseLoadableQueryResult<
-  TData = unknown,
-  TVariables extends OperationVariables = OperationVariables,
-> = [
+export type UseLoadableQueryResult<TData = unknown, TVariables extends OperationVariables = OperationVariables> = [
   loadQuery: LoadQueryFunction<TVariables>,
   queryRef: QueryRef<TData, TVariables> | null,
   handlers: {
     /** {@inheritDoc @apollo/client!QueryResultDocumentation#fetchMore:member} */
-    fetchMore: FetchMoreFunction<TData, TVariables>,
+    fetchMore: FetchMoreFunction<TData, TVariables>;
     /** {@inheritDoc @apollo/client!QueryResultDocumentation#refetch:member} */
-    refetch: RefetchFunction<TData, TVariables>,
+    refetch: RefetchFunction<TData, TVariables>;
     /**
      * A function that resets the `queryRef` back to `null`.
      */
-    reset: ResetFunction,
+    reset: ResetFunction;
   },
 ];
 
@@ -64,46 +60,38 @@ export function useLoadableQuery<
   TOptions extends LoadableQueryHookOptions,
 >(
   query: DocumentNode | TypedDocumentNode<TData, TVariables>,
-  options?: LoadableQueryHookOptions & TOptions
+  options?: LoadableQueryHookOptions & TOptions,
 ): UseLoadableQueryResult<
-  TOptions['errorPolicy'] extends 'ignore' | 'all' ?
-    TOptions['returnPartialData'] extends true ?
-      DeepPartial<TData> | undefined
-    : TData | undefined
-  : TOptions['returnPartialData'] extends true ? DeepPartial<TData>
-  : TData,
+  TOptions['errorPolicy'] extends 'ignore' | 'all'
+    ? TOptions['returnPartialData'] extends true
+      ? DeepPartial<TData> | undefined
+      : TData | undefined
+    : TOptions['returnPartialData'] extends true
+      ? DeepPartial<TData>
+      : TData,
   TVariables
 >;
 
-export function useLoadableQuery<
-  TData = unknown,
-  TVariables extends OperationVariables = OperationVariables,
->(
+export function useLoadableQuery<TData = unknown, TVariables extends OperationVariables = OperationVariables>(
   query: DocumentNode | TypedDocumentNode<TData, TVariables>,
   options: LoadableQueryHookOptions & {
-    returnPartialData: true,
-    errorPolicy: 'ignore' | 'all',
-  }
+    returnPartialData: true;
+    errorPolicy: 'ignore' | 'all';
+  },
 ): UseLoadableQueryResult<DeepPartial<TData> | undefined, TVariables>;
 
-export function useLoadableQuery<
-  TData = unknown,
-  TVariables extends OperationVariables = OperationVariables,
->(
+export function useLoadableQuery<TData = unknown, TVariables extends OperationVariables = OperationVariables>(
   query: DocumentNode | TypedDocumentNode<TData, TVariables>,
   options: LoadableQueryHookOptions & {
-    errorPolicy: 'ignore' | 'all',
-  }
+    errorPolicy: 'ignore' | 'all';
+  },
 ): UseLoadableQueryResult<TData | undefined, TVariables>;
 
-export function useLoadableQuery<
-  TData = unknown,
-  TVariables extends OperationVariables = OperationVariables,
->(
+export function useLoadableQuery<TData = unknown, TVariables extends OperationVariables = OperationVariables>(
   query: DocumentNode | TypedDocumentNode<TData, TVariables>,
   options: LoadableQueryHookOptions & {
-    returnPartialData: true,
-  }
+    returnPartialData: true;
+  },
 ): UseLoadableQueryResult<DeepPartial<TData>, TVariables>;
 
 /**
@@ -151,30 +139,21 @@ export function useLoadableQuery<
  * @param options - Options to control how the query is executed.
  * @returns A tuple in the form of `[loadQuery, queryRef, handlers]`
  */
-export function useLoadableQuery<
-  TData = unknown,
-  TVariables extends OperationVariables = OperationVariables,
->(
+export function useLoadableQuery<TData = unknown, TVariables extends OperationVariables = OperationVariables>(
   query: DocumentNode | TypedDocumentNode<TData, TVariables>,
-  options?: LoadableQueryHookOptions
+  options?: LoadableQueryHookOptions,
 ): UseLoadableQueryResult<TData, TVariables>;
 
-export function useLoadableQuery<
-  TData = unknown,
-  TVariables extends OperationVariables = OperationVariables,
->(
+export function useLoadableQuery<TData = unknown, TVariables extends OperationVariables = OperationVariables>(
   query: DocumentNode | TypedDocumentNode<TData, TVariables>,
-  options: LoadableQueryHookOptions = Object.create(null)
+  options: LoadableQueryHookOptions = Object.create(null),
 ): UseLoadableQueryResult<TData, TVariables> {
   const client = useApolloClient(options.client);
   const suspenseCache = getSuspenseCache(client);
   const watchQueryOptions = useWatchQueryOptions({ client, query, options });
   const { queryKey = [] } = options;
 
-  const [queryRef, setQueryRef] = React.useState<QueryRef<
-    TData,
-    TVariables
-  > | null>(null);
+  const [queryRef, setQueryRef] = React.useState<QueryRef<TData, TVariables> | null>(null);
 
   assertWrappedQueryRef(queryRef);
 
@@ -188,30 +167,24 @@ export function useLoadableQuery<
   const calledDuringRender = useRenderGuard();
 
   const fetchMore: FetchMoreFunction<TData, TVariables> = React.useCallback(
-    (options) => {
+    options => {
       if (!internalQueryRef) {
-        throw new Error(
-          'The query has not been loaded. Please load the query.'
-        );
+        throw new Error('The query has not been loaded. Please load the query.');
       }
 
-      const promise = internalQueryRef.fetchMore(
-        options as FetchMoreQueryOptions<TVariables, TData>
-      );
+      const promise = internalQueryRef.fetchMore(options as FetchMoreQueryOptions<TVariables, TData>);
 
       setQueryRef(wrapQueryRef(internalQueryRef));
 
       return promise;
     },
-    [internalQueryRef]
+    [internalQueryRef],
   );
 
   const refetch: RefetchFunction<TData, TVariables> = React.useCallback(
-    (options) => {
+    options => {
       if (!internalQueryRef) {
-        throw new Error(
-          'The query has not been loaded. Please load the query.'
-        );
+        throw new Error('The query has not been loaded. Please load the query.');
       }
 
       const promise = internalQueryRef.refetch(options);
@@ -220,41 +193,30 @@ export function useLoadableQuery<
 
       return promise;
     },
-    [internalQueryRef]
+    [internalQueryRef],
   );
 
   const loadQuery: LoadQueryFunction<TVariables> = React.useCallback(
     (...args) => {
       invariant(
         !calledDuringRender(),
-        'useLoadableQuery: \'loadQuery\' should not be called during render. To start a query during render, use the \'useBackgroundQuery\' hook.'
+        "useLoadableQuery: 'loadQuery' should not be called during render. To start a query during render, use the 'useBackgroundQuery' hook.",
       );
 
       const [variables] = args;
 
-      const cacheKey: CacheKey = [
-        query,
-        canonicalStringify(variables),
-        ...([] as any[]).concat(queryKey),
-      ];
+      const cacheKey: CacheKey = [query, canonicalStringify(variables), ...([] as any[]).concat(queryKey)];
 
       const queryRef = suspenseCache.getQueryRef(cacheKey, () =>
         client.watchQuery({
           ...watchQueryOptions,
           variables,
-        } as WatchQueryOptions<any, any>)
+        } as WatchQueryOptions<any, any>),
       );
 
       setQueryRef(wrapQueryRef(queryRef));
     },
-    [
-      query,
-      queryKey,
-      suspenseCache,
-      watchQueryOptions,
-      calledDuringRender,
-      client,
-    ]
+    [query, queryKey, suspenseCache, watchQueryOptions, calledDuringRender, client],
   );
 
   const reset: ResetFunction = React.useCallback(() => {

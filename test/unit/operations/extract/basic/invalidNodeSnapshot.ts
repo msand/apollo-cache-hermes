@@ -6,7 +6,6 @@ import { createStrictCacheContext } from '../../../../helpers';
 
 describe(`operations.extract`, () => {
   describe(`invalid NodeSnapshot type`, () => {
-
     let snapshot: GraphSnapshot;
     beforeAll(() => {
       class InvalidNodeSnapshot implements NodeSnapshot {
@@ -14,7 +13,7 @@ describe(`operations.extract`, () => {
       }
 
       snapshot = new GraphSnapshot({
-        'a': new InvalidNodeSnapshot(null),
+        a: new InvalidNodeSnapshot(null),
       });
     });
 
@@ -24,6 +23,5 @@ describe(`operations.extract`, () => {
         extract(snapshot, cacheContext);
       }).toThrow(/Serializable.NodeSnapshotType/i);
     });
-
   });
 });

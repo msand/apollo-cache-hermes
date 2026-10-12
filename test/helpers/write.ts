@@ -13,16 +13,15 @@ export function createSnapshot(
   gqlString: string,
   gqlVariables?: JsonObject,
   rootId?: NodeId,
-  cacheContext: CacheContext = new CacheContext(strictConfig)
+  cacheContext: CacheContext = new CacheContext(strictConfig),
 ): EditedSnapshot {
-
   const rawOperation = query(gqlString, gqlVariables, rootId);
 
   return write(
     cacheContext,
     new GraphSnapshot(),
     { ...rawOperation, document: cacheContext.transformDocument(rawOperation.document) },
-    payload
+    payload,
   );
 }
 
@@ -32,15 +31,14 @@ export function updateSnapshot(
   gqlString: string,
   gqlVariables?: JsonObject,
   rootId?: NodeId,
-  cacheContext: CacheContext = new CacheContext(strictConfig)
+  cacheContext: CacheContext = new CacheContext(strictConfig),
 ): EditedSnapshot {
-
   const rawOperation = query(gqlString, gqlVariables, rootId);
 
   return write(
     cacheContext,
     baseline,
     { ...rawOperation, document: cacheContext.transformDocument(rawOperation.document) },
-    payload
+    payload,
   );
 }

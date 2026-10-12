@@ -26,7 +26,6 @@ declare module 'graphql/language/ast' {
 }
 
 export namespace CacheContext {
-
   export type EntityIdForNode = (node: JsonObject) => EntityId | undefined;
   export type EntityIdForValue = (value: any) => EntityId | undefined;
   export type EntityIdMapper = (node: JsonObject) => string | number | undefined;
@@ -40,8 +39,8 @@ export namespace CacheContext {
   export type ResolverRedirect = (args: JsonObject) => any;
   export type ResolverRedirects = {
     [typeName: string]: {
-      [fieldName: string]: ResolverRedirect,
-    },
+      [fieldName: string]: ResolverRedirect;
+    };
   };
 
   /**
@@ -62,7 +61,6 @@ export namespace CacheContext {
    * Configuration for a Hermes cache.
    */
   export interface Configuration<TSerialized = GraphSnapshot> {
-
     typePolicies?: TypePolicies;
 
     /** Whether __typename should be injected into nodes in queries. */
@@ -151,14 +149,12 @@ export namespace CacheContext {
      */
     logger?: ConsoleTracer.Logger;
   }
-
 }
 
 /**
  * Configuration and shared state used throughout the cache's operation.
  */
 export class CacheContext<TSerialized = GraphSnapshot> {
-
   /** Retrieve the EntityId for a given node, if any. */
   readonly entityIdForValue: CacheContext.EntityIdForValue;
 
@@ -202,7 +198,7 @@ export class CacheContext<TSerialized = GraphSnapshot> {
     // Infer dev mode from NODE_ENV, by convention.
     const nodeEnv = typeof process !== 'undefined' ? process.env.NODE_ENV : 'development';
 
-    this.entityIdForValue = _makeEntityIdMapper((config.entityIdForNode ?? config.dataIdFromObject), config.typePolicies);
+    this.entityIdForValue = _makeEntityIdMapper(config.entityIdForNode ?? config.dataIdFromObject, config.typePolicies);
     this.entityTransformer = config.entityTransformer;
     this.freezeSnapshots = 'freeze' in config ? !!config.freeze : nodeEnv !== 'production';
 
@@ -287,7 +283,6 @@ export class CacheContext<TSerialized = GraphSnapshot> {
     }
     return this._queryInfoMap.get(cacheKey)!;
   }
-
 }
 
 /**
@@ -297,35 +292,36 @@ export function _makeEntityIdMapper(
   idForNode: CacheContext.EntityIdMapper | undefined,
   typePolicies: TypePolicies | undefined,
 ): CacheContext.EntityIdForValue {
-  const mapper = idForNode || (
-    !typePolicies ? defaultEntityIdMapper
+  const mapper =
+    idForNode ||
+    (!typePolicies
+      ? defaultEntityIdMapper
       : (node: JsonObject): string | number | undefined => {
-        if (!node) {
-          return undefined;
-        }
-        const { __typename } = node;
-        if (typeof __typename === 'string' && __typename in typePolicies) {
-          const keyFields = typePolicies[__typename].keyFields;
-          if (Array.isArray(keyFields)) {
-            const keys: Record<string, unknown> = {};
-            for (const key of keyFields) {
-              const value = node[key];
-              if (value === undefined) {
-                return undefined;
-              }
-              keys[key] = value;
-            }
-            return `${__typename}:${JSON.stringify(keys)}`;
+          if (!node) {
+            return undefined;
           }
-        }
-        const { id } = node;
-        const idType = typeof id;
-        if (idType !== 'string' && idType !== 'number') {
-          return undefined;
-        }
-        return __typename ? `${__typename}:${id}` : `${id}`;
-      }
-  );
+          const { __typename } = node;
+          if (typeof __typename === 'string' && __typename in typePolicies) {
+            const keyFields = typePolicies[__typename].keyFields;
+            if (Array.isArray(keyFields)) {
+              const keys: Record<string, unknown> = {};
+              for (const key of keyFields) {
+                const value = node[key];
+                if (value === undefined) {
+                  return undefined;
+                }
+                keys[key] = value;
+              }
+              return `${__typename}:${JSON.stringify(keys)}`;
+            }
+          }
+          const { id } = node;
+          const idType = typeof id;
+          if (idType !== 'string' && idType !== 'number') {
+            return undefined;
+          }
+          return __typename ? `${__typename}:${id}` : `${id}`;
+        });
   return function entityIdForNode(node: JsonObject) {
     if (!isObject(node)) return undefined;
 
@@ -337,7 +333,7 @@ export function _makeEntityIdMapper(
   };
 }
 
-export function defaultEntityIdMapper({ __typename, _id, id = _id }: { __typename?: any, _id?: any, id?: any }) {
+export function defaultEntityIdMapper({ __typename, _id, id = _id }: { __typename?: any; _id?: any; id?: any }) {
   if (id == null) {
     return undefined;
   }

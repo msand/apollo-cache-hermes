@@ -6,7 +6,7 @@ var path = require('path');
 
 var node_modules = path.resolve(__dirname, '..', 'node_modules');
 var temp_modules = node_modules + '.tmp';
-var dev_modules  = node_modules + '.dev';
+var dev_modules = node_modules + '.dev';
 
 // When installing directly from GitHub, we get the TypeScript source, but none
 // of the compiled JavaScript.

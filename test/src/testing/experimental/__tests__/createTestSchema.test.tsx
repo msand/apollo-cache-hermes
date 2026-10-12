@@ -2,24 +2,13 @@ import * as React from 'react';
 import { GraphQLError, buildSchema } from 'graphql';
 import userEvent from '@testing-library/user-event';
 import { act, screen } from '@testing-library/react';
-import {
-  FallbackProps,
-  ErrorBoundary as ReactErrorBoundary,
-} from 'react-error-boundary';
+import { FallbackProps, ErrorBoundary as ReactErrorBoundary } from 'react-error-boundary';
 import { InvariantError } from 'ts-invariant';
 import { ApolloClient } from '@apollo/client';
 
-import {
-  ApolloError,
-  gql,
-} from '../../../core/index';
+import { ApolloError, gql } from '../../../core/index';
 import type { TypedDocumentNode } from '../../../core/index';
-import {
-  Profiler,
-  createProfiler,
-  renderWithClient,
-  spyOnConsole,
-} from '../../internal/index';
+import { Profiler, createProfiler, renderWithClient, spyOnConsole } from '../../internal/index';
 import { createTestSchema } from '../createTestSchema';
 import type { UseSuspenseQueryResult } from '../../../react/index';
 import { useMutation, useSuspenseQuery } from '../../../react/index';
@@ -105,9 +94,7 @@ function createErrorProfiler<TData = unknown>() {
   });
 }
 
-function createTrackedErrorComponents<Snapshot extends { error: Error | null }>(
-  Profiler: Profiler<Snapshot>
-) {
+function createTrackedErrorComponents<Snapshot extends { error: Error | null }>(Profiler: Profiler<Snapshot>) {
   function ErrorFallback({ error }: FallbackProps) {
     Profiler.mergeSnapshot({ error } as Partial<Snapshot>);
 
@@ -115,11 +102,7 @@ function createTrackedErrorComponents<Snapshot extends { error: Error | null }>(
   }
 
   function ErrorBoundary({ children }: { children: React.ReactNode }) {
-    return (
-      <ReactErrorBoundary FallbackComponent={ErrorFallback}>
-        {children}
-      </ReactErrorBoundary>
-    );
+    return <ReactErrorBoundary FallbackComponent={ErrorFallback}>{children}</ReactErrorBoundary>;
   }
 
   return { ErrorBoundary };
@@ -127,14 +110,14 @@ function createTrackedErrorComponents<Snapshot extends { error: Error | null }>(
 
 interface ViewerQueryData {
   viewer: {
-    id: string,
-    name: string,
-    age: number,
+    id: string;
+    name: string;
+    age: number;
     book: {
-      id: string,
-      title: string,
-      publishedAt: string,
-    },
+      id: string;
+      title: string;
+      publishedAt: string;
+    };
   };
 }
 
@@ -151,7 +134,7 @@ describe('schema proxy', () => {
         }),
       },
       Book: {
-        __resolveType: (obj) => {
+        __resolveType: obj => {
           if ('text' in obj) {
             return 'TextBook';
           }
@@ -170,7 +153,7 @@ describe('schema proxy', () => {
     },
   });
 
-  it('mocks scalars and resolvers', async() => {
+  it('mocks scalars and resolvers', async () => {
     const Profiler = createDefaultProfiler<ViewerQueryData>();
 
     using _fetch = createSchemaFetch(schema).mockGlobal();
@@ -245,7 +228,7 @@ describe('schema proxy', () => {
     }
   });
 
-  it('allows schema forking with .fork', async() => {
+  it('allows schema forking with .fork', async () => {
     const forkedSchema = schema.fork({
       resolvers: {
         Query: {
@@ -336,7 +319,7 @@ describe('schema proxy', () => {
     }
   });
 
-  it('schema.fork does not pollute the original schema', async() => {
+  it('schema.fork does not pollute the original schema', async () => {
     const Profiler = createDefaultProfiler<ViewerQueryData>();
 
     schema.fork({
@@ -424,7 +407,7 @@ describe('schema proxy', () => {
     }
   });
 
-  it('allows you to call .fork without providing resolvers', async() => {
+  it('allows you to call .fork without providing resolvers', async () => {
     const forkedSchema = schema.fork();
 
     forkedSchema.add({
@@ -517,7 +500,7 @@ describe('schema proxy', () => {
     }
   });
 
-  it('handles mutations', async() => {
+  it('handles mutations', async () => {
     const query: TypedDocumentNode<ViewerQueryData> = gql`
       query {
         viewer {
@@ -658,7 +641,7 @@ describe('schema proxy', () => {
     }
   });
 
-  it('returns GraphQL errors', async() => {
+  it('returns GraphQL errors', async () => {
     using _consoleSpy = spyOnConsole('error');
     const query: TypedDocumentNode<ViewerQueryData> = gql`
       query {
@@ -742,12 +725,12 @@ describe('schema proxy', () => {
       expect(snapshot.error).toEqual(
         new ApolloError({
           graphQLErrors: [new GraphQLError('Could not resolve type')],
-        })
+        }),
       );
     }
   });
 
-  it('validates schema by default and returns validation errors', async() => {
+  it('validates schema by default and returns validation errors', async () => {
     using _consoleSpy = spyOnConsole('error');
     const query: TypedDocumentNode<ViewerQueryData> = gql`
       query {
@@ -816,15 +799,13 @@ describe('schema proxy', () => {
 
       expect(snapshot.error).toEqual(
         new ApolloError({
-          graphQLErrors: [
-            new GraphQLError('Expected { foo: "bar" } to be a GraphQL schema.'),
-          ],
-        })
+          graphQLErrors: [new GraphQLError('Expected { foo: "bar" } to be a GraphQL schema.')],
+        }),
       );
     }
   });
 
-  it('preserves resolvers from previous calls to .add on subsequent calls to .fork', async() => {
+  it('preserves resolvers from previous calls to .add on subsequent calls to .fork', async () => {
     let name = 'Virginia';
 
     const schema = createTestSchema(schemaWithTypeDefs, {
@@ -839,7 +820,7 @@ describe('schema proxy', () => {
           }),
         },
         Book: {
-          __resolveType: (obj) => {
+          __resolveType: obj => {
             if ('text' in obj) {
               return 'TextBook';
             }
@@ -1009,7 +990,7 @@ describe('schema proxy', () => {
     }
   });
 
-  it('resets the schema with schema.reset()', async() => {
+  it('resets the schema with schema.reset()', async () => {
     const resetTestSchema = createTestSchema(schema, {
       resolvers: {
         Query: {
@@ -1021,7 +1002,7 @@ describe('schema proxy', () => {
           }),
         },
         Book: {
-          __resolveType: (obj) => {
+          __resolveType: obj => {
             if ('text' in obj) {
               return 'TextBook';
             }
@@ -1157,7 +1138,7 @@ describe('schema proxy', () => {
     }
   });
 
-  it('createSchemaFetch respects min and max delay', async() => {
+  it('createSchemaFetch respects min and max delay', async () => {
     const Profiler = createDefaultProfiler<ViewerQueryData>();
 
     const minDelay = 1500;
@@ -1246,15 +1227,15 @@ describe('schema proxy', () => {
     }
   });
 
-  it('should call invariant.error if min delay is greater than max delay', async() => {
-    await expect(async() => {
+  it('should call invariant.error if min delay is greater than max delay', async () => {
+    await expect(async () => {
       createSchemaFetch(schema, {
         delay: { min: 3000, max: 1000 },
       });
     }).rejects.toThrow(
       new InvariantError(
-        'Please configure a minimum delay that is less than the maximum delay. The default minimum delay is 3ms.'
-      )
+        'Please configure a minimum delay that is less than the maximum delay. The default minimum delay is 3ms.',
+      ),
     );
   });
 });

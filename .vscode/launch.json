@@ -8,10 +8,7 @@
       "console": "integratedTerminal",
       "name": "test-unit",
       "runtimeExecutable": "${workspaceRoot}/scripts/test-unit.sh",
-      "runtimeArgs": [
-        "--runInBand",
-        "${relativeFile}",
-      ]
+      "runtimeArgs": ["--runInBand", "${relativeFile}"]
     }
   ]
 }

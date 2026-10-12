@@ -28,23 +28,19 @@ describe(`context.CacheContext`, () => {
     });
 
     it(`do not trigger onChange callback on error`, () => {
-      cache.transaction(true, (transaction) => {
-        transaction.write(
-          graphqlQuery,
-          {
-            foo: {
-              id: 0,
-              bar: {
-                id: 1,
-                name: 'Gouda',
-              },
+      cache.transaction(true, transaction => {
+        transaction.write(graphqlQuery, {
+          foo: {
+            id: 0,
+            bar: {
+              id: 1,
+              name: 'Gouda',
             },
-          }
-        );
+          },
+        });
         throw new Error(`Fake error`);
       });
       expect(mockOnChange.mock.calls.length).to.equal(0);
     });
-
   });
 });

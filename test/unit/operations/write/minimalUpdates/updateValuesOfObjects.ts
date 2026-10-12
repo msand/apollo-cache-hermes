@@ -11,13 +11,11 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 // It just isn't very fruitful to unit test the individual steps of the write
 // workflow in isolation, given the contextual state that must be passed around.
 describe(`operations.write`, () => {
-
   const context = new CacheContext(strictConfig);
   const empty = new GraphSnapshot();
   const basicNestedQuery = query(`{ foo { a b c } }`);
 
   describe(`minimal updates values of objects`, () => {
-
     it(`preserves objects if none of their values change`, () => {
       const { snapshot: baseSnapshot } = write(context, empty, basicNestedQuery, {
         foo: { a: 1, b: 2, c: 3 },
@@ -48,7 +46,5 @@ describe(`operations.write`, () => {
       jestExpect(newValue.b).toEqual({ nested: { value: 4 } });
       jestExpect(baseValue.b).toEqual({ nested: { value: 2 } });
     });
-
   });
-
 });

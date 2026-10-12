@@ -11,7 +11,6 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 // workflow in isolation, given the contextual state that must be passed around.
 describe(`operations.write`, () => {
   describe(`nested values hanging off of a root`, () => {
-
     let snapshot: GraphSnapshot, editedNodeIds: Set<NodeId>;
     beforeAll(() => {
       const result = createSnapshot(
@@ -31,7 +30,7 @@ describe(`operations.write`, () => {
             prop1
             prop2
           }
-        }`
+        }`,
       );
 
       snapshot = result.snapshot;
@@ -63,5 +62,4 @@ describe(`operations.write`, () => {
       jestExpect(snapshot.getNodeSnapshot(QueryRootId)).toBeInstanceOf(EntitySnapshot);
     });
   });
-
 });

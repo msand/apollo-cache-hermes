@@ -4,16 +4,11 @@ export const config: Config = {
   preset: 'ts-jest',
   testEnvironment: 'jsdom',
   automock: false,
-  collectCoverageFrom: [
-    'src/**/*.js',
-  ],
+  collectCoverageFrom: ['src/**/*.js'],
   moduleFileExtensions: ['js', 'jsx', 'ts', 'tsx'],
   coverageDirectory: 'output/test-unit',
   coverageReporters: ['lcovonly', 'text'],
-  coveragePathIgnorePatterns: [
-    '<rootDir>/node_modules/',
-    '<rootDir>/test/',
-  ],
+  coveragePathIgnorePatterns: ['<rootDir>/node_modules/', '<rootDir>/test/'],
   rootDir: '../..',
   setupFilesAfterEnv: ['./test/env/unit.js'],
   testMatch: ['<rootDir>/test/unit/**/*.js', '<rootDir>/test/**/*.test.js', '<rootDir>/test/**/*.test.jsx'],
@@ -28,7 +23,7 @@ export const config: Config = {
     },
     __DEV__: true,
   },
-  'transformIgnorePatterns': [],
+  transformIgnorePatterns: [],
 };
 
 export default config;

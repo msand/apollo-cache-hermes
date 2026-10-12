@@ -18,14 +18,10 @@ export function createGraphSnapshot(
   gqlVariables?: JsonObject,
   rootId?: NodeId,
 ): GraphSnapshot {
-  return createSnapshot(
-    payload,
-    gqlString,
-    gqlVariables,
-    rootId,
-    cacheContext
-  ).snapshot;
+  return createSnapshot(payload, gqlString, gqlVariables, rootId, cacheContext).snapshot;
 }
 
-export const mapToEntries = (map: Map<string, NodeReference[]> | undefined): NodeReference[] | undefined => map && Array.from(iterParameterized(map));
-export const mapToEntries2 = (map: Map<string, NodeReference> | undefined): NodeReference[] | undefined => map && Array.from(map.values());
+export const mapToEntries = (map: Map<string, NodeReference[]> | undefined): NodeReference[] | undefined =>
+  map && Array.from(iterParameterized(map));
+export const mapToEntries2 = (map: Map<string, NodeReference> | undefined): NodeReference[] | undefined =>
+  map && Array.from(map.values());

@@ -14,7 +14,10 @@ import { iterParameterized, iterRefs, lazyImmutableDeepSet } from '../util';
  *
  * @throws Will throw an error if there is no corresponding node type
  */
-export function extract<TSerialized>(graphSnapshot: GraphSnapshot, cacheContext: CacheContext<TSerialized>): Serializable.GraphSnapshot {
+export function extract<TSerialized>(
+  graphSnapshot: GraphSnapshot,
+  cacheContext: CacheContext<TSerialized>,
+): Serializable.GraphSnapshot {
   const result: Serializable.GraphSnapshot = {};
   const entities = graphSnapshot._values;
   // We don't need to check for hasOwnProperty because data._values is
@@ -29,7 +32,9 @@ export function extract<TSerialized>(graphSnapshot: GraphSnapshot, cacheContext:
     } else if (nodeSnapshot instanceof ParameterizedValueSnapshot) {
       type = Serializable.NodeSnapshotType.ParameterizedValueSnapshot;
     } else {
-      throw new Error(`${nodeSnapshot.constructor.name} does not have corresponding enum value in Serializable.NodeSnapshotType`);
+      throw new Error(
+        `${nodeSnapshot.constructor.name} does not have corresponding enum value in Serializable.NodeSnapshotType`,
+      );
     }
 
     const serializedEntity: Serializable.NodeSnapshot = { type };
@@ -72,7 +77,10 @@ export function extract<TSerialized>(graphSnapshot: GraphSnapshot, cacheContext:
   return result;
 }
 
-function extractSerializableData(graphSnapshot: GraphSnapshot, nodeSnapshot: NodeSnapshot): NestedValue<JsonValue | undefined> {
+function extractSerializableData(
+  graphSnapshot: GraphSnapshot,
+  nodeSnapshot: NodeSnapshot,
+): NestedValue<JsonValue | undefined> {
   // If there is no outbound, then data is a value
   // 'data' can also be undefined or null even though there exist an
   // outbound reference (e.g referencing ParameterizedValueSnapshot).
@@ -97,7 +105,12 @@ function extractSerializableData(graphSnapshot: GraphSnapshot, nodeSnapshot: Nod
       // In the case of parameterized field hanging off of a root
       // the data at the ROOTQUERY node will be undefined with outbound
       // reference to the parameterized node.
-      extractedData = lazyImmutableDeepSet(extractedData, nodeSnapshot.data, outbound.path, outbound.path.length === 0 ? null : undefined);
+      extractedData = lazyImmutableDeepSet(
+        extractedData,
+        nodeSnapshot.data,
+        outbound.path,
+        outbound.path.length === 0 ? null : undefined,
+      );
     }
   }
 

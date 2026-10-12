@@ -1,4 +1,3 @@
-
 import * as React from 'rehackt';
 import type * as ReactTypes from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -7,10 +6,7 @@ import { getApolloContext } from '../context/index';
 
 import { RenderPromises } from './RenderPromises';
 
-export function getDataFromTree(
-  tree: ReactTypes.ReactNode,
-  context: { [key: string]: any } = {}
-) {
+export function getDataFromTree(tree: ReactTypes.ReactNode, context: { [key: string]: any } = {}) {
   return getMarkupFromTree({
     tree,
     context,
@@ -21,11 +17,9 @@ export function getDataFromTree(
 }
 
 export type GetMarkupFromTreeOptions = {
-  tree: ReactTypes.ReactNode,
-  context?: { [key: string]: any },
-  renderFunction?: (
-    tree: ReactTypes.ReactElement<any>
-  ) => string | PromiseLike<string>,
+  tree: ReactTypes.ReactNode;
+  context?: { [key: string]: any };
+  renderFunction?: (tree: ReactTypes.ReactElement<any>) => string | PromiseLike<string>;
 };
 
 export function getMarkupFromTree({
@@ -46,18 +40,12 @@ export function getMarkupFromTree({
     // elements) for a subtree of the original component tree.
     const ApolloContext = getApolloContext();
 
-    return new Promise<string>((resolve) => {
-      const element = React.createElement(
-        ApolloContext.Provider,
-        { value: { ...context, renderPromises } },
-        tree
-      );
+    return new Promise<string>(resolve => {
+      const element = React.createElement(ApolloContext.Provider, { value: { ...context, renderPromises } }, tree);
       resolve(renderFunction(element));
     })
-      .then((html) => {
-        return renderPromises.hasPromises()
-          ? renderPromises.consumeAndAwaitPromises().then(process)
-          : html;
+      .then(html => {
+        return renderPromises.hasPromises() ? renderPromises.consumeAndAwaitPromises().then(process) : html;
       })
       .finally(() => {
         renderPromises.stop();

@@ -9,12 +9,7 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.restore`, () => {
   describe(`top-level parameterized reference`, () => {
-
-    const parameterizedId = nodeIdForParameterizedValue(
-      QueryRootId,
-      ['foo'],
-      { id: 1, withExtra: true }
-    );
+    const parameterizedId = nodeIdForParameterizedValue(QueryRootId, ['foo'], { id: 1, withExtra: true });
     let restoreGraphSnapshot: GraphSnapshot, originalGraphSnapshot: GraphSnapshot;
     beforeAll(() => {
       const cacheContext = createStrictCacheContext();
@@ -28,20 +23,23 @@ describe(`operations.restore`, () => {
           }
         }`,
         cacheContext,
-        { id: 1 }
+        { id: 1 },
       );
 
-      restoreGraphSnapshot = restore({
-        [QueryRootId]: {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          parameterized: [{ id: parameterizedId, path: ['foo'] }],
+      restoreGraphSnapshot = restore(
+        {
+          [QueryRootId]: {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            parameterized: [{ id: parameterizedId, path: ['foo'] }],
+          },
+          [parameterizedId]: {
+            type: Serializable.NodeSnapshotType.ParameterizedValueSnapshot,
+            inbound: [{ id: QueryRootId, path: ['foo'] }],
+            data: null,
+          },
         },
-        [parameterizedId]: {
-          type: Serializable.NodeSnapshotType.ParameterizedValueSnapshot,
-          inbound: [{ id: QueryRootId, path: ['foo'] }],
-          data: null,
-        },
-      }, cacheContext).cacheSnapshot.baseline;
+        cacheContext,
+      ).cacheSnapshot.baseline;
     });
 
     it(`restores GraphSnapshot from JSON serializable object`, () => {
@@ -52,6 +50,5 @@ describe(`operations.restore`, () => {
       jestExpect(restoreGraphSnapshot.getNodeSnapshot(QueryRootId)).toBeInstanceOf(EntitySnapshot);
       jestExpect(restoreGraphSnapshot.getNodeSnapshot(parameterizedId)).toBeInstanceOf(ParameterizedValueSnapshot);
     });
-
   });
 });

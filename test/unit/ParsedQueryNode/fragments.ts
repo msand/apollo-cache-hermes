@@ -8,7 +8,6 @@ import { fragmentMapForDocument, getOperationOrDie } from '../../../src/util';
 import { strictConfig } from '../../helpers';
 
 describe(`parseQuery for queries with fragments`, () => {
-
   const context = new CacheContext(strictConfig);
   function parseOperation(operationString: string) {
     const document = gql(operationString);
@@ -107,11 +106,20 @@ describe(`parseQuery for queries with fragments`, () => {
     `;
     expect(parseOperation(operation)).to.deep.eq({
       parsedQuery: {
-        foo: new ParsedQueryNode({
-          bar: new ParsedQueryNode({
-            baz: new ParsedQueryNode(),
-          }, undefined, { extra: true }),
-        }, undefined, undefined, true),
+        foo: new ParsedQueryNode(
+          {
+            bar: new ParsedQueryNode(
+              {
+                baz: new ParsedQueryNode(),
+              },
+              undefined,
+              { extra: true },
+            ),
+          },
+          undefined,
+          undefined,
+          true,
+        ),
       },
       variables: new Set(),
     });
@@ -131,11 +139,20 @@ describe(`parseQuery for queries with fragments`, () => {
     `;
     expect(parseOperation(operation)).to.deep.eq({
       parsedQuery: {
-        foo: new ParsedQueryNode({
-          bar: new ParsedQueryNode<JsonScalar | VariableArgument>({
-            baz: new ParsedQueryNode(),
-          }, undefined, { limit: new VariableArgument('count') }),
-        }, undefined, undefined, true),
+        foo: new ParsedQueryNode(
+          {
+            bar: new ParsedQueryNode<JsonScalar | VariableArgument>(
+              {
+                baz: new ParsedQueryNode(),
+              },
+              undefined,
+              { limit: new VariableArgument('count') },
+            ),
+          },
+          undefined,
+          undefined,
+          true,
+        ),
       },
       variables: new Set(['count']),
     });
@@ -195,5 +212,4 @@ describe(`parseQuery for queries with fragments`, () => {
       parseOperation(operation);
     }).to.throw(/foo\.bar/i);
   });
-
 });

@@ -100,7 +100,7 @@ const QueryType = new GraphQLObjectType({
 const Schema = new GraphQLSchema({ query: QueryType });
 
 describe('SSR', () => {
-  it('should work with React.createContext', async() => {
+  it('should work with React.createContext', async () => {
     const defaultValue = 'default';
     const Context = React.createContext(defaultValue);
     const providerValue = 'provider';
@@ -109,35 +109,35 @@ describe('SSR', () => {
         <React.Fragment>
           <Context.Provider value={providerValue} />
           <Context.Consumer>
-            {(val) => {
+            {val => {
               expect(val).toBe(defaultValue);
               return val;
             }}
           </Context.Consumer>
-        </React.Fragment>
-      )
+        </React.Fragment>,
+      ),
     ).toBe(defaultValue);
     expect(
       await renderToStringWithData(
         <Context.Provider value={providerValue}>
           <Context.Consumer>
-            {(val) => {
+            {val => {
               expect(val).toBe(providerValue);
               return val;
             }}
           </Context.Consumer>
-        </Context.Provider>
-      )
+        </Context.Provider>,
+      ),
     ).toBe(providerValue);
     expect(
       await renderToStringWithData(
         <Context.Consumer>
-          {(val) => {
+          {val => {
             expect(val).toBe(defaultValue);
             return val;
           }}
-        </Context.Consumer>
-      )
+        </Context.Consumer>,
+      ),
     ).toBe(defaultValue);
     const ContextForUndefined = React.createContext<void | string>(defaultValue);
 
@@ -145,29 +145,29 @@ describe('SSR', () => {
       await renderToStringWithData(
         <ContextForUndefined.Provider value={undefined}>
           <ContextForUndefined.Consumer>
-            {(val) => {
+            {val => {
               expect(val).toBeUndefined();
               return val === undefined ? 'works' : 'broken';
             }}
           </ContextForUndefined.Consumer>
-        </ContextForUndefined.Provider>
-      )
+        </ContextForUndefined.Provider>,
+      ),
     ).toBe('works');
 
     const apolloClient = new ApolloClient({
-      link: new ApolloLink((config) => {
-        return new Observable((observer) => {
+      link: new ApolloLink(config => {
+        return new Observable(observer => {
           execute({
             schema: Schema,
             source: print(config.query),
             variableValues: config.variables,
             operationName: config.operationName,
           })
-            .then((result) => {
+            .then(result => {
               observer.next(result);
               observer.complete();
             })
-            .catch((e) => {
+            .catch(e => {
               observer.error(e);
             });
         });
@@ -190,7 +190,7 @@ describe('SSR', () => {
             >
               {() => (
                 <Context.Consumer>
-                  {(val) => {
+                  {val => {
                     expect(val).toBe(providerValue);
                     return val;
                   }}
@@ -198,8 +198,8 @@ describe('SSR', () => {
               )}
             </Query>
           </Context.Provider>
-        </ApolloProvider>
-      )
+        </ApolloProvider>,
+      ),
     ).toBe(providerValue);
   });
 });

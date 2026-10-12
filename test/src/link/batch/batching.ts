@@ -4,7 +4,7 @@ import { Observable } from '../../utilities/index';
 
 export type BatchHandler = (
   operations: Operation[],
-  forward?: (NextLink | undefined)[]
+  forward?: (NextLink | undefined)[],
 ) => Observable<FetchResult[]> | null;
 
 export interface BatchableRequest {
@@ -13,17 +13,17 @@ export interface BatchableRequest {
 }
 
 type QueuedRequest = BatchableRequest & {
-  observable?: Observable<FetchResult>,
-  next: Array<(result: FetchResult) => void>,
-  error: Array<(error: Error) => void>,
-  complete: Array<() => void>,
-  subscribers: Set<object>,
+  observable?: Observable<FetchResult>;
+  next: Array<(result: FetchResult) => void>;
+  error: Array<(error: Error) => void>;
+  complete: Array<() => void>;
+  subscribers: Set<object>;
 };
 
 // Batches are primarily a Set<QueuedRequest>, but may have other optional
 // properties, such as batch.subscription.
 type RequestBatch = Set<QueuedRequest> & {
-  subscription?: ObservableSubscription,
+  subscription?: ObservableSubscription;
 };
 
 // QueryBatcher doesn't fire requests immediately. Requests that were enqueued within
@@ -33,10 +33,7 @@ export class OperationBatcher {
   // Queue on which the QueryBatcher will operate on a per-tick basis.
   private batchesByKey = new Map<string, RequestBatch>();
 
-  private scheduledBatchTimerByKey = new Map<
-    string,
-    ReturnType<typeof setTimeout>
-  >();
+  private scheduledBatchTimerByKey = new Map<string, ReturnType<typeof setTimeout>>();
 
   private batchDebounce?: boolean;
   private batchInterval?: number;
@@ -53,11 +50,11 @@ export class OperationBatcher {
     batchHandler,
     batchKey,
   }: {
-    batchDebounce?: boolean,
-    batchInterval?: number,
-    batchMax?: number,
-    batchHandler: BatchHandler,
-    batchKey?: (operation: Operation) => string,
+    batchDebounce?: boolean;
+    batchInterval?: number;
+    batchMax?: number;
+    batchHandler: BatchHandler;
+    batchKey?: (operation: Operation) => string;
   }) {
     this.batchDebounce = batchDebounce;
     this.batchInterval = batchInterval;
@@ -78,7 +75,7 @@ export class OperationBatcher {
     const key = this.batchKey(request.operation);
 
     if (!requestCopy.observable) {
-      requestCopy.observable = new Observable<FetchResult>((observer) => {
+      requestCopy.observable = new Observable<FetchResult>(observer => {
         let batch = this.batchesByKey.get(key)!;
         if (!batch) this.batchesByKey.set(key, (batch = new Set()));
 
@@ -117,10 +114,7 @@ export class OperationBatcher {
 
         return () => {
           // If this is last subscriber for this request, remove request from queue
-          if (
-            requestCopy.subscribers.delete(observer) &&
-            requestCopy.subscribers.size < 1
-          ) {
+          if (requestCopy.subscribers.delete(observer) && requestCopy.subscribers.size < 1) {
             // If this is last request from queue, remove queue entirely
             if (batch.delete(requestCopy) && batch.size < 1) {
               this.consumeQueue(key);
@@ -137,9 +131,7 @@ export class OperationBatcher {
 
   // Consumes the queue.
   // Returns a list of promises (one for each query).
-  public consumeQueue(
-    key: string = ''
-  ): (Observable<FetchResult> | undefined)[] | undefined {
+  public consumeQueue(key: string = ''): (Observable<FetchResult> | undefined)[] | undefined {
     const batch = this.batchesByKey.get(key);
     // Delete this batch and process it below.
     this.batchesByKey.delete(key);
@@ -158,7 +150,7 @@ export class OperationBatcher {
     // Even though batch is a Set, it preserves the order of first insertion
     // when iterating (per ECMAScript specification), so these requests will be
     // handled in the order they were enqueued (minus any deleted ones).
-    batch.forEach((request) => {
+    batch.forEach(request => {
       operations.push(request.operation);
       forwards.push(request.forward);
       observables.push(request.observable);
@@ -167,12 +159,11 @@ export class OperationBatcher {
       completes.push(request.complete);
     });
 
-    const batchedObservable
-      = this.batchHandler(operations, forwards) || Observable.of();
+    const batchedObservable = this.batchHandler(operations, forwards) || Observable.of();
 
     const onError = (error: Error) => {
       // each callback list in batch
-      errors.forEach((rejecters) => {
+      errors.forEach(rejecters => {
         if (rejecters) {
           // each subscriber to request
           rejecters.forEach(e => e(error));
@@ -181,14 +172,14 @@ export class OperationBatcher {
     };
 
     batch.subscription = batchedObservable.subscribe({
-      next: (results) => {
+      next: results => {
         if (!Array.isArray(results)) {
           results = [results];
         }
 
         if (nexts.length !== results.length) {
           const error = new Error(
-            `server returned results with length ${results.length}, expected length of ${nexts.length}`
+            `server returned results with length ${results.length}, expected length of ${nexts.length}`,
           );
           (error as any).result = results;
 
@@ -203,7 +194,7 @@ export class OperationBatcher {
       },
       error: onError,
       complete: () => {
-        completes.forEach((complete) => {
+        completes.forEach(complete => {
           if (complete) {
             // each subscriber to request
             complete.forEach(c => c());
@@ -222,7 +213,7 @@ export class OperationBatcher {
       setTimeout(() => {
         this.consumeQueue(key);
         this.scheduledBatchTimerByKey.delete(key);
-      }, this.batchInterval)
+      }, this.batchInterval),
     );
   }
 }

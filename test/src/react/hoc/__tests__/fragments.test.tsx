@@ -44,13 +44,13 @@ describe('fragments', () => {
           render() {
             return null;
           }
-        }
+        },
       );
 
       render(
         <ApolloProvider client={client}>
           <Container />
-        </ApolloProvider>
+        </ApolloProvider>,
       );
       throw new Error();
     } catch (e) {
@@ -58,65 +58,62 @@ describe('fragments', () => {
     }
   });
 
-  itAsync(
-    'correctly fetches a query with inline fragments',
-    (resolve, reject) => {
-      let done = false;
-      const query: DocumentNode = gql`
-        query people {
-          allPeople(first: 1) {
-            __typename
-            ...person
-          }
+  itAsync('correctly fetches a query with inline fragments', (resolve, reject) => {
+    let done = false;
+    const query: DocumentNode = gql`
+      query people {
+        allPeople(first: 1) {
+          __typename
+          ...person
+        }
+      }
+
+      fragment person on PeopleConnection {
+        people {
+          name
+        }
+      }
+    `;
+    const data = {
+      allPeople: {
+        __typename: 'PeopleConnection',
+        people: [{ name: 'Luke Skywalker' }],
+      },
+    };
+
+    type Data = typeof data;
+
+    const link = mockSingleLink({
+      request: { query },
+      result: { data },
+    });
+    const client = new ApolloClient({
+      link,
+      cache: new Hermes({ addTypename: false }),
+    });
+
+    const Container = graphql<{}, Data>(query)(
+      class extends React.Component<ChildProps<{}, Data>> {
+        componentDidUpdate() {
+          expect(this.props.data!.loading).toBeFalsy();
+          expect(this.props.data!.allPeople).toEqual(data.allPeople);
+          done = true;
         }
 
-        fragment person on PeopleConnection {
-          people {
-            name
-          }
+        render() {
+          return null;
         }
-      `;
-      const data = {
-        allPeople: {
-          __typename: 'PeopleConnection',
-          people: [{ name: 'Luke Skywalker' }],
-        },
-      };
+      },
+    );
 
-      type Data = typeof data;
+    render(
+      <ApolloProvider client={client}>
+        <Container />
+      </ApolloProvider>,
+    );
 
-      const link = mockSingleLink({
-        request: { query },
-        result: { data },
-      });
-      const client = new ApolloClient({
-        link,
-        cache: new Hermes({ addTypename: false }),
-      });
-
-      const Container = graphql<{}, Data>(query)(
-        class extends React.Component<ChildProps<{}, Data>> {
-          componentDidUpdate() {
-            expect(this.props.data!.loading).toBeFalsy();
-            expect(this.props.data!.allPeople).toEqual(data.allPeople);
-            done = true;
-          }
-
-          render() {
-            return null;
-          }
-        }
-      );
-
-      render(
-        <ApolloProvider client={client}>
-          <Container />
-        </ApolloProvider>
-      );
-
-      waitFor(() => {
-        expect(done).toBe(true);
-      }).then(resolve, reject);
-    }
-  );
+    waitFor(() => {
+      expect(done).toBe(true);
+    }).then(resolve, reject);
+  });
 });

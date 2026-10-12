@@ -48,7 +48,7 @@ describe('client option', () => {
         }
       >
         <ContainerWithData />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
     unmount();
   });
@@ -83,7 +83,7 @@ describe('client option', () => {
 
     const ContainerWithData = graphql<{}, Data>(
       query,
-      config
+      config,
     )(() => {
       renderCount += 1;
       return null;
@@ -95,77 +95,74 @@ describe('client option', () => {
     }).then(resolve, reject);
   });
 
-  itAsync(
-    'ignores client from context if client from options is present',
-    (resolve, reject) => {
-      let done = false;
-      const query: DocumentNode = gql`
-        query people {
-          allPeople(first: 1) {
-            people {
-              name
-            }
+  itAsync('ignores client from context if client from options is present', (resolve, reject) => {
+    let done = false;
+    const query: DocumentNode = gql`
+      query people {
+        allPeople(first: 1) {
+          people {
+            name
           }
         }
-      `;
-      const dataProvider = {
-        allPeople: { people: [{ name: 'Leia Organa Solo' }] },
-      };
+      }
+    `;
+    const dataProvider = {
+      allPeople: { people: [{ name: 'Leia Organa Solo' }] },
+    };
 
-      type Data = typeof dataProvider;
-      const linkProvider = mockSingleLink({
-        request: { query },
-        result: { data: dataProvider },
-      });
-      const clientProvider = new ApolloClient({
-        link: linkProvider,
-        cache: new Hermes({ addTypename: false }),
-      });
-      const dataOptions = {
-        allPeople: { people: [{ name: 'Luke Skywalker' }] },
-      };
-      const linkOptions = mockSingleLink({
-        request: { query },
-        result: { data: dataOptions },
-      });
-      const clientOptions = new ApolloClient({
-        link: linkOptions,
-        cache: new Hermes({ addTypename: false }),
-      });
+    type Data = typeof dataProvider;
+    const linkProvider = mockSingleLink({
+      request: { query },
+      result: { data: dataProvider },
+    });
+    const clientProvider = new ApolloClient({
+      link: linkProvider,
+      cache: new Hermes({ addTypename: false }),
+    });
+    const dataOptions = {
+      allPeople: { people: [{ name: 'Luke Skywalker' }] },
+    };
+    const linkOptions = mockSingleLink({
+      request: { query },
+      result: { data: dataOptions },
+    });
+    const clientOptions = new ApolloClient({
+      link: linkOptions,
+      cache: new Hermes({ addTypename: false }),
+    });
 
-      const config = {
-        options: {
-          client: clientOptions,
-        },
-      };
+    const config = {
+      options: {
+        client: clientOptions,
+      },
+    };
 
-      class Container extends React.Component<ChildProps<{}, Data>> {
-        componentDidUpdate() {
-          const { data } = this.props;
-          expect(data!.loading).toBeFalsy(); // first data
-          expect(data!.allPeople).toEqual({
-            people: [{ name: 'Luke Skywalker' }],
-          });
-          done = true;
-        }
-
-        render() {
-          return null;
-        }
+    class Container extends React.Component<ChildProps<{}, Data>> {
+      componentDidUpdate() {
+        const { data } = this.props;
+        expect(data!.loading).toBeFalsy(); // first data
+        expect(data!.allPeople).toEqual({
+          people: [{ name: 'Luke Skywalker' }],
+        });
+        done = true;
       }
 
-      const ContainerWithData = graphql<{}, Data>(query, config)(Container);
-      render(
-        <ApolloProvider client={clientProvider}>
-          <ContainerWithData />
-        </ApolloProvider>
-      );
-
-      waitFor(() => {
-        expect(done).toBe(true);
-      }).then(resolve, reject);
+      render() {
+        return null;
+      }
     }
-  );
+
+    const ContainerWithData = graphql<{}, Data>(query, config)(Container);
+    render(
+      <ApolloProvider client={clientProvider}>
+        <ContainerWithData />
+      </ApolloProvider>,
+    );
+
+    waitFor(() => {
+      expect(done).toBe(true);
+    }).then(resolve, reject);
+  });
 
   itAsync('exposes refetch as part of the props api', (resolve, reject) => {
     let done = false;
@@ -204,13 +201,13 @@ describe('client option', () => {
         render() {
           return null;
         }
-      }
+      },
     );
 
     render(
       <ApolloProvider client={client}>
         <Container first={1} />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     waitFor(() => {

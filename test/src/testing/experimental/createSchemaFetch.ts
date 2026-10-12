@@ -35,9 +35,9 @@ import { wait } from '../core/wait';
 const createSchemaFetch = (
   schema: GraphQLSchema,
   mockFetchOpts: {
-    validate?: boolean,
-    delay?: { min: number, max: number },
-  } = { validate: true }
+    validate?: boolean;
+    delay?: { min: number; max: number };
+  } = { validate: true },
 ) => {
   const prevFetch = window.fetch;
   const delayMin = mockFetchOpts.delay?.min ?? 3;
@@ -45,16 +45,13 @@ const createSchemaFetch = (
 
   if (delayMin > delayMax) {
     throw new Error(
-      'Please configure a minimum delay that is less than the maximum delay. The default minimum delay is 3ms.'
+      'Please configure a minimum delay that is less than the maximum delay. The default minimum delay is 3ms.',
     );
   }
 
-  const mockFetch: (uri?: any, options?: any) => Promise<Response> = async(
-    _uri,
-    options
-  ) => {
+  const mockFetch: (uri?: any, options?: any) => Promise<Response> = async (_uri, options) => {
     if (delayMin > 0) {
-      const randomDelay = (Math.random() * (delayMax - delayMin)) + delayMin;
+      const randomDelay = Math.random() * (delayMax - delayMin) + delayMin;
       await wait(randomDelay);
     }
 
@@ -67,9 +64,7 @@ const createSchemaFetch = (
       try {
         validationErrors = validate(schema, document);
       } catch (e) {
-        validationErrors = [
-          new ApolloError({ graphQLErrors: [e as GraphQLError] }),
-        ];
+        validationErrors = [new ApolloError({ graphQLErrors: [e as GraphQLError] })];
       }
 
       if (validationErrors?.length > 0) {

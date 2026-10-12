@@ -2,21 +2,17 @@ import { maybe } from '../globals/index';
 
 const isReactNative = maybe(() => navigator.product) === 'ReactNative';
 
-export const canUseWeakMap
-  = typeof WeakMap === 'function' &&
-  !(isReactNative && !(global as any).HermesInternal);
+export const canUseWeakMap = typeof WeakMap === 'function' && !(isReactNative && !(global as any).HermesInternal);
 
 export const canUseWeakSet = typeof WeakSet === 'function';
 
-export const canUseSymbol
-  = typeof Symbol === 'function' && typeof Symbol.for === 'function';
+export const canUseSymbol = typeof Symbol === 'function' && typeof Symbol.for === 'function';
 
 export const canUseAsyncIteratorSymbol = canUseSymbol && Symbol.asyncIterator;
 
-export const canUseDOM
-  = typeof maybe(() => window.document.createElement) === 'function';
+export const canUseDOM = typeof maybe(() => window.document.createElement) === 'function';
 
-const usingJSDOM: boolean
+const usingJSDOM: boolean =
   // Following advice found in this comment from @domenic (maintainer of jsdom):
   // https://github.com/jsdom/jsdom/issues/1537#issuecomment-229405327
   //
@@ -25,7 +21,7 @@ const usingJSDOM: boolean
   // at the end of the user agent string, I believe this case is all we need to
   // check. Testing for "Node.js" was recommended for backwards compatibility
   // with older version of jsdom, but we don't have that problem.
-  = maybe(() => navigator.userAgent.indexOf('jsdom') >= 0) || false;
+  maybe(() => navigator.userAgent.indexOf('jsdom') >= 0) || false;
 
 // Our tests should all continue to pass if we remove this !usingJSDOM
 // condition, thereby allowing useLayoutEffect when using jsdom. Unfortunately,

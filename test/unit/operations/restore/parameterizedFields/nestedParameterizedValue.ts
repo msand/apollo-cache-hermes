@@ -9,12 +9,10 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.restore`, () => {
   describe(`nested parameterized value`, () => {
-
-    const parameterizedId = nodeIdForParameterizedValue(
-      QueryRootId,
-      ['one', 'two', 'three'],
-      { id: 1, withExtra: true }
-    );
+    const parameterizedId = nodeIdForParameterizedValue(QueryRootId, ['one', 'two', 'three'], {
+      id: 1,
+      withExtra: true,
+    });
 
     let restoreGraphSnapshot: GraphSnapshot, originalGraphSnapshot: GraphSnapshot;
     beforeAll(() => {
@@ -40,23 +38,26 @@ describe(`operations.restore`, () => {
           }
         }`,
         cacheContext,
-        { id: 1 }
+        { id: 1 },
       );
 
-      restoreGraphSnapshot = restore({
-        [QueryRootId]: {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          parameterized: [{ id: parameterizedId, path: ['one', 'two', 'three'] }],
-        },
-        [parameterizedId]: {
-          type: Serializable.NodeSnapshotType.ParameterizedValueSnapshot,
-          inbound: [{ id: QueryRootId, path: ['one', 'two', 'three'] }],
-          data: {
-            name: 'ThreeValue',
-            extraValue: 42,
+      restoreGraphSnapshot = restore(
+        {
+          [QueryRootId]: {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            parameterized: [{ id: parameterizedId, path: ['one', 'two', 'three'] }],
+          },
+          [parameterizedId]: {
+            type: Serializable.NodeSnapshotType.ParameterizedValueSnapshot,
+            inbound: [{ id: QueryRootId, path: ['one', 'two', 'three'] }],
+            data: {
+              name: 'ThreeValue',
+              extraValue: 42,
+            },
           },
         },
-      }, cacheContext).cacheSnapshot.baseline;
+        cacheContext,
+      ).cacheSnapshot.baseline;
     });
 
     it(`restores GraphSnapshot from JSON serializable object`, () => {
@@ -67,6 +68,5 @@ describe(`operations.restore`, () => {
       jestExpect(restoreGraphSnapshot.getNodeSnapshot(QueryRootId)).toBeInstanceOf(EntitySnapshot);
       jestExpect(restoreGraphSnapshot.getNodeSnapshot(parameterizedId)).toBeInstanceOf(ParameterizedValueSnapshot);
     });
-
   });
 });

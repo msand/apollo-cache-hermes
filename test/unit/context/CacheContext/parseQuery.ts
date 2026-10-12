@@ -5,8 +5,11 @@ import { CacheContext } from '../../../../src/context';
 
 describe(`context.CacheContext`, () => {
   describe(`parseQuery`, () => {
-
-    const simpleQuery = gql`{ foo }`;
+    const simpleQuery = gql`
+      {
+        foo
+      }
+    `;
 
     it(`memoizes identical queries w/o variables`, () => {
       const context = new CacheContext();
@@ -47,6 +50,5 @@ describe(`context.CacheContext`, () => {
 
       expect(parsed1).to.not.eq(parsed2);
     });
-
   });
 });

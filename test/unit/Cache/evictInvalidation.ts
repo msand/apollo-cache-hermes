@@ -5,7 +5,6 @@ import { Cache } from '../../../src';
 import { CacheContext } from '../../../src/context';
 
 describe(`evicting an entity`, () => {
-
   const thingsQuery = query(`{
     things {
       id
@@ -53,7 +52,9 @@ describe(`evicting an entity`, () => {
   it(`removes the evicted entity from the inbound references of its targets`, () => {
     cache.evict({ id: '1' });
 
-    const inbound = Array.from(cache.getSnapshot().baseline.getNodeSnapshot('s')!.inbound!.values()).map(({ id }) => id);
+    const inbound = Array.from(cache.getSnapshot().baseline.getNodeSnapshot('s')!.inbound!.values()).map(
+      ({ id }) => id,
+    );
     expect(inbound).to.have.members(['2', '3']);
   });
 
@@ -71,5 +72,4 @@ describe(`evicting an entity`, () => {
     expect(editedNodeIds[0].has('o')).to.eq(true);
     expect(cache.getSnapshot().baseline.getNodeSnapshot('o')!.inbound).to.eq(undefined);
   });
-
 });

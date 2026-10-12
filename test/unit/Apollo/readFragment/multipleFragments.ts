@@ -8,7 +8,6 @@ import { strictConfig } from '../../../helpers';
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`readFragment with multiple fragments`, () => {
-
   let hermes: Hermes;
   beforeAll(() => {
     hermes = new Hermes(strictConfig);
@@ -26,7 +25,7 @@ describe(`readFragment with multiple fragments`, () => {
         outbound: [{ id: 'shipment0', path: ['shipment'] }],
         data: { id: 123, name: 'Gouda', __typename: 'Viewer' },
       },
-      'shipment0': {
+      shipment0: {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
         inbound: [{ id: 123, path: ['shipment'] }],
         data: {
@@ -39,10 +38,11 @@ describe(`readFragment with multiple fragments`, () => {
   });
 
   it(`returns a value following the named fragment ('viewer')`, () => {
-    expect(hermes.readFragment({
-      id: '123',
-      fragmentName: 'viewer',
-      fragment: gql(`
+    expect(
+      hermes.readFragment({
+        id: '123',
+        fragmentName: 'viewer',
+        fragment: gql(`
         fragment viewer on Viewer {
           id
           name
@@ -55,7 +55,8 @@ describe(`readFragment with multiple fragments`, () => {
           __typename
         }
       `),
-    })).to.be.deep.eq({
+      }),
+    ).to.be.deep.eq({
       id: 123,
       name: 'Gouda',
       __typename: 'Viewer',
@@ -68,10 +69,11 @@ describe(`readFragment with multiple fragments`, () => {
   });
 
   it(`returns a value following the named fragment ('shipment')`, () => {
-    expect(hermes.readFragment({
-      id: 'shipment0',
-      fragmentName: 'shipment',
-      fragment: gql(`
+    expect(
+      hermes.readFragment({
+        id: 'shipment0',
+        fragmentName: 'shipment',
+        fragment: gql(`
         fragment viewer on Viewer {
           id
           name
@@ -83,11 +85,11 @@ describe(`readFragment with multiple fragments`, () => {
           __typename
         }
       `),
-    })).to.be.deep.eq({
+      }),
+    ).to.be.deep.eq({
       id: 'shipment0',
       destination: 'Seattle',
       __typename: 'Shipment',
     });
   });
-
 });

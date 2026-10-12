@@ -4,21 +4,9 @@ import gql from 'graphql-tag';
 import { act, render, renderHook, waitFor } from '@testing-library/react';
 import { ApolloClient, ApolloProvider, ApolloLink } from '@apollo/client';
 
-import {
-  ApolloError,
-  ErrorPolicy,
-  NetworkStatus,
-  TypedDocumentNode,
-} from '../../../core';
+import { ApolloError, ErrorPolicy, NetworkStatus, TypedDocumentNode } from '../../../core';
 import { Observable } from '../../../utilities';
-import {
-  MockedProvider,
-  mockSingleLink,
-  wait,
-  tick,
-  MockSubscriptionLink,
-  MockLink,
-} from '../../../testing';
+import { MockedProvider, mockSingleLink, wait, tick, MockSubscriptionLink, MockLink } from '../../../testing';
 import { useLazyQuery } from '../useLazyQuery';
 import { QueryResult } from '../../types/types';
 import { profileHook } from '../../../testing/internal';
@@ -26,14 +14,14 @@ import { Hermes } from '../../../../../src';
 
 describe('useLazyQuery Hook', () => {
   const helloQuery: TypedDocumentNode<{
-    hello: string,
+    hello: string;
   }> = gql`
     query {
       hello
     }
   `;
 
-  it('should hold query execution until manually triggered', async() => {
+  it('should hold query execution until manually triggered', async () => {
     const mocks = [
       {
         request: { query: helloQuery },
@@ -42,9 +30,7 @@ describe('useLazyQuery Hook', () => {
       },
     ];
     const { result } = renderHook(() => useLazyQuery(helloQuery), {
-      wrapper: ({ children }) => (
-        <MockedProvider mocks={mocks}>{children}</MockedProvider>
-      ),
+      wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
     });
 
     expect(result.current[1].loading).toBe(false);
@@ -56,19 +42,19 @@ describe('useLazyQuery Hook', () => {
       () => {
         expect(result.current[1].loading).toBe(true);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
 
     await waitFor(
       () => {
         expect(result.current[1].loading).toBe(false);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     expect(result.current[1].data).toEqual({ hello: 'world' });
   });
 
-  it('should set `called` to false by default', async() => {
+  it('should set `called` to false by default', async () => {
     const mocks = [
       {
         request: { query: helloQuery },
@@ -77,9 +63,7 @@ describe('useLazyQuery Hook', () => {
       },
     ];
     const { result } = renderHook(() => useLazyQuery(helloQuery), {
-      wrapper: ({ children }) => (
-        <MockedProvider mocks={mocks}>{children}</MockedProvider>
-      ),
+      wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
     });
 
     expect(result.current[1].loading).toBe(false);
@@ -87,7 +71,7 @@ describe('useLazyQuery Hook', () => {
     expect(result.current[1].called).toBe(false);
   });
 
-  it('should set `called` to true after calling the lazy execute function', async() => {
+  it('should set `called` to true after calling the lazy execute function', async () => {
     const mocks = [
       {
         request: { query: helloQuery },
@@ -99,9 +83,7 @@ describe('useLazyQuery Hook', () => {
     const ProfiledHook = profileHook(() => useLazyQuery(helloQuery));
 
     render(<ProfiledHook />, {
-      wrapper: ({ children }) => (
-        <MockedProvider mocks={mocks}>{children}</MockedProvider>
-      ),
+      wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
     });
 
     {
@@ -126,7 +108,7 @@ describe('useLazyQuery Hook', () => {
     }
   });
 
-  it('should override `skip` if lazy mode execution function is called', async() => {
+  it('should override `skip` if lazy mode execution function is called', async () => {
     const mocks = [
       {
         request: { query: helloQuery },
@@ -137,12 +119,10 @@ describe('useLazyQuery Hook', () => {
 
     const ProfiledHook = profileHook(
       // skip isn’t actually an option on the types
-      () => useLazyQuery(helloQuery, { skip: true } as any)
+      () => useLazyQuery(helloQuery, { skip: true } as any),
     );
     render(<ProfiledHook />, {
-      wrapper: ({ children }) => (
-        <MockedProvider mocks={mocks}>{children}</MockedProvider>
-      ),
+      wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
     });
 
     {
@@ -166,7 +146,7 @@ describe('useLazyQuery Hook', () => {
     }
   });
 
-  it('should use variables defined in hook options (if any), when running the lazy execution function', async() => {
+  it('should use variables defined in hook options (if any), when running the lazy execution function', async () => {
     const query = gql`
       query ($id: number) {
         hello(id: $id)
@@ -184,12 +164,10 @@ describe('useLazyQuery Hook', () => {
     const ProfiledHook = profileHook(() =>
       useLazyQuery(query, {
         variables: { id: 1 },
-      })
+      }),
     );
     render(<ProfiledHook />, {
-      wrapper: ({ children }) => (
-        <MockedProvider mocks={mocks}>{children}</MockedProvider>
-      ),
+      wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
     });
 
     {
@@ -211,7 +189,7 @@ describe('useLazyQuery Hook', () => {
     }
   });
 
-  it('should use variables passed into lazy execution function, overriding similar variables defined in Hook options', async() => {
+  it('should use variables passed into lazy execution function, overriding similar variables defined in Hook options', async () => {
     const query = gql`
       query ($id: number) {
         hello(id: $id)
@@ -237,10 +215,8 @@ describe('useLazyQuery Hook', () => {
           variables: { id: 1 },
         }),
       {
-        wrapper: ({ children }) => (
-          <MockedProvider mocks={mocks}>{children}</MockedProvider>
-        ),
-      }
+        wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+      },
     );
 
     const execute = result.current[0];
@@ -250,36 +226,31 @@ describe('useLazyQuery Hook', () => {
       () => {
         expect(result.current[1].loading).toBe(true);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
 
     await waitFor(
       () => {
         expect(result.current[1].loading).toBe(false);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     expect(result.current[1].data).toEqual({ hello: 'world 2' });
   });
 
-  it('should merge variables from original hook and execution function', async() => {
+  it('should merge variables from original hook and execution function', async () => {
     const counterQuery: TypedDocumentNode<
       {
-        counter: number,
+        counter: number;
       },
       {
-        hookVar?: boolean,
-        execVar?: boolean,
-        localDefaultVar?: boolean,
-        globalDefaultVar?: boolean,
+        hookVar?: boolean;
+        execVar?: boolean;
+        localDefaultVar?: boolean;
+        globalDefaultVar?: boolean;
       }
     > = gql`
-      query GetCounter(
-        $hookVar: Boolean
-        $execVar: Boolean
-        $localDefaultVar: Boolean
-        $globalDefaultVar: Boolean
-      ) {
+      query GetCounter($hookVar: Boolean, $execVar: Boolean, $localDefaultVar: Boolean, $globalDefaultVar: Boolean) {
         counter
         vars
       }
@@ -297,7 +268,7 @@ describe('useLazyQuery Hook', () => {
       cache: new Hermes(),
       link: new ApolloLink(
         request =>
-          new Observable((observer) => {
+          new Observable(observer => {
             if (request.operationName === 'GetCounter') {
               observer.next({
                 data: {
@@ -309,13 +280,9 @@ describe('useLazyQuery Hook', () => {
                 observer.complete();
               }, 10);
             } else {
-              observer.error(
-                new Error(
-                  `Unknown query: ${request.operationName || request.query}`
-                )
-              );
+              observer.error(new Error(`Unknown query: ${request.operationName || request.query}`));
             }
-          })
+          }),
       ),
     });
 
@@ -338,29 +305,27 @@ describe('useLazyQuery Hook', () => {
         };
       },
       {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
-      }
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
     );
 
     await waitFor(
       () => {
         expect(result.current.query.loading).toBe(false);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     await waitFor(
       () => {
         expect(result.current.query.called).toBe(false);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     await waitFor(
       () => {
         expect(result.current.query.data).toBeUndefined();
       },
-      { interval: 1 }
+      { interval: 1 },
     );
 
     const expectedFinalData = {
@@ -383,37 +348,37 @@ describe('useLazyQuery Hook', () => {
       () => {
         expect(execResult.loading).toBe(false);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     await waitFor(
       () => {
         expect(execResult.called).toBe(true);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     await waitFor(
       () => {
         expect(execResult.networkStatus).toBe(NetworkStatus.ready);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     await waitFor(
       () => {
         expect(execResult.data).toEqual(expectedFinalData);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     await waitFor(
       () => {
         expect(result.current.query.called).toBe(true);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     await waitFor(
       () => {
         expect(result.current.query.loading).toBe(false);
       },
-      { interval: 10 }
+      { interval: 10 },
     );
 
     expect(result.current.query.called).toBe(true);
@@ -438,13 +403,13 @@ describe('useLazyQuery Hook', () => {
       () => {
         expect(result.current.query.loading).toBe(false);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     await waitFor(
       () => {
         expect(result.current.query.called).toBe(true);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     await waitFor(
       () => {
@@ -455,7 +420,7 @@ describe('useLazyQuery Hook', () => {
           },
         });
       },
-      { interval: 1 }
+      { interval: 1 },
     );
 
     const execResult2 = await result.current.exec({
@@ -470,13 +435,13 @@ describe('useLazyQuery Hook', () => {
       () => {
         expect(execResult2.loading).toBe(false);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     await waitFor(
       () => {
         expect(execResult2.called).toBe(true);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     await waitFor(
       () => {
@@ -488,21 +453,21 @@ describe('useLazyQuery Hook', () => {
           },
         });
       },
-      { interval: 1 }
+      { interval: 1 },
     );
 
     await waitFor(
       () => {
         expect(result.current.query.called).toBe(true);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
 
     await waitFor(
       () => {
         expect(result.current.query.loading).toBe(false);
       },
-      { interval: 10 }
+      { interval: 10 },
     );
     expect(result.current.query.called).toBe(true);
     expect(result.current.query.data).toEqual({
@@ -514,7 +479,7 @@ describe('useLazyQuery Hook', () => {
     });
   });
 
-  it('changing queries', async() => {
+  it('changing queries', async () => {
     const query1 = gql`
       query {
         hello
@@ -581,7 +546,7 @@ describe('useLazyQuery Hook', () => {
     }
   });
 
-  it('should fetch data each time the execution function is called, when using a "network-only" fetch policy', async() => {
+  it('should fetch data each time the execution function is called, when using a "network-only" fetch policy', async () => {
     const mocks = [
       {
         request: { query: helloQuery },
@@ -598,13 +563,11 @@ describe('useLazyQuery Hook', () => {
     const ProfiledHook = profileHook(() =>
       useLazyQuery(helloQuery, {
         fetchPolicy: 'network-only',
-      })
+      }),
     );
 
     render(<ProfiledHook />, {
-      wrapper: ({ children }) => (
-        <MockedProvider mocks={mocks}>{children}</MockedProvider>
-      ),
+      wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
     });
 
     {
@@ -639,7 +602,7 @@ describe('useLazyQuery Hook', () => {
     }
   });
 
-  it('should persist previous data when a query is re-run', async() => {
+  it('should persist previous data when a query is re-run', async () => {
     const mocks = [
       {
         request: { query: helloQuery },
@@ -656,13 +619,11 @@ describe('useLazyQuery Hook', () => {
     const ProfiledHook = profileHook(() =>
       useLazyQuery(helloQuery, {
         notifyOnNetworkStatusChange: true,
-      })
+      }),
     );
 
     render(<ProfiledHook />, {
-      wrapper: ({ children }) => (
-        <MockedProvider mocks={mocks}>{children}</MockedProvider>
-      ),
+      wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
     });
 
     {
@@ -704,7 +665,7 @@ describe('useLazyQuery Hook', () => {
     }
   });
 
-  it('should allow for the query to start with polling', async() => {
+  it('should allow for the query to start with polling', async () => {
     const mocks = [
       {
         request: { query: helloQuery },
@@ -721,9 +682,7 @@ describe('useLazyQuery Hook', () => {
       },
     ];
 
-    const wrapper = ({ children }: any) => (
-      <MockedProvider mocks={mocks}>{children}</MockedProvider>
-    );
+    const wrapper = ({ children }: any) => <MockedProvider mocks={mocks}>{children}</MockedProvider>;
 
     const ProfiledHook = profileHook(() => useLazyQuery(helloQuery));
 
@@ -766,7 +725,7 @@ describe('useLazyQuery Hook', () => {
     expect(ProfiledHook).not.toRerender();
   });
 
-  it('should persist previous data when a query is re-run and variable changes', async() => {
+  it('should persist previous data when a query is re-run and variable changes', async () => {
     const CAR_QUERY_BY_ID = gql`
       query ($id: Int) {
         car(id: $id) {
@@ -807,9 +766,7 @@ describe('useLazyQuery Hook', () => {
 
     const ProfiledHook = profileHook(() => useLazyQuery(CAR_QUERY_BY_ID));
     render(<ProfiledHook />, {
-      wrapper: ({ children }) => (
-        <MockedProvider mocks={mocks}>{children}</MockedProvider>
-      ),
+      wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
     });
 
     {
@@ -850,7 +807,7 @@ describe('useLazyQuery Hook', () => {
     }
   });
 
-  it('should work with cache-and-network fetch policy', async() => {
+  it('should work with cache-and-network fetch policy', async () => {
     const cache = new Hermes();
     const link = mockSingleLink({
       request: { query: helloQuery },
@@ -865,14 +822,9 @@ describe('useLazyQuery Hook', () => {
 
     cache.writeQuery({ query: helloQuery, data: { hello: 'from cache' } });
 
-    const { result } = renderHook(
-      () => useLazyQuery(helloQuery, { fetchPolicy: 'cache-and-network' }),
-      {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
-      }
-    );
+    const { result } = renderHook(() => useLazyQuery(helloQuery, { fetchPolicy: 'cache-and-network' }), {
+      wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+    });
 
     expect(result.current[1].loading).toBe(false);
     expect(result.current[1].data).toBe(undefined);
@@ -883,7 +835,7 @@ describe('useLazyQuery Hook', () => {
       () => {
         expect(result.current[1].loading).toBe(true);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
 
     // TODO: FIXME
@@ -893,12 +845,12 @@ describe('useLazyQuery Hook', () => {
       () => {
         expect(result.current[1].loading).toBe(false);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     expect(result.current[1].data).toEqual({ hello: 'from link' });
   });
 
-  it('should return a promise from the execution function which resolves with the result', async() => {
+  it('should return a promise from the execution function which resolves with the result', async () => {
     const mocks = [
       {
         request: { query: helloQuery },
@@ -907,16 +859,14 @@ describe('useLazyQuery Hook', () => {
       },
     ];
     const { result } = renderHook(() => useLazyQuery(helloQuery), {
-      wrapper: ({ children }) => (
-        <MockedProvider mocks={mocks}>{children}</MockedProvider>
-      ),
+      wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
     });
 
     expect(result.current[1].loading).toBe(false);
     expect(result.current[1].data).toBe(undefined);
     const execute = result.current[0];
 
-    const executeResult = new Promise<QueryResult<any, any>>((resolve) => {
+    const executeResult = new Promise<QueryResult<any, any>>(resolve => {
       setTimeout(() => resolve(execute()));
     });
 
@@ -924,7 +874,7 @@ describe('useLazyQuery Hook', () => {
       () => {
         expect(result.current[1].loading).toBe(true);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
 
     let latestRenderResult: QueryResult;
@@ -937,12 +887,12 @@ describe('useLazyQuery Hook', () => {
       expect(latestRenderResult.data).toEqual({ hello: 'world' });
     });
 
-    return executeResult.then((finalResult) => {
+    return executeResult.then(finalResult => {
       expect(finalResult).toEqual(latestRenderResult);
     });
   });
 
-  it('should have matching results from execution function and hook', async() => {
+  it('should have matching results from execution function and hook', async () => {
     const query = gql`
       query GetCountries($filter: String) {
         countries(filter: $filter) {
@@ -990,9 +940,7 @@ describe('useLazyQuery Hook', () => {
     ];
 
     const { result } = renderHook(() => useLazyQuery(query), {
-      wrapper: ({ children }) => (
-        <MockedProvider mocks={mocks}>{children}</MockedProvider>
-      ),
+      wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
     });
 
     expect(result.current[1].loading).toBe(false);
@@ -1007,14 +955,14 @@ describe('useLazyQuery Hook', () => {
       () => {
         expect(result.current[1].loading).toBe(true);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
 
     await waitFor(
       () => {
         expect(result.current[1].loading).toBe(false);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     expect(result.current[1].data).toEqual({
       countries: {
@@ -1039,7 +987,7 @@ describe('useLazyQuery Hook', () => {
       () => {
         expect(result.current[1].loading).toBe(false);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     await waitFor(
       () => {
@@ -1050,7 +998,7 @@ describe('useLazyQuery Hook', () => {
           },
         });
       },
-      { interval: 1 }
+      { interval: 1 },
     );
 
     expect(executeResult).toBeInstanceOf(Promise);
@@ -1062,7 +1010,7 @@ describe('useLazyQuery Hook', () => {
     });
   });
 
-  it('the promise should reject with errors the “way useMutation does”', async() => {
+  it('the promise should reject with errors the “way useMutation does”', async () => {
     const mocks = [
       {
         request: { query: helloQuery },
@@ -1083,9 +1031,7 @@ describe('useLazyQuery Hook', () => {
     const ProfiledHook = profileHook(() => useLazyQuery(helloQuery));
 
     render(<ProfiledHook />, {
-      wrapper: ({ children }) => (
-        <MockedProvider mocks={mocks}>{children}</MockedProvider>
-      ),
+      wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
     });
 
     const [execute] = await ProfiledHook.peekSnapshot();
@@ -1112,7 +1058,7 @@ describe('useLazyQuery Hook', () => {
       expect(result.error).toEqual(new Error('error 1'));
     }
 
-    await executePromise.then((result) => {
+    await executePromise.then(result => {
       expect(result.loading).toBe(false);
       expect(result.data).toBeUndefined();
       expect(result.error!.message).toBe('error 1');
@@ -1135,7 +1081,7 @@ describe('useLazyQuery Hook', () => {
     }
   });
 
-  it('the promise should not cause an unhandled rejection', async() => {
+  it('the promise should not cause an unhandled rejection', async () => {
     const mocks = [
       {
         request: { query: helloQuery },
@@ -1146,9 +1092,7 @@ describe('useLazyQuery Hook', () => {
     ];
 
     const { result } = renderHook(() => useLazyQuery(helloQuery), {
-      wrapper: ({ children }) => (
-        <MockedProvider mocks={mocks}>{children}</MockedProvider>
-      ),
+      wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
     });
 
     const execute = result.current[0];
@@ -1157,28 +1101,26 @@ describe('useLazyQuery Hook', () => {
         expect(result.current[1].loading).toBe(false);
         execute();
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     await waitFor(
       () => {
         expect(result.current[1].data).toBe(undefined);
         execute();
       },
-      { interval: 1 }
+      { interval: 1 },
     );
 
     // Making sure the rejection triggers a test failure.
     await wait(50);
   });
 
-  it('allows in-flight requests to resolve when component unmounts', async() => {
+  it('allows in-flight requests to resolve when component unmounts', async () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({ link, cache: new Hermes() });
 
     const { result, unmount } = renderHook(() => useLazyQuery(helloQuery), {
-      wrapper: ({ children }) => (
-        <ApolloProvider client={client}>{children}</ApolloProvider>
-      ),
+      wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
     });
 
     const [execute] = result.current;
@@ -1199,14 +1141,12 @@ describe('useLazyQuery Hook', () => {
     expect(queryResult.networkStatus).toBe(NetworkStatus.ready);
   });
 
-  it('handles resolving multiple in-flight requests when component unmounts', async() => {
+  it('handles resolving multiple in-flight requests when component unmounts', async () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({ link, cache: new Hermes() });
 
     const { result, unmount } = renderHook(() => useLazyQuery(helloQuery), {
-      wrapper: ({ children }) => (
-        <ApolloProvider client={client}>{children}</ApolloProvider>
-      ),
+      wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
     });
 
     const [execute] = result.current;
@@ -1233,9 +1173,9 @@ describe('useLazyQuery Hook', () => {
   });
 
   // https://github.com/apollographql/apollo-client/issues/9755
-  it('resolves each execution of the query with the appropriate result and renders with the result from the latest execution', async() => {
+  it('resolves each execution of the query with the appropriate result and renders with the result from the latest execution', async () => {
     interface Data {
-      user: { id: string, name: string };
+      user: { id: string; name: string };
     }
 
     interface Variables {
@@ -1265,14 +1205,12 @@ describe('useLazyQuery Hook', () => {
     ];
 
     const { result } = renderHook(() => useLazyQuery(query), {
-      wrapper: ({ children }) => (
-        <MockedProvider mocks={mocks}>{children}</MockedProvider>
-      ),
+      wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
     });
 
     const [execute] = result.current;
 
-    await act(async() => {
+    await act(async () => {
       const promise1 = execute({ variables: { id: '1' } });
       const promise2 = execute({ variables: { id: '2' } });
 
@@ -1296,9 +1234,9 @@ describe('useLazyQuery Hook', () => {
     });
   });
 
-  it('uses the most recent options when the hook rerenders before execution', async() => {
+  it('uses the most recent options when the hook rerenders before execution', async () => {
     interface Data {
-      user: { id: string, name: string };
+      user: { id: string; name: string };
     }
 
     interface Variables {
@@ -1327,15 +1265,10 @@ describe('useLazyQuery Hook', () => {
       },
     ];
 
-    const { result, rerender } = renderHook(
-      ({ id }) => useLazyQuery(query, { variables: { id } }),
-      {
-        initialProps: { id: '1' },
-        wrapper: ({ children }) => (
-          <MockedProvider mocks={mocks}>{children}</MockedProvider>
-        ),
-      }
-    );
+    const { result, rerender } = renderHook(({ id }) => useLazyQuery(query, { variables: { id } }), {
+      initialProps: { id: '1' },
+      wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+    });
 
     rerender({ id: '2' });
 
@@ -1356,7 +1289,7 @@ describe('useLazyQuery Hook', () => {
   });
 
   // https://github.com/apollographql/apollo-client/issues/10198
-  it('uses the most recent query document when the hook rerenders before execution', async() => {
+  it('uses the most recent query document when the hook rerenders before execution', async () => {
     const query = gql`
       query DummyQuery {
         shouldNotBeUsed
@@ -1371,15 +1304,10 @@ describe('useLazyQuery Hook', () => {
       },
     ];
 
-    const { result, rerender } = renderHook(
-      ({ query }) => useLazyQuery(query),
-      {
-        initialProps: { query },
-        wrapper: ({ children }) => (
-          <MockedProvider mocks={mocks}>{children}</MockedProvider>
-        ),
-      }
-    );
+    const { result, rerender } = renderHook(({ query }) => useLazyQuery(query), {
+      initialProps: { query },
+      wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+    });
 
     rerender({ query: helloQuery });
 
@@ -1399,9 +1327,9 @@ describe('useLazyQuery Hook', () => {
     });
   });
 
-  it('does not refetch when rerendering after executing query', async() => {
+  it('does not refetch when rerendering after executing query', async () => {
     interface Data {
-      user: { id: string, name: string };
+      user: { id: string; name: string };
     }
 
     interface Variables {
@@ -1419,9 +1347,9 @@ describe('useLazyQuery Hook', () => {
 
     let fetchCount = 0;
 
-    const link = new ApolloLink((operation) => {
+    const link = new ApolloLink(operation => {
       fetchCount++;
-      return new Observable((observer) => {
+      return new Observable(observer => {
         setTimeout(() => {
           observer.next({
             data: { user: { id: operation.variables.id, name: 'John Doe' } },
@@ -1433,15 +1361,10 @@ describe('useLazyQuery Hook', () => {
 
     const client = new ApolloClient({ link, cache: new Hermes() });
 
-    const { result, rerender } = renderHook(
-      () => useLazyQuery(query, { variables: { id: '1' } }),
-      {
-        initialProps: { id: '1' },
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
-      }
-    );
+    const { result, rerender } = renderHook(() => useLazyQuery(query, { variables: { id: '1' } }), {
+      initialProps: { id: '1' },
+      wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+    });
 
     const [execute] = result.current;
 
@@ -1459,9 +1382,9 @@ describe('useLazyQuery Hook', () => {
   // https://github.com/apollographql/apollo-client/issues/9448
   it.each(['network-only', 'no-cache', 'cache-and-network'] as const)(
     'does not issue multiple network calls when calling execute again without variables with a %s fetch policy',
-    async(fetchPolicy) => {
+    async fetchPolicy => {
       interface Data {
-        user: { id: string, name: string };
+        user: { id: string; name: string };
       }
 
       interface Variables {
@@ -1479,18 +1402,15 @@ describe('useLazyQuery Hook', () => {
 
       let fetchCount = 0;
 
-      const link = new ApolloLink((operation) => {
+      const link = new ApolloLink(operation => {
         fetchCount++;
-        return new Observable((observer) => {
+        return new Observable(observer => {
           const { id } = operation.variables;
 
           setTimeout(() => {
             observer.next({
               data: {
-                user:
-                  id
-                    ? { id, name: 'John Doe' }
-                    : { id: null, name: 'John Default' },
+                user: id ? { id, name: 'John Doe' } : { id: null, name: 'John Default' },
               },
             });
             observer.complete();
@@ -1503,14 +1423,9 @@ describe('useLazyQuery Hook', () => {
         cache: new Hermes(),
       });
 
-      const { result } = renderHook(
-        () => useLazyQuery(query, { fetchPolicy }),
-        {
-          wrapper: ({ children }) => (
-            <ApolloProvider client={client}>{children}</ApolloProvider>
-          ),
-        }
-      );
+      const { result } = renderHook(() => useLazyQuery(query, { fetchPolicy }), {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      });
 
       await act(() => result.current[0]({ variables: { id: '2' } }));
 
@@ -1533,12 +1448,12 @@ describe('useLazyQuery Hook', () => {
       });
 
       expect(fetchCount).toBe(2);
-    }
+    },
   );
 
-  it('maintains stable execute function when passing in dynamic function options', async() => {
+  it('maintains stable execute function when passing in dynamic function options', async () => {
     interface Data {
-      user: { id: string, name: string };
+      user: { id: string; name: string };
     }
 
     interface Variables {
@@ -1596,17 +1511,15 @@ describe('useLazyQuery Hook', () => {
             trackClosureValue('skipPollAttempt', count);
             return false;
           },
-          nextFetchPolicy: (currentFetchPolicy) => {
+          nextFetchPolicy: currentFetchPolicy => {
             trackClosureValue('nextFetchPolicy', count);
             return currentFetchPolicy;
           },
         });
       },
       {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
-      }
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
     );
 
     const [originalExecute] = result.current;
@@ -1637,9 +1550,7 @@ describe('useLazyQuery Hook', () => {
     // Check for stale closures with onError
     await act(() => result.current[0]({ variables: { id: '2' } }));
     await waitFor(() => {
-      expect(result.current[1].error).toEqual(
-        new ApolloError({ graphQLErrors: [new GraphQLError('Oops')] })
-      );
+      expect(result.current[1].error).toEqual(new ApolloError({ graphQLErrors: [new GraphQLError('Oops')] }));
     });
 
     // variables changed
@@ -1676,9 +1587,9 @@ describe('useLazyQuery Hook', () => {
     expect(trackClosureValue).toHaveBeenCalledWith('skipPollAttempt', 3);
   });
 
-  it('maintains stable execute function identity when changing non-callback options', async() => {
+  it('maintains stable execute function identity when changing non-callback options', async () => {
     interface Data {
-      user: { id: string, name: string };
+      user: { id: string; name: string };
     }
 
     interface Variables {
@@ -1694,8 +1605,8 @@ describe('useLazyQuery Hook', () => {
       }
     `;
 
-    const link = new ApolloLink((operation) => {
-      return new Observable((observer) => {
+    const link = new ApolloLink(operation => {
+      return new Observable(observer => {
         setTimeout(() => {
           observer.next({
             data: { user: { id: operation.variables.id, name: 'John Doe' } },
@@ -1707,15 +1618,10 @@ describe('useLazyQuery Hook', () => {
 
     const client = new ApolloClient({ link, cache: new Hermes() });
 
-    const { result, rerender } = renderHook(
-      ({ id }) => useLazyQuery(query, { variables: { id } }),
-      {
-        initialProps: { id: '1' },
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
-      }
-    );
+    const { result, rerender } = renderHook(({ id }) => useLazyQuery(query, { variables: { id } }), {
+      initialProps: { id: '1' },
+      wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+    });
 
     const [execute] = result.current;
 
@@ -1732,23 +1638,21 @@ describe('useLazyQuery Hook', () => {
         cache: new Hermes(),
         link: new ApolloLink(
           request =>
-            new Observable((observer) => {
+            new Observable(observer => {
               setTimeout(() => {
                 observer.error(networkError);
               }, 20);
-            })
+            }),
         ),
       });
 
       const ProfiledHook = profileHook(() =>
         useLazyQuery(helloQuery, {
           errorPolicy,
-        })
+        }),
       );
       render(<ProfiledHook />, {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
       });
 
       {
@@ -1791,9 +1695,9 @@ describe('useLazyQuery Hook', () => {
   });
 
   describe('options.defaultOptions', () => {
-    it('defaultOptions do not confuse useLazyQuery', async() => {
+    it('defaultOptions do not confuse useLazyQuery', async () => {
       const counterQuery: TypedDocumentNode<{
-        counter: number,
+        counter: number;
       }> = gql`
         query GetCounter {
           counter
@@ -1805,7 +1709,7 @@ describe('useLazyQuery Hook', () => {
         cache: new Hermes(),
         link: new ApolloLink(
           request =>
-            new Observable((observer) => {
+            new Observable(observer => {
               if (request.operationName === 'GetCounter') {
                 observer.next({
                   data: {
@@ -1816,13 +1720,9 @@ describe('useLazyQuery Hook', () => {
                   observer.complete();
                 }, 10);
               } else {
-                observer.error(
-                  new Error(
-                    `Unknown query: ${request.operationName || request.query}`
-                  )
-                );
+                observer.error(new Error(`Unknown query: ${request.operationName || request.query}`));
               }
-            })
+            }),
         ),
       });
 
@@ -1842,29 +1742,27 @@ describe('useLazyQuery Hook', () => {
           };
         },
         {
-          wrapper: ({ children }) => (
-            <ApolloProvider client={client}>{children}</ApolloProvider>
-          ),
-        }
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        },
       );
 
       await waitFor(
         () => {
           expect(result.current.query.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           expect(result.current.query.called).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           expect(result.current.query.data).toBeUndefined();
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       const execResult = await result.current.exec();
@@ -1876,38 +1774,38 @@ describe('useLazyQuery Hook', () => {
         () => {
           expect(result.current.query.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           expect(result.current.query.data).toMatchObject({ counter: 1 });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           expect(result.current.query.called).toBe(true);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       await waitFor(
         () => {
           expect(result.current.query.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           expect(result.current.query.called).toBe(true);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           expect(result.current.query.data).toEqual({ counter: 1 });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       const { options } = result.current.query.observable;

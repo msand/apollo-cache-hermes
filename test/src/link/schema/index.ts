@@ -4,9 +4,7 @@ import { ApolloLink, Observable, Operation, FetchResult } from '@apollo/client';
 
 export namespace SchemaLink {
   export type ResolverContext = Record<string, any>;
-  export type ResolverContextFunction = (
-    operation: Operation
-  ) => ResolverContext | PromiseLike<ResolverContext>;
+  export type ResolverContextFunction = (operation: Operation) => ResolverContext | PromiseLike<ResolverContext>;
 
   export interface Options {
     /**
@@ -47,15 +45,11 @@ export class SchemaLink extends ApolloLink {
   }
 
   public request(operation: Operation): Observable<FetchResult> {
-    return new Observable<FetchResult>((observer) => {
+    return new Observable<FetchResult>(observer => {
       new Promise<SchemaLink.ResolverContext>(resolve =>
-        resolve(
-          typeof this.context === 'function'
-            ? this.context(operation)
-            : this.context
-        )
+        resolve(typeof this.context === 'function' ? this.context(operation) : this.context),
       )
-        .then((context) => {
+        .then(context => {
           if (this.validate) {
             const validationErrors = validate(this.schema, operation.query);
             if (validationErrors.length > 0) {
@@ -72,13 +66,13 @@ export class SchemaLink extends ApolloLink {
             operationName: operation.operationName,
           });
         })
-        .then((data) => {
+        .then(data => {
           if (!observer.closed) {
             observer.next(data);
             observer.complete();
           }
         })
-        .catch((error) => {
+        .catch(error => {
           if (!observer.closed) {
             observer.error(error);
           }

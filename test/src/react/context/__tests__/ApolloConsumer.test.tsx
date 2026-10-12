@@ -17,7 +17,7 @@ describe('<ApolloConsumer /> component', () => {
     render(
       <ApolloProvider client={client}>
         <ApolloConsumer>
-          {(clientRender) => {
+          {clientRender => {
             try {
               expect(clientRender).toBe(client);
               resolve();
@@ -27,7 +27,7 @@ describe('<ApolloConsumer /> component', () => {
             return null;
           }}
         </ApolloConsumer>
-      </ApolloProvider>
+      </ApolloProvider>,
     );
   });
 
@@ -35,7 +35,7 @@ describe('<ApolloConsumer /> component', () => {
     render(
       <ApolloProvider client={client}>
         <ApolloConsumer>{() => <div>Test</div>}</ApolloConsumer>
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     expect(screen.getByText('Test')).toBeTruthy();
@@ -53,10 +53,10 @@ describe('<ApolloConsumer /> component', () => {
       render(
         <ApolloContext.Provider value={{}}>
           <ApolloConsumer>{() => null}</ApolloConsumer>
-        </ApolloContext.Provider>
+        </ApolloContext.Provider>,
       );
     }).toThrow(
-      'Could not find "client" in the context of ApolloConsumer. Wrap the root component in an <ApolloProvider>'
+      'Could not find "client" in the context of ApolloConsumer. Wrap the root component in an <ApolloProvider>',
     );
 
     console.error = errorLogger;

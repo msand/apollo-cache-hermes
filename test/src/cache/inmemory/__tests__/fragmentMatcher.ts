@@ -234,7 +234,7 @@ describe('policies.fragmentMatches', () => {
 
   beforeEach(() => {
     warnings.length = 0;
-    console.warn = function(...args: any) {
+    console.warn = function (...args: any) {
       warnings.push(args);
     };
   });
@@ -280,11 +280,7 @@ describe('policies.fragmentMatches', () => {
         FragmentDefinition(frag) {
           function check(typename: string, result: boolean) {
             if (result !== cache.policies.fragmentMatches(frag, typename)) {
-              reject(
-                `fragment ${frag.name.value} should${
-                  result ? '' : ' not'
-                } have matched typename ${typename}`
-              );
+              reject(`fragment ${frag.name.value} should${result ? '' : ' not'} have matched typename ${typename}`);
             }
           }
 
@@ -292,7 +288,7 @@ describe('policies.fragmentMatches', () => {
           expect('ABCDEF'.split('')).toContain(supertype);
 
           if (hasOwn.call(expected, supertype)) {
-            Object.keys(expected[supertype]).forEach((subtype) => {
+            Object.keys(expected[supertype]).forEach(subtype => {
               check(subtype, expected[supertype][subtype]);
             });
 
@@ -369,7 +365,7 @@ describe('policies.fragmentMatches', () => {
           F: false,
           G: true,
         },
-      }).size
+      }).size,
     ).toBe('ABCDEF'.length);
 
     cache.writeQuery({
@@ -476,7 +472,7 @@ describe('policies.fragmentMatches', () => {
           G: true,
           H: false,
         },
-      }).size
+      }).size,
     ).toBe('ABCDEF'.length);
 
     expect(cache.extract()).toMatchSnapshot();
@@ -576,7 +572,7 @@ describe('policies.fragmentMatches', () => {
           TooLong: false,
           H: true,
         },
-      }).size
+      }).size,
     ).toBe('ABCDEF'.length);
 
     resolve();

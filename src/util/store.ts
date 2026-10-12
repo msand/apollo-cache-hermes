@@ -14,17 +14,14 @@ function defaultValueFromVariable(_node: VariableNode) {
 /**
  * Evaluate a ValueNode and yield its value in its natural JS form.
  */
-export function valueFromNode(
-  node: ValueNode,
-  onVariable: VariableValue = defaultValueFromVariable,
-): any {
+export function valueFromNode(node: ValueNode, onVariable: VariableValue = defaultValueFromVariable): any {
   switch (node.kind) {
     case Kind.VARIABLE:
       return onVariable(node);
     case Kind.NULL:
       return null;
     case Kind.INT:
-      return parseInt(node.value);
+      return parseInt(node.value, 10);
     case Kind.FLOAT:
       return parseFloat(node.value);
     case Kind.LIST:
@@ -42,6 +39,7 @@ export function valueFromNode(
       return node.value;
     case Kind.ENUM:
       return node.value;
-    default: throw new Error(`Unknown node: ${JSON.stringify(node)}`);
+    default:
+      throw new Error(`Unknown node: ${JSON.stringify(node)}`);
   }
 }

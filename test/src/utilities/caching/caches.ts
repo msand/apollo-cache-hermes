@@ -30,9 +30,9 @@ function schedule(cache: CleanableCache) {
  * with the notable exception of usage in `wrap` from `optimism` - that one
  * already handles cleanup and should remain a `WeakCache`.
  */
-export const AutoCleanedWeakCache = function(
+export const AutoCleanedWeakCache = function (
   max?: number | undefined,
-  dispose?: ((value: any, key: any) => void) | undefined
+  dispose?: ((value: any, key: any) => void) | undefined,
 ) {
   /*
   Some builds of `WeakCache` are function prototypes, some are classes.
@@ -42,7 +42,7 @@ export const AutoCleanedWeakCache = function(
   target.
   */
   const cache = new WeakCache(max, dispose);
-  cache.set = function(key: any, value: any) {
+  cache.set = function (key: any, value: any) {
     const ret = WeakCache.prototype.set.call(this, key, value);
     schedule(this as any as CleanableCache);
     return ret;
@@ -65,9 +65,9 @@ export type AutoCleanedWeakCache<K extends object, V> = WeakCache<K, V>;
  * with the notable exception of usage in `wrap` from `optimism` - that one
  * already handles cleanup and should remain a `StrongCache`.
  */
-export const AutoCleanedStrongCache = function(
+export const AutoCleanedStrongCache = function (
   max?: number | undefined,
-  dispose?: ((value: any, key: any) => void) | undefined
+  dispose?: ((value: any, key: any) => void) | undefined,
 ) {
   /*
   Some builds of `StrongCache` are function prototypes, some are classes.
@@ -77,7 +77,7 @@ export const AutoCleanedStrongCache = function(
   target.
   */
   const cache = new StrongCache(max, dispose);
-  cache.set = function(key: any, value: any) {
+  cache.set = function (key: any, value: any) {
     const ret = StrongCache.prototype.set.call(this, key, value);
     schedule(this as any as CleanableCache);
     return ret;

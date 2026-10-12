@@ -11,7 +11,7 @@ import { itAsync, mockSingleLink } from '../../../../testing';
 
 describe('[queries] observableQuery', () => {
   // observableQuery
-  it('will recycle `ObservableQuery`s when re-rendering the entire tree', async() => {
+  it('will recycle `ObservableQuery`s when re-rendering the entire tree', async () => {
     const query: DocumentNode = gql`
       query people {
         allPeople(first: 1) {
@@ -24,10 +24,7 @@ describe('[queries] observableQuery', () => {
     const data = { allPeople: { people: [{ name: 'Luke Skywalker' }] } };
     type Data = typeof data;
 
-    const link = mockSingleLink(
-      { request: { query }, result: { data } },
-      { request: { query }, result: { data } }
-    );
+    const link = mockSingleLink({ request: { query }, result: { data } }, { request: { query }, result: { data } });
     const client = new ApolloClient({
       link,
       cache: new Hermes({ addTypename: false }),
@@ -35,17 +32,13 @@ describe('[queries] observableQuery', () => {
 
     let count = 0;
 
-    const assert1 = async() => {
-      const keys = Array.from(
-        ((client as any).queryManager as any).queries.keys()
-      );
+    const assert1 = async () => {
+      const keys = Array.from(((client as any).queryManager as any).queries.keys());
       await waitFor(() => expect(keys).toEqual(['1']), { interval: 1 });
     };
 
-    const assert2 = async() => {
-      const keys = Array.from(
-        ((client as any).queryManager as any).queries.keys()
-      );
+    const assert2 = async () => {
+      const keys = Array.from(((client as any).queryManager as any).queries.keys());
       await waitFor(() => expect(keys).toEqual(['1']), { interval: 1 });
     };
 
@@ -88,7 +81,7 @@ describe('[queries] observableQuery', () => {
           count++;
           return null;
         }
-      }
+      },
     );
 
     class RedirectOnMount extends React.Component<{ onMount: () => void }> {
@@ -133,7 +126,7 @@ describe('[queries] observableQuery', () => {
     render(
       <ApolloProvider client={client}>
         <AppWrapper />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     await waitFor(() => {
@@ -142,7 +135,7 @@ describe('[queries] observableQuery', () => {
   });
 
   itAsync(
-    'will recycle `ObservableQuery`s when re-rendering a portion of the tree but not return stale data if variables don\'t match',
+    "will recycle `ObservableQuery`s when re-rendering a portion of the tree but not return stale data if variables don't match",
     (resolve, reject) => {
       const query: DocumentNode = gql`
         query people($first: Int!) {
@@ -174,7 +167,7 @@ describe('[queries] observableQuery', () => {
 
       const link = mockSingleLink(
         { request: { query, variables: variables1 }, result: { data } },
-        { request: { query, variables: variables2 }, result: { data: data2 } }
+        { request: { query, variables: variables2 }, result: { data: data2 } },
       );
       const client = new ApolloClient({
         link,
@@ -206,12 +199,12 @@ describe('[queries] observableQuery', () => {
 
             return null;
           }
-        }
+        },
       );
 
       class Remounter extends React.Component<
         { render: typeof Container },
-        { showChildren: boolean, variables: Vars }
+        { showChildren: boolean; variables: Vars }
       > {
         state = {
           showChildren: true,
@@ -243,7 +236,7 @@ describe('[queries] observableQuery', () => {
       render(
         <ApolloProvider client={client}>
           <Remounter render={Container} />
-        </ApolloProvider>
+        </ApolloProvider>,
       );
 
       // after the initial data has been returned
@@ -262,10 +255,10 @@ describe('[queries] observableQuery', () => {
       }, 5);
 
       return waitFor(() => expect(done).toBeTruthy()).then(resolve, reject);
-    }
+    },
   );
 
-  it('not overly rerender', async() => {
+  it('not overly rerender', async () => {
     const query: DocumentNode = gql`
       query people($first: Int!) {
         allPeople(first: $first) {
@@ -322,13 +315,10 @@ describe('[queries] observableQuery', () => {
 
           return null;
         }
-      }
+      },
     );
 
-    class Remounter extends React.Component<
-      { render: typeof Container },
-      { showChildren: boolean, variables: Vars }
-    > {
+    class Remounter extends React.Component<{ render: typeof Container }, { showChildren: boolean; variables: Vars }> {
       state = {
         showChildren: true,
         variables,
@@ -356,7 +346,7 @@ describe('[queries] observableQuery', () => {
     render(
       <ApolloProvider client={client}>
         <Remounter render={Container} />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     // after the initial data has been returned
@@ -378,96 +368,91 @@ describe('[queries] observableQuery', () => {
     });
   });
 
-  itAsync(
-    'does rerender if query returns differnt result',
-    (resolve, reject) => {
-      const query: DocumentNode = gql`
-        query people($first: Int!) {
-          allPeople(first: $first) {
-            people {
+  itAsync('does rerender if query returns differnt result', (resolve, reject) => {
+    const query: DocumentNode = gql`
+      query people($first: Int!) {
+        allPeople(first: $first) {
+          people {
+            name
+            friends(id: $first) {
               name
-              friends(id: $first) {
-                name
-              }
             }
           }
         }
-      `;
+      }
+    `;
 
-      const variables = { first: 1 };
-      const dataOne = {
-        allPeople: {
-          people: [{ name: 'Luke Skywalker', friends: [{ name: 'r2d2' }] }],
-        },
-      };
-      const dataTwo = {
-        allPeople: {
-          people: [
-            { name: 'Luke Skywalker', friends: [{ name: 'Leia Skywalker' }] },
-          ],
-        },
-      };
+    const variables = { first: 1 };
+    const dataOne = {
+      allPeople: {
+        people: [{ name: 'Luke Skywalker', friends: [{ name: 'r2d2' }] }],
+      },
+    };
+    const dataTwo = {
+      allPeople: {
+        people: [{ name: 'Luke Skywalker', friends: [{ name: 'Leia Skywalker' }] }],
+      },
+    };
 
-      type Data = typeof dataOne;
-      type Vars = typeof variables;
+    type Data = typeof dataOne;
+    type Vars = typeof variables;
 
-      const link = mockSingleLink(
-        {
-          request: { query, variables },
-          result: { data: dataOne },
-        },
-        {
-          request: { query, variables },
-          result: { data: dataTwo },
-        }
-      );
+    const link = mockSingleLink(
+      {
+        request: { query, variables },
+        result: { data: dataOne },
+      },
+      {
+        request: { query, variables },
+        result: { data: dataTwo },
+      },
+    );
 
-      const client = new ApolloClient({
-        link,
-        cache: new Hermes({ addTypename: false }),
-      });
+    const client = new ApolloClient({
+      link,
+      cache: new Hermes({ addTypename: false }),
+    });
 
-      let count = 0;
-      const Container = graphql<Vars, Data, Vars>(query)(
-        class extends React.Component<ChildProps<Vars, Data, Vars>> {
-          render() {
-            count++;
-            try {
-              const { loading, allPeople, refetch } = this.props.data!;
-              // first variable render
-              if (count === 1) {
-                expect(loading).toBe(true);
-              }
-              if (count === 2) {
-                expect(loading).toBe(false);
-                expect(allPeople).toEqual(dataOne.allPeople);
-                refetch();
-              }
-              if (count === 3) {
-                expect(loading).toBe(false);
-                expect(allPeople).toEqual(dataTwo.allPeople);
-              }
-              if (count > 3) {
-                throw new Error('too many renders');
-              }
-            } catch (e) {
-              reject(e);
+    let count = 0;
+    const Container = graphql<Vars, Data, Vars>(query)(
+      class extends React.Component<ChildProps<Vars, Data, Vars>> {
+        render() {
+          count++;
+          try {
+            const { loading, allPeople, refetch } = this.props.data!;
+            // first variable render
+            if (count === 1) {
+              expect(loading).toBe(true);
             }
-
-            return null;
+            if (count === 2) {
+              expect(loading).toBe(false);
+              expect(allPeople).toEqual(dataOne.allPeople);
+              refetch();
+            }
+            if (count === 3) {
+              expect(loading).toBe(false);
+              expect(allPeople).toEqual(dataTwo.allPeople);
+            }
+            if (count > 3) {
+              throw new Error('too many renders');
+            }
+          } catch (e) {
+            reject(e);
           }
+
+          return null;
         }
-      );
+      },
+    );
 
-      // the initial mount fires off the query
-      // the same as episode id = 1
-      render(
-        <ApolloProvider client={client}>
-          <Container first={1} />
-        </ApolloProvider>
-      );
+    // the initial mount fires off the query
+    // the same as episode id = 1
+    render(
+      <ApolloProvider client={client}>
+        <Container first={1} />
+      </ApolloProvider>,
+    );
 
-      return waitFor(() => expect(count).toBe(3)).then(resolve, reject);
-    }
-  );
+    return waitFor(() => expect(count).toBe(3)).then(resolve, reject);
+  });
 });

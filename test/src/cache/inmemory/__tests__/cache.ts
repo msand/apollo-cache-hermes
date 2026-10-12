@@ -3,14 +3,7 @@ import { expectTypeOf } from 'expect-type';
 import { InMemoryCache, TypePolicies } from '@apollo/client';
 
 import { cloneDeep } from '../../../utilities';
-import {
-  makeReference,
-  Reference,
-  makeVar,
-  TypedDocumentNode,
-  isReference,
-  DocumentNode,
-} from '../../../core';
+import { makeReference, Reference, makeVar, TypedDocumentNode, isReference, DocumentNode } from '../../../core';
 import { Cache } from '../..';
 import { StoreReader } from '../readFromStore';
 import { StoreWriter } from '../writeToStore';
@@ -25,32 +18,27 @@ describe('Cache', () => {
   function itWithInitialData(
     message: string,
     initialDataForCaches: { [key: string]: any }[],
-    callback: (...caches: Hermes[]) => any
+    callback: (...caches: Hermes[]) => any,
   ) {
     const cachesList: Hermes[][] = [
       initialDataForCaches.map(data =>
         new Hermes({
           addTypename: false,
-        }).restore(cloneDeep(data))
+        }).restore(cloneDeep(data)),
       ),
       initialDataForCaches.map(data =>
         new Hermes({
           addTypename: false,
-        }).restore(cloneDeep(data))
+        }).restore(cloneDeep(data)),
       ),
     ];
 
     cachesList.forEach((caches, i) => {
-      it(`${message} (${i + 1}/${cachesList.length})`, () =>
-        callback(...caches));
+      it(`${message} (${i + 1}/${cachesList.length})`, () => callback(...caches));
     });
   }
 
-  function itWithCacheConfig(
-    message: string,
-    config: CacheContext.Configuration,
-    callback: (cache: Hermes) => any
-  ) {
+  function itWithCacheConfig(message: string, config: CacheContext.Configuration, callback: (cache: Hermes) => any) {
     const caches = [
       new Hermes({
         addTypename: false,
@@ -79,7 +67,7 @@ describe('Cache', () => {
           },
         },
       ],
-      (proxy) => {
+      proxy => {
         expect(
           proxy.readQuery({
             query: gql`
@@ -87,7 +75,7 @@ describe('Cache', () => {
                 a
               }
             `,
-          })
+          }),
         ).toEqual({ a: 1 });
         expect(
           proxy.readQuery({
@@ -97,7 +85,7 @@ describe('Cache', () => {
                 c
               }
             `,
-          })
+          }),
         ).toEqual({ b: 2, c: 3 });
         expect(
           proxy.readQuery({
@@ -108,9 +96,9 @@ describe('Cache', () => {
                 c
               }
             `,
-          })
+          }),
         ).toEqual({ a: 1, b: 2, c: 3 });
-      }
+      },
     );
 
     itWithInitialData(
@@ -136,7 +124,7 @@ describe('Cache', () => {
           },
         },
       ],
-      (proxy) => {
+      proxy => {
         expect(
           proxy.readQuery({
             query: gql`
@@ -147,7 +135,7 @@ describe('Cache', () => {
                 }
               }
             `,
-          })
+          }),
         ).toEqual({ a: 1, d: { e: 4 } });
         expect(
           proxy.readQuery({
@@ -162,7 +150,7 @@ describe('Cache', () => {
                 }
               }
             `,
-          })
+          }),
         ).toEqual({ a: 1, d: { e: 4, h: { i: 7 } } });
         expect(
           proxy.readQuery({
@@ -183,14 +171,14 @@ describe('Cache', () => {
                 }
               }
             `,
-          })
+          }),
         ).toEqual({
           a: 1,
           b: 2,
           c: 3,
           d: { e: 4, f: 5, g: 6, h: { i: 7, j: 8, k: 9 } },
         });
-      }
+      },
     );
 
     itWithInitialData(
@@ -203,7 +191,7 @@ describe('Cache', () => {
           },
         },
       ],
-      (proxy) => {
+      proxy => {
         expect(
           proxy.readQuery({
             query: gql`
@@ -216,9 +204,9 @@ describe('Cache', () => {
               literal: false,
               value: 42,
             },
-          })
+          }),
         ).toEqual({ a: 1, b: 2 });
-      }
+      },
     );
 
     itWithInitialData(
@@ -230,7 +218,7 @@ describe('Cache', () => {
           },
         },
       ],
-      (proxy) => {
+      proxy => {
         expect(
           proxy.readQuery({
             query: gql`
@@ -242,9 +230,9 @@ describe('Cache', () => {
               literal: false,
               value: null,
             },
-          })
+          }),
         ).toEqual({ a: 1 });
-      }
+      },
     );
 
     itWithInitialData(
@@ -257,7 +245,7 @@ describe('Cache', () => {
           },
         },
       ],
-      (proxy) => {
+      proxy => {
         const options = {
           query: gql`
             query ($literal: Boolean, $value: Int) {
@@ -274,7 +262,7 @@ describe('Cache', () => {
         const preQueryCopy = cloneDeep(options);
         expect(proxy.readQuery(options)).toEqual({ a: 1, b: 2 });
         expect(preQueryCopy).toEqual(options);
-      }
+      },
     );
   });
 
@@ -285,7 +273,7 @@ describe('Cache', () => {
         // Empty data, but still want to test with/without result caching.
         {},
       ],
-      (proxy) => {
+      proxy => {
         expect(() => {
           proxy.readFragment({
             id: 'x',
@@ -298,7 +286,7 @@ describe('Cache', () => {
             `,
           });
         }).toThrow(
-          'Found a query operation. No operations are allowed when using a fragment as a query. Only fragments are allowed.'
+          'Found a query operation. No operations are allowed when using a fragment as a query. Only fragments are allowed.',
         );
         expect(() => {
           proxy.readFragment({
@@ -309,54 +297,44 @@ describe('Cache', () => {
               }
             `,
           });
-        }).toThrow(
-          'Found 0 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.'
-        );
-      }
+        }).toThrow('Found 0 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.');
+      },
     );
 
-    itWithInitialData(
-      'will throw an error when there is more than one fragment but no fragment name',
-      [{}],
-      (proxy) => {
-        expect(() => {
-          proxy.readFragment({
-            id: 'x',
-            fragment: gql`
-              fragment a on A {
-                a
-              }
+    itWithInitialData('will throw an error when there is more than one fragment but no fragment name', [{}], proxy => {
+      expect(() => {
+        proxy.readFragment({
+          id: 'x',
+          fragment: gql`
+            fragment a on A {
+              a
+            }
 
-              fragment b on B {
-                b
-              }
-            `,
-          });
-        }).toThrow(
-          'Found 2 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.'
-        );
-        expect(() => {
-          proxy.readFragment({
-            id: 'x',
-            fragment: gql`
-              fragment a on A {
-                a
-              }
+            fragment b on B {
+              b
+            }
+          `,
+        });
+      }).toThrow('Found 2 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.');
+      expect(() => {
+        proxy.readFragment({
+          id: 'x',
+          fragment: gql`
+            fragment a on A {
+              a
+            }
 
-              fragment b on B {
-                b
-              }
+            fragment b on B {
+              b
+            }
 
-              fragment c on C {
-                c
-              }
-            `,
-          });
-        }).toThrow(
-          'Found 3 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.'
-        );
-      }
-    );
+            fragment c on C {
+              c
+            }
+          `,
+        });
+      }).toThrow('Found 3 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.');
+    });
 
     itWithInitialData(
       'will read some deeply nested data from the store at any id',
@@ -384,7 +362,7 @@ describe('Cache', () => {
           },
         },
       ],
-      (proxy) => {
+      proxy => {
         expect(
           proxy.readFragment({
             id: 'foo',
@@ -396,7 +374,7 @@ describe('Cache', () => {
                 }
               }
             `,
-          })
+          }),
         ).toEqual({ e: 4, h: { i: 7 } });
         expect(
           proxy.readFragment({
@@ -413,7 +391,7 @@ describe('Cache', () => {
                 }
               }
             `,
-          })
+          }),
         ).toEqual({ e: 4, f: 5, g: 6, h: { i: 7, j: 8, k: 9 } });
         expect(
           proxy.readFragment({
@@ -423,7 +401,7 @@ describe('Cache', () => {
                 i
               }
             `,
-          })
+          }),
         ).toEqual({ i: 7 });
         expect(
           proxy.readFragment({
@@ -435,7 +413,7 @@ describe('Cache', () => {
                 k
               }
             `,
-          })
+          }),
         ).toEqual({ i: 7, j: 8, k: 9 });
         expect(
           proxy.readFragment({
@@ -459,7 +437,7 @@ describe('Cache', () => {
               }
             `,
             fragmentName: 'fragmentFoo',
-          })
+          }),
         ).toEqual({ e: 4, f: 5, g: 6, h: { i: 7, j: 8, k: 9 } });
         expect(
           proxy.readFragment({
@@ -483,9 +461,9 @@ describe('Cache', () => {
               }
             `,
             fragmentName: 'fragmentBar',
-          })
+          }),
         ).toEqual({ i: 7, j: 8, k: 9 });
-      }
+      },
     );
 
     itWithInitialData(
@@ -499,7 +477,7 @@ describe('Cache', () => {
           },
         },
       ],
-      (proxy) => {
+      proxy => {
         expect(
           proxy.readFragment({
             id: 'foo',
@@ -513,9 +491,9 @@ describe('Cache', () => {
               literal: false,
               value: 42,
             },
-          })
+          }),
         ).toEqual({ a: 1, b: 2 });
-      }
+      },
     );
 
     itWithInitialData(
@@ -543,7 +521,7 @@ describe('Cache', () => {
                 c
               }
             `,
-          })
+          }),
         ).toEqual(null);
         expect(
           client2.readFragment({
@@ -555,7 +533,7 @@ describe('Cache', () => {
                 c
               }
             `,
-          })
+          }),
         ).toEqual(null);
         expect(
           client3.readFragment({
@@ -567,14 +545,13 @@ describe('Cache', () => {
                 c
               }
             `,
-          })
+          }),
         ).toEqual({ a: 1, b: 2, c: 3 });
-      }
+      },
     );
 
     it('should not accidentally depend on unrelated entity fields', () => {
-      const cache = new Hermes({
-      });
+      const cache = new Hermes({});
 
       const bothNamesData = {
         __typename: 'Person',
@@ -647,7 +624,7 @@ describe('Cache', () => {
         cache.readQuery({
           id,
           query: firstNameQuery,
-        })
+        }),
       ).toBe(firstNameResult);
 
       const lastNameResult = cache.readQuery({
@@ -701,7 +678,7 @@ describe('Cache', () => {
         cache.readQuery({
           id,
           query: lastNameQuery,
-        })
+        }),
       ).toBe(lastNameResult);
     });
 
@@ -724,7 +701,7 @@ describe('Cache', () => {
 
       const id = cache.identify(data)!;
 
-      cache.recordOptimisticTransaction((proxy) => {
+      cache.recordOptimisticTransaction(proxy => {
         proxy.writeFragment({ id, fragment, data });
       }, 'optimistic Hugh');
 
@@ -744,15 +721,15 @@ describe('Cache', () => {
       expect(
         cache.readFragment(
           { id, fragment },
-          false // not optimistic
-        )
+          false, // not optimistic
+        ),
       ).toBe(null);
 
       expect(
         cache.readFragment(
           { id, fragment },
-          true // optimistic
-        )
+          true, // optimistic
+        ),
       ).toEqual({
         __typename: 'Person',
         firstName: 'Hugh',
@@ -772,8 +749,8 @@ describe('Cache', () => {
       expect(
         cache.readFragment(
           { id, fragment },
-          false // not optimistic
-        )
+          false, // not optimistic
+        ),
       ).toEqual({
         __typename: 'Person',
         firstName: 'HUGH',
@@ -783,8 +760,8 @@ describe('Cache', () => {
       expect(
         cache.readFragment(
           { id, fragment },
-          true // optimistic
-        )
+          true, // optimistic
+        ),
       ).toEqual({
         __typename: 'Person',
         firstName: 'Hugh',
@@ -796,8 +773,8 @@ describe('Cache', () => {
       expect(
         cache.readFragment(
           { id, fragment },
-          true // optimistic
-        )
+          true, // optimistic
+        ),
       ).toEqual({
         __typename: 'Person',
         firstName: 'HUGH',
@@ -807,7 +784,7 @@ describe('Cache', () => {
   });
 
   describe('writeQuery', () => {
-    itWithInitialData('will write some data to the store', [{}], (proxy) => {
+    itWithInitialData('will write some data to the store', [{}], proxy => {
       proxy.writeQuery({
         data: { a: 1 },
         query: gql`
@@ -975,149 +952,127 @@ describe('Cache', () => {
       });
     });
 
-    itWithInitialData(
-      'will write some data to the store with variables',
-      [{}],
-      (proxy) => {
-        proxy.writeQuery({
-          data: {
-            a: 1,
-            b: 2,
-          },
-          query: gql`
-            query ($literal: Boolean, $value: Int) {
-              a: field(literal: true, value: 42)
-              b: field(literal: $literal, value: $value)
-            }
-          `,
-          variables: {
-            literal: false,
-            value: 42,
-          },
-        });
+    itWithInitialData('will write some data to the store with variables', [{}], proxy => {
+      proxy.writeQuery({
+        data: {
+          a: 1,
+          b: 2,
+        },
+        query: gql`
+          query ($literal: Boolean, $value: Int) {
+            a: field(literal: true, value: 42)
+            b: field(literal: $literal, value: $value)
+          }
+        `,
+        variables: {
+          literal: false,
+          value: 42,
+        },
+      });
 
-        expect((proxy as Hermes).extract()).toEqual({
-          ROOT_QUERY: {
-            __typename: 'Query',
-            'field({"literal":true,"value":42})': 1,
-            'field({"literal":false,"value":42})': 2,
-          },
-        });
-      }
-    );
+      expect((proxy as Hermes).extract()).toEqual({
+        ROOT_QUERY: {
+          __typename: 'Query',
+          'field({"literal":true,"value":42})': 1,
+          'field({"literal":false,"value":42})': 2,
+        },
+      });
+    });
 
-    itWithInitialData(
-      'will write some data to the store with variables where some are null',
-      [{}],
-      (proxy) => {
-        proxy.writeQuery({
-          data: {
-            a: 1,
-            b: 2,
-          },
-          query: gql`
-            query ($literal: Boolean, $value: Int) {
-              a: field(literal: true, value: 42)
-              b: field(literal: $literal, value: $value)
-            }
-          `,
-          variables: {
-            literal: false,
-            value: null,
-          },
-        });
+    itWithInitialData('will write some data to the store with variables where some are null', [{}], proxy => {
+      proxy.writeQuery({
+        data: {
+          a: 1,
+          b: 2,
+        },
+        query: gql`
+          query ($literal: Boolean, $value: Int) {
+            a: field(literal: true, value: 42)
+            b: field(literal: $literal, value: $value)
+          }
+        `,
+        variables: {
+          literal: false,
+          value: null,
+        },
+      });
 
-        expect((proxy as Hermes).extract()).toEqual({
-          ROOT_QUERY: {
-            __typename: 'Query',
-            'field({"literal":true,"value":42})': 1,
-            'field({"literal":false,"value":null})': 2,
-          },
-        });
-      }
-    );
+      expect((proxy as Hermes).extract()).toEqual({
+        ROOT_QUERY: {
+          __typename: 'Query',
+          'field({"literal":true,"value":42})': 1,
+          'field({"literal":false,"value":null})': 2,
+        },
+      });
+    });
   });
 
   describe('writeFragment', () => {
-    itWithInitialData(
-      'will throw an error when there is no fragment',
-      [{}],
-      (proxy) => {
-        expect(() => {
-          proxy.writeFragment({
-            data: {},
-            id: 'x',
-            fragment: gql`
-              query {
-                a
-                b
-                c
-              }
-            `,
-          });
-        }).toThrow(
-          'Found a query operation. No operations are allowed when using a fragment as a query. Only fragments are allowed.'
-        );
-        expect(() => {
-          proxy.writeFragment({
-            data: {},
-            id: 'x',
-            fragment: gql`
-              schema {
-                query: Query
-              }
-            `,
-          });
-        }).toThrow(
-          'Found 0 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.'
-        );
-      }
-    );
+    itWithInitialData('will throw an error when there is no fragment', [{}], proxy => {
+      expect(() => {
+        proxy.writeFragment({
+          data: {},
+          id: 'x',
+          fragment: gql`
+            query {
+              a
+              b
+              c
+            }
+          `,
+        });
+      }).toThrow(
+        'Found a query operation. No operations are allowed when using a fragment as a query. Only fragments are allowed.',
+      );
+      expect(() => {
+        proxy.writeFragment({
+          data: {},
+          id: 'x',
+          fragment: gql`
+            schema {
+              query: Query
+            }
+          `,
+        });
+      }).toThrow('Found 0 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.');
+    });
 
-    itWithInitialData(
-      'will throw an error when there is more than one fragment but no fragment name',
-      [{}],
-      (proxy) => {
-        expect(() => {
-          proxy.writeFragment({
-            data: {},
-            id: 'x',
-            fragment: gql`
-              fragment a on A {
-                a
-              }
+    itWithInitialData('will throw an error when there is more than one fragment but no fragment name', [{}], proxy => {
+      expect(() => {
+        proxy.writeFragment({
+          data: {},
+          id: 'x',
+          fragment: gql`
+            fragment a on A {
+              a
+            }
 
-              fragment b on B {
-                b
-              }
-            `,
-          });
-        }).toThrow(
-          'Found 2 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.'
-        );
-        expect(() => {
-          proxy.writeFragment({
-            data: {},
-            id: 'x',
-            fragment: gql`
-              fragment a on A {
-                a
-              }
+            fragment b on B {
+              b
+            }
+          `,
+        });
+      }).toThrow('Found 2 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.');
+      expect(() => {
+        proxy.writeFragment({
+          data: {},
+          id: 'x',
+          fragment: gql`
+            fragment a on A {
+              a
+            }
 
-              fragment b on B {
-                b
-              }
+            fragment b on B {
+              b
+            }
 
-              fragment c on C {
-                c
-              }
-            `,
-          });
-        }).toThrow(
-          'Found 3 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.'
-        );
-      }
-    );
+            fragment c on C {
+              c
+            }
+          `,
+        });
+      }).toThrow('Found 3 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.');
+    });
 
     itWithCacheConfig(
       'will write some deeply nested data into the store at any id',
@@ -1125,7 +1080,7 @@ describe('Cache', () => {
         dataIdFromObject: (o: any) => o.id,
         addTypename: false,
       },
-      (proxy) => {
+      proxy => {
         proxy.writeFragment({
           data: { __typename: 'Foo', e: 4, h: { id: 'bar', i: 7 } },
           id: 'foo',
@@ -1239,7 +1194,7 @@ describe('Cache', () => {
         });
 
         expect((proxy as Hermes).extract()).toMatchSnapshot();
-      }
+      },
     );
 
     itWithCacheConfig(
@@ -1247,7 +1202,7 @@ describe('Cache', () => {
       {
         addTypename: true,
       },
-      (proxy) => {
+      proxy => {
         const readWriteFragment = gql`
           fragment aFragment on Query {
             getSomething {
@@ -1270,7 +1225,7 @@ describe('Cache', () => {
           id: 'query',
         });
         expect(result).toEqual(data);
-      }
+      },
     );
 
     itWithCacheConfig(
@@ -1278,7 +1233,7 @@ describe('Cache', () => {
       {
         addTypename: true,
       },
-      (proxy) => {
+      proxy => {
         proxy.writeFragment({
           data: {
             a: 1,
@@ -1308,7 +1263,7 @@ describe('Cache', () => {
             'field({"literal":false,"value":42})': 2,
           },
         });
-      }
+      },
     );
   });
 
@@ -1324,9 +1279,9 @@ describe('Cache', () => {
 
       type QueryData = {
         me: {
-          __typename: string,
-          name: string,
-        },
+          __typename: string;
+          name: string;
+        };
       };
 
       const query: TypedDocumentNode<QueryData> = gql`
@@ -1346,7 +1301,7 @@ describe('Cache', () => {
         },
       });
 
-      cache.updateQuery({ query }, (data) => {
+      cache.updateQuery({ query }, data => {
         expect(data).toBe(null);
 
         cache.writeQuery({
@@ -1367,9 +1322,7 @@ describe('Cache', () => {
         };
       });
 
-      expect(results).toEqual([
-        { me: { __typename: 'Person', name: 'Ben Newman' } },
-      ]);
+      expect(results).toEqual([{ me: { __typename: 'Person', name: 'Ben Newman' } }]);
 
       expect(cache.extract()).toEqual({
         'Person:{"name":"Ben Newman"}': {
@@ -1405,7 +1358,7 @@ describe('Cache', () => {
           fragment: usernameFragment,
           returnPartialData: true,
         },
-        (data) => {
+        data => {
           expect(data).toEqual({
             __typename: 'Person',
           });
@@ -1438,7 +1391,7 @@ describe('Cache', () => {
             name: 'Ben Newman',
             username: 'benjamn',
           };
-        }
+        },
       );
 
       // Still just two results, thanks to cache.update{Query,Fragment} using
@@ -1470,10 +1423,7 @@ describe('Cache', () => {
           },
         },
         __META: {
-          extraRootIds: [
-            'Person:{"name":"Ben Newman"}',
-            'Person:{"name":"Brian Kim"}',
-          ],
+          extraRootIds: ['Person:{"name":"Ben Newman"}', 'Person:{"name":"Brian Kim"}'],
         },
       });
 
@@ -1908,7 +1858,7 @@ describe('Cache', () => {
             });
             return expected;
           },
-        })
+        }),
       ).toBe(expected);
 
       expect(
@@ -1918,7 +1868,7 @@ describe('Cache', () => {
             c.reset();
             return expected;
           },
-        })
+        }),
       ).toBe(expected);
 
       expect(
@@ -1938,7 +1888,7 @@ describe('Cache', () => {
           onWatchUpdated() {
             throw new Error('onWatchUpdated should not have been called');
           },
-        })
+        }),
       ).toBe(expected);
 
       expect(
@@ -1947,7 +1897,7 @@ describe('Cache', () => {
           update(c) {
             return expected;
           },
-        })
+        }),
       ).toBe(expected);
 
       expect(
@@ -1967,7 +1917,7 @@ describe('Cache', () => {
           onWatchUpdated() {
             throw new Error('onWatchUpdated should not have been called');
           },
-        })
+        }),
       ).toBe(expected);
 
       expect(
@@ -1977,7 +1927,7 @@ describe('Cache', () => {
           update(c) {
             return expected;
           },
-        })
+        }),
       ).toBe(expected);
 
       expect(
@@ -1991,11 +1941,11 @@ describe('Cache', () => {
                     __typename
                   }
                 `,
-              })
+              }),
             ).toEqual({ __typename: 'Query' });
             return expected;
           },
-        })
+        }),
       ).toBe(expected);
 
       const optimisticId = 'some optimistic ID';
@@ -2016,13 +1966,13 @@ describe('Cache', () => {
           onWatchUpdated() {
             throw new Error('onWatchUpdated should not have been called');
           },
-        })
+        }),
       ).toBe(expected);
     });
   });
 
   describe('performTransaction', () => {
-    itWithInitialData('will not broadcast mid-transaction', [{}], (cache) => {
+    itWithInitialData('will not broadcast mid-transaction', [{}], cache => {
       let numBroadcasts = 0;
 
       const query = gql`
@@ -2041,7 +1991,7 @@ describe('Cache', () => {
 
       expect(numBroadcasts).toEqual(0);
 
-      cache.performTransaction((proxy) => {
+      cache.performTransaction(proxy => {
         proxy.writeQuery({
           data: { a: 1 },
           query,
@@ -2068,7 +2018,7 @@ describe('Cache', () => {
   });
 
   describe('recordOptimisticTransaction', () => {
-    itWithInitialData('will only broadcast once', [{}], (cache) => {
+    itWithInitialData('will only broadcast once', [{}], cache => {
       let numBroadcasts = 0;
 
       const query = gql`
@@ -2087,7 +2037,7 @@ describe('Cache', () => {
 
       expect(numBroadcasts).toEqual(0);
 
-      cache.recordOptimisticTransaction((proxy) => {
+      cache.recordOptimisticTransaction(proxy => {
         proxy.writeQuery({
           data: { a: 1 },
           query,
@@ -2293,8 +2243,8 @@ describe('Hermes#broadcastWatches', () => {
 
     type Diff = Cache.DiffResult<{
       object: {
-        name: string,
-      },
+        name: string;
+      };
     }>;
     const diffs: Record<string, Diff[]> = Object.create(null);
     function addDiff(name: string, diff: Diff) {
@@ -2316,7 +2266,7 @@ describe('Hermes#broadcastWatches', () => {
         variables: { name: 'canonicalByDefault' },
         // Pass nothing for canonizeResults to let the default for canonicalCache
         // (true) prevail.
-      })
+      }),
     );
 
     unwatchers.add(
@@ -2325,7 +2275,7 @@ describe('Hermes#broadcastWatches', () => {
         variables: { name: 'nonCanonicalByDefault' },
         // Pass nothing for canonizeResults to let the default for
         // nonCanonicalCache (false) prevail.
-      })
+      }),
     );
 
     unwatchers.add(
@@ -2333,7 +2283,7 @@ describe('Hermes#broadcastWatches', () => {
         ...commonWatchOptions,
         variables: { name: 'canonicalByChoice' },
         canonizeResults: true, // Override the default.
-      })
+      }),
     );
 
     unwatchers.add(
@@ -2341,7 +2291,7 @@ describe('Hermes#broadcastWatches', () => {
         ...commonWatchOptions,
         variables: { name: 'nonCanonicalByChoice' },
         canonizeResults: false, // Override the default.
-      })
+      }),
     );
 
     function makeDiff(name: string): Diff {
@@ -2365,10 +2315,10 @@ describe('Hermes#broadcastWatches', () => {
       nonCanonicalByChoice: [nonCanonicalByChoiceDiff],
     });
 
-    [canonicalCache, nonCanonicalCache].forEach((cache) => {
+    [canonicalCache, nonCanonicalCache].forEach(cache => {
       // Hack: delete every watch.lastDiff, so subsequent results will be
       // broadcast, even though they are deeply equal to the previous results.
-      cache['watches'].forEach((watch) => {
+      cache['watches'].forEach(watch => {
         delete watch.lastDiff;
       });
     });
@@ -2384,15 +2334,9 @@ describe('Hermes#broadcastWatches', () => {
     // Every watcher receives the same (deeply equal) Diff a second time.
     expect(diffs).toEqual({
       canonicalByDefault: [canonicalByDefaultDiff, canonicalByDefaultDiff],
-      nonCanonicalByDefault: [
-        nonCanonicalByDefaultDiff,
-        nonCanonicalByDefaultDiff,
-      ],
+      nonCanonicalByDefault: [nonCanonicalByDefaultDiff, nonCanonicalByDefaultDiff],
       canonicalByChoice: [canonicalByChoiceDiff, canonicalByChoiceDiff],
-      nonCanonicalByChoice: [
-        nonCanonicalByChoiceDiff,
-        nonCanonicalByChoiceDiff,
-      ],
+      nonCanonicalByChoice: [nonCanonicalByChoiceDiff, nonCanonicalByChoiceDiff],
     });
 
     function expectCanonical(name: string) {
@@ -2544,12 +2488,12 @@ describe('Hermes#modify', () => {
 
     const query: TypedDocumentNode<{
       currentlyReading: {
-        title: string,
-        isbn: string,
+        title: string;
+        isbn: string;
         author: {
-          name: string,
-        },
-      },
+          name: string;
+        };
+      };
     }> = gql`
       query {
         currentlyReading {
@@ -2598,7 +2542,7 @@ describe('Hermes#modify', () => {
             return INVALIDATE;
           },
         },
-      })
+      }),
     ).toBe(false); // Nothing actually modified.
 
     const resultAfterAuthorInvalidation = read();
@@ -2615,7 +2559,7 @@ describe('Hermes#modify', () => {
         fields(_, { INVALIDATE }) {
           return INVALIDATE;
         },
-      })
+      }),
     ).toBe(false); // Nothing actually modified.
 
     const resultAfterBookInvalidation = read();
@@ -2626,7 +2570,7 @@ describe('Hermes#modify', () => {
       name: 'Maria Dahvana Headley',
     });
     expect(resultAfterBookInvalidation.currentlyReading.author).toBe(
-      resultAfterAuthorInvalidation.currentlyReading.author
+      resultAfterAuthorInvalidation.currentlyReading.author,
     );
   });
 
@@ -2658,7 +2602,7 @@ describe('Hermes#modify', () => {
     const currentlyReading = {
       __typename: 'Book',
       isbn: '147670032X',
-      title: 'Why We\'re Polarized',
+      title: "Why We're Polarized",
       author: {
         __typename: 'Author',
         name: 'Ezra Klein',
@@ -2686,7 +2630,7 @@ describe('Hermes#modify', () => {
         author: {
           __ref: 'Author:{"name":"Ezra Klein"}',
         },
-        title: 'Why We\'re Polarized',
+        title: "Why We're Polarized",
       },
       'Author:{"name":"Ezra Klein"}': {
         __typename: 'Author',
@@ -2729,7 +2673,7 @@ describe('Hermes#modify', () => {
       id: bookId,
       fields: {
         author(author: Reference, { readField }) {
-          expect(readField('title')).toBe('Why We\'re Polarized');
+          expect(readField('title')).toBe("Why We're Polarized");
           expect(readField('name', author)).toBe('Ezra Klein');
           cache.modify({
             fields: {
@@ -2764,7 +2708,7 @@ describe('Hermes#modify', () => {
         author: {
           __ref: 'Author:{"name":"Ezra Klein"}',
         },
-        title: 'Why We\'re Polarized',
+        title: "Why We're Polarized",
       },
       'Author:{"name":"Ezra Klein"}': {
         __typename: 'Author',
@@ -2835,27 +2779,17 @@ describe('Hermes#modify', () => {
 
           fields: {
             comments: {
-              merge(
-                existing: Reference[],
-                incoming: Reference[],
-                { args, mergeObjects }
-              ) {
+              merge(existing: Reference[], incoming: Reference[], { args, mergeObjects }) {
                 const merged = existing ? existing.slice(0) : [];
-                const end
-                  = args!.offset + Math.min(args!.limit, incoming.length);
+                const end = args!.offset + Math.min(args!.limit, incoming.length);
                 for (let i = args!.offset; i < end; ++i) {
-                  merged[i] = mergeObjects(
-                    merged[i],
-                    incoming[i - args!.offset]
-                  ) as Reference;
+                  merged[i] = mergeObjects(merged[i], incoming[i - args!.offset]) as Reference;
                 }
                 return merged;
               },
 
               read(existing: Reference[], { args }) {
-                const page
-                  = existing &&
-                  existing.slice(args!.offset, args!.offset + args!.limit);
+                const page = existing && existing.slice(args!.offset, args!.offset + args!.limit);
                 if (page && page.length > 0) {
                   return page;
                 }
@@ -2951,7 +2885,7 @@ describe('Hermes#modify', () => {
         comments(comments: readonly Reference[], { readField }) {
           expect(Object.isFrozen(comments)).toBe(true);
           expect(comments.length).toBe(3);
-          const filtered = comments.filter((comment) => {
+          const filtered = comments.filter(comment => {
             return readField('id', comment) !== 'c1';
           });
           expect(filtered.length).toBe(2);
@@ -2977,10 +2911,7 @@ describe('Hermes#modify', () => {
       'Thread:{"tid":123}': {
         __typename: 'Thread',
         tid: 123,
-        comments: [
-          { __ref: 'Comment:{"id":"c2"}' },
-          { __ref: 'Comment:{"id":"c3"}' },
-        ],
+        comments: [{ __ref: 'Comment:{"id":"c2"}' }, { __ref: 'Comment:{"id":"c3"}' }],
       },
       'Comment:{"id":"c2"}': {
         __typename: 'Comment',
@@ -3005,7 +2936,7 @@ describe('Hermes#modify', () => {
       }
     `;
 
-    cache.recordOptimisticTransaction((cache) => {
+    cache.recordOptimisticTransaction(cache => {
       cache.writeQuery({
         query,
         data: {
@@ -3126,11 +3057,7 @@ describe('Hermes#modify', () => {
       },
     });
 
-    function makeResult(
-      __typename: string,
-      value: number,
-      complete: boolean = true
-    ) {
+    function makeResult(__typename: string, value: number, complete: boolean = true) {
       return {
         complete,
         result: {
@@ -3182,9 +3109,11 @@ describe('Hermes#modify', () => {
     // Check that resetting the result cache does not trigger additional watch
     // notifications.
     expect(
-      cache.gc(/* {
+      cache.gc(
+        /* {
         resetResultCache: true,
-      } */)
+      } */
+      ),
     ).toEqual([]);
     expect(aResults).toEqual([a123, a124]);
     expect(bResults).toEqual([b321, b322]);
@@ -3232,7 +3161,7 @@ describe('Hermes#modify', () => {
       });
     }
 
-    addBook('147670032X', 'Why We\'re Polarized');
+    addBook('147670032X', "Why We're Polarized");
     addBook('1760641790', 'How To Do Nothing');
     addBook('0735211280', 'Spineless');
 
@@ -3252,7 +3181,7 @@ describe('Hermes#modify', () => {
       'Book:{"isbn":"147670032X"}': {
         __typename: 'Book',
         isbn: '147670032X',
-        title: 'Why We\'re Polarized',
+        title: "Why We're Polarized",
       },
       'Book:{"isbn":"1760641790"}': {
         __typename: 'Book',
@@ -3273,10 +3202,7 @@ describe('Hermes#modify', () => {
 
       cache.modify({
         fields: {
-          book(
-            book: Reference,
-            { fieldName, storeFieldName, isReference, readField, DELETE }
-          ) {
+          book(book: Reference, { fieldName, storeFieldName, isReference, readField, DELETE }) {
             expect(fieldName).toBe('book');
             expect(isReference(book)).toBe(true);
             expect(typeof readField('title', book)).toBe('string');
@@ -3285,7 +3211,7 @@ describe('Hermes#modify', () => {
               readField({
                 fieldName: '__typename',
                 from: book,
-              })
+              }),
             ).toBe('Book');
 
             const parts = storeFieldName.split(':');
@@ -3331,7 +3257,7 @@ describe('Hermes#modify', () => {
       'Book:{"isbn":"147670032X"}': {
         __typename: 'Book',
         isbn: '147670032X',
-        title: 'Why We\'re Polarized',
+        title: "Why We're Polarized",
       },
       'Book:{"isbn":"1760641790"}': {
         __typename: 'Book',
@@ -3345,10 +3271,7 @@ describe('Hermes#modify', () => {
       },
     });
 
-    expect(cache.gc().sort()).toEqual([
-      'Book:{"isbn":"0735211280"}',
-      'Book:{"isbn":"147670032X"}',
-    ]);
+    expect(cache.gc().sort()).toEqual(['Book:{"isbn":"0735211280"}', 'Book:{"isbn":"147670032X"}']);
 
     expect(cache.extract()).toEqual({
       ROOT_QUERY: {
@@ -3416,7 +3339,7 @@ describe('Hermes#modify', () => {
           fields(value) {
             throw new Error(`unexpected value: ${value}`);
           },
-        })
+        }),
       ).toBe(false);
     }
 
@@ -3484,9 +3407,9 @@ describe('Hermes#modify', () => {
         },
       });
       expect(consoleSpy.warn).toHaveBeenLastCalledWith(
-        'cache.modify: Writing an array with a mix of both References and Objects will not result in the Objects being normalized correctly.\n'
-          + 'Please convert the object instance %o to a Reference before writing it to the cache by calling `toReference(object, true)`.',
-        book4
+        'cache.modify: Writing an array with a mix of both References and Objects will not result in the Objects being normalized correctly.\n' +
+          'Please convert the object instance %o to a Reference before writing it to the cache by calling `toReference(object, true)`.',
+        book4,
       );
     }
   });
@@ -3506,9 +3429,9 @@ describe('Hermes#modify', () => {
     `;
 
     type Book = {
-      __typename: 'Book',
-      id: string,
-      title: string,
+      __typename: 'Book';
+      id: string;
+      title: string;
     };
 
     const book1: Book = { __typename: 'Book', id: '1', title: '1984' };
@@ -3546,10 +3469,10 @@ describe('Hermes#modify', () => {
         },
       });
       expect(consoleSpy.warn).toHaveBeenLastCalledWith(
-        'cache.modify: You are trying to write a Reference that is not part of the store: %o\n'
-          + 'Please make sure to set the `mergeIntoStore` parameter to `true` when creating a Reference that is not part of the store yet:\n'
-          + '`toReference(object, true)`',
-        { __ref: 'Book:4' }
+        'cache.modify: You are trying to write a Reference that is not part of the store: %o\n' +
+          'Please make sure to set the `mergeIntoStore` parameter to `true` when creating a Reference that is not part of the store yet:\n' +
+          '`toReference(object, true)`',
+        { __ref: 'Book:4' },
       );
     }
 
@@ -3572,12 +3495,7 @@ describe('Hermes#modify', () => {
         __typename: 'User',
         id: '42',
         // Book:4 here is a dead ref
-        books: [
-          { __ref: 'Book:1' },
-          { __ref: 'Book:2' },
-          { __ref: 'Book:3' },
-          { __ref: 'Book:4' },
-        ],
+        books: [{ __ref: 'Book:1' }, { __ref: 'Book:2' }, { __ref: 'Book:3' }, { __ref: 'Book:4' }],
       },
     });
   });
@@ -3593,8 +3511,8 @@ describe('Hermes#modify', () => {
     `;
 
     type User = {
-      __typename: string,
-      id: string,
+      __typename: string;
+      id: string;
     };
 
     cache.writeQuery({
@@ -3628,10 +3546,10 @@ describe('Hermes#modify', () => {
         },
       });
       expect(consoleSpy.warn).toHaveBeenLastCalledWith(
-        'cache.modify: You are trying to write a Reference that is not part of the store: %o\n'
-          + 'Please make sure to set the `mergeIntoStore` parameter to `true` when creating a Reference that is not part of the store yet:\n'
-          + '`toReference(object, true)`',
-        { __ref: 'User:43' }
+        'cache.modify: You are trying to write a Reference that is not part of the store: %o\n' +
+          'Please make sure to set the `mergeIntoStore` parameter to `true` when creating a Reference that is not part of the store yet:\n' +
+          '`toReference(object, true)`',
+        { __ref: 'User:43' },
       );
     }
 
@@ -3823,7 +3741,7 @@ describe('ReactiveVar and makeVar', () => {
           callback() {
             diffCounts[id] = (diffCounts[id] || 0) + 1;
           },
-        })
+        }),
       );
     }
 
@@ -4217,11 +4135,11 @@ describe('ReactiveVar and makeVar', () => {
 
 describe('TypedDocumentNode<Data, Variables>', () => {
   type Book = {
-    isbn?: string,
-    title: string,
+    isbn?: string;
+    title: string;
     author: {
-      name: string,
-    },
+      name: string;
+    };
   };
 
   const query: TypedDocumentNode<{ book: Book }, { isbn: string }> = gql`
@@ -4273,8 +4191,8 @@ describe('TypedDocumentNode<Data, Variables>', () => {
           fields: {
             book(existing, { args, toReference }) {
               return (
-                existing
-                ?? (args &&
+                existing ??
+                (args &&
                   toReference({
                     __typename: 'Book',
                     isbn: args.isbn,
@@ -4391,7 +4309,7 @@ describe('TypedDocumentNode<Data, Variables>', () => {
     cache.modify<Book>({
       id: cache.identify(ffplBook),
       fields: {
-        isbn: (value) => {
+        isbn: value => {
           expectTypeOf(value).toEqualTypeOf<string>();
           return value;
         },

@@ -43,7 +43,7 @@ export class ParsedQueryNode<TArgTypes = JsonScalar> {
      * */
     public hasParameterizedChildren?: true,
     public propMap?: {
-      [key: string]: string,
+      [key: string]: string;
     },
   ) {}
 }
@@ -100,9 +100,9 @@ export function parseQuery<TSerialized>(
   fragments: FragmentMap,
   selectionSet: SelectionSetNode,
 ): {
-  parsedQuery: DeepReadonly<ParsedQueryWithVariables>,
-  variables: Set<string>,
-  propMap?: { [p: string]: string } | undefined,
+  parsedQuery: DeepReadonly<ParsedQueryWithVariables>;
+  variables: Set<string>;
+  propMap?: { [p: string]: string } | undefined;
 } {
   const variables = new Set<string>();
   const propMap = Object.create(null);
@@ -143,7 +143,10 @@ function _buildNodeMap<TSerialized>(
       // The name of the field (as defined by the query).
       const name = selection.alias ? selection.alias.value : selection.name.value;
       const innerPropMap = Object.create(null);
-      const children = _buildNodeMap(variables, context, fragments, innerPropMap, selection.selectionSet, [...path, name]);
+      const children = _buildNodeMap(variables, context, fragments, innerPropMap, selection.selectionSet, [
+        ...path,
+        name,
+      ]);
 
       let args, schemaName;
       // fields marked as @static are treated as if they are a static field in
@@ -161,7 +164,6 @@ function _buildNodeMap<TSerialized>(
 
       const node = new ParsedQueryNode(children, schemaName, args, hasParameterizedChildren, unlessEmpty(innerPropMap));
       nodeMap[name] = _mergeNodes([...path, name], node, nodeMap[name]);
-
     } else if (selection.kind === 'FragmentSpread') {
       const fragment = fragments[selection.name.value];
       if (!fragment) {
@@ -174,7 +176,6 @@ function _buildNodeMap<TSerialized>(
           nodeMap[name] = _mergeNodes([...path, name], fragmentMap[name], nodeMap[name]);
         }
       }
-
     } else if (selection.kind === 'InlineFragment') {
       const fragmentMap = _buildNodeMap(variables, context, fragments, propMap, selection.selectionSet, path);
       if (fragmentMap) {
@@ -182,7 +183,6 @@ function _buildNodeMap<TSerialized>(
           nodeMap[name] = _mergeNodes([...path, name], fragmentMap[name], nodeMap[name]);
         }
       }
-
     } else if (context.tracer.warning) {
       context.tracer.warning(`${(selection as any).kind} selections are not supported; query may misbehave`);
     }
@@ -254,7 +254,11 @@ function _collectDirectiveVariables(variables: Set<string>, node: SelectionNode)
  * Merges two node definitions; mutating `target` to include children from
  * `source`.
  */
-function _mergeNodes<TArgTypes>(path: string[], target: ParsedQueryNode<TArgTypes>, source?: ParsedQueryNode<TArgTypes>) {
+function _mergeNodes<TArgTypes>(
+  path: string[],
+  target: ParsedQueryNode<TArgTypes>,
+  source?: ParsedQueryNode<TArgTypes>,
+) {
   if (!source) return target;
   if (!isEqual(target.args, source.args)) {
     throw new ConflictingFieldsError(`parameterization mismatch`, path, [target, source]);
@@ -285,7 +289,10 @@ function _mergeNodes<TArgTypes>(path: string[], target: ParsedQueryNode<TArgType
  *
  * This requires that all variables used are provided in `variables`.
  */
-export function expandVariables(parsed: ParsedQueryWithVariables, variables: JsonObject | undefined): ParsedQuery<JsonScalar> {
+export function expandVariables(
+  parsed: ParsedQueryWithVariables,
+  variables: JsonObject | undefined,
+): ParsedQuery<JsonScalar> {
   return _expandVariables(parsed, variables)!;
 }
 
@@ -303,7 +310,7 @@ export function _expandVariables(parsed?: ParsedQueryWithVariables, variables?: 
         node.hasParameterizedChildren,
         node.propMap,
       );
-    // No variables to substitute for this subtree.
+      // No variables to substitute for this subtree.
     } else {
       newMap[key] = node as ParsedQueryNode;
     }
@@ -319,13 +326,10 @@ export function expandFieldArguments(
   args: NestedValue<JsonAndVariables> | undefined,
   variables: JsonObject | undefined,
 ): JsonObject | undefined {
-  return args ? _expandArgument(args, variables) as JsonObject : undefined;
+  return args ? (_expandArgument(args, variables) as JsonObject) : undefined;
 }
 
-export function _expandArgument(
-  arg: NestedValue<JsonAndVariables>,
-  variables: JsonObject | undefined,
-): JsonValue {
+export function _expandArgument(arg: NestedValue<JsonAndVariables>, variables: JsonObject | undefined): JsonValue {
   if (arg instanceof VariableArgument) {
     if (!variables || !(arg.name in variables)) {
       throw new Error(`Expected variable $${arg.name} to exist for query`);

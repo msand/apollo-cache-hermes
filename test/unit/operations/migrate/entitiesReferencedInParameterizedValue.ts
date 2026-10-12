@@ -49,7 +49,7 @@ function createNewCacheSnapshot(cacheContext: CacheContext) {
       }
     }`,
     cacheContext,
-    { id: 1 }
+    { id: 1 },
   );
   return new CacheSnapshot(snapshot, snapshot, new OptimisticUpdateQueue());
 }
@@ -70,23 +70,11 @@ describe(`operations.migrate`, () => {
     });
     const cacheAfter = extract(migrated.baseline, cacheContext);
 
-    const parameterizedTopContainerId = nodeIdForParameterizedValue(
-      QueryRootId,
-      ['one', 'two'],
-      { id: 1 }
-    );
+    const parameterizedTopContainerId = nodeIdForParameterizedValue(QueryRootId, ['one', 'two'], { id: 1 });
 
-    const nestedParameterizedValueId0 = nodeIdForParameterizedValue(
-      '31',
-      ['four'],
-      { extra: true },
-    );
+    const nestedParameterizedValueId0 = nodeIdForParameterizedValue('31', ['four'], { extra: true });
 
-    const nestedParameterizedValueId1 = nodeIdForParameterizedValue(
-      '32',
-      ['four'],
-      { extra: true },
-    );
+    const nestedParameterizedValueId1 = nodeIdForParameterizedValue('32', ['four'], { extra: true });
 
     jestExpect(cacheAfter).toEqual({
       [QueryRootId]: {
@@ -151,23 +139,11 @@ describe(`operations.migrate`, () => {
     });
     const cacheAfter = extract(migrated.baseline, cacheContext);
 
-    const parameterizedTopContainerId = nodeIdForParameterizedValue(
-      QueryRootId,
-      ['one', 'two'],
-      { id: 1 }
-    );
+    const parameterizedTopContainerId = nodeIdForParameterizedValue(QueryRootId, ['one', 'two'], { id: 1 });
 
-    const nestedParameterizedValueId0 = nodeIdForParameterizedValue(
-      '31',
-      ['four'],
-      { extra: true },
-    );
+    const nestedParameterizedValueId0 = nodeIdForParameterizedValue('31', ['four'], { extra: true });
 
-    const nestedParameterizedValueId1 = nodeIdForParameterizedValue(
-      '32',
-      ['four'],
-      { extra: true },
-    );
+    const nestedParameterizedValueId1 = nodeIdForParameterizedValue('32', ['four'], { extra: true });
 
     jestExpect(cacheAfter).toEqual({
       [QueryRootId]: {
@@ -219,5 +195,4 @@ describe(`operations.migrate`, () => {
       },
     });
   });
-
 });

@@ -18,8 +18,8 @@ it('omits the key from arbitrarily nested object', () => {
           other: { omit: 'a', keep: 'b', other: 'c' },
         },
       },
-      'omit'
-    )
+      'omit',
+    ),
   ).toEqual({
     keep: {
       keep: 'b',
@@ -35,8 +35,8 @@ it('omits the key from arrays', () => {
         { omit: 'a', keep: 'b', other: 'c' },
         { omit: 'a', keep: 'b', other: 'c' },
       ],
-      'omit'
-    )
+      'omit',
+    ),
   ).toEqual([
     { keep: 'b', other: 'c' },
     { keep: 'b', other: 'c' },
@@ -48,17 +48,11 @@ it('omits the key from arbitrarily nested arrays', () => {
     omitDeep(
       [
         [{ omit: 'a', keep: 'b', other: 'c' }],
-        [
-          { omit: 'a', keep: 'b', other: 'c' },
-          [{ omit: 'a', keep: 'b', other: 'c' }],
-        ],
+        [{ omit: 'a', keep: 'b', other: 'c' }, [{ omit: 'a', keep: 'b', other: 'c' }]],
       ],
-      'omit'
-    )
-  ).toEqual([
-    [{ keep: 'b', other: 'c' }],
-    [{ keep: 'b', other: 'c' }, [{ keep: 'b', other: 'c' }]],
-  ]);
+      'omit',
+    ),
+  ).toEqual([[{ keep: 'b', other: 'c' }], [{ keep: 'b', other: 'c' }, [{ keep: 'b', other: 'c' }]]]);
 });
 
 it('returns primitives unchanged', () => {

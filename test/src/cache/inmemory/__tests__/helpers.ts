@@ -4,9 +4,7 @@ import { Cache, DiffQueryAgainstStoreOptions, InMemoryCache, NormalizedCacheObje
 import { StoreReader } from '../readFromStore';
 import { StoreWriter } from '../writeToStore';
 
-export function defaultNormalizedCacheFactory(
-  seed?: NormalizedCacheObject
-): NormalizedCache {
+export function defaultNormalizedCacheFactory(seed?: NormalizedCacheObject): NormalizedCache {
   const cache = new InMemoryCache();
   return new EntityStore.Root({
     policies: cache.policies,
@@ -20,19 +18,14 @@ interface WriteQueryToStoreOptions extends Cache.WriteOptions {
   store?: NormalizedCache;
 }
 
-export function readQueryFromStore<T = any>(
-  reader: StoreReader,
-  options: DiffQueryAgainstStoreOptions
-) {
+export function readQueryFromStore<T = any>(reader: StoreReader, options: DiffQueryAgainstStoreOptions) {
   return reader.diffQueryAgainstStore<T>({
     ...options,
     returnPartialData: false,
   }).result;
 }
 
-export function writeQueryToStore(
-  options: WriteQueryToStoreOptions
-): NormalizedCache {
+export function writeQueryToStore(options: WriteQueryToStoreOptions): NormalizedCache {
   const {
     dataId = 'ROOT_QUERY',
     store = new EntityStore.Root({

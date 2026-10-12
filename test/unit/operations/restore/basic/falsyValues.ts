@@ -9,23 +9,25 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.restore`, () => {
   describe(`falsy values`, () => {
-
     let restoreGraphSnapshot: GraphSnapshot, cacheContext: CacheContext;
     beforeAll(() => {
       cacheContext = createStrictCacheContext();
-      restoreGraphSnapshot = restore({
-        [QueryRootId]: {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          data: { null: null, false: false, zero: 0, string: '' },
+      restoreGraphSnapshot = restore(
+        {
+          [QueryRootId]: {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            data: { null: null, false: false, zero: 0, string: '' },
+          },
         },
-      }, cacheContext).cacheSnapshot.baseline;
+        cacheContext,
+      ).cacheSnapshot.baseline;
     });
 
     it(`restores GraphSnapshot from JSON serializable object`, () => {
       const originalGraphSnapshot = createGraphSnapshot(
         { null: null, false: false, zero: 0, string: '' },
         `{ null, false, zero, string }`,
-        cacheContext
+        cacheContext,
       );
       jestExpect(restoreGraphSnapshot).toEqual(originalGraphSnapshot);
     });
@@ -33,6 +35,5 @@ describe(`operations.restore`, () => {
     it(`correctly restores different types of NodeSnapshot`, () => {
       jestExpect(restoreGraphSnapshot.getNodeSnapshot(QueryRootId)).toBeInstanceOf(EntitySnapshot);
     });
-
   });
 });

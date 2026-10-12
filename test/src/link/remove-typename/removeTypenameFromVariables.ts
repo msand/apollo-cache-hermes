@@ -6,12 +6,7 @@ import { Kind, visit } from 'graphql';
 import { WeakCache } from '@wry/caches';
 import { ApolloLink } from '@apollo/client';
 
-import {
-  stripTypename,
-  isPlainObject,
-  cacheSizes,
-  defaultCacheSizes,
-} from '../../utilities/index';
+import { stripTypename, isPlainObject, cacheSizes, defaultCacheSizes } from '../../utilities/index';
 import type { OperationVariables } from '../../core/index';
 
 export const KEEP = '__KEEP';
@@ -24,67 +19,54 @@ export interface RemoveTypenameFromVariablesOptions {
   except?: KeepTypenameConfig;
 }
 
-export function removeTypenameFromVariables(
-  options: RemoveTypenameFromVariablesOptions = Object.create(null)
-) {
+export function removeTypenameFromVariables(options: RemoveTypenameFromVariablesOptions = Object.create(null)) {
   return Object.assign(
     new ApolloLink((operation, forward) => {
       const { except } = options;
       const { query, variables } = operation;
 
       if (variables) {
-        operation.variables
-          = except
-            ? maybeStripTypenameUsingConfig(query, variables, except)
-            : stripTypename(variables);
+        operation.variables = except
+          ? maybeStripTypenameUsingConfig(query, variables, except)
+          : stripTypename(variables);
       }
 
       return forward(operation);
     }),
     __DEV__
       ? {
-        getMemoryInternals() {
-          return {
-            removeTypenameFromVariables: {
-              getVariableDefinitions: getVariableDefinitions?.size ?? 0,
-            },
-          };
-        },
-      }
-      : {}
+          getMemoryInternals() {
+            return {
+              removeTypenameFromVariables: {
+                getVariableDefinitions: getVariableDefinitions?.size ?? 0,
+              },
+            };
+          },
+        }
+      : {},
   );
 }
 
-function maybeStripTypenameUsingConfig(
-  query: DocumentNode,
-  variables: OperationVariables,
-  config: KeepTypenameConfig
-) {
+function maybeStripTypenameUsingConfig(query: DocumentNode, variables: OperationVariables, config: KeepTypenameConfig) {
   const variableDefinitions = getVariableDefinitions(query);
 
   return Object.fromEntries(
-    Object.entries(variables).map((keyVal) => {
+    Object.entries(variables).map(keyVal => {
       const [key, value] = keyVal;
       const typename = variableDefinitions[key];
       const typenameConfig = config[typename];
 
-      keyVal[1]
-        = typenameConfig
-          ? maybeStripTypename(value, typenameConfig)
-          : stripTypename(value);
+      keyVal[1] = typenameConfig ? maybeStripTypename(value, typenameConfig) : stripTypename(value);
 
       return keyVal;
-    })
+    }),
   );
 }
 
 type JSONPrimitive = string | number | null | boolean;
 type JSONValue = JSONPrimitive | JSONValue[] | { [key: string]: JSONValue };
 
-function maybeStripTypename(
-  value: JSONValue,
-  config: KeepTypenameConfig[string]
-): JSONValue {
+function maybeStripTypename(value: JSONValue, config: KeepTypenameConfig[string]): JSONValue {
   if (config === KEEP) {
     return value;
   }
@@ -96,7 +78,7 @@ function maybeStripTypename(
   if (isPlainObject(value)) {
     const modified: Record<string, any> = {};
 
-    Object.keys(value).forEach((key) => {
+    Object.keys(value).forEach(key => {
       const child = value[key];
 
       if (key === '__typename') {
@@ -105,10 +87,7 @@ function maybeStripTypename(
 
       const fieldConfig = config[key];
 
-      modified[key]
-        = fieldConfig
-          ? maybeStripTypename(child, fieldConfig)
-          : stripTypename(child);
+      modified[key] = fieldConfig ? maybeStripTypename(child, fieldConfig) : stripTypename(child);
     });
 
     return modified;
@@ -134,7 +113,7 @@ const getVariableDefinitions = wrap(
       cacheSizes['removeTypenameFromVariables.getVariableDefinitions'] ||
       defaultCacheSizes['removeTypenameFromVariables.getVariableDefinitions'],
     cache: WeakCache,
-  }
+  },
 );
 
 function unwrapType(node: TypeNode): string {

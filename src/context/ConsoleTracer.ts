@@ -11,7 +11,6 @@ const INDENT = '  ';
  * out all cache operations.
  */
 export class ConsoleTracer<TSerialized> implements Tracer<void> {
-
   // Used when emulating grouping behavior.
   private _indent = 0;
 
@@ -102,7 +101,6 @@ export class ConsoleTracer<TSerialized> implements Tracer<void> {
       this._indent -= 1;
     }
   }
-
 }
 
 export namespace ConsoleTracer {
@@ -126,7 +124,7 @@ export namespace ConsoleTracer {
   export const DefaultLogger: Logger = {
     debug: _makeDefaultEmitter('debug'),
     info: _makeDefaultEmitter('info'),
-    warn:  _makeDefaultEmitter('warn'),
+    warn: _makeDefaultEmitter('warn'),
     // Grouping:
     group: _makeDefaultEmitter('group'),
     groupEnd: console.groupEnd ? console.groupEnd.bind(console) : () => {},

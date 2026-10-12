@@ -6,14 +6,13 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.extract`, () => {
   describe(`falsy values`, () => {
-
     let extractResult: Serializable.GraphSnapshot;
     beforeAll(() => {
       const cacheContext = createStrictCacheContext();
       const snapshot = createGraphSnapshot(
         { null: null, false: false, zero: 0, string: '' },
         `{ null, false, zero, string }`,
-        cacheContext
+        cacheContext,
       );
 
       extractResult = extract(snapshot, cacheContext);
@@ -27,6 +26,5 @@ describe(`operations.extract`, () => {
         },
       });
     });
-
   });
 });

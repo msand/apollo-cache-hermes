@@ -47,9 +47,7 @@ describe('parser', () => {
     const query = `
       query One { user { name } }
     `;
-    expect(parser.bind(null, query as any)).toThrow(
-      /not a valid GraphQL DocumentNode/
-    );
+    expect(parser.bind(null, query as any)).toThrow(/not a valid GraphQL DocumentNode/);
   });
 
   it('should return the name of the operation', () => {
@@ -186,9 +184,7 @@ describe('parser', () => {
       }
     `;
     definition = subscription.definitions[0] as OperationDefinition;
-    expect(parser(subscription).variables).toEqual(
-      definition.variableDefinitions
-    );
+    expect(parser(subscription).variables).toEqual(definition.variableDefinitions);
   });
 
   it('should not error if the operation has no variables', () => {
@@ -220,8 +216,6 @@ describe('parser', () => {
       }
     `;
     definition = subscription.definitions[0] as OperationDefinition;
-    expect(parser(subscription).variables).toEqual(
-      definition.variableDefinitions
-    );
+    expect(parser(subscription).variables).toEqual(definition.variableDefinitions);
   });
 });

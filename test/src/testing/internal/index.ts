@@ -9,14 +9,7 @@ export type {
   VariablesCaseData,
   VariablesCaseVariables,
 } from './scenarios/index';
-export {
-  setupSimpleCase,
-  setupVariablesCase,
-  setupPaginatedCase,
-} from './scenarios/index';
+export { setupSimpleCase, setupVariablesCase, setupPaginatedCase } from './scenarios/index';
 
-export type {
-  RenderWithClientOptions,
-  RenderWithMocksOptions,
-} from './renderHelpers';
+export type { RenderWithClientOptions, RenderWithMocksOptions } from './renderHelpers';
 export { renderWithClient, renderWithMocks } from './renderHelpers';

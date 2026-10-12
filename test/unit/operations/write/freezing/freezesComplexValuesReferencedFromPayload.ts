@@ -4,20 +4,15 @@ import { write } from '../../../../../src/operations';
 import { query, strictConfig } from '../../../../helpers';
 
 describe(`operations.write`, () => {
-
   const context = new CacheContext(strictConfig);
   const empty = new GraphSnapshot();
 
   describe(`freezes complex values referenced from the payload`, () => {
-
     it(`checks values references from the payload`, () => {
       const simpleQuery = query(`{ foo }`);
       const payload = {
         foo: {
-          bar: [
-            { baz: 123 },
-            { baz: 321 },
-          ],
+          bar: [{ baz: 123 }, { baz: 321 }],
         },
       };
       write(context, empty, simpleQuery, payload);
@@ -30,7 +25,5 @@ describe(`operations.write`, () => {
         (payload.foo as any).fizz = 'nope';
       }).toThrow(/property.*fizz/);
     });
-
   });
-
 });

@@ -8,17 +8,13 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.restore`, () => {
   describe(`nested values in an array`, () => {
-
     let restoreGraphSnapshot: GraphSnapshot, originalGraphSnapshot: GraphSnapshot;
     beforeAll(() => {
       const cacheContext = createStrictCacheContext();
       originalGraphSnapshot = createGraphSnapshot(
         {
           one: {
-            two: [
-              { three: { name: 'Gouda' } },
-              { three: { name: 'Brie' } },
-            ],
+            two: [{ three: { name: 'Gouda' } }, { three: { name: 'Brie' } }],
           },
         },
         `{ 
@@ -28,22 +24,22 @@ describe(`operations.restore`, () => {
               }
             }
         }`,
-        cacheContext
+        cacheContext,
       );
 
-      restoreGraphSnapshot = restore({
-        [QueryRootId]: {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          data: {
-            one: {
-              two: [
-                { three: { name: 'Gouda' } },
-                { three: { name: 'Brie' } },
-              ],
+      restoreGraphSnapshot = restore(
+        {
+          [QueryRootId]: {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            data: {
+              one: {
+                two: [{ three: { name: 'Gouda' } }, { three: { name: 'Brie' } }],
+              },
             },
           },
         },
-      }, cacheContext).cacheSnapshot.baseline;
+        cacheContext,
+      ).cacheSnapshot.baseline;
     });
 
     it(`restores GraphSnapshot from JSON serializable object`, () => {
@@ -53,6 +49,5 @@ describe(`operations.restore`, () => {
     it(`correctly restores different types of NodeSnapshot`, () => {
       jestExpect(restoreGraphSnapshot.getNodeSnapshot(QueryRootId)).toBeInstanceOf(EntitySnapshot);
     });
-
   });
 });

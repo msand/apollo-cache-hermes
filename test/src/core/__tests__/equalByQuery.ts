@@ -15,49 +15,27 @@ describe('equalByQuery', () => {
       }
     `;
 
+    expect(equalByQuery(query, { data: { hello: 'hi' } }, { data: { hello: 'hi' } })).toBe(true);
+
     expect(
-      equalByQuery(query, { data: { hello: 'hi' } }, { data: { hello: 'hi' } })
+      equalByQuery(query, { data: { hello: 'hi', unrelated: 1 } }, { data: { hello: 'hi', unrelated: 100 } }),
     ).toBe(true);
 
-    expect(
-      equalByQuery(
-        query,
-        { data: { hello: 'hi', unrelated: 1 } },
-        { data: { hello: 'hi', unrelated: 100 } }
-      )
-    ).toBe(true);
+    expect(equalByQuery(query, { data: { hello: 'hi' } }, { data: { hello: 'hey' } })).toBe(false);
 
-    expect(
-      equalByQuery(query, { data: { hello: 'hi' } }, { data: { hello: 'hey' } })
-    ).toBe(false);
+    expect(equalByQuery(query, { data: {} }, { data: { hello: 'hi' } })).toBe(false);
 
-    expect(equalByQuery(query, { data: {} }, { data: { hello: 'hi' } })).toBe(
-      false
-    );
+    expect(equalByQuery(query, { data: { hello: 'hi' } }, { data: {} })).toBe(false);
 
-    expect(equalByQuery(query, { data: { hello: 'hi' } }, { data: {} })).toBe(
-      false
-    );
+    expect(equalByQuery(query, { data: { hello: 'hi' } }, { data: null })).toBe(false);
 
-    expect(equalByQuery(query, { data: { hello: 'hi' } }, { data: null })).toBe(
-      false
-    );
-
-    expect(equalByQuery(query, { data: null }, { data: { hello: 'hi' } })).toBe(
-      false
-    );
+    expect(equalByQuery(query, { data: null }, { data: { hello: 'hi' } })).toBe(false);
 
     expect(equalByQuery(query, { data: null }, { data: null })).toBe(true);
 
     expect(equalByQuery(query, { data: {} }, { data: {} })).toBe(true);
 
-    expect(
-      equalByQuery(
-        query,
-        { data: { unrelated: 'whatever' } },
-        { data: { unrelated: 'no matter' } }
-      )
-    ).toBe(true);
+    expect(equalByQuery(query, { data: { unrelated: 'whatever' } }, { data: { unrelated: 'no matter' } })).toBe(true);
   });
 
   it('is not confused by properties in different orders', () => {
@@ -69,20 +47,10 @@ describe('equalByQuery', () => {
       }
     `;
 
-    expect(
-      equalByQuery(
-        query,
-        { data: { a: 1, b: 2, c: 3 } },
-        { data: { b: 2, c: 3, a: 1 } }
-      )
-    ).toBe(true);
+    expect(equalByQuery(query, { data: { a: 1, b: 2, c: 3 } }, { data: { b: 2, c: 3, a: 1 } })).toBe(true);
 
     expect(
-      equalByQuery(
-        query,
-        { data: { d: 'bogus', a: 1, b: 2, c: 3 } },
-        { data: { b: 2, c: 3, a: 1, d: 'also bogus' } }
-      )
+      equalByQuery(query, { data: { d: 'bogus', a: 1, b: 2, c: 3 } }, { data: { b: 2, c: 3, a: 1, d: 'also bogus' } }),
     ).toBe(true);
   });
 
@@ -95,21 +63,9 @@ describe('equalByQuery', () => {
       }
     `;
 
-    expect(
-      equalByQuery(
-        query,
-        { data: { a: 1, b: 2, c: 3 } },
-        { data: { a: 1, b: 2, c: 'different' } }
-      )
-    ).toBe(true);
+    expect(equalByQuery(query, { data: { a: 1, b: 2, c: 3 } }, { data: { a: 1, b: 2, c: 'different' } })).toBe(true);
 
-    expect(
-      equalByQuery(
-        query,
-        { data: { a: 1, b: 2, c: 3 } },
-        { data: { a: 'different', b: 2, c: 4 } }
-      )
-    ).toBe(false);
+    expect(equalByQuery(query, { data: { a: 1, b: 2, c: 3 } }, { data: { a: 'different', b: 2, c: 4 } })).toBe(false);
   });
 
   describe('@skip and @include directives', () => {
@@ -129,67 +85,32 @@ describe('equalByQuery', () => {
       `;
 
       expect(
-        equalByQuery(
-          skipQuery,
-          { data: { a: 1, b: 2, c: 3 } },
-          { data: { a: 1, b: 2, c: 3 } },
-          { condition: false }
-        )
+        equalByQuery(skipQuery, { data: { a: 1, b: 2, c: 3 } }, { data: { a: 1, b: 2, c: 3 } }, { condition: false }),
       ).toBe(true);
 
       expect(
-        equalByQuery(
-          skipQuery,
-          { data: { a: 1, b: 2, c: 3 } },
-          { data: { a: 1, b: 2 } },
-          { condition: false }
-        )
+        equalByQuery(skipQuery, { data: { a: 1, b: 2, c: 3 } }, { data: { a: 1, b: 2 } }, { condition: false }),
       ).toBe(false);
 
       expect(
-        equalByQuery(
-          skipQuery,
-          { data: { a: 1, b: 2, c: 3 } },
-          { data: { a: 1, b: 2 } },
-          { condition: true }
-        )
+        equalByQuery(skipQuery, { data: { a: 1, b: 2, c: 3 } }, { data: { a: 1, b: 2 } }, { condition: true }),
       ).toBe(true);
 
       expect(
-        equalByQuery(
-          skipQuery,
-          { data: { a: 1, b: 2 } },
-          { data: { a: 1, b: 2, c: 3 } },
-          { condition: false }
-        )
+        equalByQuery(skipQuery, { data: { a: 1, b: 2 } }, { data: { a: 1, b: 2, c: 3 } }, { condition: false }),
       ).toBe(false);
 
       expect(
-        equalByQuery(
-          skipQuery,
-          { data: { a: 1, b: 2 } },
-          { data: { a: 1, b: 2, c: 3 } },
-          { condition: true }
-        )
+        equalByQuery(skipQuery, { data: { a: 1, b: 2 } }, { data: { a: 1, b: 2, c: 3 } }, { condition: true }),
       ).toBe(true);
 
-      expect(
-        equalByQuery(
-          skipQuery,
-          { data: { a: 1, b: 2 } },
-          { data: { a: 1, b: 2 } },
-          { condition: false }
-        )
-      ).toBe(true);
+      expect(equalByQuery(skipQuery, { data: { a: 1, b: 2 } }, { data: { a: 1, b: 2 } }, { condition: false })).toBe(
+        true,
+      );
 
-      expect(
-        equalByQuery(
-          skipQuery,
-          { data: { a: 1, b: 2 } },
-          { data: { a: 1, b: 2 } },
-          { condition: true }
-        )
-      ).toBe(true);
+      expect(equalByQuery(skipQuery, { data: { a: 1, b: 2 } }, { data: { a: 1, b: 2 } }, { condition: true })).toBe(
+        true,
+      );
     });
 
     it('respects @include directive, depending on variables', () => {
@@ -202,67 +123,32 @@ describe('equalByQuery', () => {
       `;
 
       expect(
-        equalByQuery(
-          includeQuery,
-          { data: { a: 1, b: 2, c: 3 } },
-          { data: { a: 1, b: 2, c: 3 } },
-          { condition: true }
-        )
+        equalByQuery(includeQuery, { data: { a: 1, b: 2, c: 3 } }, { data: { a: 1, b: 2, c: 3 } }, { condition: true }),
       ).toBe(true);
 
       expect(
-        equalByQuery(
-          includeQuery,
-          { data: { a: 1, b: 2, c: 3 } },
-          { data: { a: 1, b: 2 } },
-          { condition: true }
-        )
+        equalByQuery(includeQuery, { data: { a: 1, b: 2, c: 3 } }, { data: { a: 1, b: 2 } }, { condition: true }),
       ).toBe(false);
 
       expect(
-        equalByQuery(
-          includeQuery,
-          { data: { a: 1, b: 2, c: 3 } },
-          { data: { a: 1, b: 2 } },
-          { condition: false }
-        )
+        equalByQuery(includeQuery, { data: { a: 1, b: 2, c: 3 } }, { data: { a: 1, b: 2 } }, { condition: false }),
       ).toBe(true);
 
       expect(
-        equalByQuery(
-          includeQuery,
-          { data: { a: 1, b: 2 } },
-          { data: { a: 1, b: 2, c: 3 } },
-          { condition: true }
-        )
+        equalByQuery(includeQuery, { data: { a: 1, b: 2 } }, { data: { a: 1, b: 2, c: 3 } }, { condition: true }),
       ).toBe(false);
 
       expect(
-        equalByQuery(
-          includeQuery,
-          { data: { a: 1, b: 2 } },
-          { data: { a: 1, b: 2, c: 3 } },
-          { condition: false }
-        )
+        equalByQuery(includeQuery, { data: { a: 1, b: 2 } }, { data: { a: 1, b: 2, c: 3 } }, { condition: false }),
       ).toBe(true);
 
-      expect(
-        equalByQuery(
-          includeQuery,
-          { data: { a: 1, b: 2 } },
-          { data: { a: 1, b: 2 } },
-          { condition: true }
-        )
-      ).toBe(true);
+      expect(equalByQuery(includeQuery, { data: { a: 1, b: 2 } }, { data: { a: 1, b: 2 } }, { condition: true })).toBe(
+        true,
+      );
 
-      expect(
-        equalByQuery(
-          includeQuery,
-          { data: { a: 1, b: 2 } },
-          { data: { a: 1, b: 2 } },
-          { condition: false }
-        )
-      ).toBe(true);
+      expect(equalByQuery(includeQuery, { data: { a: 1, b: 2 } }, { data: { a: 1, b: 2 } }, { condition: false })).toBe(
+        true,
+      );
     });
   });
 
@@ -279,69 +165,33 @@ describe('equalByQuery', () => {
     const oopsError = new GraphQLError('oops');
     const differentError = new GraphQLError('different');
 
+    expect(equalByQuery(query, { data: data123 }, { data: data123, errors: [oopsError] })).toBe(false);
+
+    expect(equalByQuery(query, { data: data123, errors: [oopsError] }, { data: data123 })).toBe(false);
+
+    expect(equalByQuery(query, { data: data123, errors: [oopsError] }, { data: data123, errors: [oopsError] })).toBe(
+      true,
+    );
+
     expect(
-      equalByQuery(
-        query,
-        { data: data123 },
-        { data: data123, errors: [oopsError] }
-      )
+      equalByQuery(query, { data: data123, errors: [oopsError] }, { data: data123, errors: [differentError] }),
     ).toBe(false);
 
-    expect(
-      equalByQuery(
-        query,
-        { data: data123, errors: [oopsError] },
-        { data: data123 }
-      )
-    ).toBe(false);
+    expect(equalByQuery(query, { data: data123, errors: [oopsError] }, { data: data123, errors: [oopsError] })).toBe(
+      true,
+    );
 
     expect(
       equalByQuery(
         query,
         { data: data123, errors: [oopsError] },
-        { data: data123, errors: [oopsError] }
-      )
+        { data: { ...data123, b: 100 }, errors: [oopsError] },
+      ),
     ).toBe(true);
 
-    expect(
-      equalByQuery(
-        query,
-        { data: data123, errors: [oopsError] },
-        { data: data123, errors: [differentError] }
-      )
-    ).toBe(false);
+    expect(equalByQuery(query, { data: data123, errors: [] }, { data: data123, errors: [] })).toBe(true);
 
-    expect(
-      equalByQuery(
-        query,
-        { data: data123, errors: [oopsError] },
-        { data: data123, errors: [oopsError] }
-      )
-    ).toBe(true);
-
-    expect(
-      equalByQuery(
-        query,
-        { data: data123, errors: [oopsError] },
-        { data: { ...data123, b: 100 }, errors: [oopsError] }
-      )
-    ).toBe(true);
-
-    expect(
-      equalByQuery(
-        query,
-        { data: data123, errors: [] },
-        { data: data123, errors: [] }
-      )
-    ).toBe(true);
-
-    expect(
-      equalByQuery(
-        query,
-        { data: data123, errors: [] },
-        { data: { ...data123, b: 100 }, errors: [] }
-      )
-    ).toBe(true);
+    expect(equalByQuery(query, { data: data123, errors: [] }, { data: { ...data123, b: 100 }, errors: [] })).toBe(true);
   });
 
   it('respects the @nonreactive directive on inline fragments', () => {
@@ -355,21 +205,9 @@ describe('equalByQuery', () => {
       }
     `;
 
-    expect(
-      equalByQuery(
-        query,
-        { data: { a: 1, b: 2, c: 3 } },
-        { data: { a: 1, b: 20, c: 30 } }
-      )
-    ).toBe(true);
+    expect(equalByQuery(query, { data: { a: 1, b: 2, c: 3 } }, { data: { a: 1, b: 20, c: 30 } })).toBe(true);
 
-    expect(
-      equalByQuery(
-        query,
-        { data: { a: 1, b: 2, c: 3 } },
-        { data: { a: 10, b: 20, c: 30 } }
-      )
-    ).toBe(false);
+    expect(equalByQuery(query, { data: { a: 1, b: 2, c: 3 } }, { data: { a: 10, b: 20, c: 30 } })).toBe(false);
   });
 
   it('respects the @nonreactive directive on named fragment ...spreads', () => {
@@ -385,37 +223,13 @@ describe('equalByQuery', () => {
       }
     `;
 
-    expect(
-      equalByQuery(
-        query,
-        { data: { a: 1, b: 2, c: 3 } },
-        { data: { a: 1, b: 2, c: 30 } }
-      )
-    ).toBe(true);
+    expect(equalByQuery(query, { data: { a: 1, b: 2, c: 3 } }, { data: { a: 1, b: 2, c: 30 } })).toBe(true);
 
-    expect(
-      equalByQuery(
-        query,
-        { data: { a: 1, b: 2, c: 3 } },
-        { data: { a: 1, b: 20, c: 3 } }
-      )
-    ).toBe(true);
+    expect(equalByQuery(query, { data: { a: 1, b: 2, c: 3 } }, { data: { a: 1, b: 20, c: 3 } })).toBe(true);
 
-    expect(
-      equalByQuery(
-        query,
-        { data: { a: 1, b: 2, c: 3 } },
-        { data: { a: 1, b: 20, c: 30 } }
-      )
-    ).toBe(true);
+    expect(equalByQuery(query, { data: { a: 1, b: 2, c: 3 } }, { data: { a: 1, b: 20, c: 30 } })).toBe(true);
 
-    expect(
-      equalByQuery(
-        query,
-        { data: { a: 1, b: 2, c: 3 } },
-        { data: { a: 10, b: 20, c: 30 } }
-      )
-    ).toBe(false);
+    expect(equalByQuery(query, { data: { a: 1, b: 2, c: 3 } }, { data: { a: 10, b: 20, c: 30 } })).toBe(false);
   });
 
   it('respects the @nonreactive directive on named fragment definitions', () => {
@@ -431,37 +245,13 @@ describe('equalByQuery', () => {
       }
     `;
 
-    expect(
-      equalByQuery(
-        query,
-        { data: { a: 1, b: 2, c: 3 } },
-        { data: { a: 1, b: 2, c: 30 } }
-      )
-    ).toBe(true);
+    expect(equalByQuery(query, { data: { a: 1, b: 2, c: 3 } }, { data: { a: 1, b: 2, c: 30 } })).toBe(true);
 
-    expect(
-      equalByQuery(
-        query,
-        { data: { a: 1, b: 2, c: 3 } },
-        { data: { a: 1, b: 20, c: 3 } }
-      )
-    ).toBe(true);
+    expect(equalByQuery(query, { data: { a: 1, b: 2, c: 3 } }, { data: { a: 1, b: 20, c: 3 } })).toBe(true);
 
-    expect(
-      equalByQuery(
-        query,
-        { data: { a: 1, b: 2, c: 3 } },
-        { data: { a: 1, b: 20, c: 30 } }
-      )
-    ).toBe(true);
+    expect(equalByQuery(query, { data: { a: 1, b: 2, c: 3 } }, { data: { a: 1, b: 20, c: 30 } })).toBe(true);
 
-    expect(
-      equalByQuery(
-        query,
-        { data: { a: 1, b: 2, c: 3 } },
-        { data: { a: 10, b: 20, c: 30 } }
-      )
-    ).toBe(false);
+    expect(equalByQuery(query, { data: { a: 1, b: 2, c: 3 } }, { data: { a: 10, b: 20, c: 30 } })).toBe(false);
   });
 
   it('traverses fragments without @nonreactive', () => {
@@ -477,60 +267,24 @@ describe('equalByQuery', () => {
       }
     `;
 
-    expect(
-      equalByQuery(
-        query,
-        { data: { a: 1, b: 2, c: 3 } },
-        { data: { a: 1, b: 2, c: 3 } }
-      )
-    ).toBe(true);
+    expect(equalByQuery(query, { data: { a: 1, b: 2, c: 3 } }, { data: { a: 1, b: 2, c: 3 } })).toBe(true);
 
-    expect(
-      equalByQuery(
-        query,
-        { data: { a: 1, b: 2, c: 3 } },
-        { data: { c: 3, a: 1, b: 2 } }
-      )
-    ).toBe(true);
+    expect(equalByQuery(query, { data: { a: 1, b: 2, c: 3 } }, { data: { c: 3, a: 1, b: 2 } })).toBe(true);
 
-    expect(
-      equalByQuery(
-        query,
-        { data: { a: 1, b: 2, c: 3 } },
-        { data: { a: 1, b: 2, c: 30 } }
-      )
-    ).toBe(false);
+    expect(equalByQuery(query, { data: { a: 1, b: 2, c: 3 } }, { data: { a: 1, b: 2, c: 30 } })).toBe(false);
 
-    expect(
-      equalByQuery(
-        query,
-        { data: { a: 1, b: 2, c: 3 } },
-        { data: { a: 1, b: 20, c: 3 } }
-      )
-    ).toBe(false);
+    expect(equalByQuery(query, { data: { a: 1, b: 2, c: 3 } }, { data: { a: 1, b: 20, c: 3 } })).toBe(false);
 
-    expect(
-      equalByQuery(
-        query,
-        { data: { a: 1, b: 2, c: 3 } },
-        { data: { a: 1, b: 20, c: 30 } }
-      )
-    ).toBe(false);
+    expect(equalByQuery(query, { data: { a: 1, b: 2, c: 3 } }, { data: { a: 1, b: 20, c: 30 } })).toBe(false);
 
-    expect(
-      equalByQuery(
-        query,
-        { data: { a: 1, b: 2, c: 3 } },
-        { data: { a: 10, b: 20, c: 30 } }
-      )
-    ).toBe(false);
+    expect(equalByQuery(query, { data: { a: 1, b: 2, c: 3 } }, { data: { a: 10, b: 20, c: 30 } })).toBe(false);
   });
 
   type Thing = {
-    __typename: 'Thing',
-    id: string,
-    stable: number,
-    volatile: number,
+    __typename: 'Thing';
+    id: string;
+    stable: number;
+    volatile: number;
   };
 
   it.each<TypedDocumentNode<Thing>>([
@@ -608,116 +362,97 @@ describe('equalByQuery', () => {
         }
       }
     `,
-  ])(
-    'iterates over array-valued result fields ignoring @nonreactive (%#)',
-    (query) => {
-      let nextVolatileIntegerPart = 0;
-      const makeThing = (id: string, stable = 1): Thing => ({
-        __typename: 'Thing',
-        id,
-        stable,
-        // Thing.volatile is always a different randomized number, which normally
-        // would threatens any deep comparison of Thing objects. These test cases
-        // demonstrate (among other things) that we can make the result comparison
-        // insensitive to this volatility by marking the volatile field with the
-        // @nonreactive directive.
-        volatile: nextVolatileIntegerPart++ + Math.random(),
-      });
+  ])('iterates over array-valued result fields ignoring @nonreactive (%#)', query => {
+    let nextVolatileIntegerPart = 0;
+    const makeThing = (id: string, stable = 1): Thing => ({
+      __typename: 'Thing',
+      id,
+      stable,
+      // Thing.volatile is always a different randomized number, which normally
+      // would threatens any deep comparison of Thing objects. These test cases
+      // demonstrate (among other things) that we can make the result comparison
+      // insensitive to this volatility by marking the volatile field with the
+      // @nonreactive directive.
+      volatile: nextVolatileIntegerPart++ + Math.random(),
+    });
 
-      const makeThings = (
-        lettersToSplit: string,
-        stable: number = 1
-      ): Thing[] => lettersToSplit.split('').map(id => makeThing(id, stable));
+    const makeThings = (lettersToSplit: string, stable: number = 1): Thing[] =>
+      lettersToSplit.split('').map(id => makeThing(id, stable));
 
-      expect(
-        equalByQuery(
-          query,
-          { data: { things: makeThings('abc') } },
-          { data: { things: [makeThing('a'), makeThing('b'), makeThing('c')] } }
-        )
-      ).toBe(true);
+    expect(
+      equalByQuery(
+        query,
+        { data: { things: makeThings('abc') } },
+        { data: { things: [makeThing('a'), makeThing('b'), makeThing('c')] } },
+      ),
+    ).toBe(true);
 
-      expect(
-        equalByQuery(
-          query,
-          { data: { things: makeThings('abcdefg', 2) } },
-          { data: { things: makeThings('abcdefg') } }
-        )
-      ).toBe(false);
+    expect(
+      equalByQuery(query, { data: { things: makeThings('abcdefg', 2) } }, { data: { things: makeThings('abcdefg') } }),
+    ).toBe(false);
 
-      expect(
-        equalByQuery(
-          query,
-          { data: { things: makeThings('abcdefg', 2) } },
-          { data: { things: makeThings('abcdefg', 3) } }
-        )
-      ).toBe(false);
+    expect(
+      equalByQuery(
+        query,
+        { data: { things: makeThings('abcdefg', 2) } },
+        { data: { things: makeThings('abcdefg', 3) } },
+      ),
+    ).toBe(false);
 
-      expect(
-        equalByQuery(
-          query,
-          { data: { things: makeThings('abcdefg', 3) } },
-          { data: { things: makeThings('abcdefg', 3) } }
-        )
-      ).toBe(true);
+    expect(
+      equalByQuery(
+        query,
+        { data: { things: makeThings('abcdefg', 3) } },
+        { data: { things: makeThings('abcdefg', 3) } },
+      ),
+    ).toBe(true);
 
-      expect(
-        equalByQuery(
-          query,
-          { data: { things: makeThings('ab', 2345) } },
-          { data: { things: [makeThing('a'), makeThing('b', 2345)] } }
-        )
-      ).toBe(false);
+    expect(
+      equalByQuery(
+        query,
+        { data: { things: makeThings('ab', 2345) } },
+        { data: { things: [makeThing('a'), makeThing('b', 2345)] } },
+      ),
+    ).toBe(false);
 
-      expect(
-        equalByQuery(
-          query,
-          { data: { things: makeThings('ab', 3456) } },
-          { data: { things: [makeThing('a', 3456), makeThing('b')] } }
-        )
-      ).toBe(false);
+    expect(
+      equalByQuery(
+        query,
+        { data: { things: makeThings('ab', 3456) } },
+        { data: { things: [makeThing('a', 3456), makeThing('b')] } },
+      ),
+    ).toBe(false);
 
-      expect(
-        equalByQuery(
-          query,
-          { data: { things: makeThings('ab', 3456) } },
-          { data: { things: [makeThing('a', 3456), makeThing('b', 3456)] } }
-        )
-      ).toBe(true);
+    expect(
+      equalByQuery(
+        query,
+        { data: { things: makeThings('ab', 3456) } },
+        { data: { things: [makeThing('a', 3456), makeThing('b', 3456)] } },
+      ),
+    ).toBe(true);
 
-      expect(
-        equalByQuery(
-          query,
-          { data: { things: makeThings('abc') } },
-          { data: { things: 'not an array' } }
-        )
-      ).toBe(false);
+    expect(equalByQuery(query, { data: { things: makeThings('abc') } }, { data: { things: 'not an array' } })).toBe(
+      false,
+    );
 
-      expect(
-        equalByQuery(query, { data: { things: {} } }, { data: { things: [] } })
-      ).toBe(false);
+    expect(equalByQuery(query, { data: { things: {} } }, { data: { things: [] } })).toBe(false);
 
-      expect(
-        equalByQuery(query, { data: { things: [] } }, { data: { things: {} } })
-      ).toBe(false);
+    expect(equalByQuery(query, { data: { things: [] } }, { data: { things: {} } })).toBe(false);
 
-      expect(
-        equalByQuery(query, { data: { things: [] } }, { data: { things: [] } })
-      ).toBe(true);
+    expect(equalByQuery(query, { data: { things: [] } }, { data: { things: [] } })).toBe(true);
 
-      expect(
-        equalByQuery(
-          query,
-          // There's nothing inherently array-like about the Query.things field as
-          // it's represented in query syntax, since `query { things { id } }` could
-          // (depending on the server/schema) return a single object for the things
-          // field, rather than an array. Although this might seem like a strange
-          // edge case to test, it demonstrates the equalByQuery function can handle
-          // any combination of array/non-array values.
-          { data: { things: {} } },
-          { data: { things: {} } }
-        )
-      ).toBe(true);
-    }
-  );
+    expect(
+      equalByQuery(
+        query,
+        // There's nothing inherently array-like about the Query.things field as
+        // it's represented in query syntax, since `query { things { id } }` could
+        // (depending on the server/schema) return a single object for the things
+        // field, rather than an array. Although this might seem like a strange
+        // edge case to test, it demonstrates the equalByQuery function can handle
+        // any combination of array/non-array values.
+        { data: { things: {} } },
+        { data: { things: {} } },
+      ),
+    ).toBe(true);
+  });
 });

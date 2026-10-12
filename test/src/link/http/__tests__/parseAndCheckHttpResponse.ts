@@ -20,66 +20,57 @@ describe('parseAndCheckResponse', () => {
 
   const operations = [createOperation({}, { query })];
 
-  itAsync(
-    'throws a Server error when response is > 300 with unparsable json',
-    (resolve, reject) => {
-      const status = 400;
-      fetchMock.mock('begin:/error', status);
-      fetch('error')
-        .then(parseAndCheckHttpResponse(operations))
-        .then(reject)
-        .catch((e) => {
-          expect(e.statusCode).toBe(status);
-          expect(e.name).toBe('ServerError');
-          expect(e).toHaveProperty('response');
-          expect(e.bodyText).toBe(undefined);
-          resolve();
-        })
-        .catch(reject);
-    }
-  );
+  itAsync('throws a Server error when response is > 300 with unparsable json', (resolve, reject) => {
+    const status = 400;
+    fetchMock.mock('begin:/error', status);
+    fetch('error')
+      .then(parseAndCheckHttpResponse(operations))
+      .then(reject)
+      .catch(e => {
+        expect(e.statusCode).toBe(status);
+        expect(e.name).toBe('ServerError');
+        expect(e).toHaveProperty('response');
+        expect(e.bodyText).toBe(undefined);
+        resolve();
+      })
+      .catch(reject);
+  });
 
-  itAsync(
-    'throws a ServerParse error when response is 200 with unparsable json',
-    (resolve, reject) => {
-      const status = 200;
-      fetchMock.mock('begin:/error', status);
-      fetch('error')
-        .then(parseAndCheckHttpResponse(operations))
-        .then(reject)
-        .catch((e) => {
-          expect(e.statusCode).toBe(status);
-          expect(e.name).toBe('ServerParseError');
-          expect(e).toHaveProperty('response');
-          expect(e).toHaveProperty('bodyText');
-          resolve();
-        })
-        .catch(reject);
-    }
-  );
+  itAsync('throws a ServerParse error when response is 200 with unparsable json', (resolve, reject) => {
+    const status = 200;
+    fetchMock.mock('begin:/error', status);
+    fetch('error')
+      .then(parseAndCheckHttpResponse(operations))
+      .then(reject)
+      .catch(e => {
+        expect(e.statusCode).toBe(status);
+        expect(e.name).toBe('ServerParseError');
+        expect(e).toHaveProperty('response');
+        expect(e).toHaveProperty('bodyText');
+        resolve();
+      })
+      .catch(reject);
+  });
 
-  itAsync(
-    'throws a network error with a status code and result',
-    (resolve, reject) => {
-      const status = 403;
-      const body = { data: 'fail' }; // does not contain data or errors
-      fetchMock.mock('begin:/error', {
-        body,
-        status,
-      });
-      fetch('error')
-        .then(parseAndCheckHttpResponse(operations))
-        .then(reject)
-        .catch((e) => {
-          expect(e.statusCode).toBe(status);
-          expect(e.name).toBe('ServerError');
-          expect(e).toHaveProperty('response');
-          expect(e).toHaveProperty('result');
-          resolve();
-        })
-        .catch(reject);
-    }
-  );
+  itAsync('throws a network error with a status code and result', (resolve, reject) => {
+    const status = 403;
+    const body = { data: 'fail' }; // does not contain data or errors
+    fetchMock.mock('begin:/error', {
+      body,
+      status,
+    });
+    fetch('error')
+      .then(parseAndCheckHttpResponse(operations))
+      .then(reject)
+      .catch(e => {
+        expect(e.statusCode).toBe(status);
+        expect(e.name).toBe('ServerError');
+        expect(e).toHaveProperty('response');
+        expect(e).toHaveProperty('result');
+        resolve();
+      })
+      .catch(reject);
+  });
 
   itAsync('throws a server error on incorrect data', (resolve, reject) => {
     const data = { hello: 'world' }; // does not contain data or erros
@@ -87,7 +78,7 @@ describe('parseAndCheckResponse', () => {
     fetch('incorrect')
       .then(parseAndCheckHttpResponse(operations))
       .then(reject)
-      .catch((e) => {
+      .catch(e => {
         expect(e.statusCode).toBe(200);
         expect(e.name).toBe('ServerError');
         expect(e).toHaveProperty('response');

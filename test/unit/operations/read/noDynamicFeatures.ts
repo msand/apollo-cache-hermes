@@ -7,7 +7,6 @@ import { query, silentConfig, strictConfig } from '../../../helpers';
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.read`, () => {
-
   const context = new CacheContext(strictConfig);
   const silentContext = new CacheContext(silentConfig);
   const empty = new GraphSnapshot();
@@ -19,7 +18,6 @@ describe(`operations.read`, () => {
   }`);
 
   describe(`with an empty cache`, () => {
-
     it(`returns undefined when fetching anything.`, () => {
       jestExpect(read(context, viewerQuery, empty).result).toBe(undefined);
     });
@@ -29,15 +27,13 @@ describe(`operations.read`, () => {
     });
 
     it(`includes no node ids if requested`, () => {
-      jestExpect(
-        Array.from(read(context, viewerQuery, empty, Object.create(null), true).entityIds)
-      ).toEqual(jestExpect.arrayContaining([]));
+      jestExpect(Array.from(read(context, viewerQuery, empty, Object.create(null), true).entityIds)).toEqual(
+        jestExpect.arrayContaining([]),
+      );
     });
-
   });
 
   describe(`with a complete cache`, () => {
-
     let snapshot: GraphSnapshot;
     beforeAll(() => {
       snapshot = write(context, empty, viewerQuery, {
@@ -67,11 +63,9 @@ describe(`operations.read`, () => {
       const { entityIds } = read(context, viewerQuery, snapshot, Object.create(null), true);
       jestExpect(Array.from(entityIds)).toEqual(jestExpect.arrayContaining([QueryRootId, '123']));
     });
-
   });
 
   describe(`with a partial write`, () => {
-
     let snapshot: GraphSnapshot;
     beforeAll(() => {
       snapshot = write(silentContext, empty, viewerQuery, {
@@ -99,11 +93,9 @@ describe(`operations.read`, () => {
       const { entityIds } = read(silentContext, viewerQuery, snapshot, Object.create(null), true);
       jestExpect(Array.from(entityIds)).toEqual(jestExpect.arrayContaining([QueryRootId, '123']));
     });
-
   });
 
   describe(`with a null subgraphs`, () => {
-
     let nestedQuery: RawOperation, snapshot: GraphSnapshot;
     beforeAll(() => {
       nestedQuery = query(`{
@@ -141,11 +133,9 @@ describe(`operations.read`, () => {
       const { entityIds } = read(context, nestedQuery, snapshot, Object.create(null), true);
       jestExpect(Array.from(entityIds)).toEqual(jestExpect.arrayContaining([QueryRootId]));
     });
-
   });
 
   describe(`with arrays of complete values`, () => {
-
     let snapshot: GraphSnapshot;
     beforeAll(() => {
       snapshot = write(context, empty, viewerQuery, {
@@ -177,30 +167,20 @@ describe(`operations.read`, () => {
       const { entityIds } = read(context, viewerQuery, snapshot, Object.create(null), true);
       jestExpect(Array.from(entityIds)).toEqual(jestExpect.arrayContaining([QueryRootId, '1', '2', '3']));
     });
-
   });
 
   describe(`with arrays of arrays of complete values`, () => {
-
     let snapshot: GraphSnapshot;
     beforeAll(() => {
       snapshot = write(context, empty, viewerQuery, {
-        viewer: [
-          [{ id: 1, name: 'Foo' }],
-          [{ id: 2, name: 'Bar' }],
-          [{ id: 3, name: 'Baz' }],
-        ],
+        viewer: [[{ id: 1, name: 'Foo' }], [{ id: 2, name: 'Bar' }], [{ id: 3, name: 'Baz' }]],
       }).snapshot;
     });
 
     it(`returns the selected values.`, () => {
       const { result } = read(context, viewerQuery, snapshot);
       jestExpect(result).toEqual({
-        viewer: [
-          [{ id: 1, name: 'Foo' }],
-          [{ id: 2, name: 'Bar' }],
-          [{ id: 3, name: 'Baz' }],
-        ],
+        viewer: [[{ id: 1, name: 'Foo' }], [{ id: 2, name: 'Bar' }], [{ id: 3, name: 'Baz' }]],
       });
     });
   });

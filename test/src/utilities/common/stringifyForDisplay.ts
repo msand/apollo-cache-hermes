@@ -7,7 +7,7 @@ export function stringifyForDisplay(value: any, space = 0): string {
     (key, value) => {
       return value === void 0 ? undefId : value;
     },
-    space
+    space,
   )
     .split(JSON.stringify(undefId))
     .join('<undefined>');

@@ -30,7 +30,7 @@ function addClientDirectiveToField(fieldName: string) {
   return (document: DocumentNode) => {
     return visit(document, {
       Field: {
-        leave: (node) => {
+        leave: node => {
           if (node.name.value === fieldName) {
             return {
               ...node,
@@ -92,9 +92,7 @@ it('returns unmodified document if trying to transform an already computed resul
 
   expect(cachedTransform.transformDocument(withoutClient)).toBe(withoutClient);
 
-  expect(uncachedTransform.transformDocument(withoutCustom)).toBe(
-    withoutCustom
-  );
+  expect(uncachedTransform.transformDocument(withoutCustom)).toBe(withoutCustom);
 });
 
 it('caches the result of the transform by default', () => {
@@ -158,14 +156,10 @@ it('allows custom cache keys to be defined', () => {
   let online = true;
 
   const onlineTransform = new DocumentTransform(stripDirective('network'));
-  const offlineTransform = new DocumentTransform(
-    renameDirective('network', 'client')
-  );
+  const offlineTransform = new DocumentTransform(renameDirective('network', 'client'));
 
   const transform = jest.fn((document: DocumentNode) => {
-    return online
-      ? onlineTransform.transformDocument(document)
-      : offlineTransform.transformDocument(document);
+    return online ? onlineTransform.transformDocument(document) : offlineTransform.transformDocument(document);
   });
 
   const documentTransform = new DocumentTransform(transform, {
@@ -232,7 +226,7 @@ it('can disable caching the result output', () => {
   expect(transform).toHaveBeenCalledTimes(2);
 });
 
-it('can combine 2 transforms with `concat`', async() => {
+it('can combine 2 transforms with `concat`', async () => {
   const query = gql`
     query TestQuery {
       user @nonreactive {
@@ -277,9 +271,7 @@ it('runs concatenated transform after original transform', () => {
     }
   `;
 
-  const addClientDirectiveToName = new DocumentTransform(
-    addClientDirectiveToField('name')
-  );
+  const addClientDirectiveToName = new DocumentTransform(addClientDirectiveToField('name'));
 
   expect(addClientDirectiveToName.transformDocument(query)).toMatchDocument(gql`
     query TestQuery {
@@ -298,7 +290,7 @@ it('runs concatenated transform after original transform', () => {
   expect(result).toMatchDocument(expected);
 });
 
-it('can combine multiple transforms with `concat`', async() => {
+it('can combine multiple transforms with `concat`', async () => {
   const query = gql`
     query TestQuery {
       user @nonreactive {
@@ -311,9 +303,7 @@ it('can combine multiple transforms with `concat`', async() => {
   const stripClient = new DocumentTransform(stripDirective('client'));
   const stripNonReactive = new DocumentTransform(stripDirective('nonreactive'));
   const stripConnection = new DocumentTransform(stripDirective('connection'));
-  const documentTransform = stripClient
-    .concat(stripNonReactive)
-    .concat(stripConnection);
+  const documentTransform = stripClient.concat(stripNonReactive).concat(stripConnection);
 
   const result = documentTransform.transformDocument(query);
 
@@ -327,7 +317,7 @@ it('can combine multiple transforms with `concat`', async() => {
   `);
 });
 
-it('caches the result output from a combined transform when both transforms are cached', async() => {
+it('caches the result output from a combined transform when both transforms are cached', async () => {
   const query = gql`
     query TestQuery {
       user @nonreactive {
@@ -351,9 +341,7 @@ it('caches the result output from a combined transform when both transforms are 
 
   const stripClientTransform = new DocumentTransform(stripClient);
   const stripNonReactiveTransform = new DocumentTransform(stripNonReactive);
-  const documentTransform = stripClientTransform.concat(
-    stripNonReactiveTransform
-  );
+  const documentTransform = stripClientTransform.concat(stripNonReactiveTransform);
 
   const result = documentTransform.transformDocument(query);
 
@@ -368,7 +356,7 @@ it('caches the result output from a combined transform when both transforms are 
   expect(stripNonReactive).toHaveBeenCalledTimes(1);
 });
 
-it('allows non cached transforms to be run when concatenated', async() => {
+it('allows non cached transforms to be run when concatenated', async () => {
   const query = gql`
     query TestQuery {
       user @nonreactive {
@@ -399,12 +387,9 @@ it('allows non cached transforms to be run when concatenated', async() => {
 
   // Try ordering the transforms both ways to ensure the cached transform has
   // no effect on whether the non-cached transform runs
-  const documentTransform
-    = stripNonReactiveTransform.concat(stripClientTransform);
+  const documentTransform = stripNonReactiveTransform.concat(stripClientTransform);
 
-  const reversedTransform = stripClientTransform.concat(
-    stripNonReactiveTransform
-  );
+  const reversedTransform = stripClientTransform.concat(stripNonReactiveTransform);
 
   const result = documentTransform.transformDocument(query);
 
@@ -457,10 +442,7 @@ it('can conditionally run transforms using `DocumentTransform.split`', () => {
     }
   `;
 
-  const documentTransform = DocumentTransform.split(
-    isQueryOperation,
-    new DocumentTransform(stripDirective('client'))
-  );
+  const documentTransform = DocumentTransform.split(isQueryOperation, new DocumentTransform(stripDirective('client')));
 
   const queryResult = documentTransform.transformDocument(query);
   const mutationResult = documentTransform.transformDocument(mutation);
@@ -499,7 +481,7 @@ it('properly caches the result of `filter` when the original transform is cached
   const transform = jest.fn(stripDirective('client'));
   const documentTransform = DocumentTransform.split(
     isQueryOperation,
-    new DocumentTransform(transform, { cache: true })
+    new DocumentTransform(transform, { cache: true }),
   );
 
   const result = documentTransform.transformDocument(query);
@@ -535,7 +517,7 @@ it('reruns transform returned from `DocumentTransform.split` when the original t
   const transform = jest.fn(stripDirective('client'));
   const documentTransform = DocumentTransform.split(
     isQueryOperation,
-    new DocumentTransform(transform, { cache: false })
+    new DocumentTransform(transform, { cache: false }),
   );
 
   const result = documentTransform.transformDocument(query);
@@ -571,16 +553,10 @@ it('properly handles combinations of `DocumentTransform.split` and `filter`', ()
   const stripNonReactive = new DocumentTransform(stripDirective('nonreactive'));
 
   // Strip both @client and @nonreactive but only on query types
-  const queryOnlyTransform = DocumentTransform.split(
-    isQueryOperation,
-    stripClient.concat(stripNonReactive)
-  );
+  const queryOnlyTransform = DocumentTransform.split(isQueryOperation, stripClient.concat(stripNonReactive));
 
   // Only strip @client from mutations but remove @nonreactive from all
-  const conditionalStrip = DocumentTransform.split(
-    isMutationOperation,
-    stripClient
-  ).concat(stripNonReactive);
+  const conditionalStrip = DocumentTransform.split(isMutationOperation, stripClient).concat(stripNonReactive);
 
   expect(queryOnlyTransform.transformDocument(query)).toMatchDocument(gql`
     query TestQuery {
@@ -591,9 +567,7 @@ it('properly handles combinations of `DocumentTransform.split` and `filter`', ()
     }
   `);
 
-  expect(queryOnlyTransform.transformDocument(mutation)).toMatchDocument(
-    mutation
-  );
+  expect(queryOnlyTransform.transformDocument(mutation)).toMatchDocument(mutation);
 
   expect(conditionalStrip.transformDocument(query)).toMatchDocument(gql`
     query TestQuery {
@@ -638,7 +612,7 @@ it('executes other transform when using `DocumentTransform.split` when condition
   const documentTransform = DocumentTransform.split(
     isQueryOperation,
     stripClient.concat(stripNonReactive),
-    stripNonReactive
+    stripNonReactive,
   );
 
   expect(documentTransform.transformDocument(query)).toMatchDocument(gql`

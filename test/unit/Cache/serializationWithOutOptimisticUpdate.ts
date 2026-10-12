@@ -6,8 +6,8 @@ import { Serializable } from '../../../src/schema';
 import { query, strictConfig } from '../../helpers';
 
 describe(`serialization without optimistic update`, () => {
-
-  const getAFooQuery =  query(`query getAFoo($id: ID!) {
+  const getAFooQuery = query(
+    `query getAFoo($id: ID!) {
     one {
       two {
         three(id: $id, withExtra: true) {
@@ -15,35 +15,34 @@ describe(`serialization without optimistic update`, () => {
         }
       }
     }
-  }`, { id: 0 });
+  }`,
+    { id: 0 },
+  );
 
   let originalCacheSnapshot: CacheSnapshot, extractResult: Serializable.GraphSnapshot, storedExtractResult: string;
   beforeEach(() => {
     const cache = new Cache(strictConfig);
-    cache.write(
-      getAFooQuery,
-      {
-        one: {
-          two: [
-            {
-              three: {
-                id: '30',
-                name: 'Three0',
-                extraValue: '30-42',
-              },
+    cache.write(getAFooQuery, {
+      one: {
+        two: [
+          {
+            three: {
+              id: '30',
+              name: 'Three0',
+              extraValue: '30-42',
             },
-            {
-              three: {
-                id: '31',
-                name: 'Three1',
-                extraValue: '31-42',
-              },
+          },
+          {
+            three: {
+              id: '31',
+              name: 'Three1',
+              extraValue: '31-42',
             },
-            null,
-          ],
-        },
+          },
+          null,
+        ],
       },
-    );
+    });
     originalCacheSnapshot = cache.getSnapshot();
     extractResult = cache.extract(/* optimistic */ false);
     storedExtractResult = JSON.stringify(extractResult);
@@ -61,5 +60,4 @@ describe(`serialization without optimistic update`, () => {
       newCache.restore(extractResult);
     }).to.throw(/Unexpected 'undefined'/);
   });
-
 });

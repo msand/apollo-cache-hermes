@@ -18,7 +18,10 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
 
   diff<T>(query: Cache.DiffOptions): Cache.DiffResult<T> {
     const rawOperation = buildRawOperationFromQuery(query.query, query.variables);
-    const { result, complete, missing, fromOptimisticTransaction } = this._queryable.read(rawOperation, query.optimistic);
+    const { result, complete, missing, fromOptimisticTransaction } = this._queryable.read(
+      rawOperation,
+      query.optimistic,
+    );
     if (query.returnPartialData === false && !complete) {
       // TODO: Include more detail with this error.
       throw new UnsatisfiedCacheError(`diffQuery not satisfied by the cache.`);
@@ -28,15 +31,22 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
   }
 
   read<TData = any, TVariables = any>(query: Cache.ReadOptions<TVariables, TData>): TData | null {
-    const rawOperation = buildRawOperationFromQuery(query.query, (query.variables as unknown) as JsonObject, query.rootId);
+    const rawOperation = buildRawOperationFromQuery(
+      query.query,
+      query.variables as unknown as JsonObject,
+      query.rootId,
+    );
     const { result, complete } = this._queryable.read(rawOperation, query.optimistic);
     if (complete || query.returnPartialData) {
-      return (result ?? null as unknown) as TData | null;
+      return (result ?? (null as unknown)) as TData | null;
     }
     return null;
   }
 
-  readQuery<QueryType, TVariables = any>(options: Cache.ReadQueryOptions<QueryType, TVariables>, optimistic?: boolean): QueryType | null {
+  readQuery<QueryType, TVariables = any>(
+    options: Cache.ReadQueryOptions<QueryType, TVariables>,
+    optimistic?: boolean,
+  ): QueryType | null {
     return this.read({
       query: options.query,
       variables: options.variables,
@@ -46,8 +56,10 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
     });
   }
 
-  readFragment<FragmentType, TVariables = any>(options: Cache.ReadFragmentOptions<FragmentType, TVariables>, optimistic?: boolean):
-    FragmentType | null {
+  readFragment<FragmentType, TVariables = any>(
+    options: Cache.ReadFragmentOptions<FragmentType, TVariables>,
+    optimistic?: boolean,
+  ): FragmentType | null {
     // TODO: Support nested fragments.
     const rawOperation = buildRawOperationFromFragment(
       options.fragment,
@@ -57,7 +69,7 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
     );
     const { complete, result } = this._queryable.read(rawOperation, optimistic);
     if (complete || options.returnPartialData) {
-      return result ?? null as any;
+      return result ?? (null as any);
     }
     return null;
   }
@@ -72,13 +84,17 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
     return ref ?? makeReference(rawOperation.rootId);
   }
 
-  writeQuery<TData = any, TVariables = any>(options: Cache.WriteQueryOptions<TData, TVariables>): Reference | undefined {
+  writeQuery<TData = any, TVariables = any>(
+    options: Cache.WriteQueryOptions<TData, TVariables>,
+  ): Reference | undefined {
     const rawOperation = buildRawOperationFromQuery(options.query, options.variables as any, options.id);
     const ref = this._queryable.write(rawOperation, options.data as any, options.broadcast);
     return ref ?? makeReference(rawOperation.rootId);
   }
 
-  writeFragment<TData = any, TVariables = any>(options: Cache.WriteFragmentOptions<TData, TVariables>): Reference | undefined {
+  writeFragment<TData = any, TVariables = any>(
+    options: Cache.WriteFragmentOptions<TData, TVariables>,
+  ): Reference | undefined {
     // TODO: Support nested fragments.
     const rawOperation = buildRawOperationFromFragment(
       options.fragment,
@@ -96,10 +112,7 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
 
   transformForLink(document: DocumentNode): DocumentNode {
     // @static directives are for the cache only.
-    return removeDirectivesFromDocument(
-      [{ name: 'static' }],
-      document
-    )!;
+    return removeDirectivesFromDocument([{ name: 'static' }], document)!;
   }
 
   evict(options: Cache.EvictOptions): boolean {

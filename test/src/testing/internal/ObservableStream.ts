@@ -3,31 +3,28 @@ import type { Observable } from '../../utilities/index';
 interface TakeOptions {
   timeout?: number;
 }
-type ObservableEvent<T> =
-  | { type: 'next', value: T }
-  | { type: 'error', error: any }
-  | { type: 'complete' };
+type ObservableEvent<T> = { type: 'next'; value: T } | { type: 'error'; error: any } | { type: 'complete' };
 
-async function *observableToAsyncEventIterator<T>(observable: Observable<T>) {
+async function* observableToAsyncEventIterator<T>(observable: Observable<T>) {
   let resolveNext: (value: ObservableEvent<T>) => void;
   const promises: Promise<ObservableEvent<T>>[] = [];
   queuePromise();
 
   function queuePromise() {
     promises.push(
-      new Promise<ObservableEvent<T>>((resolve) => {
+      new Promise<ObservableEvent<T>>(resolve => {
         resolveNext = (event: ObservableEvent<T>) => {
           resolve(event);
           queuePromise();
         };
-      })
+      }),
     );
   }
 
   observable.subscribe(
     value => resolveNext({ type: 'next', value }),
     error => resolveNext({ type: 'error', error }),
-    () => resolveNext({ type: 'complete' })
+    () => resolveNext({ type: 'complete' }),
   );
   yield 'initialization value' as unknown as Promise<ObservableEvent<T>>;
 
@@ -43,11 +40,7 @@ class IteratorStream<T> {
     return Promise.race([
       this.iterator.next().then(result => result.value!),
       new Promise<T>((_, reject) => {
-        setTimeout(
-          reject,
-          timeout,
-          new Error('Timeout waiting for next event')
-        );
+        setTimeout(reject, timeout, new Error('Timeout waiting for next event'));
       }),
     ]);
   }

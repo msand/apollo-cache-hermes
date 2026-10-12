@@ -27,7 +27,6 @@ export type TransactionCallback<TSerialized> = (transaction: CacheTransaction<TS
  * @see https://github.com/apollographql/apollo-client/blob/2.0-alpha/src/data/cache.ts
  */
 export class Cache<TSerialized = GraphSnapshot> implements Queryable {
-
   /** The cache-wide configuration. */
   private _context: CacheContext<TSerialized>;
 
@@ -42,7 +41,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
 
   constructor(
     configuration: CacheContext.Configuration<TSerialized> | undefined,
-    cacheInstance: Hermes<TSerialized> | undefined = undefined
+    cacheInstance: Hermes<TSerialized> | undefined = undefined,
   ) {
     const initialGraphSnapshot = new GraphSnapshot();
     this._snapshot = new CacheSnapshot(initialGraphSnapshot, initialGraphSnapshot, new OptimisticUpdateQueue());
@@ -54,7 +53,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
   // the number of times they have been released. Retained entities keep other
   // entities they reference (even indirectly) from being garbage collected.
   private _rootIds: {
-    [rootId: string]: number,
+    [rootId: string]: number;
   } = Object.create(null);
 
   public retain(rootId: string): number {
@@ -88,7 +87,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     const addRef = (ref: NodeReference) => ids.add(ref.id);
     const addRefs = (refs: NodeReference[]) => refs.forEach(addRef);
     const snapshot = { ...this._snapshot.optimistic._values };
-    ids.forEach((id) => {
+    ids.forEach(id => {
       if (hasOwn.call(snapshot, id)) {
         // Because we are iterating over an ECMAScript Set, the IDs we add here
         // will be visited in later iterations of the forEach loop only if they
@@ -104,7 +103,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     const idsToRemove = Object.keys(snapshot);
 
     if (idsToRemove.length) {
-      this.transaction(false, (t) => {
+      this.transaction(false, t => {
         t.batchEvict(idsToRemove);
       });
     }
@@ -132,7 +131,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     const cacheSnapshot = optimistic ? this._snapshot.optimistic : this._snapshot.baseline;
     return extract(
       pruneQuery ? prune(this._context, cacheSnapshot, pruneQuery).snapshot : cacheSnapshot,
-      this._context
+      this._context,
     );
   }
 
@@ -146,10 +145,15 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     // TODO: Can we drop non-optimistic reads?
     // https://github.com/apollographql/apollo-client/issues/1971#issuecomment-319402170
     const tempStore: NodeSnapshotMap = Object.create(null);
-    const result = read(this._context, query, optimistic ? this._snapshot.optimistic : this._snapshot.baseline, tempStore);
+    const result = read(
+      this._context,
+      query,
+      optimistic ? this._snapshot.optimistic : this._snapshot.baseline,
+      tempStore,
+    );
     const newKeys = Object.keys(tempStore);
     if (newKeys.length) {
-      this.transaction(true, (t) => {
+      this.transaction(true, t => {
         t.merge(tempStore);
       });
     }
@@ -191,7 +195,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
    */
   write(query: RawOperation, payload: JsonObject, broadcast: boolean | undefined = true): Reference | undefined {
     let ref;
-    this.transaction(broadcast, (t) => {
+    this.transaction(broadcast, t => {
       ref = t.write(query, payload);
     });
     return ref;
@@ -206,14 +210,12 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
    *
    * Returns whether the transaction was successful.
    */
-  transaction(
-    broadcast: boolean | undefined,
-    callback: TransactionCallback<TSerialized>
-  ): boolean;
+  transaction(broadcast: boolean | undefined, callback: TransactionCallback<TSerialized>): boolean;
 
   transaction(
     broadcast: boolean | undefined,
-    changeIdOrCallback: ChangeId, callback: TransactionCallback<TSerialized>
+    changeIdOrCallback: ChangeId,
+    callback: TransactionCallback<TSerialized>,
   ): boolean;
 
   transaction(
@@ -227,7 +229,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     broadcast: boolean | undefined,
     changeIdOrCallback: ChangeId | TransactionCallback<TSerialized> | undefined | null,
     callback?: TransactionCallback<TSerialized>,
-    onWatchUpdated?: CacheInterface.BatchOptions<Hermes<TSerialized>>['onWatchUpdated']
+    onWatchUpdated?: CacheInterface.BatchOptions<Hermes<TSerialized>>['onWatchUpdated'],
   ): boolean {
     const { tracer } = this._context;
 
@@ -352,10 +354,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     }
   }
 
-  public broadcastWatches(options?: Pick<
-    BatchOptions<Hermes<TSerialized>>,
-    'optimistic' | 'onWatchUpdated'
-  >) {
+  public broadcastWatches(options?: Pick<BatchOptions<Hermes<TSerialized>>, 'optimistic' | 'onWatchUpdated'>) {
     this._broadcastWatches(this._editedNodeIds, options?.onWatchUpdated, options?.optimistic);
   }
 
@@ -394,7 +393,6 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
   batchEvict(ids: Iterable<NodeId>, broadcast: boolean = true): boolean {
     return this.transaction(broadcast, t => t.batchEvict(ids));
   }
-
 }
 
 /**
@@ -404,7 +402,12 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
  * TODO: Can we special case ROOT_QUERY somehow; any fields hanging off of it
  * tend to aggressively bust the cache, when we don't really mean to.
  */
-function _copyUnaffectedCachedReads(lastSnapshot: GraphSnapshot, nextSnapshot: GraphSnapshot, editedNodeIds: Set<NodeId>, strict: boolean) {
+function _copyUnaffectedCachedReads(
+  lastSnapshot: GraphSnapshot,
+  nextSnapshot: GraphSnapshot,
+  editedNodeIds: Set<NodeId>,
+  strict: boolean,
+) {
   for (const [operation, result] of lastSnapshot.readCache) {
     const { complete, entityIds, dynamicNodeIds } = result;
     // We don't care about incomplete results.

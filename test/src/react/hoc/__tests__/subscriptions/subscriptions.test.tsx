@@ -23,12 +23,7 @@ describe('subscriptions', () => {
     console.error = error;
   });
 
-  const results = [
-    'James Baxley',
-    'John Pinkerton',
-    'Sam Claridge',
-    'Ben Coleman',
-  ].map(name => ({
+  const results = ['James Baxley', 'John Pinkerton', 'Sam Claridge', 'Ben Coleman'].map(name => ({
     result: { data: { user: { name } } },
     delay: 10,
   }));
@@ -52,9 +47,7 @@ describe('subscriptions', () => {
       user: { name: string };
     }
 
-    const ContainerWithData = graphql<Props, Data>(query)(({
-      data,
-    }: ChildProps<Props, Data>) => {
+    const ContainerWithData = graphql<Props, Data>(query)(({ data }: ChildProps<Props, Data>) => {
       expect(data).toBeTruthy();
       expect(data!.user).toBeFalsy();
       expect(data!.loading).toBeTruthy();
@@ -64,7 +57,7 @@ describe('subscriptions', () => {
     render(
       <ApolloProvider client={client}>
         <ContainerWithData />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
   });
 
@@ -91,9 +84,7 @@ describe('subscriptions', () => {
       user: { name: string };
     }
 
-    const ContainerWithData = graphql<Variables, Data>(query)(({
-      data,
-    }: ChildProps<Variables, Data>) => {
+    const ContainerWithData = graphql<Variables, Data>(query)(({ data }: ChildProps<Variables, Data>) => {
       expect(data).toBeTruthy();
       expect(data!.variables).toEqual(variables);
       return null;
@@ -102,7 +93,7 @@ describe('subscriptions', () => {
     render(
       <ApolloProvider client={client}>
         <ContainerWithData name={'James Baxley'} />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
   });
 
@@ -143,7 +134,7 @@ describe('subscriptions', () => {
         <ErrorBoundary>
           <ContainerWithData />
         </ErrorBoundary>
-      </ApolloProvider>
+      </ApolloProvider>,
     );
   });
 
@@ -198,7 +189,7 @@ describe('subscriptions', () => {
           count += 1;
           return null;
         }
-      }
+      },
     );
 
     const interval = setInterval(() => {
@@ -209,7 +200,7 @@ describe('subscriptions', () => {
     render(
       <ApolloProvider client={client}>
         <Container />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     act(() => {
@@ -220,26 +211,13 @@ describe('subscriptions', () => {
   itAsync('resubscribes to a subscription', (resolve, reject) => {
     // we make an extra Hoc which will trigger the inner HoC to resubscribe
     // these are the results for the outer subscription
-    const triggerResults = [
-      '0',
-      'trigger resubscribe',
-      '3',
-      '4',
-      '5',
-      '6',
-      '7',
-    ].map(trigger => ({
+    const triggerResults = ['0', 'trigger resubscribe', '3', '4', '5', '6', '7'].map(trigger => ({
       result: { data: { trigger } },
       delay: 10,
     }));
 
     // These are the results from the resubscription
-    const results3 = [
-      'NewUser: 1',
-      'NewUser: 2',
-      'NewUser: 3',
-      'NewUser: 4',
-    ].map(name => ({
+    const results3 = ['NewUser: 1', 'NewUser: 2', 'NewUser: 3', 'NewUser: 4'].map(name => ({
       result: { data: { user: { name } } },
       delay: 10,
     }));
@@ -269,7 +247,7 @@ describe('subscriptions', () => {
     const link = new ApolloLink((o, f) => (f ? f(o) : null)).split(
       ({ operationName }) => operationName === 'UserInfo',
       userLink,
-      triggerLink
+      triggerLink,
     );
 
     const client = new ApolloClient({
@@ -284,7 +262,7 @@ describe('subscriptions', () => {
 
     const Container = graphql<{}, TriggerData>(triggerQuery)(
       graphql<TriggerQueryChildProps, QueryData>(query, {
-        shouldResubscribe: (nextProps) => {
+        shouldResubscribe: nextProps => {
           return nextProps.data!.trigger === 'trigger resubscribe';
         },
       })(
@@ -329,8 +307,8 @@ describe('subscriptions', () => {
           render() {
             return null;
           }
-        }
-      )
+        },
+      ),
     );
 
     const interval = setInterval(() => {
@@ -351,7 +329,7 @@ describe('subscriptions', () => {
     render(
       <ApolloProvider client={client}>
         <Container />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
   });
 });

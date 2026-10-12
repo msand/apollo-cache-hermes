@@ -25,7 +25,7 @@ describe(`operations.prune`, () => {
             }
           }
       }`,
-      cacheContext
+      cacheContext,
     );
 
     const pruneQuery = query(`{ 
@@ -43,9 +43,7 @@ describe(`operations.prune`, () => {
     jestExpect(extractResult).toEqual({
       [QueryRootId]: {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
-        outbound: [
-          { id: '1', path: ['one', 'two', 'four'] },
-        ],
+        outbound: [{ id: '1', path: ['one', 'two', 'four'] }],
         data: {
           one: {
             two: {
@@ -61,5 +59,4 @@ describe(`operations.prune`, () => {
       },
     });
   });
-
 });

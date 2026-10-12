@@ -22,15 +22,8 @@ export function graphql<
     Partial<MutateProps<TData, TGraphQLVariables>>,
 >(
   document: DocumentNode,
-  operationOptions: OperationOption<
-    TProps,
-    TData,
-    TGraphQLVariables,
-    TChildProps
-  > = {}
-): (
-  WrappedComponent: ReactTypes.ComponentType<TProps & TChildProps>
-) => ReactTypes.ComponentClass<TProps> {
+  operationOptions: OperationOption<TProps, TData, TGraphQLVariables, TChildProps> = {},
+): (WrappedComponent: ReactTypes.ComponentType<TProps & TChildProps>) => ReactTypes.ComponentClass<TProps> {
   switch (parser(document).type) {
     case DocumentType.Mutation:
       return withMutation(document, operationOptions);

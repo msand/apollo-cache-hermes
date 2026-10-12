@@ -12,15 +12,14 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 // It just isn't very fruitful to unit test the individual steps of the write
 // workflow in isolation, given the contextual state that must be passed around.
 describe(`operations.write`, () => {
-
   const context = new CacheContext(strictConfig);
   const empty = new GraphSnapshot();
 
   describe(`nested parameterized value with an array of nested values`, () => {
-
     let nestedQuery: RawOperation, snapshot: GraphSnapshot, containerId: NodeId;
     beforeAll(() => {
-      nestedQuery = query(`query nested($id: ID!) {
+      nestedQuery = query(
+        `query nested($id: ID!) {
         one {
           two(id: $id) {
             three {
@@ -28,7 +27,9 @@ describe(`operations.write`, () => {
             }
           }
         }
-      }`, { id: 1 });
+      }`,
+        { id: 1 },
+      );
 
       containerId = nodeIdForParameterizedValue(QueryRootId, ['one', 'two'], { id: 1 });
 
@@ -96,6 +97,5 @@ describe(`operations.write`, () => {
         },
       ]);
     });
-
   });
 });

@@ -5,9 +5,7 @@ import { DocumentNode } from 'graphql';
 import { ApolloCache, ApolloClient, ApolloProvider, MutationFunction } from '@apollo/client';
 import { graphql, ChildProps } from '@apollo/client/react/hoc';
 
-import {
-  MutationUpdaterFunction,
-} from '../../../../core';
+import { MutationUpdaterFunction } from '../../../../core';
 import { mockSingleLink } from '../../../../testing';
 import { Hermes } from '../../../../../../src';
 
@@ -31,7 +29,7 @@ describe('graphql(mutation) update queries', () => {
   //
   // There are also a lot more assertions on the way to make sure everything is
   // going as smoothly as planned.
-  it('will run `update` for a previously mounted component', async() => {
+  it('will run `update` for a previously mounted component', async () => {
     const query: DocumentNode = gql`
       query todos {
         todo_list {
@@ -48,9 +46,9 @@ describe('graphql(mutation) update queries', () => {
 
     interface QueryData {
       todo_list: {
-        id: string,
-        title: string,
-        tasks: { id: string, text: string, completed: boolean }[],
+        id: string;
+        title: string;
+        tasks: { id: string; text: string; completed: boolean }[];
       };
     }
 
@@ -74,15 +72,13 @@ describe('graphql(mutation) update queries', () => {
     type MutationData = typeof mutationData;
 
     let todoUpdateQueryCount = 0;
-    const update: MutationUpdaterFunction<
-      MutationData,
-      Record<string, any>,
-      Record<string, any>,
-      ApolloCache<any>
-    > = (proxy, result) => {
+    const update: MutationUpdaterFunction<MutationData, Record<string, any>, Record<string, any>, ApolloCache<any>> = (
+      proxy,
+      result,
+    ) => {
       todoUpdateQueryCount++;
       const data = JSON.parse(
-        JSON.stringify(proxy.readQuery<QueryData>({ query })) // read from cache
+        JSON.stringify(proxy.readQuery<QueryData>({ query })), // read from cache
       );
       data!.todo_list.tasks.push(result.data!.createTodo); // update value
       proxy.writeQuery({ query, data }); // write to cache
@@ -98,7 +94,7 @@ describe('graphql(mutation) update queries', () => {
         result: { data: expectedData },
       },
       { request: { query: mutation }, result: { data: mutationData } },
-      { request: { query: mutation }, result: { data: mutationData } }
+      { request: { query: mutation }, result: { data: mutationData } },
     );
     const client = new ApolloClient({
       link,
@@ -118,7 +114,7 @@ describe('graphql(mutation) update queries', () => {
         render() {
           return null;
         }
-      }
+      },
     );
 
     let queryMountCount = 0;
@@ -196,23 +192,23 @@ describe('graphql(mutation) update queries', () => {
           queryRenderCount += 1;
           return null;
         }
-      }
+      },
     );
 
     const { unmount: mutationUnmount } = render(
       <ApolloProvider client={client}>
         <MyMutation />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     const { unmount: query1Unmount } = render(
       <ApolloProvider client={client}>
         <MyQuery />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     let resolveLastTimeout: () => void;
-    const allTimeoutsFinished = new Promise<void>((r) => {
+    const allTimeoutsFinished = new Promise<void>(r => {
       resolveLastTimeout = r;
     });
 
@@ -241,7 +237,7 @@ describe('graphql(mutation) update queries', () => {
             const { unmount: query2Unmount } = render(
               <ApolloProvider client={client}>
                 <MyQuery />
-              </ApolloProvider>
+              </ApolloProvider>,
             );
 
             catchingSetTimeout(() => {
@@ -267,7 +263,7 @@ describe('graphql(mutation) update queries', () => {
     }
   });
 
-  it('will run `refetchQueries` for a recycled queries', async() => {
+  it('will run `refetchQueries` for a recycled queries', async () => {
     const mutation: DocumentNode = gql`
       mutation createTodo {
         createTodo {
@@ -304,9 +300,9 @@ describe('graphql(mutation) update queries', () => {
 
     interface QueryData {
       todo_list: {
-        id: string,
-        title: string,
-        tasks: { id: string, text: string, completed: boolean }[],
+        id: string;
+        title: string;
+        tasks: { id: string; text: string; completed: boolean }[];
       };
     }
 
@@ -332,7 +328,7 @@ describe('graphql(mutation) update queries', () => {
       {
         request: { query, variables: { id: '123' } },
         result: { data: updatedData },
-      }
+      },
     );
     const client = new ApolloClient({
       link,
@@ -350,16 +346,14 @@ describe('graphql(mutation) update queries', () => {
         render() {
           return null;
         }
-      }
+      },
     );
 
     let queryMountCount = 0;
     let queryRenderCount = 0;
 
     const Query = graphql<QueryVariables, QueryData, QueryVariables>(query)(
-      class extends React.Component<
-        ChildProps<QueryVariables, QueryData, QueryVariables>
-      > {
+      class extends React.Component<ChildProps<QueryVariables, QueryData, QueryVariables>> {
         componentDidMount() {
           queryMountCount++;
         }
@@ -392,33 +386,31 @@ describe('graphql(mutation) update queries', () => {
           queryRenderCount += 1;
           return null;
         }
-      }
+      },
     );
 
     render(
       <ApolloProvider client={client}>
         <Mutation />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     render(
       <ApolloProvider client={client}>
         <Query id='123' />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     setTimeout(() => {
-      mutate({ refetchQueries: [{ query, variables: { id: '123' } }] }).then(
-        () => {
-          setTimeout(() => {
-            render(
-              <ApolloProvider client={client}>
-                <Query id='123' />
-              </ApolloProvider>
-            );
-          });
-        }
-      );
+      mutate({ refetchQueries: [{ query, variables: { id: '123' } }] }).then(() => {
+        setTimeout(() => {
+          render(
+            <ApolloProvider client={client}>
+              <Query id='123' />
+            </ApolloProvider>,
+          );
+        });
+      });
     });
 
     await waitFor(() => {

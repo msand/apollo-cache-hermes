@@ -12,15 +12,18 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 // It just isn't very fruitful to unit test the individual steps of the write
 // workflow in isolation, given the contextual state that must be passed around.
 describe(`operations.write`, () => {
-
   const context = new CacheContext(strictConfig);
   const empty = new GraphSnapshot();
 
   describe(`nested parameterized references with parameterized value`, () => {
-
-    let nestedQuery: RawOperation, snapshot: GraphSnapshot, parameterizedRootId: NodeId, parameterizedFieldId: NodeId, entityId: NodeId;
+    let nestedQuery: RawOperation,
+      snapshot: GraphSnapshot,
+      parameterizedRootId: NodeId,
+      parameterizedFieldId: NodeId,
+      entityId: NodeId;
     beforeAll(() => {
-      nestedQuery = query(`query nested($id: ID!) {
+      nestedQuery = query(
+        `query nested($id: ID!) {
         one {
           two(id: $id) {
             three {
@@ -31,7 +34,9 @@ describe(`operations.write`, () => {
             }
           }
         }
-      }`, { id: 1 });
+      }`,
+        { id: 1 },
+      );
 
       entityId = '31';
       parameterizedRootId = nodeIdForParameterizedValue(QueryRootId, ['one', 'two'], { id: 1 });
@@ -65,17 +70,17 @@ describe(`operations.write`, () => {
 
     it(`references the children from the parent entity`, () => {
       const entity = snapshot.getNodeSnapshot(entityId)!;
-      jestExpect(mapToEntries(entity.parameterized)).toEqual(jestExpect.arrayContaining([
-        { id: parameterizedFieldId, path: ['four'] },
-      ]));
+      jestExpect(mapToEntries(entity.parameterized)).toEqual(
+        jestExpect.arrayContaining([{ id: parameterizedFieldId, path: ['four'] }]),
+      );
     });
 
     it(`references the children from the parameterized root`, () => {
       const container = snapshot.getNodeSnapshot(parameterizedRootId)!;
 
-      jestExpect(mapToEntries2(container.outbound)).toEqual(jestExpect.arrayContaining([
-        { id: entityId, path: ['three'] },
-      ]));
+      jestExpect(mapToEntries2(container.outbound)).toEqual(
+        jestExpect.arrayContaining([{ id: entityId, path: ['three'] }]),
+      );
     });
 
     it(`writes an array with the correct length`, () => {
@@ -94,6 +99,5 @@ describe(`operations.write`, () => {
 
       jestExpect(updated.getNodeData(parameterizedRootId)).toEqual(null);
     });
-
   });
 });

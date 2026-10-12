@@ -51,10 +51,7 @@ describe('ApolloError', () => {
   });
 
   it('should add multiple graphql errors to the message', () => {
-    const graphQLErrors = [
-      new GraphQLError('this is new'),
-      new GraphQLError('this is old'),
-    ];
+    const graphQLErrors = [new GraphQLError('this is new'), new GraphQLError('this is old')];
     const apolloError = new ApolloError({
       graphQLErrors,
     });

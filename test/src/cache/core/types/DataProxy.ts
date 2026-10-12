@@ -56,8 +56,7 @@ export namespace DataProxy {
     variables?: TVariables;
   }
 
-  export interface ReadQueryOptions<TData, TVariables>
-    extends Query<TVariables, TData> {
+  export interface ReadQueryOptions<TData, TVariables> extends Query<TVariables, TData> {
     /**
      * Whether to return incomplete data rather than null.
      * Defaults to false.
@@ -73,8 +72,7 @@ export namespace DataProxy {
     canonizeResults?: boolean;
   }
 
-  export interface ReadFragmentOptions<TData, TVariables>
-    extends Fragment<TVariables, TData> {
+  export interface ReadFragmentOptions<TData, TVariables> extends Fragment<TVariables, TData> {
     /**
      * Whether to return incomplete data rather than null.
      * Defaults to false.
@@ -106,33 +104,25 @@ export namespace DataProxy {
     overwrite?: boolean;
   }
 
-  export interface WriteQueryOptions<TData, TVariables>
-    extends Query<TVariables, TData>,
-      WriteOptions<TData> {}
+  export interface WriteQueryOptions<TData, TVariables> extends Query<TVariables, TData>, WriteOptions<TData> {}
 
-  export interface WriteFragmentOptions<TData, TVariables>
-    extends Fragment<TVariables, TData>,
-      WriteOptions<TData> {}
+  export interface WriteFragmentOptions<TData, TVariables> extends Fragment<TVariables, TData>, WriteOptions<TData> {}
 
-  export interface UpdateQueryOptions<TData, TVariables>
-    extends Omit<
-      ReadQueryOptions<TData, TVariables> &
-        WriteQueryOptions<TData, TVariables>,
-      'data'
-    > {}
+  export interface UpdateQueryOptions<TData, TVariables> extends Omit<
+    ReadQueryOptions<TData, TVariables> & WriteQueryOptions<TData, TVariables>,
+    'data'
+  > {}
 
-  export interface UpdateFragmentOptions<TData, TVariables>
-    extends Omit<
-      ReadFragmentOptions<TData, TVariables> &
-        WriteFragmentOptions<TData, TVariables>,
-      'data'
-    > {}
+  export interface UpdateFragmentOptions<TData, TVariables> extends Omit<
+    ReadFragmentOptions<TData, TVariables> & WriteFragmentOptions<TData, TVariables>,
+    'data'
+  > {}
 
   export type DiffResult<T> = {
-    result?: T,
-    complete?: boolean,
-    missing?: MissingFieldError[],
-    fromOptimisticTransaction?: boolean,
+    result?: T;
+    complete?: boolean;
+    missing?: MissingFieldError[];
+    fromOptimisticTransaction?: boolean;
   };
 }
 
@@ -148,7 +138,7 @@ export interface DataProxy {
    */
   readQuery<QueryType, TVariables = any>(
     options: DataProxy.ReadQueryOptions<QueryType, TVariables>,
-    optimistic?: boolean
+    optimistic?: boolean,
   ): QueryType | null;
 
   /**
@@ -158,14 +148,14 @@ export interface DataProxy {
    */
   readFragment<FragmentType, TVariables = any>(
     options: DataProxy.ReadFragmentOptions<FragmentType, TVariables>,
-    optimistic?: boolean
+    optimistic?: boolean,
   ): FragmentType | null;
 
   /**
    * Writes a GraphQL query to the root query id.
    */
   writeQuery<TData = any, TVariables = any>(
-    options: DataProxy.WriteQueryOptions<TData, TVariables>
+    options: DataProxy.WriteQueryOptions<TData, TVariables>,
   ): Reference | undefined;
 
   /**
@@ -174,6 +164,6 @@ export interface DataProxy {
    * provided to select the correct fragment.
    */
   writeFragment<TData = any, TVariables = any>(
-    options: DataProxy.WriteFragmentOptions<TData, TVariables>
+    options: DataProxy.WriteFragmentOptions<TData, TVariables>,
   ): Reference | undefined;
 }

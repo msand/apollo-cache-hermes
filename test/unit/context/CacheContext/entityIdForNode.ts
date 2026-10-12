@@ -5,7 +5,6 @@ import { CacheContext } from '../../../../src/context';
 describe(`context.CacheContext`, () => {
   describe(`entityIdForNode`, () => {
     describe(`default behavior`, () => {
-
       let context: CacheContext;
       beforeAll(() => {
         context = new CacheContext();
@@ -39,11 +38,9 @@ describe(`context.CacheContext`, () => {
         expect(context.entityIdForValue([] as any)).to.eq(undefined);
         expect(context.entityIdForValue((() => {}) as any)).to.eq(undefined);
       });
-
     });
 
     describe(`custom mapper`, () => {
-
       let context: CacheContext, mapper: jest.Mock;
       beforeAll(() => {
         mapper = jest.fn();

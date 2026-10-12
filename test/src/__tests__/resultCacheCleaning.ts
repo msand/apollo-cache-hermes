@@ -1,4 +1,3 @@
-
 import { makeExecutableSchema } from '@graphql-tools/schema';
 import { ApolloClient, Resolvers, gql, NormalizedCacheObject, InMemoryCache } from '@apollo/client';
 
@@ -161,15 +160,15 @@ describe('resultCache cleaning', () => {
     expect(storeReader['executeSelectionSet'].size).toEqual(0);
   });
 
-  it(`empties all result caches after eviction - query`, async() => {
+  it(`empties all result caches after eviction - query`, async () => {
     await client.query({
       query,
       variables: { id: 1 },
     });
   });
 
-  it(`empties all result caches after eviction - watchQuery`, async() => {
-    return new Promise<void>((r) => {
+  it(`empties all result caches after eviction - watchQuery`, async () => {
+    return new Promise<void>(r => {
       const observable = client.watchQuery({
         query,
         variables: { id: 1 },

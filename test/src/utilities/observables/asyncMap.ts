@@ -6,9 +6,9 @@ import { Observable } from './Observable';
 export function asyncMap<V, R>(
   observable: Observable<V>,
   mapFn: (value: V) => R | PromiseLike<R>,
-  catchFn?: (error: any) => R | PromiseLike<R>
+  catchFn?: (error: any) => R | PromiseLike<R>,
 ): Observable<R> {
-  return new Observable<R>((observer) => {
+  return new Observable<R>(observer => {
     let promiseQueue = {
       // Normally we would initialize promiseQueue to Promise.resolve(), but
       // in this case, for backwards compatibility, we need to be careful to
@@ -18,22 +18,17 @@ export function asyncMap<V, R>(
       },
     } as Promise<void>;
 
-    function makeCallback(
-      examiner: typeof mapFn | typeof catchFn,
-      key: 'next' | 'error'
-    ): (arg: any) => void {
-      return (arg) => {
+    function makeCallback(examiner: typeof mapFn | typeof catchFn, key: 'next' | 'error'): (arg: any) => void {
+      return arg => {
         if (examiner) {
           const both = () =>
             // If the observer is closed, we don't want to continue calling the
             // mapping function - it's result will be swallowed anyways.
-            (observer.closed
-              /* will be swallowed */ ? (0 as any)
-              : examiner(arg));
+            observer.closed ? /* will be swallowed */ (0 as any) : examiner(arg);
 
           promiseQueue = promiseQueue.then(both, both).then(
             result => observer.next(result),
-            error => observer.error(error)
+            error => observer.error(error),
           );
         } else {
           observer[key](arg);

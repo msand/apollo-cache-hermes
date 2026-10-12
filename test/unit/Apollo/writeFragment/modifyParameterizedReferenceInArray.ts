@@ -7,7 +7,6 @@ import { nodeIdForParameterizedValue } from '../../../../src/operations/Snapshot
 import { strictConfig } from '../../../helpers';
 
 describe(`writeFragment with paramterized references in an array`, () => {
-
   let hermes: Hermes;
   const fragments = gql(`
     fragment shipper on Shipper {
@@ -111,17 +110,9 @@ describe(`writeFragment with paramterized references in an array`, () => {
       },
     });
 
-    const parameterizedShipmentId = nodeIdForParameterizedValue(
-      '123',
-      ['shipments'],
-      { destination: 'Seattle' }
-    );
+    const parameterizedShipmentId = nodeIdForParameterizedValue('123', ['shipments'], { destination: 'Seattle' });
 
-    const parameterizedShipperId = nodeIdForParameterizedValue(
-      'shipment0',
-      ['shipper'],
-      { operation: 'PNW' }
-    );
+    const parameterizedShipperId = nodeIdForParameterizedValue('shipment0', ['shipper'], { operation: 'PNW' });
 
     expect(hermes.getCurrentCacheSnapshot().baseline.getNodeSnapshot('shipment0')).to.deep.eq(
       new EntitySnapshot(
@@ -136,7 +127,7 @@ describe(`writeFragment with paramterized references in an array`, () => {
         [{ id: parameterizedShipmentId, path: [0] }],
         undefined,
         [{ id: parameterizedShipperId, path: ['shipper'] }],
-      )
+      ),
     );
 
     expect(hermes.getCurrentCacheSnapshot().baseline.getNodeSnapshot(parameterizedShipperId)).to.deep.eq(
@@ -147,8 +138,8 @@ describe(`writeFragment with paramterized references in an array`, () => {
           name: 'Munster',
         },
         [{ id: 'shipment0', path: ['shipper'] }],
-        [{ id: 'shipper0', path: [] }]
-      )
+        [{ id: 'shipper0', path: [] }],
+      ),
     );
   });
 
@@ -172,8 +163,9 @@ describe(`writeFragment with paramterized references in an array`, () => {
   });
 
   it(`correctly read cache after multiple writeFragments`, () => {
-    expect(hermes.readQuery({
-      query: gql(`
+    expect(
+      hermes.readQuery({
+        query: gql(`
       query readViewer($city: String!, $area: String!) {
         viewer {
           id
@@ -192,11 +184,12 @@ describe(`writeFragment with paramterized references in an array`, () => {
         }
       }
     `),
-      variables: {
-        city: 'Seattle',
-        area: 'PNW',
-      },
-    })).to.deep.eq({
+        variables: {
+          city: 'Seattle',
+          area: 'PNW',
+        },
+      }),
+    ).to.deep.eq({
       viewer: {
         id: 123,
         name: 'Gouda',
@@ -232,5 +225,4 @@ describe(`writeFragment with paramterized references in an array`, () => {
       },
     });
   });
-
 });

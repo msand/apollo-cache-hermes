@@ -8,7 +8,6 @@ import { strictConfig } from '../../../helpers';
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`readFragment when no fragment is provided`, () => {
-
   let hermes: Hermes;
   beforeAll(() => {
     hermes = new Hermes(strictConfig);
@@ -41,5 +40,4 @@ describe(`readFragment when no fragment is provided`, () => {
       });
     }).to.throw(/An error occurred! For more details, see the full error text at /i);
   });
-
 });

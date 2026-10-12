@@ -7,7 +7,6 @@ import { query, strictConfig } from '../../../helpers';
 
 describe(`context.CacheContext`, () => {
   describe(`entityUpdaters with updateListOfReference during optimistic change`, () => {
-
     const dashboardQuery = query(`
       query dashboard {
         dashboard {
@@ -68,7 +67,7 @@ describe(`context.CacheContext`, () => {
               }
             `),
           },
-          (previousUsers) => {
+          previousUsers => {
             if (!previousUsers) {
               return previousUsers;
             }
@@ -81,7 +80,7 @@ describe(`context.CacheContext`, () => {
             } else {
               return previousUsers; // No change.
             }
-          }
+          },
         );
       },
 
@@ -122,24 +121,20 @@ describe(`context.CacheContext`, () => {
     });
 
     it(`triggers updaters when an entity is added`, () => {
-      cache.transaction(
-        true,
-        /** changeIdOrCallback */ 'opt0',
-        (transaction) => {
-          transaction.write(
-            { ...getUserQuery, variables: { id: 4 } },
-            {
-              user: {
-                __typename: 'User',
-                id: 3,
-                name: 'Cheddar',
-                active: true,
-                currentDashboard: { id: 'dash0' },
-              },
-            }
-          );
-        }
-      );
+      cache.transaction(true, /** changeIdOrCallback */ 'opt0', transaction => {
+        transaction.write(
+          { ...getUserQuery, variables: { id: 4 } },
+          {
+            user: {
+              __typename: 'User',
+              id: 3,
+              name: 'Cheddar',
+              active: true,
+              currentDashboard: { id: 'dash0' },
+            },
+          },
+        );
+      });
 
       expect(userUpdater.mock.calls.length).to.eq(1);
       const [, user, previous] = userUpdater.mock.calls[0];
@@ -157,72 +152,59 @@ describe(`context.CacheContext`, () => {
     });
 
     it(`triggers updaters when an entity is orphaned`, () => {
-      cache.transaction(
-        true,
-        /** changeIdOrCallback */ 'opt1',
-        (transaction) => {
-          transaction.write(
-            dashboardQuery,
-            {
-              dashboard: {
-                name: 'Main Dashboard',
-                id: 'dash0',
-                users: [
-                  {
-                    __typename: 'User',
-                    id: 2,
-                    name: 'Munster',
-                    active: true,
-                    currentDashboard: {
-                      id: 'dash0',
-                      name: 'Main Dashboard',
-                    },
-                  },
-                ],
+      cache.transaction(true, /** changeIdOrCallback */ 'opt1', transaction => {
+        transaction.write(dashboardQuery, {
+          dashboard: {
+            name: 'Main Dashboard',
+            id: 'dash0',
+            users: [
+              {
+                __typename: 'User',
+                id: 2,
+                name: 'Munster',
+                active: true,
+                currentDashboard: {
+                  id: 'dash0',
+                  name: 'Main Dashboard',
+                },
               },
-            }
-          );
-        }
-      );
+            ],
+          },
+        });
+      });
 
       expect(userUpdater.mock.calls.length).to.eq(1);
       const [, user, previous] = userUpdater.mock.calls[0];
       expect(user).to.eq(undefined);
-      expect(previous).to.deep.eq(
-        {
-          __typename: 'User',
-          id: 1,
-          name: 'Gouda',
-          active: true,
-          currentDashboard: {
-            id: 'dash0',
-            name: 'Main Dashboard',
-          },
-        }
-      );
+      expect(previous).to.deep.eq({
+        __typename: 'User',
+        id: 1,
+        name: 'Gouda',
+        active: true,
+        currentDashboard: {
+          id: 'dash0',
+          name: 'Main Dashboard',
+        },
+      });
     });
 
     it(`respects writes by updaters`, () => {
-      cache.transaction(
-        true,
-        /** changeIdOrCallback */ 'opt2',
-        (transaction) => {
-          transaction.write(
-            { ...getUserQuery, variables: { id: 2 } },
-            {
-              user: {
-                __typename: 'User',
-                id: 2,
-                name: 'Munster',
-                active: false,
-                currentDashboard: {
-                  id: 'dash0',
-                },
+      cache.transaction(true, /** changeIdOrCallback */ 'opt2', transaction => {
+        transaction.write(
+          { ...getUserQuery, variables: { id: 2 } },
+          {
+            user: {
+              __typename: 'User',
+              id: 2,
+              name: 'Munster',
+              active: false,
+              currentDashboard: {
+                id: 'dash0',
               },
-            }
-          );
-        }
-      );
+            },
+          },
+        );
+      });
 
       expect(cache.read(dashboardQuery).result).to.deep.eq({
         dashboard: {
@@ -272,6 +254,5 @@ describe(`context.CacheContext`, () => {
         },
       });
     });
-
   });
 });

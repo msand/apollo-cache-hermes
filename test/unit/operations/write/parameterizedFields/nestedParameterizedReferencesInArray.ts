@@ -12,31 +12,29 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 // It just isn't very fruitful to unit test the individual steps of the write
 // workflow in isolation, given the contextual state that must be passed around.
 describe(`operations.write`, () => {
-
   const context = new CacheContext(strictConfig);
   const empty = new GraphSnapshot();
 
   describe(`nested parameterized references in an array`, () => {
-
     let nestedQuery: RawOperation, snapshot: GraphSnapshot, containerId: NodeId;
     beforeAll(() => {
-      nestedQuery = query(`
+      nestedQuery = query(
+        `
         query nested($id: ID!) {
           one {
             two(id: $id) {
               three { id }
             }
           }
-        }`, { id: 1 });
+        }`,
+        { id: 1 },
+      );
 
       containerId = nodeIdForParameterizedValue(QueryRootId, ['one', 'two'], { id: 1 });
 
       snapshot = write(context, empty, nestedQuery, {
         one: {
-          two: [
-            { three: { id: 1 } },
-            { three: { id: 2 } },
-          ],
+          two: [{ three: { id: 1 } }, { three: { id: 2 } }],
         },
       }).snapshot;
     });
@@ -54,36 +52,39 @@ describe(`operations.write`, () => {
       const entry1 = snapshot.getNodeSnapshot('1')!;
       const entry2 = snapshot.getNodeSnapshot('2')!;
 
-      jestExpect(mapToEntries2(entry1.inbound)).toEqual(jestExpect.arrayContaining([{ id: containerId, path: [0, 'three'] }]));
-      jestExpect(mapToEntries2(entry2.inbound)).toEqual(jestExpect.arrayContaining([{ id: containerId, path: [1, 'three'] }]));
+      jestExpect(mapToEntries2(entry1.inbound)).toEqual(
+        jestExpect.arrayContaining([{ id: containerId, path: [0, 'three'] }]),
+      );
+      jestExpect(mapToEntries2(entry2.inbound)).toEqual(
+        jestExpect.arrayContaining([{ id: containerId, path: [1, 'three'] }]),
+      );
     });
 
     it(`references the children from the parent`, () => {
       const container = snapshot.getNodeSnapshot(containerId)!;
 
-      jestExpect(mapToEntries2(container.outbound)).toEqual(jestExpect.arrayContaining([
-        { id: '1', path: [0, 'three'] },
-        { id: '2', path: [1, 'three'] },
-      ]));
+      jestExpect(mapToEntries2(container.outbound)).toEqual(
+        jestExpect.arrayContaining([
+          { id: '1', path: [0, 'three'] },
+          { id: '2', path: [1, 'three'] },
+        ]),
+      );
     });
 
     it(`allows shifting from the front`, () => {
       const updated = write(context, snapshot, nestedQuery, {
         one: {
-          two: [
-            { three: { id: 2 } },
-          ],
+          two: [{ three: { id: 2 } }],
         },
       }).snapshot;
 
-      jestExpect(mapToEntries2(updated.getNodeSnapshot(containerId)!.outbound)).toEqual(jestExpect.arrayContaining([
-        { id: '2', path: [0, 'three'] },
-      ]));
+      jestExpect(mapToEntries2(updated.getNodeSnapshot(containerId)!.outbound)).toEqual(
+        jestExpect.arrayContaining([{ id: '2', path: [0, 'three'] }]),
+      );
 
-      jestExpect(mapToEntries2(updated.getNodeSnapshot('2')!.inbound)).toEqual(jestExpect.arrayContaining([
-        { id: containerId, path: [0, 'three'] },
-      ]));
+      jestExpect(mapToEntries2(updated.getNodeSnapshot('2')!.inbound)).toEqual(
+        jestExpect.arrayContaining([{ id: containerId, path: [0, 'three'] }]),
+      );
     });
-
   });
 });

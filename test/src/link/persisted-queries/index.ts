@@ -2,15 +2,17 @@ import type { DocumentNode, ExecutionResult, GraphQLError } from 'graphql';
 import { ApolloLink } from '@apollo/client';
 
 import { invariant } from '../../utilities/globals/index';
-import { print, Observable, compact, isNonEmptyArray,
+import {
+  print,
+  Observable,
+  compact,
+  isNonEmptyArray,
   cacheSizes,
   AutoCleanedWeakCache,
-  defaultCacheSizes } from '../../utilities/index';
-import type { Operation } from '../core/index';
-import type {
-  Observer,
-  ObservableSubscription,
+  defaultCacheSizes,
 } from '../../utilities/index';
+import type { Operation } from '../core/index';
+import type { Observer, ObservableSubscription } from '../../utilities/index';
 import type { NetworkError } from '../../errors/index';
 import type { ServerError } from '../utils/index';
 
@@ -25,14 +27,12 @@ export interface ErrorResponse {
 }
 
 type ErrorMeta = {
-  persistedQueryNotSupported: boolean,
-  persistedQueryNotFound: boolean,
+  persistedQueryNotSupported: boolean;
+  persistedQueryNotFound: boolean;
 };
 
 type SHA256Function = (...args: any[]) => string | PromiseLike<string>;
-type GenerateHashFunction = (
-  document: DocumentNode
-) => string | PromiseLike<string>;
+type GenerateHashFunction = (document: DocumentNode) => string | PromiseLike<string>;
 
 interface BaseOptions {
   disable?: (error: ErrorResponse) => boolean;
@@ -54,48 +54,34 @@ export namespace PersistedQueryLink {
   export type Options = SHA256Options | GenerateHashOptions;
 }
 
-function processErrors(
-  graphQLErrors: GraphQLError[] | readonly GraphQLError[] | undefined
-): ErrorMeta {
+function processErrors(graphQLErrors: GraphQLError[] | readonly GraphQLError[] | undefined): ErrorMeta {
   const byMessage = Object.create(null),
     byCode = Object.create(null);
 
   if (isNonEmptyArray(graphQLErrors)) {
-    graphQLErrors.forEach((error) => {
+    graphQLErrors.forEach(error => {
       byMessage[error.message] = error;
       if (typeof error.extensions?.code === 'string') byCode[error.extensions.code] = error;
     });
   }
   return {
-    persistedQueryNotSupported: !!(
-      byMessage.PersistedQueryNotSupported ||
-      byCode.PERSISTED_QUERY_NOT_SUPPORTED
-    ),
-    persistedQueryNotFound: !!(
-      byMessage.PersistedQueryNotFound || byCode.PERSISTED_QUERY_NOT_FOUND
-    ),
+    persistedQueryNotSupported: !!(byMessage.PersistedQueryNotSupported || byCode.PERSISTED_QUERY_NOT_SUPPORTED),
+    persistedQueryNotFound: !!(byMessage.PersistedQueryNotFound || byCode.PERSISTED_QUERY_NOT_FOUND),
   };
 }
 
 const defaultOptions: Required<BaseOptions> = {
   disable: ({ meta }) => meta.persistedQueryNotSupported,
-  retry: ({ meta }) =>
-    meta.persistedQueryNotSupported || meta.persistedQueryNotFound,
+  retry: ({ meta }) => meta.persistedQueryNotSupported || meta.persistedQueryNotFound,
   useGETForHashedQueries: false,
 };
 
 function operationDefinesMutation(operation: Operation) {
-  return operation.query.definitions.some(
-    d => d.kind === 'OperationDefinition' && d.operation === 'mutation'
-  );
+  return operation.query.definitions.some(d => d.kind === 'OperationDefinition' && d.operation === 'mutation');
 }
 
-export const createPersistedQueryLink = (
-  options: PersistedQueryLink.Options
-) => {
-  let hashesByQuery:
-    | AutoCleanedWeakCache<DocumentNode, Promise<string>>
-    | undefined;
+export const createPersistedQueryLink = (options: PersistedQueryLink.Options) => {
+  let hashesByQuery: AutoCleanedWeakCache<DocumentNode, Promise<string>> | undefined;
   function resetHashCache() {
     hashesByQuery = undefined;
   }
@@ -107,12 +93,10 @@ export const createPersistedQueryLink = (
   // function (via the `generateHash` option) if they want to handle
   // hashing with something other than SHA-256.
   invariant(
-    options &&
-      (typeof options.sha256 === 'function' ||
-        typeof options.generateHash === 'function'),
-    'Missing/invalid "sha256" or "generateHash" function. Please '
-      + 'configure one using the "createPersistedQueryLink(options)" options '
-      + 'parameter.'
+    options && (typeof options.sha256 === 'function' || typeof options.generateHash === 'function'),
+    'Missing/invalid "sha256" or "generateHash" function. Please ' +
+      'configure one using the "createPersistedQueryLink(options)" options ' +
+      'parameter.',
   );
 
   const {
@@ -121,8 +105,7 @@ export const createPersistedQueryLink = (
     // `sha256` option will be ignored. Developers can configure and
     // use any hashing approach they want in a custom `generateHash`
     // function; they aren't limited to SHA-256.
-    generateHash = (query: DocumentNode) =>
-      Promise.resolve<string>(sha256!(print(query))),
+    generateHash = (query: DocumentNode) => Promise.resolve<string>(sha256!(print(query))),
     disable,
     retry,
     useGETForHashedQueries,
@@ -130,8 +113,7 @@ export const createPersistedQueryLink = (
 
   let supportsPersistedQueries = true;
 
-  const getHashPromise = (query: DocumentNode) =>
-    new Promise<string>(resolve => resolve(generateHash(query)));
+  const getHashPromise = (query: DocumentNode) => new Promise<string>(resolve => resolve(generateHash(query)));
 
   function getQueryHash(query: DocumentNode): Promise<string> {
     if (!query || typeof query !== 'object') {
@@ -143,7 +125,7 @@ export const createPersistedQueryLink = (
     if (!hashesByQuery) {
       hashesByQuery = new AutoCleanedWeakCache(
         cacheSizes['PersistedQueryLink.persistedQueryHashes'] ||
-          defaultCacheSizes['PersistedQueryLink.persistedQueryHashes']
+          defaultCacheSizes['PersistedQueryLink.persistedQueryHashes'],
       );
     }
     let hash = hashesByQuery.get(query)!;
@@ -153,10 +135,7 @@ export const createPersistedQueryLink = (
 
   return Object.assign(
     new ApolloLink((operation, forward) => {
-      invariant(
-        forward,
-        'PersistedQueryLink cannot be the last link in the chain.'
-      );
+      invariant(forward, 'PersistedQueryLink cannot be the last link in the chain.');
 
       const { query } = operation;
 
@@ -166,11 +145,8 @@ export const createPersistedQueryLink = (
         let originalFetchOptions: any;
         let setFetchOptions = false;
         const maybeRetry = (
-          {
-            response,
-            networkError,
-          }: { response?: ExecutionResult, networkError?: ServerError },
-          cb: () => void
+          { response, networkError }: { response?: ExecutionResult; networkError?: ServerError },
+          cb: () => void,
         ) => {
           if (!retried && ((response && response.errors) || networkError)) {
             retried = true;
@@ -185,10 +161,7 @@ export const createPersistedQueryLink = (
             // Network errors can return GraphQL errors on for example a 403
             let networkErrors: GraphQLError[] | undefined;
             if (typeof networkError?.result !== 'string') {
-              networkErrors
-                = networkError &&
-                networkError.result &&
-                (networkError.result.errors as GraphQLError[]);
+              networkErrors = networkError && networkError.result && (networkError.result.errors as GraphQLError[]);
             }
             if (isNonEmptyArray(networkErrors)) {
               graphQLErrors.push(...networkErrors);
@@ -198,8 +171,7 @@ export const createPersistedQueryLink = (
               response,
               networkError,
               operation,
-              graphQLErrors:
-                isNonEmptyArray(graphQLErrors) ? graphQLErrors : void 0,
+              graphQLErrors: isNonEmptyArray(graphQLErrors) ? graphQLErrors : void 0,
               meta: processErrors(graphQLErrors),
             };
 
@@ -258,28 +230,22 @@ export const createPersistedQueryLink = (
         // If requested, set method to GET if there are no mutations. Remember the
         // original fetchOptions so we can restore them if we fall back to a
         // non-hashed request.
-        if (
-          useGETForHashedQueries &&
-          supportsPersistedQueries &&
-          !operationDefinesMutation(operation)
-        ) {
-          operation.setContext(
-            ({ fetchOptions = {} }: { fetchOptions: Record<string, any> }) => {
-              originalFetchOptions = fetchOptions;
-              return {
-                fetchOptions: {
-                  ...fetchOptions,
-                  method: 'GET',
-                },
-              };
-            }
-          );
+        if (useGETForHashedQueries && supportsPersistedQueries && !operationDefinesMutation(operation)) {
+          operation.setContext(({ fetchOptions = {} }: { fetchOptions: Record<string, any> }) => {
+            originalFetchOptions = fetchOptions;
+            return {
+              fetchOptions: {
+                ...fetchOptions,
+                method: 'GET',
+              },
+            };
+          });
           setFetchOptions = true;
         }
 
         if (supportsPersistedQueries) {
           getQueryHash(query)
-            .then((sha256Hash) => {
+            .then(sha256Hash => {
               operation.extensions.persistedQuery = {
                 version: VERSION,
                 sha256Hash,
@@ -301,14 +267,14 @@ export const createPersistedQueryLink = (
     },
     __DEV__
       ? {
-        getMemoryInternals() {
-          return {
-            PersistedQueryLink: {
-              persistedQueryHashes: hashesByQuery?.size ?? 0,
-            },
-          };
-        },
-      }
-      : {}
+          getMemoryInternals() {
+            return {
+              PersistedQueryLink: {
+                persistedQueryHashes: hashesByQuery?.size ?? 0,
+              },
+            };
+          },
+        }
+      : {},
   );
 };

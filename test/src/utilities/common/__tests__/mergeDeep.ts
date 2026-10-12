@@ -41,11 +41,10 @@ describe('mergeDeep', () => {
   });
 
   it('should resolve conflicts among more than two objects', () => {
-
     type Value = { value: number };
     type Nested = { [p: string]: Value | Nested };
     type Conflicts = Nested & {
-      conflict: Nested & { nested: Nested },
+      conflict: Nested & { nested: Nested };
     };
     const sources: Conflicts[] = [];
 
@@ -74,9 +73,7 @@ describe('mergeDeep', () => {
 
       expect(merged.conflict.nested).not.toBe(source.conflict.nested);
       expect(merged.conflict.nested[`nested${i}`].value).toBe(i);
-      expect(merged.conflict.nested[`nested${i}`]).toBe(
-        source.conflict.nested[`nested${i}`]
-      );
+      expect(merged.conflict.nested[`nested${i}`]).toBe(source.conflict.nested[`nested${i}`]);
     });
   });
 
@@ -87,23 +84,13 @@ describe('mergeDeep', () => {
 
     const d = { 1: { d: 'dee' } };
 
-    expect(mergeDeep(a, b, c, d)).toEqual([
-      { a: 1, b: 2, c: 3 },
-      { a: 'ay', b: 'bee', c: 'cee', d: 'dee' },
-      'c',
-    ]);
+    expect(mergeDeep(a, b, c, d)).toEqual([{ a: 1, b: 2, c: 3 }, { a: 'ay', b: 'bee', c: 'cee', d: 'dee' }, 'c']);
   });
 
   it('lets the last conflicting value win', () => {
     expect(mergeDeep('a', 'b', 'c')).toBe('c');
 
-    expect(
-      mergeDeep(
-        { a: 'a', conflict: 1 },
-        { b: 'b', conflict: 2 },
-        { c: 'c', conflict: 3 }
-      )
-    ).toEqual({
+    expect(mergeDeep({ a: 'a', conflict: 1 }, { b: 'b', conflict: 2 }, { c: 'c', conflict: 3 })).toEqual({
       a: 'a',
       b: 'b',
       c: 'c',
@@ -156,7 +143,7 @@ describe('mergeDeep', () => {
   });
 
   it('supports custom reconciler functions', () => {
-    const merger = new DeepMerger(function(target, source, key) {
+    const merger = new DeepMerger(function (target, source, key) {
       const targetValue = target[key];
       const sourceValue = source[key];
       if (Array.isArray(sourceValue)) {
@@ -177,8 +164,8 @@ describe('mergeDeep', () => {
         {
           a: [4, 5],
           b: ['I', 'win'],
-        }
-      )
+        },
+      ),
     ).toEqual({
       a: [1, 2, 3, 4, 5],
       b: ['I', 'win'],
@@ -200,7 +187,7 @@ describe('mergeDeep', () => {
         b: {
           c: 3,
         },
-      })
+      }),
     ).toBe(target);
 
     const partial = mergeDeep(target, {
@@ -226,7 +213,7 @@ describe('mergeDeep', () => {
       },
       {
         e: 5,
-      }
+      },
     );
 
     expect(multiple).toBe(target);
@@ -247,21 +234,21 @@ describe('mergeDeep', () => {
     expect(
       mergeDeep(targetWithArrays, {
         e: [],
-      })
+      }),
     ).toBe(targetWithArrays);
 
     expect(
       mergeDeep(targetWithArrays, {
         // eslint-disable-next-line no-sparse-arrays
         e: [, , /* hole*/ /* hole*/ 9],
-      })
+      }),
     ).toBe(targetWithArrays);
 
     expect(
       mergeDeep(targetWithArrays, {
         a: 1,
         e: [7, 8],
-      })
+      }),
     ).toBe(targetWithArrays);
 
     expect(
@@ -273,7 +260,7 @@ describe('mergeDeep', () => {
             d: 5,
           },
         ],
-      })
+      }),
     ).toBe(targetWithArrays);
 
     expect(
@@ -287,7 +274,7 @@ describe('mergeDeep', () => {
           6,
         ],
         e: [],
-      })
+      }),
     ).toBe(targetWithArrays);
 
     const nestedInequality = mergeDeep(targetWithArrays, {
@@ -315,8 +302,8 @@ describe('mergeDeep', () => {
         targetWithArrays,
         JSON.parse(JSON.stringify(targetWithArrays)),
         JSON.parse(JSON.stringify(targetWithArrays)),
-        JSON.parse(JSON.stringify(targetWithArrays))
-      )
+        JSON.parse(JSON.stringify(targetWithArrays)),
+      ),
     ).toBe(targetWithArrays);
   });
 
@@ -326,11 +313,11 @@ describe('mergeDeep', () => {
     };
 
     const shallowContextValues: any[] = [];
-    const shallowMerger = new DeepMerger<(typeof contextObject)[]>(function(
+    const shallowMerger = new DeepMerger<(typeof contextObject)[]>(function (
       target,
       source,
       property,
-      context: typeof contextObject
+      context: typeof contextObject,
     ) {
       shallowContextValues.push(context);
       // Deliberately not passing context down to nested levels.
@@ -338,12 +325,7 @@ describe('mergeDeep', () => {
     });
 
     const typicalContextValues: any[] = [];
-    const typicalMerger = new DeepMerger<(typeof contextObject)[]>(function(
-      target,
-      source,
-      property,
-      context
-    ) {
+    const typicalMerger = new DeepMerger<(typeof contextObject)[]>(function (target, source, property, context) {
       typicalContextValues.push(context);
       // Passing context down this time.
       return this.merge(target[property], source[property], context);

@@ -13,11 +13,8 @@ import type { QueryComponentOptions } from './types';
  * This library is still included in the `@apollo/client` package,
  * but it no longer receives feature updates or bug fixes.
  */
-export function Query<
-  TData = any,
-  TVariables extends OperationVariables = OperationVariables,
->(
-  props: QueryComponentOptions<TData, TVariables>
+export function Query<TData = any, TVariables extends OperationVariables = OperationVariables>(
+  props: QueryComponentOptions<TData, TVariables>,
 ): ReactTypes.JSX.Element | null {
   const { children, query, ...options } = props;
   const result = useQuery(query, options);

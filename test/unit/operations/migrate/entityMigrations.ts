@@ -21,7 +21,7 @@ function createNewCacheSnapshot(cacheContext: CacheContext) {
       },
     },
     `{ foo bar viewer { id first last __typename } }`,
-    cacheContext
+    cacheContext,
   );
   return new CacheSnapshot(snapshot, snapshot, new OptimisticUpdateQueue());
 }
@@ -49,13 +49,16 @@ describe(`operations.migrate`, () => {
           foo: 123,
           bar: 'asdf',
           extra: '',
-          'viewer': undefined,
+          viewer: undefined,
         },
-        outbound: [{
-          id: 'a', path: ['viewer'],
-        }],
+        outbound: [
+          {
+            id: 'a',
+            path: ['viewer'],
+          },
+        ],
       },
-      'a': {
+      a: {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
         data: {
           id: 'a',
@@ -84,13 +87,16 @@ describe(`operations.migrate`, () => {
         data: {
           foo: 456,
           bar: 'woohoo',
-          'viewer': undefined,
+          viewer: undefined,
         },
-        outbound: [{
-          id: 'a', path: ['viewer'],
-        }],
+        outbound: [
+          {
+            id: 'a',
+            path: ['viewer'],
+          },
+        ],
       },
-      'a': {
+      a: {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
         data: {
           id: 'a',
@@ -118,13 +124,16 @@ describe(`operations.migrate`, () => {
         data: {
           foo: 123,
           bar: 'asdf',
-          'viewer': undefined,
+          viewer: undefined,
         },
-        outbound: [{
-          id: 'a', path: ['viewer'],
-        }],
+        outbound: [
+          {
+            id: 'a',
+            path: ['viewer'],
+          },
+        ],
       },
-      'a': {
+      a: {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
         data: {
           id: 'a',
@@ -154,13 +163,16 @@ describe(`operations.migrate`, () => {
         data: {
           foo: 123,
           bar: 'asdf',
-          'viewer': undefined,
+          viewer: undefined,
         },
-        outbound: [{
-          id: 'a', path: ['viewer'],
-        }],
+        outbound: [
+          {
+            id: 'a',
+            path: ['viewer'],
+          },
+        ],
       },
-      'a': {
+      a: {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
         data: {
           id: 'a',
@@ -172,5 +184,4 @@ describe(`operations.migrate`, () => {
       },
     });
   });
-
 });

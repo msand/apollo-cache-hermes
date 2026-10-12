@@ -11,8 +11,8 @@ const realHook = React[useKey] as Use | undefined;
 
 // This is named with two underscores to allow this hook to evade typical rules of
 // hooks (i.e. it can be used conditionally)
-export const __use
-  = realHook ||
+export const __use =
+  realHook ||
   function __use<TValue>(promise: Promise<TValue>) {
     const statefulPromise = wrapPromiseWithState(promise);
 

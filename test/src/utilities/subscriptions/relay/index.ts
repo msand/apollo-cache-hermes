@@ -1,11 +1,7 @@
-
 import { Observable } from 'relay-runtime';
 import type { RequestParameters, GraphQLResponse } from 'relay-runtime';
 
-import {
-  handleError,
-  readMultipartBody,
-} from '../../../link/http/parseAndCheckHttpResponse';
+import { handleError, readMultipartBody } from '../../../link/http/parseAndCheckHttpResponse';
 import { maybe } from '../../index';
 import { serializeFetchParameter } from '../../../core/index';
 import type { OperationVariables } from '../../../core/index';
@@ -17,11 +13,11 @@ const backupFetch = maybe(() => fetch);
 
 export function createFetchMultipartSubscription(
   uri: string,
-  { fetch: preferredFetch, headers }: CreateMultipartSubscriptionOptions = {}
+  { fetch: preferredFetch, headers }: CreateMultipartSubscriptionOptions = {},
 ) {
   return function fetchMultipartSubscription(
     operation: RequestParameters,
-    variables: OperationVariables
+    variables: OperationVariables,
   ): Observable<GraphQLResponse> {
     const body: Body = {
       operationName: operation.name,
@@ -30,7 +26,7 @@ export function createFetchMultipartSubscription(
     };
     const options = generateOptionsForMultipartSubscription(headers || {});
 
-    return Observable.create((sink) => {
+    return Observable.create(sink => {
       try {
         options.body = serializeFetchParameter(body, 'Payload');
       } catch (parseError) {
@@ -41,7 +37,7 @@ export function createFetchMultipartSubscription(
       const observerNext = sink.next.bind(sink);
 
       currentFetch!(uri, options)
-        .then((response) => {
+        .then(response => {
           const ctype = response.headers?.get('content-type');
 
           if (ctype !== null && /^multipart\/mixed/i.test(ctype)) {

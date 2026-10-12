@@ -9,18 +9,15 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.restore`, () => {
   describe(`top-level values wtih nested parameterized value in an array`, () => {
+    const parameterizedId0 = nodeIdForParameterizedValue(QueryRootId, ['one', 'two', 0, 'three'], {
+      id: 1,
+      withExtra: true,
+    });
 
-    const parameterizedId0 = nodeIdForParameterizedValue(
-      QueryRootId,
-      ['one', 'two', 0, 'three'],
-      { id: 1, withExtra: true }
-    );
-
-    const parameterizedId1 = nodeIdForParameterizedValue(
-      QueryRootId,
-      ['one', 'two', 1, 'three'],
-      { id: 1, withExtra: true }
-    );
+    const parameterizedId1 = nodeIdForParameterizedValue(QueryRootId, ['one', 'two', 1, 'three'], {
+      id: 1,
+      withExtra: true,
+    });
 
     let restoreGraphSnapshot: GraphSnapshot, originalGraphSnapshot: GraphSnapshot;
     beforeAll(() => {
@@ -59,54 +56,57 @@ describe(`operations.restore`, () => {
           }
         }`,
         cacheContext,
-        { id: 1 }
+        { id: 1 },
       );
 
-      restoreGraphSnapshot = restore({
-        [QueryRootId]: {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          parameterized: [
-            { id: parameterizedId0, path: ['one', 'two', 0, 'three'] },
-            { id: parameterizedId1, path: ['one', 'two', 1, 'three'] },
-          ],
-          data: {
-            one: {
-              four: 'FOUR',
-              two: [null, null, null],
+      restoreGraphSnapshot = restore(
+        {
+          [QueryRootId]: {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            parameterized: [
+              { id: parameterizedId0, path: ['one', 'two', 0, 'three'] },
+              { id: parameterizedId1, path: ['one', 'two', 1, 'three'] },
+            ],
+            data: {
+              one: {
+                four: 'FOUR',
+                two: [null, null, null],
+              },
+            },
+          },
+          [parameterizedId0]: {
+            type: Serializable.NodeSnapshotType.ParameterizedValueSnapshot,
+            inbound: [{ id: QueryRootId, path: ['one', 'two', 0, 'three'] }],
+            outbound: [{ id: '30', path: [] }],
+            data: null,
+          },
+          '30': {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            inbound: [{ id: parameterizedId0, path: [] }],
+            data: {
+              id: '30',
+              name: 'Three0',
+              extraValue: '30-42',
+            },
+          },
+          [parameterizedId1]: {
+            type: Serializable.NodeSnapshotType.ParameterizedValueSnapshot,
+            inbound: [{ id: QueryRootId, path: ['one', 'two', 1, 'three'] }],
+            outbound: [{ id: '31', path: [] }],
+            data: null,
+          },
+          '31': {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            inbound: [{ id: parameterizedId1, path: [] }],
+            data: {
+              id: '31',
+              name: 'Three1',
+              extraValue: '31-42',
             },
           },
         },
-        [parameterizedId0]: {
-          type: Serializable.NodeSnapshotType.ParameterizedValueSnapshot,
-          inbound: [{ id: QueryRootId, path: ['one', 'two', 0, 'three'] }],
-          outbound: [{ id: '30', path: [] }],
-          data: null,
-        },
-        '30': {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          inbound: [{ id: parameterizedId0, path: [] }],
-          data: {
-            id: '30',
-            name: 'Three0',
-            extraValue: '30-42',
-          },
-        },
-        [parameterizedId1]: {
-          type: Serializable.NodeSnapshotType.ParameterizedValueSnapshot,
-          inbound: [{ id: QueryRootId, path: ['one', 'two', 1, 'three'] }],
-          outbound: [{ id: '31', path: [] }],
-          data: null,
-        },
-        '31': {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          inbound: [{ id: parameterizedId1, path: [] }],
-          data: {
-            id: '31',
-            name: 'Three1',
-            extraValue: '31-42',
-          },
-        },
-      }, cacheContext).cacheSnapshot.baseline;
+        cacheContext,
+      ).cacheSnapshot.baseline;
     });
 
     it(`restores GraphSnapshot from JSON serializable object`, () => {
@@ -120,6 +120,5 @@ describe(`operations.restore`, () => {
       jestExpect(restoreGraphSnapshot.getNodeSnapshot(parameterizedId1)).toBeInstanceOf(ParameterizedValueSnapshot);
       jestExpect(restoreGraphSnapshot.getNodeSnapshot('31')).toBeInstanceOf(EntitySnapshot);
     });
-
   });
 });

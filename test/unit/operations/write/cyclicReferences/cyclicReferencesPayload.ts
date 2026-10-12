@@ -10,7 +10,6 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 // workflow in isolation, given the contextual state that must be passed around.
 describe(`operations.write`, () => {
   describe(`cyclic references payload`, () => {
-
     let snapshot: GraphSnapshot, editedNodeIds: Set<NodeId>;
     beforeAll(() => {
       const cyclicRefQuery = `{
@@ -39,7 +38,7 @@ describe(`operations.write`, () => {
             },
           },
         },
-        cyclicRefQuery
+        cyclicRefQuery,
       );
 
       snapshot = result.snapshot;

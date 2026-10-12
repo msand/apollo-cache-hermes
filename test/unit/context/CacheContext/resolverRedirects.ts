@@ -7,7 +7,6 @@ import { query, strictConfig } from '../../../helpers';
 
 describe(`operations.read`, () => {
   describe(`with resolver redirects`, () => {
-
     const context = new CacheContext({
       ...strictConfig,
       resolverRedirects: {
@@ -59,9 +58,14 @@ describe(`operations.read`, () => {
     });
 
     it(`prefers explicitly queried values, when present`, () => {
-      const { snapshot } = write(context, baseSnapshot, { ...rootRedirectQuery, variables: { id: 1 } }, {
-        thing: { __typename: 'Thing', id: 111, name: 'Other One' },
-      });
+      const { snapshot } = write(
+        context,
+        baseSnapshot,
+        { ...rootRedirectQuery, variables: { id: 1 } },
+        {
+          thing: { __typename: 'Thing', id: 111, name: 'Other One' },
+        },
+      );
 
       const { result, complete } = read(context, { ...rootRedirectQuery, variables: { id: 1 } }, snapshot);
       expect((result as any).thing).to.deep.eq({ __typename: 'Thing', id: 111, name: 'Other One' });
@@ -73,6 +77,5 @@ describe(`operations.read`, () => {
       expect((result as any).thing).to.deep.eq(undefined);
       expect(complete).to.eq(false);
     });
-
   });
 });

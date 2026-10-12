@@ -16,7 +16,6 @@ import WatchOptions = Cache.WatchOptions;
  * @internal
  */
 export class QueryObserver<TSerialized> {
-
   /** Cache configuration/context to use when executing queries. */
   private _context: CacheContext<TSerialized>;
   /** The query being observed. */
@@ -108,5 +107,4 @@ export class QueryObserver<TSerialized> {
   private _update(): void {
     this._options.callback(this._result);
   }
-
 }

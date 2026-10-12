@@ -1,19 +1,13 @@
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { Trie } from '@wry/trie';
 
-import {
-  canUseWeakMap,
-  canUseWeakSet,
-  isNonNullObject as isObjectOrArray,
-} from '../../utilities/index';
+import { canUseWeakMap, canUseWeakSet, isNonNullObject as isObjectOrArray } from '../../utilities/index';
 
 import { isArray } from './helpers';
 
 function shallowCopy<T>(value: T): T {
   if (isObjectOrArray(value)) {
-    return isArray(value)
-      ? (value.slice(0) as any as T)
-      : { __proto__: Object.getPrototypeOf(value), ...value };
+    return isArray(value) ? (value.slice(0) as any as T) : { __proto__: Object.getPrototypeOf(value), ...value };
   }
   return value;
 }
@@ -80,9 +74,9 @@ export class ObjectCanon {
 
   // Efficient storage/lookup structure for canonical objects.
   private pool = new Trie<{
-    array?: any[],
-    object?: Record<string, any>,
-    keys?: SortedKeysInfo,
+    array?: any[];
+    object?: Record<string, any>;
+    keys?: SortedKeysInfo;
   }>(canUseWeakMap);
 
   public isKnown(value: any): boolean {
@@ -138,7 +132,7 @@ export class ObjectCanon {
           const keys = this.sortedKeys(value);
           array.push(keys.json);
           const firstValueIndex = array.length;
-          keys.sorted.forEach((key) => {
+          keys.sorted.forEach(key => {
             array.push(this.admit((value as any)[key]));
           });
           // Objects are looked up in the Trie by their prototype (which
@@ -196,6 +190,6 @@ export class ObjectCanon {
 }
 
 type SortedKeysInfo = {
-  sorted: string[],
-  json: string,
+  sorted: string[];
+  json: string;
 };

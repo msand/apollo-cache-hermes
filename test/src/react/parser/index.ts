@@ -1,16 +1,7 @@
-import type {
-  DocumentNode,
-  DefinitionNode,
-  VariableDefinitionNode,
-  OperationDefinitionNode,
-} from 'graphql';
+import type { DocumentNode, DefinitionNode, VariableDefinitionNode, OperationDefinitionNode } from 'graphql';
 
 import { invariant } from '../../utilities/globals/index';
-import {
-  AutoCleanedWeakCache,
-  cacheSizes,
-  defaultCacheSizes,
-} from '../../utilities/index';
+import { AutoCleanedWeakCache, cacheSizes, defaultCacheSizes } from '../../utilities/index';
 import { registerGlobalCache } from '../../utilities/caching/getMemoryInternals';
 
 export enum DocumentType {
@@ -30,9 +21,9 @@ let cache:
   | AutoCleanedWeakCache<
       DocumentNode,
       {
-        name: string,
-        type: DocumentType,
-        variables: readonly VariableDefinitionNode[],
+        name: string;
+        type: DocumentType;
+        variables: readonly VariableDefinitionNode[];
       }
     >;
 
@@ -55,9 +46,7 @@ export function operationName(type: DocumentType) {
 // This parser is mostly used to safety check incoming documents.
 export function parser(document: DocumentNode): IDocumentDefinition {
   if (!cache) {
-    cache = new AutoCleanedWeakCache(
-      cacheSizes.parser || defaultCacheSizes.parser
-    );
+    cache = new AutoCleanedWeakCache(cacheSizes.parser || defaultCacheSizes.parser);
   }
   const cached = cache.get(document);
   if (cached) return cached;
@@ -66,10 +55,10 @@ export function parser(document: DocumentNode): IDocumentDefinition {
 
   invariant(
     !!document && !!document.kind,
-    `Argument of %s passed to parser was not a valid GraphQL `
-      + `DocumentNode. You may need to use 'graphql-tag' or another method `
-      + `to convert your operation into a document`,
-    document
+    `Argument of %s passed to parser was not a valid GraphQL ` +
+      `DocumentNode. You may need to use 'graphql-tag' or another method ` +
+      `to convert your operation into a document`,
+    document,
   );
 
   const fragments: DefinitionNode[] = [];
@@ -99,41 +88,35 @@ export function parser(document: DocumentNode): IDocumentDefinition {
   }
 
   invariant(
-    !fragments.length ||
-      queries.length ||
-      mutations.length ||
-      subscriptions.length,
-    `Passing only a fragment to 'graphql' is not yet supported. `
-      + `You must include a query, subscription or mutation as well`
+    !fragments.length || queries.length || mutations.length || subscriptions.length,
+    `Passing only a fragment to 'graphql' is not yet supported. ` +
+      `You must include a query, subscription or mutation as well`,
   );
 
   invariant(
     queries.length + mutations.length + subscriptions.length <= 1,
-    `react-apollo only supports a query, subscription, or a mutation per HOC. `
-      + `%s had %s queries, %s `
-      + `subscriptions and %s mutations. `
-      + `You can use 'compose' to join multiple operation types to a component`,
+    `react-apollo only supports a query, subscription, or a mutation per HOC. ` +
+      `%s had %s queries, %s ` +
+      `subscriptions and %s mutations. ` +
+      `You can use 'compose' to join multiple operation types to a component`,
     document,
     queries.length,
     subscriptions.length,
-    mutations.length
+    mutations.length,
   );
 
   type = queries.length ? DocumentType.Query : DocumentType.Mutation;
   if (!queries.length && !mutations.length) type = DocumentType.Subscription;
 
-  const definitions
-    = queries.length ? queries
-      : mutations.length ? mutations
-        : subscriptions;
+  const definitions = queries.length ? queries : mutations.length ? mutations : subscriptions;
 
   invariant(
     definitions.length === 1,
-    `react-apollo only supports one definition per HOC. %s had `
-      + `%s definitions. `
-      + `You can use 'compose' to join multiple operation types to a component`,
+    `react-apollo only supports one definition per HOC. %s had ` +
+      `%s definitions. ` +
+      `You can use 'compose' to join multiple operation types to a component`,
     document,
-    definitions.length
+    definitions.length,
   );
 
   const definition = definitions[0] as OperationDefinitionNode;
@@ -167,6 +150,6 @@ export function verifyDocumentType(document: DocumentNode, type: DocumentType) {
     `Running a %s requires a graphql %s, but a %s was used instead.`,
     requiredOperationName,
     requiredOperationName,
-    usedOperationName
+    usedOperationName,
   );
 }

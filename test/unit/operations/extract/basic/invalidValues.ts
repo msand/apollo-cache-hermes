@@ -5,7 +5,6 @@ import { createGraphSnapshot, createStrictCacheContext } from '../../../../helpe
 
 describe(`operations.extract`, () => {
   describe(`invalid values`, () => {
-
     let snapshot: GraphSnapshot, cacheContext: CacheContext;
     beforeAll(() => {
       cacheContext = createStrictCacheContext();
@@ -15,7 +14,7 @@ describe(`operations.extract`, () => {
           nan
           func
         }`,
-        cacheContext
+        cacheContext,
       );
     });
 
@@ -24,6 +23,5 @@ describe(`operations.extract`, () => {
         extract(snapshot, cacheContext);
       }).toThrow(/unserializable/i);
     });
-
   });
 });

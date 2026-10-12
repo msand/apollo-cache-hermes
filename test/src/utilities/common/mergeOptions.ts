@@ -1,9 +1,4 @@
-import type {
-  QueryOptions,
-  WatchQueryOptions,
-  MutationOptions,
-  OperationVariables,
-} from '../../core/index';
+import type { QueryOptions, WatchQueryOptions, MutationOptions, OperationVariables } from '../../core/index';
 
 import { compact } from './compact';
 
@@ -17,7 +12,7 @@ export function mergeOptions<
   TOptions extends TDefaultOptions,
 >(
   defaults: TDefaultOptions | Partial<TDefaultOptions> | undefined,
-  options: TOptions | Partial<TOptions>
+  options: TOptions | Partial<TOptions>,
 ): TOptions & TDefaultOptions {
   return compact(
     defaults,
@@ -27,6 +22,6 @@ export function mergeOptions<
         ...(defaults && defaults.variables),
         ...options.variables,
       }),
-    }
+    },
   );
 }

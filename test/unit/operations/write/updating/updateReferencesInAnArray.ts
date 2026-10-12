@@ -12,7 +12,6 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 // It just isn't very fruitful to unit test the individual steps of the write
 // workflow in isolation, given the contextual state that must be passed around.
 describe(`operations.write`, () => {
-
   const context = new CacheContext(strictConfig);
   const silentContext = new CacheContext(silentConfig);
   const empty = new GraphSnapshot();
@@ -47,13 +46,15 @@ describe(`operations.write`, () => {
     });
 
     it(`sets up outbound references`, () => {
-      jestExpect(mapToEntries2(snapshot.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(jestExpect.arrayContaining([
-        { id: '1', path: ['things', 0] },
-        { id: '2', path: ['things', 1] },
-        { id: '3', path: ['things', 2] },
-        { id: '4', path: ['things', 3] },
-        { id: '5', path: ['things', 4] },
-      ]));
+      jestExpect(mapToEntries2(snapshot.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(
+        jestExpect.arrayContaining([
+          { id: '1', path: ['things', 0] },
+          { id: '2', path: ['things', 1] },
+          { id: '3', path: ['things', 2] },
+          { id: '4', path: ['things', 3] },
+          { id: '5', path: ['things', 4] },
+        ]),
+      );
     });
 
     it(`lets you reorder references`, () => {
@@ -66,13 +67,15 @@ describe(`operations.write`, () => {
           { id: 3, name: 'Three' },
         ],
       }).snapshot;
-      jestExpect(mapToEntries2(updated.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(jestExpect.arrayContaining([
-        { id: '5', path: ['things', 0] },
-        { id: '2', path: ['things', 1] },
-        { id: '1', path: ['things', 2] },
-        { id: '4', path: ['things', 3] },
-        { id: '3', path: ['things', 4] },
-      ]));
+      jestExpect(mapToEntries2(updated.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(
+        jestExpect.arrayContaining([
+          { id: '5', path: ['things', 0] },
+          { id: '2', path: ['things', 1] },
+          { id: '1', path: ['things', 2] },
+          { id: '4', path: ['things', 3] },
+          { id: '3', path: ['things', 4] },
+        ]),
+      );
     });
 
     it(`drops references when the array shrinks`, () => {
@@ -83,10 +86,12 @@ describe(`operations.write`, () => {
         ],
       }).snapshot;
 
-      jestExpect(mapToEntries2(updated.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(jestExpect.arrayContaining([
-        { id: '1', path: ['things', 0] },
-        { id: '2', path: ['things', 1] },
-      ]));
+      jestExpect(mapToEntries2(updated.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(
+        jestExpect.arrayContaining([
+          { id: '1', path: ['things', 0] },
+          { id: '2', path: ['things', 1] },
+        ]),
+      );
     });
 
     it(`supports multiple references to the same node`, () => {
@@ -105,71 +110,53 @@ describe(`operations.write`, () => {
         ],
       }).snapshot;
 
-      jestExpect(mapToEntries2(updated.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(jestExpect.arrayContaining([
-        { id: '1', path: ['things', 0] },
-        { id: '2', path: ['things', 1] },
-        { id: '3', path: ['things', 2] },
-        { id: '4', path: ['things', 3] },
-        { id: '5', path: ['things', 4] },
-        { id: '1', path: ['things', 5] },
-        { id: '2', path: ['things', 6] },
-        { id: '3', path: ['things', 7] },
-        { id: '4', path: ['things', 8] },
-        { id: '5', path: ['things', 9] },
-      ]));
+      jestExpect(mapToEntries2(updated.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(
+        jestExpect.arrayContaining([
+          { id: '1', path: ['things', 0] },
+          { id: '2', path: ['things', 1] },
+          { id: '3', path: ['things', 2] },
+          { id: '4', path: ['things', 3] },
+          { id: '5', path: ['things', 4] },
+          { id: '1', path: ['things', 5] },
+          { id: '2', path: ['things', 6] },
+          { id: '3', path: ['things', 7] },
+          { id: '4', path: ['things', 8] },
+          { id: '5', path: ['things', 9] },
+        ]),
+      );
     });
 
     it(`supports holes`, () => {
       const updated = write(context, snapshot, arrayQuery, {
-        things: [
-          null,
-          null,
-          { id: 3, name: 'Three' },
-          { id: 4, name: 'Four' },
-          null,
-        ],
+        things: [null, null, { id: 3, name: 'Three' }, { id: 4, name: 'Four' }, null],
       }).snapshot;
 
-      jestExpect(mapToEntries2(updated.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(jestExpect.arrayContaining([
-        { id: '3', path: ['things', 2] },
-        { id: '4', path: ['things', 3] },
-      ]));
+      jestExpect(mapToEntries2(updated.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(
+        jestExpect.arrayContaining([
+          { id: '3', path: ['things', 2] },
+          { id: '4', path: ['things', 3] },
+        ]),
+      );
 
       jestExpect(updated.getNodeData(QueryRootId)).toEqual({
-        things: [
-          null,
-          null,
-          { id: 3, name: 'Three' },
-          { id: 4, name: 'Four' },
-          null,
-        ],
+        things: [null, null, { id: 3, name: 'Three' }, { id: 4, name: 'Four' }, null],
       });
     });
 
     it(`treats blanks in sparse arrays as null`, () => {
       const updated = write(silentContext, snapshot, arrayQuery, {
-        things: [
-          undefined,
-          undefined,
-          { id: 3, name: 'Three' },
-          { id: 4, name: 'Four' },
-          undefined,
-        ] as JsonArray,
+        things: [undefined, undefined, { id: 3, name: 'Three' }, { id: 4, name: 'Four' }, undefined] as JsonArray,
       }).snapshot;
 
-      jestExpect(mapToEntries2(updated.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(jestExpect.arrayContaining([
-        { id: '3', path: ['things', 2] },
-        { id: '4', path: ['things', 3] },
-      ]));
+      jestExpect(mapToEntries2(updated.getNodeSnapshot(QueryRootId)!.outbound)).toEqual(
+        jestExpect.arrayContaining([
+          { id: '3', path: ['things', 2] },
+          { id: '4', path: ['things', 3] },
+        ]),
+      );
 
       jestExpect(updated.getNodeData(QueryRootId)).toEqual({
-        things: [
-          null,
-          null,
-          { id: 3, name: 'Three' },
-          { id: 4, name: 'Four' },
-          null,
-        ],
+        things: [null, null, { id: 3, name: 'Three' }, { id: 4, name: 'Four' }, null],
       });
     });
 
@@ -198,20 +185,12 @@ describe(`operations.write`, () => {
       });
 
       const updated = write(context, baseSnapshot, valuesQuery, {
-        foo: [
-          false,
-          0,
-          '',
-        ] as JsonArray,
+        foo: [false, 0, ''] as JsonArray,
         bar: 0,
       }).snapshot;
 
       jestExpect(updated.getNodeData(QueryRootId)).toEqual({
-        foo: [
-          false,
-          0,
-          '',
-        ],
+        foo: [false, 0, ''],
         bar: 0,
       });
     });
@@ -221,6 +200,5 @@ describe(`operations.write`, () => {
         write(context, empty, entityQuery, { foo: [1, 2, 3, 4, 5] });
       }).toThrow(/foo\.\d/);
     });
-
   });
 });

@@ -6,7 +6,6 @@ import { createSnapshot } from '../../../../helpers';
 // workflow in isolation, given the contextual state that must be passed around.
 describe(`operations.write`, () => {
   describe(`invalid nested values, scalar in place of object value`, () => {
-
     it(`creates the query root, with the values`, () => {
       jestExpect(() => {
         createSnapshot(
@@ -23,10 +22,9 @@ describe(`operations.write`, () => {
                 prop2
               }
             }
-          }`
+          }`,
         );
       }).toThrow(/foo\.bar/);
     });
-
   });
 });

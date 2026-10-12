@@ -88,7 +88,7 @@ describe('ApolloClient', () => {
               a
             }
           `,
-        })
+        }),
       ).toEqual({ a: 1 });
       expect(
         client.readQuery({
@@ -98,7 +98,7 @@ describe('ApolloClient', () => {
               c
             }
           `,
-        })
+        }),
       ).toEqual({ b: 2, c: 3 });
       expect(
         client.readQuery({
@@ -109,7 +109,7 @@ describe('ApolloClient', () => {
               c
             }
           `,
-        })
+        }),
       ).toEqual({ a: 1, b: 2, c: 3 });
     });
 
@@ -149,7 +149,7 @@ describe('ApolloClient', () => {
               }
             }
           `,
-        })
+        }),
       ).toEqual({ a: 1, d: { e: 4, __typename: 'Foo' } });
       expect(
         client.readQuery({
@@ -164,7 +164,7 @@ describe('ApolloClient', () => {
               }
             }
           `,
-        })
+        }),
       ).toEqual({
         a: 1,
         d: { __typename: 'Foo', e: 4, h: { i: 7, __typename: 'Bar' } },
@@ -188,7 +188,7 @@ describe('ApolloClient', () => {
               }
             }
           `,
-        })
+        }),
       ).toEqual({
         a: 1,
         b: 2,
@@ -226,7 +226,7 @@ describe('ApolloClient', () => {
             literal: false,
             value: 42,
           },
-        })
+        }),
       ).toEqual({ a: 1, b: 2 });
     });
   });
@@ -253,7 +253,7 @@ describe('ApolloClient', () => {
           literal: false,
           value: 42,
         },
-      })
+      }),
     ).toEqual({ a: 2 });
 
     expect(
@@ -266,7 +266,7 @@ describe('ApolloClient', () => {
         variables: {
           literal: true,
         },
-      })
+      }),
     ).toEqual({ a: 1 });
   });
 
@@ -289,7 +289,7 @@ describe('ApolloClient', () => {
           `,
         });
       }).toThrow(
-        'Found a query operation. No operations are allowed when using a fragment as a query. Only fragments are allowed.'
+        'Found a query operation. No operations are allowed when using a fragment as a query. Only fragments are allowed.',
       );
       expect(() => {
         client.readFragment({
@@ -300,9 +300,7 @@ describe('ApolloClient', () => {
             }
           `,
         });
-      }).toThrow(
-        'Found 0 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.'
-      );
+      }).toThrow('Found 0 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.');
     });
 
     it('will throw an error when there is more than one fragment but no fragment name', () => {
@@ -324,9 +322,7 @@ describe('ApolloClient', () => {
             }
           `,
         });
-      }).toThrow(
-        'Found 2 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.'
-      );
+      }).toThrow('Found 2 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.');
       expect(() => {
         client.readFragment({
           id: 'x',
@@ -344,9 +340,7 @@ describe('ApolloClient', () => {
             }
           `,
         });
-      }).toThrow(
-        'Found 3 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.'
-      );
+      }).toThrow('Found 3 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.');
     });
 
     it('will read some deeply nested data from the store at any id', () => {
@@ -387,7 +381,7 @@ describe('ApolloClient', () => {
               }
             }
           `,
-        })
+        }),
       ).toEqual({ __typename: 'Foo', e: 4, h: { __typename: 'Bar', i: 7 } });
       expect(
         client.readFragment({
@@ -404,7 +398,7 @@ describe('ApolloClient', () => {
               }
             }
           `,
-        })
+        }),
       ).toEqual({
         __typename: 'Foo',
         e: 4,
@@ -420,7 +414,7 @@ describe('ApolloClient', () => {
               i
             }
           `,
-        })
+        }),
       ).toEqual({ __typename: 'Bar', i: 7 });
       expect(
         client.readFragment({
@@ -432,7 +426,7 @@ describe('ApolloClient', () => {
               k
             }
           `,
-        })
+        }),
       ).toEqual({ __typename: 'Bar', i: 7, j: 8, k: 9 });
       expect(
         client.readFragment({
@@ -456,7 +450,7 @@ describe('ApolloClient', () => {
             }
           `,
           fragmentName: 'fragmentFoo',
-        })
+        }),
       ).toEqual({
         __typename: 'Foo',
         e: 4,
@@ -486,7 +480,7 @@ describe('ApolloClient', () => {
             }
           `,
           fragmentName: 'fragmentBar',
-        })
+        }),
       ).toEqual({ __typename: 'Bar', i: 7, j: 8, k: 9 });
     });
 
@@ -515,7 +509,7 @@ describe('ApolloClient', () => {
             literal: false,
             value: 42,
           },
-        })
+        }),
       ).toEqual({ __typename: 'Foo', a: 1, b: 2 });
     });
 
@@ -547,7 +541,7 @@ describe('ApolloClient', () => {
               c
             }
           `,
-        })
+        }),
       ).toBe(null);
       expect(
         client2.readFragment({
@@ -559,7 +553,7 @@ describe('ApolloClient', () => {
               c
             }
           `,
-        })
+        }),
       ).toBe(null);
       expect(
         client3.readFragment({
@@ -571,7 +565,7 @@ describe('ApolloClient', () => {
               c
             }
           `,
-        })
+        }),
       ).toEqual({ __typename: 'Foo', a: 1, b: 2, c: 3 });
     });
   });
@@ -856,7 +850,7 @@ describe('ApolloClient', () => {
           `,
         });
       }).toThrow(
-        'Found a query operation. No operations are allowed when using a fragment as a query. Only fragments are allowed.'
+        'Found a query operation. No operations are allowed when using a fragment as a query. Only fragments are allowed.',
       );
       expect(() => {
         client.writeFragment({
@@ -868,9 +862,7 @@ describe('ApolloClient', () => {
             }
           `,
         });
-      }).toThrow(
-        'Found 0 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.'
-      );
+      }).toThrow('Found 0 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.');
     });
 
     it('will throw an error when there is more than one fragment but no fragment name', () => {
@@ -893,9 +885,7 @@ describe('ApolloClient', () => {
             }
           `,
         });
-      }).toThrow(
-        'Found 2 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.'
-      );
+      }).toThrow('Found 2 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.');
       expect(() => {
         client.writeFragment({
           data: {},
@@ -914,9 +904,7 @@ describe('ApolloClient', () => {
             }
           `,
         });
-      }).toThrow(
-        'Found 3 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.'
-      );
+      }).toThrow('Found 3 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.');
     });
 
     it('will write some deeply nested data into the store at any id', () => {
@@ -1129,9 +1117,9 @@ describe('ApolloClient', () => {
       }
       interface Data {
         people: {
-          id: number,
-          __typename: string,
-          friends: Friend[],
+          id: number;
+          __typename: string;
+          friends: Friend[];
         };
       }
       const bestFriend = {
@@ -1170,7 +1158,7 @@ describe('ApolloClient', () => {
                 },
               },
             },
-            dataIdFromObject: (result) => {
+            dataIdFromObject: result => {
               if (result.id && result.__typename) {
                 // @ts-ignore
                 return result.__typename + result.id;
@@ -1182,13 +1170,12 @@ describe('ApolloClient', () => {
       }
 
       describe('using writeQuery', () => {
-        it('with TypedDocumentNode', async() => {
+        it('with TypedDocumentNode', async () => {
           const client = newClient();
 
           // This is defined manually for the purpose of the test, but
           // eventually this could be generated with graphql-code-generator
-          const typedQuery: TypedDocumentNode<Data, { testVar: string }>
-            = query;
+          const typedQuery: TypedDocumentNode<Data, { testVar: string }> = query;
 
           // The result and variables are being typed automatically, based on the query object we pass,
           // and type inference is done based on the TypeDocumentNode object.
@@ -1202,238 +1189,207 @@ describe('ApolloClient', () => {
           result.data?.people.friends[0].id;
         });
 
-        itAsync(
-          'with a replacement of nested array (wq)',
-          (resolve, reject) => {
-            let count = 0;
-            const client = newClient();
-            const observable = client.watchQuery<Data>({ query });
-            const subscription = observable.subscribe({
-              next(nextResult) {
-                ++count;
-                if (count === 1) {
-                  expect(nextResult.data).toEqual(data);
-                  expect(observable.getCurrentResult().data).toEqual(data);
+        itAsync('with a replacement of nested array (wq)', (resolve, reject) => {
+          let count = 0;
+          const client = newClient();
+          const observable = client.watchQuery<Data>({ query });
+          const subscription = observable.subscribe({
+            next(nextResult) {
+              ++count;
+              if (count === 1) {
+                expect(nextResult.data).toEqual(data);
+                expect(observable.getCurrentResult().data).toEqual(data);
 
-                  const readData = client.readQuery<Data>({ query });
-                  expect(readData).toEqual(data);
+                const readData = client.readQuery<Data>({ query });
+                expect(readData).toEqual(data);
 
-                  // modify readData and writeQuery
-                  const bestFriends = readData!.people.friends.filter(
-                    x => x.type === 'best'
-                  );
-                  // this should re call next
-                  client.writeQuery<Data>({
-                    query,
-                    data: {
-                      people: {
-                        id: 1,
-                        friends: bestFriends,
-                        __typename: 'Person',
-                      },
-                    },
-                  });
-                } else if (count === 2) {
-                  const expectation = {
+                // modify readData and writeQuery
+                const bestFriends = readData!.people.friends.filter(x => x.type === 'best');
+                // this should re call next
+                client.writeQuery<Data>({
+                  query,
+                  data: {
                     people: {
                       id: 1,
-                      friends: [bestFriend],
-                      __typename: 'Person',
-                    },
-                  };
-                  expect(nextResult.data).toEqual(expectation);
-                  expect(client.readQuery<Data>({ query })).toEqual(
-                    expectation
-                  );
-                  subscription.unsubscribe();
-                  resolve();
-                }
-              },
-            });
-          }
-        );
-
-        itAsync(
-          'with a value change inside a nested array (wq)',
-          (resolve, reject) => {
-            let count = 0;
-            const client = newClient();
-            const observable = client.watchQuery<Data>({ query });
-            observable.subscribe({
-              next: (nextResult) => {
-                count++;
-                if (count === 1) {
-                  expect(nextResult.data).toEqual(data);
-                  expect(observable.getCurrentResult().data).toEqual(data);
-
-                  const readData = client.readQuery<Data>({ query });
-                  expect(readData).toEqual(data);
-
-                  // modify readData and writeQuery
-                  const friends = readData!.people.friends.slice();
-                  friends[0] = { ...friends[0], type: 'okayest' };
-                  friends[1] = { ...friends[1], type: 'okayest' };
-
-                  // this should re call next
-                  client.writeQuery<Data>({
-                    query,
-                    data: {
-                      people: {
-                        id: 1,
-                        friends,
-                        __typename: 'Person',
-                      },
-                    },
-                  });
-
-                  setTimeout(() => {
-                    if (count === 1) {
-                      reject(
-                        new Error(
-                          'writeFragment did not re-call observable with next value'
-                        )
-                      );
-                    }
-                  }, 250);
-                }
-
-                if (count === 2) {
-                  const expectation0 = {
-                    ...bestFriend,
-                    type: 'okayest',
-                  };
-                  const expectation1 = {
-                    ...badFriend,
-                    type: 'okayest',
-                  };
-                  const nextFriends = nextResult.data!.people.friends;
-                  expect(nextFriends[0]).toEqual(expectation0);
-                  expect(nextFriends[1]).toEqual(expectation1);
-
-                  const readFriends = client.readQuery<Data>({ query })!.people
-                    .friends;
-                  expect(readFriends[0]).toEqual(expectation0);
-                  expect(readFriends[1]).toEqual(expectation1);
-                  resolve();
-                }
-              },
-            });
-          }
-        );
-      });
-      describe('using writeFragment', () => {
-        itAsync(
-          'with a replacement of nested array (wf)',
-          (resolve, reject) => {
-            let count = 0;
-            const client = newClient();
-            const observable = client.watchQuery<Data>({ query });
-            observable.subscribe({
-              next: (result) => {
-                count++;
-                if (count === 1) {
-                  expect(result.data).toEqual(data);
-                  expect(observable.getCurrentResult().data).toEqual(data);
-                  const bestFriends = result.data!.people.friends.filter(
-                    x => x.type === 'best'
-                  );
-                  // this should re call next
-                  client.writeFragment({
-                    id: `Person${result.data!.people.id}`,
-                    fragment: gql`
-                      fragment bestFriends on Person {
-                        friends {
-                          id
-                        }
-                      }
-                    `,
-                    data: {
                       friends: bestFriends,
                       __typename: 'Person',
                     },
-                  });
+                  },
+                });
+              } else if (count === 2) {
+                const expectation = {
+                  people: {
+                    id: 1,
+                    friends: [bestFriend],
+                    __typename: 'Person',
+                  },
+                };
+                expect(nextResult.data).toEqual(expectation);
+                expect(client.readQuery<Data>({ query })).toEqual(expectation);
+                subscription.unsubscribe();
+                resolve();
+              }
+            },
+          });
+        });
 
-                  setTimeout(() => {
-                    if (count === 1) {
-                      reject(
-                        new Error(
-                          'writeFragment did not re-call observable with next value'
-                        )
-                      );
-                    }
-                  }, 50);
-                }
+        itAsync('with a value change inside a nested array (wq)', (resolve, reject) => {
+          let count = 0;
+          const client = newClient();
+          const observable = client.watchQuery<Data>({ query });
+          observable.subscribe({
+            next: nextResult => {
+              count++;
+              if (count === 1) {
+                expect(nextResult.data).toEqual(data);
+                expect(observable.getCurrentResult().data).toEqual(data);
 
-                if (count === 2) {
-                  expect(result.data!.people.friends).toEqual([bestFriend]);
-                  resolve();
-                }
-              },
-            });
-          }
-        );
+                const readData = client.readQuery<Data>({ query });
+                expect(readData).toEqual(data);
 
-        itAsync(
-          'with a value change inside a nested array (wf)',
-          (resolve, reject) => {
-            let count = 0;
-            const client = newClient();
-            const observable = client.watchQuery<Data>({ query });
-            observable.subscribe({
-              next: (result) => {
-                count++;
-                if (count === 1) {
-                  expect(result.data).toEqual(data);
-                  expect(observable.getCurrentResult().data).toEqual(data);
-                  const friends = result.data!.people.friends;
+                // modify readData and writeQuery
+                const friends = readData!.people.friends.slice();
+                friends[0] = { ...friends[0], type: 'okayest' };
+                friends[1] = { ...friends[1], type: 'okayest' };
 
-                  // this should re call next
-                  client.writeFragment({
-                    id: `Person${result.data!.people.id}`,
-                    fragment: gql`
-                      fragment bestFriends on Person {
-                        friends {
-                          id
-                          type
-                        }
-                      }
-                    `,
-                    data: {
-                      friends: [
-                        { ...friends[0], type: 'okayest' },
-                        { ...friends[1], type: 'okayest' },
-                      ],
+                // this should re call next
+                client.writeQuery<Data>({
+                  query,
+                  data: {
+                    people: {
+                      id: 1,
+                      friends,
                       __typename: 'Person',
                     },
-                  });
+                  },
+                });
 
-                  setTimeout(() => {
-                    if (count === 1) {
-                      reject(
-                        new Error(
-                          'writeFragment did not re-call observable with next value'
-                        )
-                      );
+                setTimeout(() => {
+                  if (count === 1) {
+                    reject(new Error('writeFragment did not re-call observable with next value'));
+                  }
+                }, 250);
+              }
+
+              if (count === 2) {
+                const expectation0 = {
+                  ...bestFriend,
+                  type: 'okayest',
+                };
+                const expectation1 = {
+                  ...badFriend,
+                  type: 'okayest',
+                };
+                const nextFriends = nextResult.data!.people.friends;
+                expect(nextFriends[0]).toEqual(expectation0);
+                expect(nextFriends[1]).toEqual(expectation1);
+
+                const readFriends = client.readQuery<Data>({ query })!.people.friends;
+                expect(readFriends[0]).toEqual(expectation0);
+                expect(readFriends[1]).toEqual(expectation1);
+                resolve();
+              }
+            },
+          });
+        });
+      });
+      describe('using writeFragment', () => {
+        itAsync('with a replacement of nested array (wf)', (resolve, reject) => {
+          let count = 0;
+          const client = newClient();
+          const observable = client.watchQuery<Data>({ query });
+          observable.subscribe({
+            next: result => {
+              count++;
+              if (count === 1) {
+                expect(result.data).toEqual(data);
+                expect(observable.getCurrentResult().data).toEqual(data);
+                const bestFriends = result.data!.people.friends.filter(x => x.type === 'best');
+                // this should re call next
+                client.writeFragment({
+                  id: `Person${result.data!.people.id}`,
+                  fragment: gql`
+                    fragment bestFriends on Person {
+                      friends {
+                        id
+                      }
                     }
-                  }, 50);
-                }
+                  `,
+                  data: {
+                    friends: bestFriends,
+                    __typename: 'Person',
+                  },
+                });
 
-                if (count === 2) {
-                  const nextFriends = result.data!.people.friends;
-                  expect(nextFriends[0]).toEqual({
-                    ...bestFriend,
-                    type: 'okayest',
-                  });
-                  expect(nextFriends[1]).toEqual({
-                    ...badFriend,
-                    type: 'okayest',
-                  });
-                  resolve();
-                }
-              },
-            });
-          }
-        );
+                setTimeout(() => {
+                  if (count === 1) {
+                    reject(new Error('writeFragment did not re-call observable with next value'));
+                  }
+                }, 50);
+              }
+
+              if (count === 2) {
+                expect(result.data!.people.friends).toEqual([bestFriend]);
+                resolve();
+              }
+            },
+          });
+        });
+
+        itAsync('with a value change inside a nested array (wf)', (resolve, reject) => {
+          let count = 0;
+          const client = newClient();
+          const observable = client.watchQuery<Data>({ query });
+          observable.subscribe({
+            next: result => {
+              count++;
+              if (count === 1) {
+                expect(result.data).toEqual(data);
+                expect(observable.getCurrentResult().data).toEqual(data);
+                const friends = result.data!.people.friends;
+
+                // this should re call next
+                client.writeFragment({
+                  id: `Person${result.data!.people.id}`,
+                  fragment: gql`
+                    fragment bestFriends on Person {
+                      friends {
+                        id
+                        type
+                      }
+                    }
+                  `,
+                  data: {
+                    friends: [
+                      { ...friends[0], type: 'okayest' },
+                      { ...friends[1], type: 'okayest' },
+                    ],
+                    __typename: 'Person',
+                  },
+                });
+
+                setTimeout(() => {
+                  if (count === 1) {
+                    reject(new Error('writeFragment did not re-call observable with next value'));
+                  }
+                }, 50);
+              }
+
+              if (count === 2) {
+                const nextFriends = result.data!.people.friends;
+                expect(nextFriends[0]).toEqual({
+                  ...bestFriend,
+                  type: 'okayest',
+                });
+                expect(nextFriends[1]).toEqual({
+                  ...badFriend,
+                  type: 'okayest',
+                });
+                resolve();
+              }
+            },
+          });
+        });
       });
     });
   });
@@ -1480,7 +1436,7 @@ describe('ApolloClient', () => {
               }
             }
           `,
-        })
+        }),
       ).toEqual({
         __typename: 'Foo',
         a: 1,
@@ -1514,7 +1470,7 @@ describe('ApolloClient', () => {
               }
             }
           `,
-        })
+        }),
       ).toEqual({
         __typename: 'Foo',
         a: 7,
@@ -1550,7 +1506,7 @@ describe('ApolloClient', () => {
               }
             }
           `,
-        })
+        }),
       ).toEqual({
         __typename: 'Foo',
         a: 7,
@@ -1584,7 +1540,7 @@ describe('ApolloClient', () => {
               }
             }
           `,
-        })
+        }),
       ).toEqual({
         __typename: 'Foo',
         a: 7,
@@ -1649,7 +1605,7 @@ describe('ApolloClient', () => {
               }
             }
           `,
-        })
+        }),
       ).toEqual({
         a: 1,
         b: 2,
@@ -2111,9 +2067,9 @@ describe('ApolloClient', () => {
 
   describe('watchQuery', () => {
     it(
-      'should change the `fetchPolicy` to `cache-first` if network fetching '
-        + 'is disabled, and the incoming `fetchPolicy` is set to '
-        + '`network-only` or `cache-and-network`',
+      'should change the `fetchPolicy` to `cache-first` if network fetching ' +
+        'is disabled, and the incoming `fetchPolicy` is set to ' +
+        '`network-only` or `cache-and-network`',
       () => {
         const client = new ApolloClient({
           link: ApolloLink.empty(),
@@ -2129,57 +2085,43 @@ describe('ApolloClient', () => {
           }
         `;
 
-        (['network-only', 'cache-and-network'] as const).forEach(
-          (fetchPolicy) => {
-            const observable = client.watchQuery({
-              query,
-              fetchPolicy,
-            });
-            expect(observable.options.fetchPolicy).toEqual('cache-first');
-          }
-        );
-      }
-    );
-
-    it(
-      'should not change the incoming `fetchPolicy` if network fetching '
-        + 'is enabled',
-      () => {
-        const client = new ApolloClient({
-          link: ApolloLink.empty(),
-          cache: new Hermes(),
-        });
-        client.disableNetworkFetches = false;
-
-        const query = gql`
-          query someData {
-            foo {
-              bar
-            }
-          }
-        `;
-
-        (
-          [
-            'cache-first',
-            'cache-and-network',
-            'network-only',
-            'cache-only',
-            'no-cache',
-          ] as const
-        ).forEach((fetchPolicy) => {
+        (['network-only', 'cache-and-network'] as const).forEach(fetchPolicy => {
           const observable = client.watchQuery({
             query,
             fetchPolicy,
           });
-          expect(observable.options.fetchPolicy).toEqual(fetchPolicy);
+          expect(observable.options.fetchPolicy).toEqual('cache-first');
         });
-      }
+      },
     );
+
+    it('should not change the incoming `fetchPolicy` if network fetching is enabled', () => {
+      const client = new ApolloClient({
+        link: ApolloLink.empty(),
+        cache: new Hermes(),
+      });
+      client.disableNetworkFetches = false;
+
+      const query = gql`
+        query someData {
+          foo {
+            bar
+          }
+        }
+      `;
+
+      (['cache-first', 'cache-and-network', 'network-only', 'cache-only', 'no-cache'] as const).forEach(fetchPolicy => {
+        const observable = client.watchQuery({
+          query,
+          fetchPolicy,
+        });
+        expect(observable.options.fetchPolicy).toEqual(fetchPolicy);
+      });
+    });
   });
 
   describe('watchFragment', () => {
-    it('if all data is available, `complete` is `true`', async() => {
+    it('if all data is available, `complete` is `true`', async () => {
       const cache = new Hermes();
       const client = new ApolloClient({
         cache,
@@ -2221,7 +2163,7 @@ describe('ApolloClient', () => {
         });
       }
     });
-    it('cache writes emit a new value', async() => {
+    it('cache writes emit a new value', async () => {
       const cache = new Hermes();
       const client = new ApolloClient({
         cache,
@@ -2285,7 +2227,7 @@ describe('ApolloClient', () => {
         });
       }
     });
-    it('if only partial data is available, `complete` is `false`', async() => {
+    it('if only partial data is available, `complete` is `false`', async () => {
       const cache = new Hermes();
       const client = new ApolloClient({
         cache,
@@ -2328,12 +2270,12 @@ describe('ApolloClient', () => {
           },
           complete: false,
           missing: {
-            text: 'Can\'t find field \'text\' on Item:5 object',
+            text: "Can't find field 'text' on Item:5 object",
           },
         });
       }
     });
-    it('if no data is written after observable is subscribed to, next is never called', async() => {
+    it('if no data is written after observable is subscribed to, next is never called', async () => {
       const cache = new Hermes();
       const client = new ApolloClient({
         cache,
@@ -2363,12 +2305,10 @@ describe('ApolloClient', () => {
         });
       }
 
-      await expect(stream.takeNext({ timeout: 1000 })).rejects.toEqual(
-        expect.any(Error)
-      );
+      await expect(stream.takeNext({ timeout: 1000 })).rejects.toEqual(expect.any(Error));
     });
 
-    it('supports the @nonreactive directive', async() => {
+    it('supports the @nonreactive directive', async () => {
       const cache = new Hermes();
       const client = new ApolloClient({
         cache,
@@ -2419,24 +2359,18 @@ describe('ApolloClient', () => {
         },
       });
 
-      await expect(stream.takeNext()).rejects.toThrow(
-        new Error('Timeout waiting for next event')
-      );
+      await expect(stream.takeNext()).rejects.toThrow(new Error('Timeout waiting for next event'));
     });
   });
 
   describe('defaultOptions', () => {
-    it(
-      'should set `defaultOptions` to an empty object if not provided in '
-        + 'the constructor',
-      () => {
-        const client = new ApolloClient({
-          link: ApolloLink.empty(),
-          cache: new Hermes(),
-        });
-        expect(client.defaultOptions).toEqual({});
-      }
-    );
+    it('should set `defaultOptions` to an empty object if not provided in the constructor', () => {
+      const client = new ApolloClient({
+        link: ApolloLink.empty(),
+        cache: new Hermes(),
+      });
+      expect(client.defaultOptions).toEqual({});
+    });
 
     it('should set `defaultOptions` using options passed into the constructor', () => {
       const defaultOptions: DefaultOptions = {
@@ -2452,7 +2386,7 @@ describe('ApolloClient', () => {
       expect(client.defaultOptions).toEqual(defaultOptions);
     });
 
-    it('should use default options (unless overridden) when querying', async() => {
+    it('should use default options (unless overridden) when querying', async () => {
       const defaultOptions: DefaultOptions = {
         query: {
           fetchPolicy: 'no-cache',
@@ -2476,7 +2410,7 @@ describe('ApolloClient', () => {
       // @ts-ignore
       const queryManager = client.queryManager;
       const _query = queryManager.query;
-      queryManager.query = (options) => {
+      queryManager.query = options => {
         queryOptions = options;
         return _query(options);
       };
@@ -2493,9 +2427,7 @@ describe('ApolloClient', () => {
         // Swallow errors caused by mocking; not part of this test
       }
 
-      expect(queryOptions.fetchPolicy).toEqual(
-        defaultOptions.query!.fetchPolicy
-      );
+      expect(queryOptions.fetchPolicy).toEqual(defaultOptions.query!.fetchPolicy);
 
       client.stop();
     });
@@ -2522,7 +2454,7 @@ describe('ApolloClient', () => {
   });
 
   describe('clearStore', () => {
-    it('should remove all data from the store', async() => {
+    it('should remove all data from the store', async () => {
       const client = new ApolloClient({
         link: ApolloLink.empty(),
         cache: new Hermes(),
@@ -2552,14 +2484,14 @@ describe('ApolloClient', () => {
   });
 
   describe('setLink', () => {
-    it('should override default link with newly set link', async() => {
+    it('should override default link with newly set link', async () => {
       const client = new ApolloClient({
         cache: new Hermes(),
       });
       expect(client.link).toBeDefined();
 
-      const newLink = new ApolloLink((operation) => {
-        return new Observable((observer) => {
+      const newLink = new ApolloLink(operation => {
+        return new Observable(observer => {
           observer.next({
             data: {
               widgets: [{ name: 'Widget 1' }, { name: 'Widget 2' }],
@@ -2594,66 +2526,63 @@ describe('ApolloClient', () => {
       invariantDebugSpy.mockRestore();
     });
 
-    itAsync(
-      'should catch refetchQueries error when not caught explicitly',
-      (resolve, reject) => {
-        const linkFn = jest
-          .fn(
-            () =>
-              new Observable<any>((observer) => {
-                setTimeout(() => {
-                  observer.error(new Error('refetch failed'));
-                });
-              })
-          )
-          .mockImplementationOnce(() => {
-            setTimeout(refetchQueries);
-            return Observable.of();
-          });
-
-        const client = new ApolloClient({
-          link: new ApolloLink(linkFn),
-          cache: new Hermes(),
-        });
-
-        const query = gql`
-          query someData {
-            foo {
-              bar
-            }
-          }
-        `;
-
-        const observable = client.watchQuery({
-          query,
-          fetchPolicy: 'network-only',
-        });
-
-        observable.subscribe({});
-
-        function refetchQueries() {
-          const result = client.refetchQueries({
-            include: 'all',
-          });
-
-          result.queries[0].subscribe({
-            error() {
+    itAsync('should catch refetchQueries error when not caught explicitly', (resolve, reject) => {
+      const linkFn = jest
+        .fn(
+          () =>
+            new Observable<any>(observer => {
               setTimeout(() => {
-                try {
-                  expect(invariantDebugSpy).toHaveBeenCalledTimes(1);
-                  expect(invariantDebugSpy).toHaveBeenCalledWith(
-                    'In client.refetchQueries, Promise.all promise rejected with error %o',
-                    new ApolloError({ errorMessage: 'refetch failed' })
-                  );
-                  resolve();
-                } catch (err) {
-                  reject(err);
-                }
+                observer.error(new Error('refetch failed'));
               });
-            },
-          });
+            }),
+        )
+        .mockImplementationOnce(() => {
+          setTimeout(refetchQueries);
+          return Observable.of();
+        });
+
+      const client = new ApolloClient({
+        link: new ApolloLink(linkFn),
+        cache: new Hermes(),
+      });
+
+      const query = gql`
+        query someData {
+          foo {
+            bar
+          }
         }
+      `;
+
+      const observable = client.watchQuery({
+        query,
+        fetchPolicy: 'network-only',
+      });
+
+      observable.subscribe({});
+
+      function refetchQueries() {
+        const result = client.refetchQueries({
+          include: 'all',
+        });
+
+        result.queries[0].subscribe({
+          error() {
+            setTimeout(() => {
+              try {
+                expect(invariantDebugSpy).toHaveBeenCalledTimes(1);
+                expect(invariantDebugSpy).toHaveBeenCalledWith(
+                  'In client.refetchQueries, Promise.all promise rejected with error %o',
+                  new ApolloError({ errorMessage: 'refetch failed' }),
+                );
+                resolve();
+              } catch (err) {
+                reject(err);
+              }
+            });
+          },
+        });
       }
-    );
+    });
   });
 });

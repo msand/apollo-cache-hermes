@@ -10,7 +10,6 @@ import { DocumentNode } from './util';
  * views, etc).
  */
 export interface Queryable {
-
   /**
    * Performs any transformations of operation documents.
    *

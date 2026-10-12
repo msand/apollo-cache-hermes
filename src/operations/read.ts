@@ -21,28 +21,20 @@ const makeRef = makeReference;
 const { StaticNodeId } = schema;
 const { cloneNodeSnapshot, EntitySnapshot } = nodes;
 const { nodeIdForParameterizedValue } = snapshotEditor;
-const {
-  deepGet,
-  isNil,
-  isObject,
-  isReference,
-  lazyImmutableDeepSet,
-  safeStringify,
-  walkOperation,
-} = util;
+const { deepGet, isNil, isObject, isReference, lazyImmutableDeepSet, safeStringify, walkOperation } = util;
 
 export type MissingTree =
   | string
   | {
-  readonly [key: string]: MissingTree,
-};
+      readonly [key: string]: MissingTree;
+    };
 
 export class MissingFieldError extends Error {
   constructor(
     public readonly message: string,
     public readonly path: MissingTree | Array<string | number>,
     public readonly query: DocumentNode,
-    public readonly variables?: Record<string, any>
+    public readonly variables?: Record<string, any>,
   ) {
     // 'Error' breaks prototype chain here
     super(message);
@@ -117,7 +109,7 @@ export function read<TSerialized>(
   const operation = context.parseOperation(raw);
 
   // Retrieve the previous result (may be partially complete), or start anew.
-  const queryResult = snapshot.readCache.get(operation) || {} as Partial<QueryResultWithNodeIds>;
+  const queryResult = snapshot.readCache.get(operation) || ({} as Partial<QueryResultWithNodeIds>);
   snapshot.readCache.set(operation, queryResult as QueryResult);
 
   let cacheHit = true;
@@ -132,7 +124,14 @@ export function read<TSerialized>(
       (operation.parsedQuery.__typename && data && !('__typename' in (data as JsonObject)))
     ) {
       const dynamicNodeIds = new Set<NodeId>();
-      queryResult.result = _walkAndOverlayDynamicValues(operation, context, snapshot, queryResult.result ?? {}, dynamicNodeIds!, tempStore);
+      queryResult.result = _walkAndOverlayDynamicValues(
+        operation,
+        context,
+        snapshot,
+        queryResult.result ?? {},
+        dynamicNodeIds!,
+        tempStore,
+      );
       queryResult.dynamicNodeIds = dynamicNodeIds;
     }
 
@@ -197,11 +196,7 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
   // dynamic values to be overlaid
   const id = query.rootId;
   const isRoot = id === StaticNodeId.QueryRoot;
-  const rootSnapshot: Readonly<NodeSnapshot> | undefined
-    = snapshot.getNodeSnapshot(id)
-      ?? isRoot
-      ? {}
-      : undefined;
+  const rootSnapshot: Readonly<NodeSnapshot> | undefined = (snapshot.getNodeSnapshot(id) ?? isRoot) ? {} : undefined;
   if (isNil(rootSnapshot)) return result;
 
   // TODO: A better approach here might be to walk the outbound references from
@@ -239,7 +234,7 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
   let readFallbackObject: undefined | StoreObject;
   const readField = (
     fieldNameOrOptions: string | ReadFieldOptions,
-    from: StoreObject | Reference = rootSnapshot.data as StoreObject ?? readFallbackObject
+    from: StoreObject | Reference = (rootSnapshot.data as StoreObject) ?? readFallbackObject,
   ) => {
     if (!from) {
       return undefined;
@@ -277,9 +272,7 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
     args: {},
     cache: null as any,
     canRead(value: StoreValue): boolean {
-      return isReference(value)
-        ? snapshot.has(value.__ref)
-        : typeof value === 'object' && value !== null;
+      return isReference(value) ? snapshot.has(value.__ref) : typeof value === 'object' && value !== null;
     },
     field: null,
     fieldName: '',
@@ -294,7 +287,7 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
       const entityId = context.entityIdForValue(value);
       if (entityId && mergeIntoStore && !isReference(value) && typeof value !== 'string') {
         const nodeSnapshot = ensureNewSnapshot(entityId);
-        nodeSnapshot.data = { ...nodeSnapshot.data as {}, ...value };
+        nodeSnapshot.data = { ...(nodeSnapshot.data as {}), ...value };
       }
       const ref = entityId ?? value;
       return typeof ref === 'string' ? makeRef(ref) : undefined;
@@ -357,7 +350,10 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
 
         if (!childSnapshot) {
           // Should we fall back to a redirect?
-          const redirect: CacheContext.ResolverRedirect | undefined = deepGet(context.resolverRedirects, [typeName, fieldName]) as any;
+          const redirect: CacheContext.ResolverRedirect | undefined = deepGet(context.resolverRedirects, [
+            typeName,
+            fieldName,
+          ]) as any;
           if (redirect) {
             childId = redirect(node.args);
             if (!isNil(childId)) {
@@ -438,10 +434,7 @@ interface UnknownGraphQLObjectArray extends Array<UnknownGraphQLObject> {}
  *  We can skip this part of the graph if there are no parameterized children
  *  to resolve.
  */
-function _shouldWalkChildren(
-  value: JsonValue | undefined,
-  node: ParsedQueryNode
-): value is UnknownGraphQLObject {
+function _shouldWalkChildren(value: JsonValue | undefined, node: ParsedQueryNode): value is UnknownGraphQLObject {
   return !!node.hasParameterizedChildren && !!node.children && value !== null;
 }
 
@@ -449,7 +442,7 @@ function _shouldWalkChildren(
  *  Private: Represents and location and value of objects discovered while
  *  flattening the value of a graphql object field.
  */
-type FlattenedGraphQLObject = { value: JsonObject, path: PathPart[] };
+type FlattenedGraphQLObject = { value: JsonObject; path: PathPart[] };
 
 /**
  *  Finds all of the actual objects in `value` which can be a single object, an
@@ -472,7 +465,10 @@ function _flattenGraphQLObject(value: UnknownGraphQLObject, path: PathPart[]): F
   return flattened;
 }
 
-function _recursivelyWrapValue<T extends JsonValue, TSerialized>(value: T | undefined, context: CacheContext<TSerialized>): T {
+function _recursivelyWrapValue<T extends JsonValue, TSerialized>(
+  value: T | undefined,
+  context: CacheContext<TSerialized>,
+): T {
   if (!Array.isArray(value)) {
     return _wrapValue(value, context);
   }
@@ -547,20 +543,18 @@ export function _visitSelection<TSerialized>(
       if (!(field in value) && field !== '__typename') {
         let missingError = missingByFieldName.get(field);
         const nodeId = context.entityIdForValue(value) ?? (value?.__typename === 'Query' ? 'ROOT_QUERY' : undefined);
-        const objOrNodeId = nodeId ? `${nodeId} object` : `object ${(safeStringify(value))}`;
+        const objOrNodeId = nodeId ? `${nodeId} object` : `object ${safeStringify(value)}`;
         const message = `Can't find field '${field}' on ${objOrNodeId}`;
         if (!missingError) {
           const missingTree: MissingTree = {};
           lazyImmutableDeepSet(missingTree, undefined, [...path, field], message);
-          missingByFieldName.set(field, missingError = new MissingFieldError(
-            message,
-            missingTree,
-            query.info.document,
-            query.variables ?? {},
-          ));
+          missingByFieldName.set(
+            field,
+            (missingError = new MissingFieldError(message, missingTree, query.info.document, query.variables ?? {})),
+          );
         } else {
           const missingTree = missingError.path as {
-            readonly [key: string]: MissingTree,
+            readonly [key: string]: MissingTree;
           };
           lazyImmutableDeepSet(missingTree, undefined, [...path, field], message);
         }

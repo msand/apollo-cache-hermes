@@ -16,10 +16,7 @@ describe('MockedResponse.newData', () => {
       },
     };
 
-    const stronglyTypedMockResponse: MockedResponse<
-      { a: string },
-      { input: string }
-    > = {
+    const stronglyTypedMockResponse: MockedResponse<{ a: string }, { input: string }> = {
       request: {
         query: gql`
           query A {
@@ -35,7 +32,7 @@ describe('MockedResponse.newData', () => {
     };
   };
 
-  it('returned \'data\' can be any object with untyped response', () => {
+  it("returned 'data' can be any object with untyped response", () => {
     const { weaklyTypedMockResponse } = setup();
 
     weaklyTypedMockResponse.newData = ({ fake: { faker } }) => ({
@@ -45,7 +42,7 @@ describe('MockedResponse.newData', () => {
     });
   });
 
-  it('can\'t return output that doesn\'t match TData', () => {
+  it("can't return output that doesn't match TData", () => {
     const { stronglyTypedMockResponse } = setup();
 
     // @ts-expect-error return type does not match `TData`
@@ -56,7 +53,7 @@ describe('MockedResponse.newData', () => {
     });
   });
 
-  it('can\'t use input variables that don\'t exist in TVariables', () => {
+  it("can't use input variables that don't exist in TVariables", () => {
     const { stronglyTypedMockResponse } = setup();
 
     // @ts-expect-error unknown variables
@@ -83,7 +80,7 @@ describe('mockLink', () => {
     }
   `;
 
-  it('should not require a result or error when delay equals Infinity', async() => {
+  it('should not require a result or error when delay equals Infinity', async () => {
     const mockLink = new MockLink([
       {
         request: {
@@ -98,13 +95,13 @@ describe('mockLink', () => {
     const subscription = observable.subscribe(
       () => fail('onNext was called'),
       () => fail('onError was called'),
-      () => fail('onComplete was called')
+      () => fail('onComplete was called'),
     );
     jest.advanceTimersByTime(MAXIMUM_DELAY);
     subscription.unsubscribe();
   });
 
-  it('should require result or error when delay is just large', (done) => {
+  it('should require result or error when delay is just large', done => {
     const mockLink = new MockLink([
       {
         request: {
@@ -116,20 +113,20 @@ describe('mockLink', () => {
 
     execute(mockLink, { query }).subscribe(
       () => fail('onNext was called'),
-      (error) => {
+      error => {
         expect(error).toBeInstanceOf(Error);
         expect(error.message).toMatch(
-          /^Mocked response should contain either `result`, `error` or a `delay` of `Infinity`: /
+          /^Mocked response should contain either `result`, `error` or a `delay` of `Infinity`: /,
         );
         done();
-      }
+      },
     );
 
     jest.advanceTimersByTime(MAXIMUM_DELAY);
   });
 });
 
-it('removes @nonreactive directives from fields', async() => {
+it('removes @nonreactive directives from fields', async () => {
   const serverQuery = gql`
     query A {
       a
@@ -182,7 +179,7 @@ it('removes @nonreactive directives from fields', async() => {
   }
 });
 
-it('removes @connection directives', async() => {
+it('removes @connection directives', async () => {
   const serverQuery = gql`
     query A {
       a
@@ -235,7 +232,7 @@ it('removes @connection directives', async() => {
   }
 });
 
-it('removes fields with @client directives', async() => {
+it('removes fields with @client directives', async () => {
   const serverQuery = gql`
     query A {
       a
@@ -288,8 +285,7 @@ describe.skip('type tests', () => {
     let unspecificArray: MockedResponse[] = [];
     let specificArray: MockedResponse<{ foo: string }, { foo: string }>[] = [];
     let unspecificResponse: MockedResponse = ANY;
-    let specificResponse: MockedResponse<{ foo: string }, { foo: string }>
-      = ANY;
+    let specificResponse: MockedResponse<{ foo: string }, { foo: string }> = ANY;
 
     unspecificArray.push(specificResponse);
     unspecificArray.push(unspecificResponse);

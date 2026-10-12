@@ -7,14 +7,14 @@ import type { DefaultContext } from '../../core/index';
 
 export type ContextSetter = (
   operation: GraphQLRequest,
-  prevContext: DefaultContext
+  prevContext: DefaultContext,
 ) => Promise<DefaultContext> | DefaultContext;
 
 export function setContext(setter: ContextSetter): ApolloLink {
   return new ApolloLink((operation: Operation, forward: NextLink) => {
     const { ...request } = operation;
 
-    return new Observable((observer) => {
+    return new Observable(observer => {
       let handle: ObservableSubscription;
       let closed = false;
       Promise.resolve(request)

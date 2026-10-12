@@ -64,9 +64,7 @@ describe('General functionality', () => {
       .then(() => {
         throw new global.Error('should not call');
       })
-      .catch((error: GraphQLError) =>
-        expect(error.message).toMatch(/no introspection/)
-      );
+      .catch((error: GraphQLError) => expect(error.message).toMatch(/no introspection/));
   });
 
   it('should support returning default values from resolvers', () => {
@@ -122,7 +120,7 @@ describe('General functionality', () => {
         client.query({ query }).then(({ data }) => {
           expect({ ...data }).toMatchObject({ field: 1 });
           expect(count).toBe(1);
-        })
+        }),
       );
   });
 
@@ -154,12 +152,10 @@ describe('General functionality', () => {
         expect(count).toBe(1);
       })
       .then(() =>
-        client
-          .query({ query, fetchPolicy: 'network-only' })
-          .then(({ data }) => {
-            expect({ ...data }).toMatchObject({ field: 1 });
-            expect(count).toBe(2);
-          })
+        client.query({ query, fetchPolicy: 'network-only' }).then(({ data }) => {
+          expect({ ...data }).toMatchObject({ field: 1 });
+          expect(count).toBe(2);
+        }),
       );
   });
 
@@ -180,7 +176,7 @@ describe('General functionality', () => {
     const link = new ApolloLink(() =>
       Observable.of({
         data: { foo: [{ __typename: 'Bar' }, { __typename: 'Baz' }] },
-      })
+      }),
     );
 
     const resolvers = {
@@ -192,10 +188,8 @@ describe('General functionality', () => {
       },
     };
 
-    const fragmentMatcher = (
-      { __typename }: { __typename: string },
-      typeCondition: string
-    ) => __typename === typeCondition;
+    const fragmentMatcher = ({ __typename }: { __typename: string }, typeCondition: string) =>
+      __typename === typeCondition;
 
     const client = new ApolloClient({
       cache: new InMemoryCache({
@@ -215,30 +209,24 @@ describe('General functionality', () => {
 });
 
 describe('Cache manipulation', () => {
-  it(
-    'should be able to query @client fields and the cache without defining '
-      + 'local resolvers',
-    () => {
-      const query = gql`
-        {
-          field @client
-        }
-      `;
+  it('should be able to query @client fields and the cache without defining local resolvers', () => {
+    const query = gql`
+      {
+        field @client
+      }
+    `;
 
-      const cache = new Hermes();
-      const client = new ApolloClient({
-        cache,
-        link: ApolloLink.empty(),
-        resolvers: {},
-      });
+    const cache = new Hermes();
+    const client = new ApolloClient({
+      cache,
+      link: ApolloLink.empty(),
+      resolvers: {},
+    });
 
-      cache.writeQuery({ query, data: { field: 'yo' } });
+    cache.writeQuery({ query, data: { field: 'yo' } });
 
-      client
-        .query({ query })
-        .then(({ data }) => expect({ ...data }).toMatchObject({ field: 'yo' }));
-    }
-  );
+    client.query({ query }).then(({ data }) => expect({ ...data }).toMatchObject({ field: 'yo' }));
+  });
 
   it('should be able to write to the cache using a local mutation', () => {
     const query = gql`
@@ -277,8 +265,7 @@ describe('Cache manipulation', () => {
   });
 
   itAsync(
-    'should be able to write to the cache with a local mutation and have '
-      + 'things rerender automatically',
+    'should be able to write to the cache with a local mutation and have things rerender automatically',
     (resolve, reject) => {
       const query = gql`
         {
@@ -325,7 +312,7 @@ describe('Cache manipulation', () => {
           }
         },
       });
-    }
+    },
   );
 
   it('should support writing to the cache with a local mutation using variables', () => {
@@ -345,11 +332,7 @@ describe('Cache manipulation', () => {
 
     const resolvers = {
       Mutation: {
-        start: (
-          _1: any,
-          variables: { field: string },
-          { cache }: { cache: ApolloCache<any> }
-        ) => {
+        start: (_1: any, variables: { field: string }, { cache }: { cache: ApolloCache<any> }) => {
           cache.writeQuery({ query, data: { field: variables.field } });
           return {
             __typename: 'Field',
@@ -378,372 +361,343 @@ describe('Cache manipulation', () => {
       });
   });
 
-  itAsync(
-    'should read @client fields from cache on refetch (#4741)',
-    (resolve, reject) => {
-      const query = gql`
-        query FetchInitialData {
-          serverData {
-            id
-            title
-          }
-          selectedItemId @client
-        }
-      `;
-
-      const mutation = gql`
-        mutation Select {
-          select(itemId: $id) @client
-        }
-      `;
-
-      const serverData = {
-        __typename: 'ServerData',
-        id: 123,
-        title: 'Oyez and Onoz',
-      };
-
-      let selectedItemId = -1;
-      const client = new ApolloClient({
-        cache: new Hermes(),
-        link: new ApolloLink(() => Observable.of({ data: { serverData } })),
-        resolvers: {
-          Query: {
-            selectedItemId() {
-              return selectedItemId;
-            },
-          },
-          Mutation: {
-            select(_, { itemId }) {
-              selectedItemId = itemId;
-            },
-          },
-        },
-      });
-
-      client.watchQuery({ query }).subscribe({
-        next(result) {
-          expect(result).toEqual({
-            data: {
-              serverData,
-              selectedItemId,
-            },
-            loading: false,
-            networkStatus: 7,
-          });
-
-          if (selectedItemId !== 123) {
-            client.mutate({
-              mutation,
-              variables: {
-                id: 123,
-              },
-              refetchQueries: ['FetchInitialData'],
-            });
-          } else {
-            resolve();
-          }
-        },
-      });
-    }
-  );
-
-  itAsync(
-    'should rerun @client(always: true) fields on entity update',
-    (resolve, reject) => {
-      const query = gql`
-        query GetClientData($id: ID) {
-          clientEntity(id: $id) @client(always: true) {
-            id
-            title
-            titleLength @client(always: true)
-          }
-        }
-      `;
-
-      const mutation = gql`
-        mutation AddOrUpdate {
-          addOrUpdate(id: $id, title: $title) @client
-        }
-      `;
-
-      const fragment = gql`
-        fragment ClientDataFragment on ClientData {
+  itAsync('should read @client fields from cache on refetch (#4741)', (resolve, reject) => {
+    const query = gql`
+      query FetchInitialData {
+        serverData {
           id
           title
         }
-      `;
-      const client = new ApolloClient({
-        cache: new Hermes(),
-        link: new ApolloLink(() => Observable.of({ data: {} })),
-        resolvers: {
-          ClientData: {
-            titleLength(data) {
-              return data.title.length;
-            },
-          },
-          Query: {
-            clientEntity(_root, { id }, { cache }) {
-              return cache.readFragment({
-                id: cache.identify({ id, __typename: 'ClientData' }),
-                fragment,
-              });
-            },
-          },
-          Mutation: {
-            addOrUpdate(_root, { id, title }, { cache }) {
-              return cache.writeFragment({
-                id: cache.identify({ id, __typename: 'ClientData' }),
-                fragment,
-                data: { id, title, __typename: 'ClientData' },
-              });
-            },
-          },
-        },
-      });
+        selectedItemId @client
+      }
+    `;
 
-      const entityId = 1;
-      const shortTitle = 'Short';
-      const longerTitle = 'A little longer';
-      client.mutate({
-        mutation,
-        variables: {
-          id: entityId,
-          title: shortTitle,
+    const mutation = gql`
+      mutation Select {
+        select(itemId: $id) @client
+      }
+    `;
+
+    const serverData = {
+      __typename: 'ServerData',
+      id: 123,
+      title: 'Oyez and Onoz',
+    };
+
+    let selectedItemId = -1;
+    const client = new ApolloClient({
+      cache: new Hermes(),
+      link: new ApolloLink(() => Observable.of({ data: { serverData } })),
+      resolvers: {
+        Query: {
+          selectedItemId() {
+            return selectedItemId;
+          },
         },
-      });
-      let mutated = false;
-      client.watchQuery({ query, variables: { id: entityId } }).subscribe({
-        next(result) {
-          if (!mutated) {
-            expect(result.data.clientEntity).toEqual({
-              id: entityId,
-              title: shortTitle,
-              titleLength: shortTitle.length,
-              __typename: 'ClientData',
+        Mutation: {
+          select(_, { itemId }) {
+            selectedItemId = itemId;
+          },
+        },
+      },
+    });
+
+    client.watchQuery({ query }).subscribe({
+      next(result) {
+        expect(result).toEqual({
+          data: {
+            serverData,
+            selectedItemId,
+          },
+          loading: false,
+          networkStatus: 7,
+        });
+
+        if (selectedItemId !== 123) {
+          client.mutate({
+            mutation,
+            variables: {
+              id: 123,
+            },
+            refetchQueries: ['FetchInitialData'],
+          });
+        } else {
+          resolve();
+        }
+      },
+    });
+  });
+
+  itAsync('should rerun @client(always: true) fields on entity update', (resolve, reject) => {
+    const query = gql`
+      query GetClientData($id: ID) {
+        clientEntity(id: $id) @client(always: true) {
+          id
+          title
+          titleLength @client(always: true)
+        }
+      }
+    `;
+
+    const mutation = gql`
+      mutation AddOrUpdate {
+        addOrUpdate(id: $id, title: $title) @client
+      }
+    `;
+
+    const fragment = gql`
+      fragment ClientDataFragment on ClientData {
+        id
+        title
+      }
+    `;
+    const client = new ApolloClient({
+      cache: new Hermes(),
+      link: new ApolloLink(() => Observable.of({ data: {} })),
+      resolvers: {
+        ClientData: {
+          titleLength(data) {
+            return data.title.length;
+          },
+        },
+        Query: {
+          clientEntity(_root, { id }, { cache }) {
+            return cache.readFragment({
+              id: cache.identify({ id, __typename: 'ClientData' }),
+              fragment,
             });
-            client.mutate({
-              mutation,
-              variables: {
-                id: entityId,
-                title: longerTitle,
-              },
+          },
+        },
+        Mutation: {
+          addOrUpdate(_root, { id, title }, { cache }) {
+            return cache.writeFragment({
+              id: cache.identify({ id, __typename: 'ClientData' }),
+              fragment,
+              data: { id, title, __typename: 'ClientData' },
             });
-            mutated = true;
-          } else if (mutated) {
-            expect(result.data.clientEntity).toEqual({
+          },
+        },
+      },
+    });
+
+    const entityId = 1;
+    const shortTitle = 'Short';
+    const longerTitle = 'A little longer';
+    client.mutate({
+      mutation,
+      variables: {
+        id: entityId,
+        title: shortTitle,
+      },
+    });
+    let mutated = false;
+    client.watchQuery({ query, variables: { id: entityId } }).subscribe({
+      next(result) {
+        if (!mutated) {
+          expect(result.data.clientEntity).toEqual({
+            id: entityId,
+            title: shortTitle,
+            titleLength: shortTitle.length,
+            __typename: 'ClientData',
+          });
+          client.mutate({
+            mutation,
+            variables: {
               id: entityId,
               title: longerTitle,
-              titleLength: longerTitle.length,
-              __typename: 'ClientData',
-            });
-            resolve();
-          }
-        },
-      });
-    }
-  );
+            },
+          });
+          mutated = true;
+        } else if (mutated) {
+          expect(result.data.clientEntity).toEqual({
+            id: entityId,
+            title: longerTitle,
+            titleLength: longerTitle.length,
+            __typename: 'ClientData',
+          });
+          resolve();
+        }
+      },
+    });
+  });
 });
 
 describe('Sample apps', () => {
-  itAsync(
-    'should support a simple counter app using local state',
-    (resolve, reject) => {
-      const query = gql`
-        query GetCount {
-          count @client
-          lastCount # stored in db on server
-        }
-      `;
-
-      const increment = gql`
-        mutation Increment($amount: Int = 1) {
-          increment(amount: $amount) @client
-        }
-      `;
-
-      const decrement = gql`
-        mutation Decrement($amount: Int = 1) {
-          decrement(amount: $amount) @client
-        }
-      `;
-
-      const link = new ApolloLink((operation) => {
-        expect(operation.operationName).toBe('GetCount');
-        return Observable.of({ data: { lastCount: 1 } });
-      });
-
-      const client = new ApolloClient({
-        link,
-        cache: new Hermes(),
-        resolvers: {},
-      });
-
-      const update = (
-        query: DocumentNode,
-        updater: (data: { count: number }, variables: { amount: number }) => any
-      ) => {
-        return (
-          _result: {},
-          variables: { amount: number },
-          { cache }: { cache: ApolloCache<any> }
-        ): null => {
-          const read = client.readQuery<{ count: number }>({
-            query,
-            variables,
-          });
-          if (read) {
-            const data = updater(read, variables);
-            cache.writeQuery({ query, variables, data });
-          } else {
-            throw new Error('readQuery returned a falsy value');
-          }
-          return null;
-        };
-      };
-
-      const resolvers = {
-        Query: {
-          count: () => 0,
-        },
-        Mutation: {
-          increment: update(query, ({ count, ...rest }, { amount }) => ({
-            ...rest,
-            count: count + amount,
-          })),
-          decrement: update(query, ({ count, ...rest }, { amount }) => ({
-            ...rest,
-            count: count - amount,
-          })),
-        },
-      };
-
-      client.addResolvers(resolvers);
-
-      let count = 0;
-      client.watchQuery({ query }).subscribe({
-        next: ({ data }) => {
-          count++;
-          if (count === 1) {
-            try {
-              expect({ ...data }).toMatchObject({ count: 0, lastCount: 1 });
-            } catch (e) {
-              reject(e);
-            }
-            client.mutate({ mutation: increment, variables: { amount: 2 } });
-          }
-
-          if (count === 2) {
-            try {
-              expect({ ...data }).toMatchObject({ count: 2, lastCount: 1 });
-            } catch (e) {
-              reject(e);
-            }
-            client.mutate({ mutation: decrement, variables: { amount: 1 } });
-          }
-          if (count === 3) {
-            try {
-              expect({ ...data }).toMatchObject({ count: 1, lastCount: 1 });
-            } catch (e) {
-              reject(e);
-            }
-            resolve();
-          }
-        },
-        error: e => reject(e),
-        complete: reject,
-      });
-    }
-  );
-
-  itAsync(
-    'should support a simple todo app using local state',
-    (resolve, reject) => {
-      const query = gql`
-        query GetTasks {
-          todos @client {
-            message
-            title
-          }
-        }
-      `;
-
-      const mutation = gql`
-        mutation AddTodo($message: String, $title: String) {
-          addTodo(message: $message, title: $title) @client
-        }
-      `;
-
-      const client = new ApolloClient({
-        link: ApolloLink.empty(),
-        cache: new Hermes(),
-        resolvers: {},
-      });
-
-      interface Todo {
-        title: string;
-        message: string;
-        __typename: string;
+  itAsync('should support a simple counter app using local state', (resolve, reject) => {
+    const query = gql`
+      query GetCount {
+        count @client
+        lastCount # stored in db on server
       }
+    `;
 
-      const update = (
-        query: DocumentNode,
-        updater: (todos: any, variables: Todo) => any
-      ) => {
-        return (
-          _result: {},
-          variables: Todo,
-          { cache }: { cache: ApolloCache<any> }
-        ): null => {
-          const data = updater(
-            client.readQuery({ query, variables }),
-            variables
-          );
+    const increment = gql`
+      mutation Increment($amount: Int = 1) {
+        increment(amount: $amount) @client
+      }
+    `;
+
+    const decrement = gql`
+      mutation Decrement($amount: Int = 1) {
+        decrement(amount: $amount) @client
+      }
+    `;
+
+    const link = new ApolloLink(operation => {
+      expect(operation.operationName).toBe('GetCount');
+      return Observable.of({ data: { lastCount: 1 } });
+    });
+
+    const client = new ApolloClient({
+      link,
+      cache: new Hermes(),
+      resolvers: {},
+    });
+
+    const update = (query: DocumentNode, updater: (data: { count: number }, variables: { amount: number }) => any) => {
+      return (_result: {}, variables: { amount: number }, { cache }: { cache: ApolloCache<any> }): null => {
+        const read = client.readQuery<{ count: number }>({
+          query,
+          variables,
+        });
+        if (read) {
+          const data = updater(read, variables);
           cache.writeQuery({ query, variables, data });
-          return null;
-        };
+        } else {
+          throw new Error('readQuery returned a falsy value');
+        }
+        return null;
       };
+    };
 
-      const resolvers = {
-        Query: {
-          todos: () => [],
-        },
-        Mutation: {
-          addTodo: update(query, ({ todos }, { title, message }: Todo) => ({
-            todos: todos.concat([{ message, title, __typename: 'Todo' }]),
-          })),
-        },
-      };
+    const resolvers = {
+      Query: {
+        count: () => 0,
+      },
+      Mutation: {
+        increment: update(query, ({ count, ...rest }, { amount }) => ({
+          ...rest,
+          count: count + amount,
+        })),
+        decrement: update(query, ({ count, ...rest }, { amount }) => ({
+          ...rest,
+          count: count - amount,
+        })),
+      },
+    };
 
-      client.addResolvers(resolvers);
+    client.addResolvers(resolvers);
 
-      let count = 0;
-      client.watchQuery({ query }).subscribe({
-        next: ({ data }: any) => {
-          count++;
-          if (count === 1) {
-            expect({ ...data }).toMatchObject({ todos: [] });
-            client.mutate({
-              mutation,
-              variables: {
-                title: 'Apollo Client 2.0',
-                message: 'ship it',
-              },
-            });
-          } else if (count === 2) {
-            expect(data.todos.map((x: Todo) => ({ ...x }))).toMatchObject([
-              {
-                title: 'Apollo Client 2.0',
-                message: 'ship it',
-                __typename: 'Todo',
-              },
-            ]);
-            resolve();
+    let count = 0;
+    client.watchQuery({ query }).subscribe({
+      next: ({ data }) => {
+        count++;
+        if (count === 1) {
+          try {
+            expect({ ...data }).toMatchObject({ count: 0, lastCount: 1 });
+          } catch (e) {
+            reject(e);
           }
-        },
-      });
+          client.mutate({ mutation: increment, variables: { amount: 2 } });
+        }
+
+        if (count === 2) {
+          try {
+            expect({ ...data }).toMatchObject({ count: 2, lastCount: 1 });
+          } catch (e) {
+            reject(e);
+          }
+          client.mutate({ mutation: decrement, variables: { amount: 1 } });
+        }
+        if (count === 3) {
+          try {
+            expect({ ...data }).toMatchObject({ count: 1, lastCount: 1 });
+          } catch (e) {
+            reject(e);
+          }
+          resolve();
+        }
+      },
+      error: e => reject(e),
+      complete: reject,
+    });
+  });
+
+  itAsync('should support a simple todo app using local state', (resolve, reject) => {
+    const query = gql`
+      query GetTasks {
+        todos @client {
+          message
+          title
+        }
+      }
+    `;
+
+    const mutation = gql`
+      mutation AddTodo($message: String, $title: String) {
+        addTodo(message: $message, title: $title) @client
+      }
+    `;
+
+    const client = new ApolloClient({
+      link: ApolloLink.empty(),
+      cache: new Hermes(),
+      resolvers: {},
+    });
+
+    interface Todo {
+      title: string;
+      message: string;
+      __typename: string;
     }
-  );
+
+    const update = (query: DocumentNode, updater: (todos: any, variables: Todo) => any) => {
+      return (_result: {}, variables: Todo, { cache }: { cache: ApolloCache<any> }): null => {
+        const data = updater(client.readQuery({ query, variables }), variables);
+        cache.writeQuery({ query, variables, data });
+        return null;
+      };
+    };
+
+    const resolvers = {
+      Query: {
+        todos: () => [],
+      },
+      Mutation: {
+        addTodo: update(query, ({ todos }, { title, message }: Todo) => ({
+          todos: todos.concat([{ message, title, __typename: 'Todo' }]),
+        })),
+      },
+    };
+
+    client.addResolvers(resolvers);
+
+    let count = 0;
+    client.watchQuery({ query }).subscribe({
+      next: ({ data }: any) => {
+        count++;
+        if (count === 1) {
+          expect({ ...data }).toMatchObject({ todos: [] });
+          client.mutate({
+            mutation,
+            variables: {
+              title: 'Apollo Client 2.0',
+              message: 'ship it',
+            },
+          });
+        } else if (count === 2) {
+          expect(data.todos.map((x: Todo) => ({ ...x }))).toMatchObject([
+            {
+              title: 'Apollo Client 2.0',
+              message: 'ship it',
+              __typename: 'Todo',
+            },
+          ]);
+          resolve();
+        }
+      },
+    });
+  });
 });
 
 describe('Combining client and server state/operations', () => {
@@ -778,7 +732,7 @@ describe('Combining client and server state/operations', () => {
       link,
       resolvers: {
         Mutation: {
-          toggleItem: async(_, { id }, { cache }) => {
+          toggleItem: async (_, { id }, { cache }) => {
             id = `ListItem:${id}`;
             const fragment = gql`
               fragment item on ListItem {
@@ -814,7 +768,7 @@ describe('Combining client and server state/operations', () => {
 
     let count = 0;
     observer.subscribe({
-      next: (response) => {
+      next: response => {
         if (count === 0) {
           const initial = { ...data };
           initial.list.items = initial.list.items.map(x => ({
@@ -844,175 +798,171 @@ describe('Combining client and server state/operations', () => {
     }, 10);
   });
 
-  itAsync(
-    'query resolves with loading: false if subsequent responses contain the same data',
-    (resolve, reject) => {
-      const request = {
-        query: gql`
-          query people($id: Int) {
-            people(id: $id) {
-              id
-              name
-            }
+  itAsync('query resolves with loading: false if subsequent responses contain the same data', (resolve, reject) => {
+    const request = {
+      query: gql`
+        query people($id: Int) {
+          people(id: $id) {
+            id
+            name
           }
-        `,
-        variables: {
-          id: 1,
-        },
-        notifyOnNetworkStatusChange: true,
-      };
+        }
+      `,
+      variables: {
+        id: 1,
+      },
+      notifyOnNetworkStatusChange: true,
+    };
 
-      const PersonType = new GraphQLObjectType({
-        name: 'Person',
-        fields: {
-          id: { type: GraphQLID },
-          name: { type: GraphQLString },
-        },
-      });
+    const PersonType = new GraphQLObjectType({
+      name: 'Person',
+      fields: {
+        id: { type: GraphQLID },
+        name: { type: GraphQLString },
+      },
+    });
 
-      const peopleData = [
-        { id: 1, name: 'John Smith' },
-        { id: 2, name: 'Sara Smith' },
-        { id: 3, name: 'Budd Deey' },
-      ];
+    const peopleData = [
+      { id: 1, name: 'John Smith' },
+      { id: 2, name: 'Sara Smith' },
+      { id: 3, name: 'Budd Deey' },
+    ];
 
-      const QueryType = new GraphQLObjectType({
-        name: 'Query',
-        fields: {
-          people: {
-            type: PersonType,
-            args: {
-              id: {
-                type: GraphQLInt,
-              },
-            },
-            resolve: (_, { id }) => {
-              return peopleData;
+    const QueryType = new GraphQLObjectType({
+      name: 'Query',
+      fields: {
+        people: {
+          type: PersonType,
+          args: {
+            id: {
+              type: GraphQLInt,
             },
           },
+          resolve: (_, { id }) => {
+            return peopleData;
+          },
         },
-      });
+      },
+    });
 
-      const schema = new GraphQLSchema({ query: QueryType });
+    const schema = new GraphQLSchema({ query: QueryType });
 
-      const link = new ApolloLink((operation) => {
-        return new Observable((observer) => {
-          const { query, operationName, variables } = operation;
-          try {
-            const result = graphql({
-              schema,
-              source: print(query),
-              variableValues: variables,
-              operationName,
-            }).then((result) => {
+    const link = new ApolloLink(operation => {
+      return new Observable(observer => {
+        const { query, operationName, variables } = operation;
+        try {
+          const result = graphql({
+            schema,
+            source: print(query),
+            variableValues: variables,
+            operationName,
+          })
+            .then(result => {
               observer.next(result);
               observer.complete();
-            }).catch(err => observer.error(err));
-          } catch (err) {
-            observer.error(err);
-          }
-        });
+            })
+            .catch(err => observer.error(err));
+        } catch (err) {
+          observer.error(err);
+        }
       });
+    });
 
-      const client = new ApolloClient({
-        cache: new Hermes(),
-        link,
+    const client = new ApolloClient({
+      cache: new Hermes(),
+      link,
+    });
+
+    const observer = client.watchQuery(request);
+
+    let count = 0;
+    observer.subscribe({
+      next: ({ loading, data }) => {
+        if (count === 0) expect(loading).toBe(false);
+        if (count === 1) expect(loading).toBe(true);
+        if (count === 2) {
+          expect(loading).toBe(false);
+          resolve();
+        }
+        count++;
+      },
+      error: reject,
+    });
+
+    setTimeout(() => {
+      observer.refetch({
+        id: 2,
       });
+    }, 1);
+  });
 
-      const observer = client.watchQuery(request);
+  itAsync('should correctly propagate an error from a client resolver', async (resolve, reject) => {
+    const data = {
+      list: {
+        __typename: 'List',
+        items: [
+          { __typename: 'ListItem', id: 1, name: 'first', isDone: true },
+          { __typename: 'ListItem', id: 2, name: 'second', isDone: false },
+        ],
+      },
+    };
 
-      let count = 0;
-      observer.subscribe({
-        next: ({ loading, data }) => {
-          if (count === 0) expect(loading).toBe(false);
-          if (count === 1) expect(loading).toBe(true);
-          if (count === 2) {
-            expect(loading).toBe(false);
-            resolve();
-          }
-          count++;
-        },
-        error: reject,
-      });
+    const link = new ApolloLink(() => Observable.of({ data }));
 
-      setTimeout(() => {
-        observer.refetch({
-          id: 2,
-        });
-      }, 1);
-    }
-  );
-
-  itAsync(
-    'should correctly propagate an error from a client resolver',
-    async(resolve, reject) => {
-      const data = {
-        list: {
-          __typename: 'List',
-          items: [
-            { __typename: 'ListItem', id: 1, name: 'first', isDone: true },
-            { __typename: 'ListItem', id: 2, name: 'second', isDone: false },
-          ],
-        },
-      };
-
-      const link = new ApolloLink(() => Observable.of({ data }));
-
-      const client = new ApolloClient({
-        cache: new Hermes(),
-        link,
-        resolvers: {
-          Query: {
-            hasBeenIllegallyTouched: (_, _v, _c) => {
-              throw new Error('Illegal Query Operation Occurred');
-            },
-          },
-
-          Mutation: {
-            touchIllegally: (_, _v, _c) => {
-              throw new Error('Illegal Mutation Operation Occurred');
-            },
+    const client = new ApolloClient({
+      cache: new Hermes(),
+      link,
+      resolvers: {
+        Query: {
+          hasBeenIllegallyTouched: (_, _v, _c) => {
+            throw new Error('Illegal Query Operation Occurred');
           },
         },
-      });
 
-      const variables = { id: 1 };
-      const query = gql`
-        query hasBeenIllegallyTouched($id: Int!) {
-          hasBeenIllegallyTouched(id: $id) @client
-        }
-      `;
-      const mutation = gql`
-        mutation SelectItem($id: Int!) {
-          touchIllegally(id: $id) @client
-        }
-      `;
+        Mutation: {
+          touchIllegally: (_, _v, _c) => {
+            throw new Error('Illegal Mutation Operation Occurred');
+          },
+        },
+      },
+    });
 
-      try {
-        await client.query({ query, variables });
-        reject('Should have thrown!');
-      } catch (e) {
-        // Test Passed!
-        expect(() => {
-          throw e;
-        }).toThrowErrorMatchingSnapshot();
+    const variables = { id: 1 };
+    const query = gql`
+      query hasBeenIllegallyTouched($id: Int!) {
+        hasBeenIllegallyTouched(id: $id) @client
       }
-
-      try {
-        await client.mutate({ mutation, variables });
-        reject('Should have thrown!');
-      } catch (e) {
-        // Test Passed!
-        expect(() => {
-          throw e;
-        }).toThrowErrorMatchingSnapshot();
+    `;
+    const mutation = gql`
+      mutation SelectItem($id: Int!) {
+        touchIllegally(id: $id) @client
       }
+    `;
 
-      resolve();
+    try {
+      await client.query({ query, variables });
+      reject('Should have thrown!');
+    } catch (e) {
+      // Test Passed!
+      expect(() => {
+        throw e;
+      }).toThrowErrorMatchingSnapshot();
     }
-  );
 
-  it('should handle a simple query with both server and client fields', async() => {
+    try {
+      await client.mutate({ mutation, variables });
+      reject('Should have thrown!');
+    } catch (e) {
+      // Test Passed!
+      expect(() => {
+        throw e;
+      }).toThrowErrorMatchingSnapshot();
+    }
+
+    resolve();
+  });
+
+  it('should handle a simple query with both server and client fields', async () => {
     using _consoleSpies = spyOnConsole.takeSnapshots('error');
     await new Promise<void>((resolve, reject) => {
       const query = gql`
@@ -1023,7 +973,7 @@ describe('Combining client and server state/operations', () => {
       `;
       const cache = new Hermes();
 
-      const link = new ApolloLink((operation) => {
+      const link = new ApolloLink(operation => {
         expect(operation.operationName).toBe('GetCount');
         return Observable.of({ data: { lastCount: 1 } });
       });
@@ -1050,7 +1000,7 @@ describe('Combining client and server state/operations', () => {
     });
   });
 
-  it('should support nested querying of both server and client fields', async() => {
+  it('should support nested querying of both server and client fields', async () => {
     using _consoleSpies = spyOnConsole.takeSnapshots('error');
     await new Promise<void>((resolve, reject) => {
       const query = gql`
@@ -1063,7 +1013,7 @@ describe('Combining client and server state/operations', () => {
       `;
 
       const cache = new Hermes();
-      const link = new ApolloLink((operation) => {
+      const link = new ApolloLink(operation => {
         expect(operation.operationName).toBe('GetUser');
         return Observable.of({
           data: {
@@ -1115,159 +1065,153 @@ describe('Combining client and server state/operations', () => {
     });
   });
 
-  itAsync(
-    'should combine both server and client mutations',
-    (resolve, reject) => {
-      const query = gql`
-        query SampleQuery {
-          count @client
-          user {
-            firstName
-          }
+  itAsync('should combine both server and client mutations', (resolve, reject) => {
+    const query = gql`
+      query SampleQuery {
+        count @client
+        user {
+          firstName
         }
-      `;
+      }
+    `;
 
-      const mutation = gql`
-        mutation SampleMutation {
-          incrementCount @client
-          updateUser(firstName: "Harry") {
-            firstName
-          }
+    const mutation = gql`
+      mutation SampleMutation {
+        incrementCount @client
+        updateUser(firstName: "Harry") {
+          firstName
         }
-      `;
+      }
+    `;
 
-      const counterQuery = gql`
-        {
-          count @client
-        }
-      `;
+    const counterQuery = gql`
+      {
+        count @client
+      }
+    `;
 
-      const userQuery = gql`
-        {
-          user {
-            firstName
-          }
+    const userQuery = gql`
+      {
+        user {
+          firstName
         }
-      `;
+      }
+    `;
 
-      let watchCount = 0;
-      const link = new ApolloLink((operation: Operation): Observable<{}> => {
-        if (operation.operationName === 'SampleQuery') {
-          return Observable.of({
-            data: { user: { __typename: 'User', firstName: 'John' } },
-          });
-        }
-        if (operation.operationName === 'SampleMutation') {
-          return Observable.of({
-            data: { updateUser: { __typename: 'User', firstName: 'Harry' } },
-          });
-        }
+    let watchCount = 0;
+    const link = new ApolloLink((operation: Operation): Observable<{}> => {
+      if (operation.operationName === 'SampleQuery') {
         return Observable.of({
-          errors: [new Error(`Unknown operation ${operation.operationName}`)],
+          data: { user: { __typename: 'User', firstName: 'John' } },
         });
+      }
+      if (operation.operationName === 'SampleMutation') {
+        return Observable.of({
+          data: { updateUser: { __typename: 'User', firstName: 'Harry' } },
+        });
+      }
+      return Observable.of({
+        errors: [new Error(`Unknown operation ${operation.operationName}`)],
       });
+    });
 
-      const cache = new Hermes();
-      const client = new ApolloClient({
-        cache,
-        link,
-        resolvers: {
-          Mutation: {
-            incrementCount: (_, __, { cache }) => {
-              const { count } = cache.readQuery({ query: counterQuery });
-              const data = { count: count + 1 };
-              cache.writeQuery({
-                query: counterQuery,
-                data,
-              });
-              return null;
-            },
+    const cache = new Hermes();
+    const client = new ApolloClient({
+      cache,
+      link,
+      resolvers: {
+        Mutation: {
+          incrementCount: (_, __, { cache }) => {
+            const { count } = cache.readQuery({ query: counterQuery });
+            const data = { count: count + 1 };
+            cache.writeQuery({
+              query: counterQuery,
+              data,
+            });
+            return null;
           },
         },
-      });
+      },
+    });
 
-      cache.writeQuery({
-        query: counterQuery,
-        data: {
-          count: 0,
-        },
-      });
+    cache.writeQuery({
+      query: counterQuery,
+      data: {
+        count: 0,
+      },
+    });
 
-      client.watchQuery({ query }).subscribe({
-        next: ({ data }: any) => {
-          if (watchCount === 0) {
-            expect(data.count).toEqual(0);
-            expect({ ...data.user }).toMatchObject({
-              __typename: 'User',
-              firstName: 'John',
-            });
-            watchCount += 1;
-            client.mutate({
-              mutation,
-              update(proxy, { data: { updateUser } }) {
-                proxy.writeQuery({
-                  query: userQuery,
-                  data: {
-                    user: { ...updateUser },
-                  },
-                });
-              },
-            });
-          } else {
-            expect(data.count).toEqual(1);
-            expect({ ...data.user }).toMatchObject({
-              __typename: 'User',
-              firstName: 'Harry',
-            });
-            resolve();
-          }
-        },
-      });
-    }
-  );
-
-  itAsync(
-    'handles server errors when root data property is null',
-    (resolve, reject) => {
-      const query = gql`
-        query GetUser {
-          user {
-            firstName @client
-            lastName
-          }
-        }
-      `;
-
-      const cache = new Hermes();
-      const link = new ApolloLink((operation) => {
-        return Observable.of({
-          data: null,
-          errors: [
-            new GraphQLError('something went wrong', {
-              extensions: {
-                code: 'INTERNAL_SERVER_ERROR',
-              },
-              path: ['user'],
-            }),
-          ],
-        });
-      });
-
-      const client = new ApolloClient({
-        cache,
-        link,
-        resolvers: {},
-      });
-
-      client.watchQuery({ query }).subscribe({
-        error(error) {
-          expect(error.message).toEqual('something went wrong');
+    client.watchQuery({ query }).subscribe({
+      next: ({ data }: any) => {
+        if (watchCount === 0) {
+          expect(data.count).toEqual(0);
+          expect({ ...data.user }).toMatchObject({
+            __typename: 'User',
+            firstName: 'John',
+          });
+          watchCount += 1;
+          client.mutate({
+            mutation,
+            update(proxy, { data: { updateUser } }) {
+              proxy.writeQuery({
+                query: userQuery,
+                data: {
+                  user: { ...updateUser },
+                },
+              });
+            },
+          });
+        } else {
+          expect(data.count).toEqual(1);
+          expect({ ...data.user }).toMatchObject({
+            __typename: 'User',
+            firstName: 'Harry',
+          });
           resolve();
-        },
-        next() {
-          reject();
-        },
+        }
+      },
+    });
+  });
+
+  itAsync('handles server errors when root data property is null', (resolve, reject) => {
+    const query = gql`
+      query GetUser {
+        user {
+          firstName @client
+          lastName
+        }
+      }
+    `;
+
+    const cache = new Hermes();
+    const link = new ApolloLink(operation => {
+      return Observable.of({
+        data: null,
+        errors: [
+          new GraphQLError('something went wrong', {
+            extensions: {
+              code: 'INTERNAL_SERVER_ERROR',
+            },
+            path: ['user'],
+          }),
+        ],
       });
-    }
-  );
+    });
+
+    const client = new ApolloClient({
+      cache,
+      link,
+      resolvers: {},
+    });
+
+    client.watchQuery({ query }).subscribe({
+      error(error) {
+        expect(error.message).toEqual('something went wrong');
+        resolve();
+      },
+      next() {
+        reject();
+      },
+    });
+  });
 });

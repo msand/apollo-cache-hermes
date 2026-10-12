@@ -2,7 +2,7 @@ import { newInvariantError } from '../../utilities/globals/index';
 import type { InvariantError } from '../../utilities/globals/index';
 
 export type ClientParseError = InvariantError & {
-  parseError: Error,
+  parseError: Error;
 };
 
 export const serializeFetchParameter = (p: any, label: string) => {
@@ -13,7 +13,7 @@ export const serializeFetchParameter = (p: any, label: string) => {
     const parseError = newInvariantError(
       `Network request failed. %s is not serializable: %s`,
       label,
-      e.message
+      e.message,
     ) as ClientParseError;
     parseError.parseError = e;
     throw parseError;

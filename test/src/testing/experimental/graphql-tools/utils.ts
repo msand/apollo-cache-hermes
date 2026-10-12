@@ -1,9 +1,4 @@
-import type {
-  GraphQLFieldResolver,
-  GraphQLObjectType,
-  GraphQLOutputType,
-  GraphQLSchema,
-} from 'graphql';
+import type { GraphQLFieldResolver, GraphQLObjectType, GraphQLOutputType, GraphQLSchema } from 'graphql';
 import {
   GraphQLInterfaceType,
   GraphQLString,
@@ -46,19 +41,14 @@ const takeRandom = <T>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
  * @since 3.10.0
  * @alpha
  */
-const createMockSchema = (
-  staticSchema: GraphQLSchema,
-  mocks: { [key: string]: any }
-) => {
+const createMockSchema = (staticSchema: GraphQLSchema, mocks: { [key: string]: any }) => {
   // Taken from @graphql-tools/mock:
   // https://github.com/ardatan/graphql-tools/blob/5ed60e44f94868f976cd28fe1b6a764fb146bbe9/packages/mock/src/MockStore.ts#L613
   const getType = (typeName: string) => {
     const type = staticSchema.getType(typeName);
 
     if (!type || !(isObjectType(type) || isInterfaceType(type))) {
-      throw new Error(
-        `${typeName} does not exist on schema or is not an object or interface`
-      );
+      throw new Error(`${typeName} does not exist on schema or is not an object or interface`);
     }
 
     return type;
@@ -106,9 +96,7 @@ const createMockSchema = (
     } else if (isObjectType(nullableType)) {
       return {};
     } else if (isListType(nullableType)) {
-      return [...new Array(2)].map(() =>
-        generateValueFromType(nullableType.ofType)
-      );
+      return [...new Array(2)].map(() => generateValueFromType(nullableType.ofType));
     } else if (isAbstractType(nullableType)) {
       const mock = mocks[nullableType.name];
 
@@ -117,39 +105,28 @@ const createMockSchema = (
       let values: { [key: string]: unknown } = {};
 
       if (!mock) {
-        typeName = takeRandom(
-          staticSchema.getPossibleTypes(nullableType).map(t => t.name)
-        );
+        typeName = takeRandom(staticSchema.getPossibleTypes(nullableType).map(t => t.name));
       } else if (typeof mock === 'function') {
         const mockRes = mock();
 
         if (mockRes === null) return null;
 
         if (!isNonNullObject(mockRes)) {
-          throw new Error(
-            `Value returned by the mock for ${nullableType.name} is not an object or null`
-          );
+          throw new Error(`Value returned by the mock for ${nullableType.name} is not an object or null`);
         }
 
         values = mockRes;
 
         if (typeof values['__typename'] !== 'string') {
-          throw new Error(
-            `Please return a __typename in "${nullableType.name}"`
-          );
+          throw new Error(`Please return a __typename in "${nullableType.name}"`);
         }
 
         typeName = values['__typename'];
-      } else if (
-        isNonNullObject(mock) &&
-        typeof mock['__typename'] === 'function'
-      ) {
+      } else if (isNonNullObject(mock) && typeof mock['__typename'] === 'function') {
         const mockRes = mock['__typename']();
 
         if (typeof mockRes !== 'string') {
-          throw new Error(
-            `'__typename' returned by the mock for abstract type ${nullableType.name} is not a string`
-          );
+          throw new Error(`'__typename' returned by the mock for abstract type ${nullableType.name} is not a string`);
         }
 
         typeName = mockRes;
@@ -173,18 +150,8 @@ const createMockSchema = (
 
   // Taken from @graphql-tools/mock:
   // https://github.com/ardatan/graphql-tools/blob/5ed60e44f94868f976cd28fe1b6a764fb146bbe9/packages/mock/src/addMocksToSchema.ts#L123
-  const mockResolver: GraphQLFieldResolver<any, any> = (
-    source,
-    args,
-    contex,
-    info
-  ) => {
-    const defaultResolvedValue = defaultFieldResolver(
-      source,
-      args,
-      contex,
-      info
-    );
+  const mockResolver: GraphQLFieldResolver<any, any> = (source, args, contex, info) => {
+    const defaultResolvedValue = defaultFieldResolver(source, args, contex, info);
 
     // priority to default resolved value
     if (defaultResolvedValue !== undefined) return defaultResolvedValue;
@@ -212,7 +179,7 @@ const createMockSchema = (
   // Taken from @graphql-tools/mock:
   // https://github.com/ardatan/graphql-tools/blob/5ed60e44f94868f976cd28fe1b6a764fb146bbe9/packages/mock/src/addMocksToSchema.ts#L176
   return mapSchema(staticSchema, {
-    [MapperKind.OBJECT_FIELD]: (fieldConfig) => {
+    [MapperKind.OBJECT_FIELD]: fieldConfig => {
       const newFieldConfig = { ...fieldConfig };
 
       const oldResolver = fieldConfig.resolve;
@@ -223,7 +190,7 @@ const createMockSchema = (
       return newFieldConfig;
     },
 
-    [MapperKind.ABSTRACT_TYPE]: (type) => {
+    [MapperKind.ABSTRACT_TYPE]: type => {
       if (type.resolveType != null && type.resolveType.length) {
         return;
       }

@@ -2,26 +2,21 @@ import type { DefinitionNode } from 'graphql';
 import { ApolloLink } from '@apollo/client';
 
 import { invariant } from '../../utilities/globals/index';
-import { Observable, hasDirectives,
+import {
+  Observable,
+  hasDirectives,
   maybe,
   getMainDefinition,
-  removeClientSetsFromDocument } from '../../utilities/index';
+  removeClientSetsFromDocument,
+} from '../../utilities/index';
 import { fromError, filterOperationVariables } from '../utils/index';
 
 import { serializeFetchParameter } from './serializeFetchParameter';
 import { selectURI } from './selectURI';
-import {
-  handleError,
-  readMultipartBody,
-  parseAndCheckHttpResponse,
-} from './parseAndCheckHttpResponse';
+import { handleError, readMultipartBody, parseAndCheckHttpResponse } from './parseAndCheckHttpResponse';
 import { checkFetcher } from './checkFetcher';
 import type { HttpOptions } from './selectHttpOptionsAndBody';
-import {
-  selectHttpOptionsAndBodyInternal,
-  defaultPrinter,
-  fallbackHttpConfig,
-} from './selectHttpOptionsAndBody';
+import { selectHttpOptionsAndBodyInternal, defaultPrinter, fallbackHttpConfig } from './selectHttpOptionsAndBody';
 import { rewriteURIForGET } from './rewriteURIForGET';
 
 const backupFetch = maybe(() => fetch);
@@ -52,7 +47,7 @@ export const createHttpLink = (linkOptions: HttpOptions = {}) => {
     headers: requestOptions.headers,
   };
 
-  return new ApolloLink((operation) => {
+  return new ApolloLink(operation => {
     let chosenURI = selectURI(operation, uri);
 
     const context = operation.getContext();
@@ -64,8 +59,8 @@ export const createHttpLink = (linkOptions: HttpOptions = {}) => {
     // the `clientAwareness` object can be overridden by
     // `apollographql-client-*` headers set in `context.headers`.
     const clientAwarenessHeaders: {
-      'apollographql-client-name'?: string,
-      'apollographql-client-version'?: string,
+      'apollographql-client-name'?: string;
+      'apollographql-client-version'?: string;
     } = {};
 
     if (context.clientAwareness) {
@@ -93,8 +88,8 @@ export const createHttpLink = (linkOptions: HttpOptions = {}) => {
       if (!transformedQuery) {
         return fromError(
           new Error(
-            'HttpLink: Trying to send a client-only query to the server. To send to the server, ensure a non-client field is added to the query or set the `transformOptions.removeClientFields` option to `true`.'
-          )
+            'HttpLink: Trying to send a client-only query to the server. To send to the server, ensure a non-client field is added to the query or set the `transformOptions.removeClientFields` option to `true`.',
+          ),
         );
       }
 
@@ -107,14 +102,11 @@ export const createHttpLink = (linkOptions: HttpOptions = {}) => {
       print,
       fallbackHttpConfig,
       linkConfig,
-      contextConfig
+      contextConfig,
     );
 
     if (body.variables && !includeUnusedVariables) {
-      body.variables = filterOperationVariables(
-        body.variables,
-        operation.query
-      );
+      body.variables = filterOperationVariables(body.variables, operation.query);
     }
 
     let controller: AbortController | undefined;
@@ -130,15 +122,10 @@ export const createHttpLink = (linkOptions: HttpOptions = {}) => {
     const definitionIsSubscription = (d: DefinitionNode) => {
       return d.kind === 'OperationDefinition' && d.operation === 'subscription';
     };
-    const isSubscription = definitionIsSubscription(
-      getMainDefinition(operation.query)
-    );
+    const isSubscription = definitionIsSubscription(getMainDefinition(operation.query));
     // does not match custom directives beginning with @defer
     const hasDefer = hasDirectives(['defer'], operation.query);
-    if (
-      useGETForQueries &&
-      !operation.query.definitions.some(definitionIsMutation)
-    ) {
+    if (useGETForQueries && !operation.query.definitions.some(definitionIsMutation)) {
       options.method = 'GET';
     }
 
@@ -152,8 +139,7 @@ export const createHttpLink = (linkOptions: HttpOptions = {}) => {
       }
 
       if (isSubscription) {
-        acceptHeader
-          += 'boundary=graphql;subscriptionSpec=1.0,application/json';
+        acceptHeader += 'boundary=graphql;subscriptionSpec=1.0,application/json';
       } else if (hasDefer) {
         acceptHeader += 'deferSpec=20220824,application/json';
       }
@@ -174,7 +160,7 @@ export const createHttpLink = (linkOptions: HttpOptions = {}) => {
       }
     }
 
-    return new Observable((observer) => {
+    return new Observable(observer => {
       // Prefer linkOptions.fetch (preferredFetch) if provided, and otherwise
       // fall back to the *current* global window.fetch function (see issue
       // #7832), or (if all else fails) the backupFetch function we saved when
@@ -184,23 +170,21 @@ export const createHttpLink = (linkOptions: HttpOptions = {}) => {
 
       const observerNext = observer.next.bind(observer);
       currentFetch!(chosenURI, options)
-        .then((response) => {
+        .then(response => {
           operation.setContext({ response });
           const ctype = response.headers?.get('content-type');
 
           if (ctype !== null && /^multipart\/mixed/i.test(ctype)) {
             return readMultipartBody(response, observerNext);
           } else {
-            return parseAndCheckHttpResponse(operation)(response).then(
-              observerNext
-            );
+            return parseAndCheckHttpResponse(operation)(response).then(observerNext);
           }
         })
         .then(() => {
           controller = undefined;
           observer.complete();
         })
-        .catch((err) => {
+        .catch(err => {
           controller = undefined;
           handleError(err, observer);
         });

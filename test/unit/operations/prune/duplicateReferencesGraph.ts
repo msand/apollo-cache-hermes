@@ -18,7 +18,8 @@ describe(`operations.prune`, () => {
           { id: 'b', name: 'nameB', bar: { id: 1, stuff: 'payload' } },
         ],
         baz: {
-          id: 'a', bar: { id: 1, stuff: 'payload' },
+          id: 'a',
+          bar: { id: 1, stuff: 'payload' },
         },
       },
       `{
@@ -32,7 +33,7 @@ describe(`operations.prune`, () => {
           bar { id }
         }
       }`,
-      cacheContext
+      cacheContext,
     );
 
     const pruneQuery = query(`{
@@ -76,7 +77,7 @@ describe(`operations.prune`, () => {
           id: 1,
         },
       },
-      'a': {
+      a: {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
         inbound: [
           { id: QueryRootId, path: ['foo', 0] },
@@ -90,7 +91,7 @@ describe(`operations.prune`, () => {
           bar: undefined,
         },
       },
-      'b': {
+      b: {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
         inbound: [
           { id: QueryRootId, path: ['foo', 2] },
@@ -104,5 +105,4 @@ describe(`operations.prune`, () => {
       },
     });
   });
-
 });

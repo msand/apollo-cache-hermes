@@ -9,12 +9,10 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.restore`, () => {
   describe(`nested parameterized references`, () => {
-
-    const parameterizedId = nodeIdForParameterizedValue(
-      QueryRootId,
-      ['one', 'two', 'three'],
-      { id: 1, withExtra: true }
-    );
+    const parameterizedId = nodeIdForParameterizedValue(QueryRootId, ['one', 'two', 'three'], {
+      id: 1,
+      withExtra: true,
+    });
 
     let restoreGraphSnapshot: GraphSnapshot, originalGraphSnapshot: GraphSnapshot;
     beforeAll(() => {
@@ -41,30 +39,33 @@ describe(`operations.restore`, () => {
           }
         }`,
         cacheContext,
-        { id: 1 }
+        { id: 1 },
       );
 
-      restoreGraphSnapshot = restore({
-        [QueryRootId]: {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          parameterized: [{ id: parameterizedId, path: ['one', 'two', 'three'] }],
-        },
-        [parameterizedId]: {
-          type: Serializable.NodeSnapshotType.ParameterizedValueSnapshot,
-          inbound: [{ id: QueryRootId, path: ['one', 'two', 'three'] }],
-          outbound: [{ id: '31', path: [] }],
-          data: null,
-        },
-        '31': {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          inbound: [{ id: parameterizedId, path: [] }],
-          data: {
-            id: '31',
-            name: 'Three',
-            extraValue: 42,
+      restoreGraphSnapshot = restore(
+        {
+          [QueryRootId]: {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            parameterized: [{ id: parameterizedId, path: ['one', 'two', 'three'] }],
+          },
+          [parameterizedId]: {
+            type: Serializable.NodeSnapshotType.ParameterizedValueSnapshot,
+            inbound: [{ id: QueryRootId, path: ['one', 'two', 'three'] }],
+            outbound: [{ id: '31', path: [] }],
+            data: null,
+          },
+          '31': {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            inbound: [{ id: parameterizedId, path: [] }],
+            data: {
+              id: '31',
+              name: 'Three',
+              extraValue: 42,
+            },
           },
         },
-      }, cacheContext).cacheSnapshot.baseline;
+        cacheContext,
+      ).cacheSnapshot.baseline;
     });
 
     it(`restores GraphSnapshot from JSON serializable object`, () => {
@@ -81,10 +82,11 @@ describe(`operations.restore`, () => {
       const parameterizedContainersNode = restoreGraphSnapshot.getNodeSnapshot(parameterizedId)!;
       const entityData = restoreGraphSnapshot.getNodeData('31');
 
-      jestExpect(mapToEntries2(parameterizedContainersNode.inbound)).toEqual([{ id: QueryRootId, path: ['one', 'two', 'three'] }]);
+      jestExpect(mapToEntries2(parameterizedContainersNode.inbound)).toEqual([
+        { id: QueryRootId, path: ['one', 'two', 'three'] },
+      ]);
       jestExpect(mapToEntries2(parameterizedContainersNode.outbound)).toEqual([{ id: '31', path: [] }]);
       jestExpect(parameterizedContainersNode.data).toBe(entityData);
     });
-
   });
 });

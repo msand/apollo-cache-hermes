@@ -4,7 +4,6 @@ import { read, write } from '../../../../src/operations';
 import { query, strictConfig } from '../../../helpers';
 
 describe(`operations.read`, () => {
-
   const context = new CacheContext(strictConfig);
   const empty = new GraphSnapshot();
 
@@ -103,7 +102,8 @@ describe(`operations.read`, () => {
       });
 
       it(`with variables`, () => {
-        const aliasQuery = query(`
+        const aliasQuery = query(
+          `
           query getUser($id: ID!) {
             fullUser: user(id: $id) {
               firstName: FirstName,
@@ -118,7 +118,9 @@ describe(`operations.read`, () => {
               id
             }
           }
-        `, { id: 2 });
+        `,
+          { id: 2 },
+        );
         const snapshot = write(context, empty, aliasQuery, {
           fullUser: {
             firstName: 'Bob',
@@ -199,14 +201,20 @@ describe(`operations.read`, () => {
             shipmentsInfo: [
               {
                 id: 0,
-                loads: [{ type: '26 Pallet', shipmentItemType: '26 Pallet' }, { type: 'Other', shipmentItemType: 'Other' }],
+                loads: [
+                  { type: '26 Pallet', shipmentItemType: '26 Pallet' },
+                  { type: 'Other', shipmentItemType: 'Other' },
+                ],
                 contents: [{ shipmentItemType: '26 Pallet' }, { shipmentItemType: 'Other' }],
                 shipmentSize: { weight: 1000, unit: 'lb', weightUnit: 'lb' },
                 dimensions: { weight: 1000, weightUnit: 'lb' },
               },
               {
                 id: 1,
-                loads: [{ type: '24 Pallet', shipmentItemType: '24 Pallet' }, { type: 'Other', shipmentItemType: 'Other' }],
+                loads: [
+                  { type: '24 Pallet', shipmentItemType: '24 Pallet' },
+                  { type: 'Other', shipmentItemType: 'Other' },
+                ],
                 contents: [{ shipmentItemType: '24 Pallet' }, { shipmentItemType: 'Other' }],
                 shipmentSize: { weight: 2000, unit: 'lb', weightUnit: 'lb' },
                 dimensions: { weight: 2000, weightUnit: 'lb' },
@@ -227,9 +235,6 @@ describe(`operations.read`, () => {
           },
         });
       });
-
     });
-
   });
-
 });

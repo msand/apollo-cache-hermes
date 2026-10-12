@@ -5,7 +5,6 @@ import { query, strictConfig } from '../../helpers';
 import { Cache } from '../../../src';
 
 describe(`Cache#watch`, () => {
-
   const fullGraph = query(`
     query fullGraph($id: ID!) {
       foo(id: $id) {
@@ -167,5 +166,4 @@ describe(`Cache#watch`, () => {
     expect((update.result as any).foo.bar).to.eq(undefined);
     expect(update.complete).to.eq(false);
   });
-
 });

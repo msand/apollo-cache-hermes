@@ -22,7 +22,7 @@ describe(`operations.prune`, () => {
         ],
       },
       `{ viewer { postal name } }`,
-      cacheContext
+      cacheContext,
     );
 
     const pruneQuery = query(`{ viewer { name }}`);
@@ -35,13 +35,9 @@ describe(`operations.prune`, () => {
       [QueryRootId]: {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
         data: {
-          viewer: [
-            { name: 'Gouda' },
-            { name: 'Brie' },
-          ],
+          viewer: [{ name: 'Gouda' }, { name: 'Brie' }],
         },
       },
     });
   });
-
 });

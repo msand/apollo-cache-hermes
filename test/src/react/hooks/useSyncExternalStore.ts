@@ -1,4 +1,3 @@
-
 import * as React from 'rehackt';
 
 import { invariant } from '../../utilities/globals/index';
@@ -23,8 +22,8 @@ const realHook = React[uSESKey] as RealUseSESHookType | undefined;
 // Apollo Client deviations called out by "// DEVIATION ..." comments.
 
 // When/if React.useSyncExternalStore is defined, delegate fully to it.
-export const useSyncExternalStore: RealUseSESHookType
-  = realHook ||
+export const useSyncExternalStore: RealUseSESHookType =
+  realHook ||
   ((subscribe, getSnapshot, getServerSnapshot) => {
     // Read the current snapshot from the store on every render. Again, this
     // breaks the rules of React, and only works here because of specific
@@ -41,9 +40,7 @@ export const useSyncExternalStore: RealUseSESHookType
     ) {
       didWarnUncachedGetSnapshot = true;
       // DEVIATION: Using invariant.error instead of console.error directly.
-      invariant.error(
-        'The result of getSnapshot should be cached to avoid an infinite loop'
-      );
+      invariant.error('The result of getSnapshot should be cached to avoid an infinite loop');
     }
 
     // Because updates are synchronous, we don't queue them. Instead we force a
@@ -120,8 +117,8 @@ function checkIfSnapshotChanged<Snapshot>({
   value,
   getSnapshot,
 }: {
-  value: Snapshot,
-  getSnapshot: () => Snapshot,
+  value: Snapshot;
+  getSnapshot: () => Snapshot;
 }): boolean {
   try {
     return value !== getSnapshot();

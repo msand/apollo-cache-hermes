@@ -7,7 +7,6 @@ import { mapToEntries2, query, strictConfig } from '../../../../helpers';
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.write`, () => {
-
   const context = new CacheContext(strictConfig);
   const empty = new GraphSnapshot();
   const listQuery = query(`{
@@ -22,7 +21,6 @@ describe(`operations.write`, () => {
   }`);
 
   describe(`write duplicate-references payload`, () => {
-
     let snapshot: GraphSnapshot;
     beforeAll(() => {
       const result = write(context, empty, listQuery, {
@@ -34,7 +32,8 @@ describe(`operations.write`, () => {
           { id: 'b', bar: { id: 1 } },
         ],
         baz: {
-          id: 'a', bar: { id: 1 },
+          id: 'a',
+          bar: { id: 1 },
         },
       });
       snapshot = result.snapshot;
@@ -50,25 +49,28 @@ describe(`operations.write`, () => {
           { id: 'b', bar: { id: 1 } },
         ],
         baz: {
-          id: 'a', bar: { id: 1 },
+          id: 'a',
+          bar: { id: 1 },
         },
       });
     });
 
     it(`doesn't insert duplicate outbound references`, () => {
-      jestExpect(mapToEntries2(snapshot.getNodeSnapshot('a')!.outbound)).toEqual(jestExpect.arrayContaining([
-        { id: '1', path: ['bar'] },
-      ]));
-      jestExpect(mapToEntries2(snapshot.getNodeSnapshot('b')!.outbound)).toEqual(jestExpect.arrayContaining([
-        { id: '1', path: ['bar'] },
-      ]));
+      jestExpect(mapToEntries2(snapshot.getNodeSnapshot('a')!.outbound)).toEqual(
+        jestExpect.arrayContaining([{ id: '1', path: ['bar'] }]),
+      );
+      jestExpect(mapToEntries2(snapshot.getNodeSnapshot('b')!.outbound)).toEqual(
+        jestExpect.arrayContaining([{ id: '1', path: ['bar'] }]),
+      );
     });
 
     it(`doesn't insert duplicate inbound references for targets`, () => {
-      jestExpect(mapToEntries2(snapshot.getNodeSnapshot('1')!.inbound)).toEqual(jestExpect.arrayContaining([
-        { id: 'a', path: ['bar'] },
-        { id: 'b', path: ['bar'] },
-      ]));
+      jestExpect(mapToEntries2(snapshot.getNodeSnapshot('1')!.inbound)).toEqual(
+        jestExpect.arrayContaining([
+          { id: 'a', path: ['bar'] },
+          { id: 'b', path: ['bar'] },
+        ]),
+      );
     });
   });
 });

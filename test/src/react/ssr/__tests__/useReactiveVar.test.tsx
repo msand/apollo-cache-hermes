@@ -7,7 +7,7 @@ import { renderToStringWithData } from '..';
 import { spyOnConsole } from '../../../testing/internal';
 
 describe('useReactiveVar Hook SSR', () => {
-  it('does not cause warnings', async() => {
+  it('does not cause warnings', async () => {
     using consoleSpy = spyOnConsole('error');
     const counterVar = makeVar(0);
     function Component() {

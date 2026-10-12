@@ -1,4 +1,3 @@
-
 import * as React from 'rehackt';
 import type * as ReactTypes from 'react';
 // eslint-disable-next-line import/no-extraneous-dependencies
@@ -19,10 +18,8 @@ function getDisplayName<P>(WrappedComponent: ReactTypes.ComponentType<P>) {
  * This library is still included in the `@apollo/client` package, but it no longer receives feature updates or bug fixes.
  */
 export function withApollo<TProps, TResult = any>(
-  WrappedComponent: ReactTypes.ComponentType<
-    WithApolloClient<Omit<TProps, 'client'>>
-  >,
-  operationOptions: OperationOption<TProps, TResult> = {}
+  WrappedComponent: ReactTypes.ComponentType<WithApolloClient<Omit<TProps, 'client'>>>,
+  operationOptions: OperationOption<TProps, TResult> = {},
 ): ReactTypes.ComponentClass<Omit<TProps, 'client'>> {
   const withDisplayName = `withApollo(${getDisplayName(WrappedComponent)})`;
 
@@ -41,27 +38,23 @@ export function withApollo<TProps, TResult = any>(
     getWrappedInstance() {
       invariant(
         operationOptions.withRef,
-        `To access the wrapped instance, you need to specify `
-          + `{ withRef: true } in the options`
+        `To access the wrapped instance, you need to specify { withRef: true } in the options`,
       );
 
       return this.wrappedInstance;
     }
 
-    setWrappedInstance(
-      ref: ReactTypes.ComponentType<WithApolloClient<TProps>>
-    ) {
+    setWrappedInstance(ref: ReactTypes.ComponentType<WithApolloClient<TProps>>) {
       this.wrappedInstance = ref;
     }
 
     render() {
       return (
         <ApolloConsumer>
-          {(client) => {
+          {client => {
             const props = Object.assign({}, this.props, {
               client,
-              ref:
-                operationOptions.withRef ? this.setWrappedInstance : undefined,
+              ref: operationOptions.withRef ? this.setWrappedInstance : undefined,
             });
             return <WrappedComponent {...props} />;
           }}

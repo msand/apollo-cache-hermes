@@ -1,7 +1,3 @@
 {
-	"recommendations": [
-		"dbaeumer.vscode-eslint",
-		"streetsidesoftware.code-spell-checker",
-		"wayou.vscode-todo-highlight"
-	]
+  "recommendations": ["dbaeumer.vscode-eslint", "streetsidesoftware.code-spell-checker", "wayou.vscode-todo-highlight"]
 }

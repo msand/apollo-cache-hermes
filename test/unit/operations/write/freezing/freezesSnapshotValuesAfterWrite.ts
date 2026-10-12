@@ -7,12 +7,10 @@ import { query, strictConfig } from '../../../../helpers';
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.write`, () => {
-
   const context = new CacheContext(strictConfig);
   const empty = new GraphSnapshot();
 
   describe(`freezes snapshot values after write operation`, () => {
-
     it(`checks values referenced from the snapshot`, () => {
       const nestedQuery = query(`{
         foo {
@@ -24,10 +22,7 @@ describe(`operations.write`, () => {
 
       const snapshot = write(context, empty, nestedQuery, {
         foo: {
-          bar: [
-            { baz: 123 },
-            { baz: 321 },
-          ],
+          bar: [{ baz: 123 }, { baz: 321 }],
         },
       }).snapshot;
 
@@ -41,7 +36,5 @@ describe(`operations.write`, () => {
         root.foo.fizz = 'nope';
       }).toThrow(/property.*fizz/);
     });
-
   });
-
 });

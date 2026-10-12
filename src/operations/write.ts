@@ -16,7 +16,7 @@ export function write<TSerialized>(
   snapshot: GraphSnapshot,
   raw: RawOperation,
   payload: JsonObject,
-  prune: boolean = false
+  prune: boolean = false,
 ): EditedSnapshot<TSerialized> {
   let tracerContext;
   if (context.tracer.writeStart) {

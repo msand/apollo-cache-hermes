@@ -27,10 +27,7 @@ export interface MockedProviderState {
   client: ApolloClient<any>;
 }
 
-export class MockedProvider extends React.Component<
-  MockedProviderProps,
-  MockedProviderState
-> {
+export class MockedProvider extends React.Component<MockedProviderProps, MockedProviderState> {
   public static defaultProps: MockedProviderProps = {
     addTypename: true,
   };
@@ -65,11 +62,11 @@ export class MockedProvider extends React.Component<
     const { children, childProps } = this.props;
     const { client } = this.state;
 
-    return React.isValidElement(children)
-      ? <ApolloProvider client={client}>
+    return React.isValidElement(children) ? (
+      <ApolloProvider client={client}>
         {React.cloneElement(React.Children.only(children), { ...childProps })}
       </ApolloProvider>
-      : null;
+    ) : null;
   }
 
   public componentWillUnmount() {

@@ -9,17 +9,8 @@ import * as util from '../util';
 
 import { nodeIdForParameterizedValue } from './SnapshotEditor';
 
-const {
-  getInbound,
-  getOutbound,
-  getParameterized,
-  isNumber,
-  isObject,
-  isReference,
-  isScalar,
-  iterRefs,
-  refToInKey,
-} = util;
+const { getInbound, getOutbound, getParameterized, isNumber, isObject, isReference, isScalar, iterRefs, refToInKey } =
+  util;
 
 /**
  * Restore GraphSnapshot from serializable representation.
@@ -32,7 +23,10 @@ const {
  *    different sub-class of NodeSnapshot.
  * @throws Will throw an error if there is undefined in sparse array
  */
-export function restore<TSerialized>(serializedState: Serializable.GraphSnapshot, cacheContext: CacheContext<TSerialized>) {
+export function restore<TSerialized>(
+  serializedState: Serializable.GraphSnapshot,
+  cacheContext: CacheContext<TSerialized>,
+) {
   const { nodesMap, editedNodeIds } = createGraphSnapshotNodes(serializedState, cacheContext);
   const graphSnapshot = new GraphSnapshot(nodesMap);
 
@@ -42,7 +36,10 @@ export function restore<TSerialized>(serializedState: Serializable.GraphSnapshot
   };
 }
 
-function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.GraphSnapshot, cacheContext: CacheContext<TSerialized>) {
+function createGraphSnapshotNodes<TSerialized>(
+  serializedState: Serializable.GraphSnapshot,
+  cacheContext: CacheContext<TSerialized>,
+) {
   const nodesMap: NodeSnapshotMap = Object.create(null);
   const editedNodeIds = new Set<NodeId>();
 
@@ -56,10 +53,20 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
     let nodeSnapshot;
     switch (type) {
       case Serializable.NodeSnapshotType.EntitySnapshot:
-        nodeSnapshot = new EntitySnapshot(data as JsonObject, getInbound(inbound), getOutbound(outbound), getParameterized(parameterized));
+        nodeSnapshot = new EntitySnapshot(
+          data as JsonObject,
+          getInbound(inbound),
+          getOutbound(outbound),
+          getParameterized(parameterized),
+        );
         break;
       case Serializable.NodeSnapshotType.ParameterizedValueSnapshot:
-        nodeSnapshot = new ParameterizedValueSnapshot(data as JsonValue, getInbound(inbound), getOutbound(outbound), getParameterized(parameterized));
+        nodeSnapshot = new ParameterizedValueSnapshot(
+          data as JsonValue,
+          getInbound(inbound),
+          getOutbound(outbound),
+          getParameterized(parameterized),
+        );
         break;
       case undefined: {
         const parsed: JsonObject = {};
@@ -73,8 +80,8 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
             const path = [key];
             nodesMap[fieldId] = new ParameterizedValueSnapshot(
               val as JsonValue,
-              [...missingPointers.get(nodeId) ?? [], { id: nodeId, path }],
-              []
+              [...(missingPointers.get(nodeId) ?? []), { id: nodeId, path }],
+              [],
             );
             editedNodeIds.add(fieldId);
             parsedParameterized.push({ id: fieldId, path });
@@ -97,7 +104,12 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
             parsed[key] = val;
           }
         }
-        nodeSnapshot = new EntitySnapshot(parsed as JsonObject, getInbound(parsedIn), getOutbound(parsedOut), getParameterized(parsedParameterized));
+        nodeSnapshot = new EntitySnapshot(
+          parsed as JsonObject,
+          getInbound(parsedIn),
+          getOutbound(parsedOut),
+          getParameterized(parsedParameterized),
+        );
         break;
       }
       default:
@@ -183,7 +195,11 @@ function restoreEntityReferences<TSerialized>(nodesMap: NodeSnapshotMap, cacheCo
  * JSON.stringify to 'null' and will preserve the structure along the path
  *
  */
-function tryRestoreSparseArray(data: NestedValue<JsonValue | undefined>, possibleSparseArrayPaths: PathPart[], idx: number) {
+function tryRestoreSparseArray(
+  data: NestedValue<JsonValue | undefined>,
+  possibleSparseArrayPaths: PathPart[],
+  idx: number,
+) {
   if (data === undefined) {
     // There should never be 'undefined'
     throw new Error(`Unexpected 'undefined' in the path [${possibleSparseArrayPaths}] at index ${idx}`);

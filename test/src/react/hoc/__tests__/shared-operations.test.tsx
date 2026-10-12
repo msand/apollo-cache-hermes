@@ -13,10 +13,10 @@ import { Hermes } from '../../../../../src';
 
 function compose(...funcs: Function[]) {
   const functions = funcs.reverse();
-  return function(...args: any[]) {
+  return function (...args: any[]) {
     const [firstFunction, ...restFunctions] = functions;
     let result = firstFunction(...args);
-    restFunctions.forEach((fnc) => {
+    restFunctions.forEach(fnc => {
       result = fnc(result);
     });
     return result;
@@ -42,7 +42,7 @@ describe('shared operations', () => {
       render(
         <ApolloProvider client={client}>
           <ContainerWithData />
-        </ApolloProvider>
+        </ApolloProvider>,
       );
     });
   });
@@ -78,7 +78,7 @@ describe('shared operations', () => {
 
     const link = mockSingleLink(
       { request: { query: peopleQuery }, result: { data: peopleData } },
-      { request: { query: shipsQuery }, result: { data: shipsData } }
+      { request: { query: shipsQuery }, result: { data: shipsData } },
     );
     const client = new ApolloClient({
       link,
@@ -91,22 +91,16 @@ describe('shared operations', () => {
 
     // Since we want to test decorators usage, and this does not play well with TypeScript,
     // we resort to setting everything as any to avoid type checking.
-    const withPeople: any = graphql<{}, PeopleData, {}, PeopleChildProps>(
-      peopleQuery,
-      {
-        name: 'people',
-      }
-    );
+    const withPeople: any = graphql<{}, PeopleData, {}, PeopleChildProps>(peopleQuery, {
+      name: 'people',
+    });
 
     interface ShipsChildProps {
       ships: DataValue<PeopleData>;
     }
-    const withShips: any = graphql<{}, ShipsData, {}, ShipsChildProps>(
-      shipsQuery,
-      {
-        name: 'ships',
-      }
-    );
+    const withShips: any = graphql<{}, ShipsData, {}, ShipsChildProps>(shipsQuery, {
+      name: 'ships',
+    });
 
     @withPeople
     @withShips
@@ -125,7 +119,7 @@ describe('shared operations', () => {
     const { unmount } = render(
       <ApolloProvider client={client}>
         <ContainerWithData />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
     // unmount here or else the query will resolve later and schedule an update that's not wrapped in act.
     unmount();
@@ -161,7 +155,7 @@ describe('shared operations', () => {
 
     const link = mockSingleLink(
       { request: { query: peopleQuery }, result: { data: peopleData } },
-      { request: { query: shipsQuery }, result: { data: shipsData } }
+      { request: { query: shipsQuery }, result: { data: shipsData } },
     );
     const client = new ApolloClient({
       link,
@@ -172,22 +166,14 @@ describe('shared operations', () => {
       people: DataValue<PeopleData>;
     }
 
-    const withPeople = graphql<{}, PeopleData, {}, PeopleChildProps>(
-      peopleQuery,
-      {
-        name: 'people',
-      }
-    );
+    const withPeople = graphql<{}, PeopleData, {}, PeopleChildProps>(peopleQuery, {
+      name: 'people',
+    });
 
     interface ShipsAndPeopleChildProps extends PeopleChildProps {
       ships: DataValue<PeopleData>;
     }
-    const withShips = graphql<
-      PeopleChildProps,
-      ShipsData,
-      {},
-      ShipsAndPeopleChildProps
-    >(shipsQuery, {
+    const withShips = graphql<PeopleChildProps, ShipsData, {}, ShipsAndPeopleChildProps>(shipsQuery, {
       name: 'ships',
     });
 
@@ -200,13 +186,13 @@ describe('shared operations', () => {
         expect(ships).toBeTruthy();
         expect(ships.loading).toBeTruthy();
         return null;
-      })
+      }),
     );
 
     const { unmount } = render(
       <ApolloProvider client={client}>
         <ContainerWithData />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     // unmount here or else the query will resolve later and schedule an update that's not wrapped in act.
@@ -243,7 +229,7 @@ describe('shared operations', () => {
       {
         request: { query: peopleMutation },
         result: { data: peopleMutationData },
-      }
+      },
     );
     const client = new ApolloClient({
       link,
@@ -264,14 +250,14 @@ describe('shared operations', () => {
             expect(addPerson).toBeTruthy();
             return null;
           }
-        }
-      )
+        },
+      ),
     );
 
     const { unmount } = render(
       <ApolloProvider client={client}>
         <ContainerWithData />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     // unmount here or else the query will resolve later and schedule an update that's not wrapped in act.
@@ -311,13 +297,13 @@ describe('shared operations', () => {
           expect(this.props.data).toBeUndefined();
           return null;
         }
-      }
+      },
     );
 
     render(
       <ApolloProvider client={client}>
         <Container />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     setTimeout(() => {
@@ -361,7 +347,7 @@ describe('shared operations', () => {
 
       const link = mockSingleLink(
         { request: { query: peopleQuery }, result: { data: peopleData } },
-        { request: { query: shipsQuery }, result: { data: shipsData } }
+        { request: { query: shipsQuery }, result: { data: shipsData } },
       );
       const client = new ApolloClient({
         link,
@@ -381,12 +367,9 @@ describe('shared operations', () => {
         graphql<{}, PeopleData, {}, PeopleChildProps>(peopleQuery, {
           name: 'people',
         }),
-        graphql<PeopleChildProps, ShipsData, {}, ShipsAndPeopleChildProps>(
-          shipsQuery,
-          {
-            name: 'ships',
-          }
-        )
+        graphql<PeopleChildProps, ShipsData, {}, ShipsAndPeopleChildProps>(shipsQuery, {
+          name: 'ships',
+        }),
       );
 
       const ContainerWithData = enhanced((props: ShipsAndPeopleChildProps) => {
@@ -402,7 +385,7 @@ describe('shared operations', () => {
       const { unmount } = render(
         <ApolloProvider client={client}>
           <ContainerWithData />
-        </ApolloProvider>
+        </ApolloProvider>,
       );
 
       // unmount here or else the query will resolve later and schedule an update that's not wrapped in act.

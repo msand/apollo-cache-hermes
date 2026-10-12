@@ -71,10 +71,7 @@ export class BatchLink extends ApolloLink {
     }
   }
 
-  public request(
-    operation: Operation,
-    forward?: NextLink
-  ): Observable<FetchResult> | null {
+  public request(operation: Operation, forward?: NextLink): Observable<FetchResult> | null {
     return this.batcher.enqueueRequest({
       operation,
       forward,

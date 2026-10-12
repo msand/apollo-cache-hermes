@@ -17,91 +17,88 @@ import { MockSubscriptionLink } from '../../../testing/core';
 import { Hermes } from '../../../../../src';
 
 describe('Subscription lifecycles', () => {
-  itAsync(
-    'cleans up and reuses data like QueryRecycler wants',
-    (resolve, reject) => {
-      const query = gql`
-        query Luke {
-          people_one(id: 1) {
+  itAsync('cleans up and reuses data like QueryRecycler wants', (resolve, reject) => {
+    const query = gql`
+      query Luke {
+        people_one(id: 1) {
+          name
+          friends {
             name
-            friends {
-              name
-            }
           }
         }
-      `;
+      }
+    `;
 
-      const initialData = {
-        people_one: {
-          name: 'Luke Skywalker',
-          friends: [{ name: 'Leia Skywalker' }],
-        },
-      };
+    const initialData = {
+      people_one: {
+        name: 'Luke Skywalker',
+        friends: [{ name: 'Leia Skywalker' }],
+      },
+    };
 
-      const link = new MockSubscriptionLink();
-      const queryManager = new QueryManager({
-        cache: new Hermes({ addTypename: false }),
-        link,
-      });
+    const link = new MockSubscriptionLink();
+    const queryManager = new QueryManager({
+      cache: new Hermes({ addTypename: false }),
+      link,
+    });
 
-      // step 1, get some data
-      const observable = queryManager.watchQuery<any>({
+    // step 1, get some data
+    const observable = queryManager.watchQuery<any>({
+      query,
+      variables: {},
+      fetchPolicy: 'cache-and-network',
+    });
+
+    const observableQueries: Array<{
+      observableQuery: ObservableQuery;
+      subscription: ObservableSubscription;
+    }> = [];
+
+    const resubscribe = () => {
+      const { observableQuery, subscription } = observableQueries.pop()!;
+      subscription.unsubscribe();
+
+      observableQuery.setOptions({
         query,
-        variables: {},
         fetchPolicy: 'cache-and-network',
       });
 
-      const observableQueries: Array<{
-        observableQuery: ObservableQuery,
-        subscription: ObservableSubscription,
-      }> = [];
+      return observableQuery;
+    };
 
-      const resubscribe = () => {
-        const { observableQuery, subscription } = observableQueries.pop()!;
-        subscription.unsubscribe();
+    const sub = observable.subscribe({
+      next(result: any) {
+        expect(result.loading).toBe(false);
+        expect(result.data).toEqual(initialData);
+        expect(observable.getCurrentResult().data).toEqual(initialData);
 
-        observableQuery.setOptions({
-          query,
-          fetchPolicy: 'cache-and-network',
+        // step 2, recycle it
+        observable.setOptions({
+          fetchPolicy: 'standby',
+          pollInterval: 0,
         });
 
-        return observableQuery;
-      };
+        observableQueries.push({
+          observableQuery: observable,
+          subscription: observable.subscribe({}),
+        });
 
-      const sub = observable.subscribe({
-        next(result: any) {
-          expect(result.loading).toBe(false);
-          expect(result.data).toEqual(initialData);
-          expect(observable.getCurrentResult().data).toEqual(initialData);
+        // step 3, unsubscribe from observable
+        sub.unsubscribe();
 
-          // step 2, recycle it
-          observable.setOptions({
-            fetchPolicy: 'standby',
-            pollInterval: 0,
-          });
+        setTimeout(() => {
+          // step 4, start new Subscription;
+          const recycled = resubscribe();
+          const currentResult = recycled.getCurrentResult();
+          expect(currentResult.data).toEqual(initialData);
+          resolve();
+        }, 10);
+      },
+    });
 
-          observableQueries.push({
-            observableQuery: observable,
-            subscription: observable.subscribe({}),
-          });
-
-          // step 3, unsubscribe from observable
-          sub.unsubscribe();
-
-          setTimeout(() => {
-            // step 4, start new Subscription;
-            const recycled = resubscribe();
-            const currentResult = recycled.getCurrentResult();
-            expect(currentResult.data).toEqual(initialData);
-            resolve();
-          }, 10);
-        },
-      });
-
-      setInterval(() => {
-        // fire off first result
-        link.simulateResult({ result: { data: initialData } });
-      }, 10);
-    }
-  );
+    setInterval(() => {
+      // fire off first result
+      link.simulateResult({ result: { data: initialData } });
+    }, 10);
+  });
 });

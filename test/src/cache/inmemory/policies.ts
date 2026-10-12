@@ -1,20 +1,10 @@
-import type {
-  InlineFragmentNode,
-  FragmentDefinitionNode,
-  SelectionSetNode,
-  FieldNode,
-} from 'graphql';
+import type { InlineFragmentNode, FragmentDefinitionNode, SelectionSetNode, FieldNode } from 'graphql';
 import { ApolloCache, ReadMergeModifyContext } from '@apollo/client';
 import { NormalizedCache } from '@apollo/client/cache';
 import { WriteContext } from '@apollo/client/cache/inmemory/writeToStore';
 
 import { invariant, newInvariantError } from '../../utilities/globals/index';
-import type {
-  FragmentMap,
-  StoreValue,
-  StoreObject,
-  Reference,
-} from '../../utilities/index';
+import type { FragmentMap, StoreValue, StoreObject, Reference } from '../../utilities/index';
 import {
   storeKeyNameFromField,
   argumentsObjectFromField,
@@ -32,10 +22,7 @@ import type {
   CanReadFunction,
 } from '../core/types/common';
 
-import type {
-  IdGetter,
-  MergeInfo,
-} from './types';
+import type { IdGetter, MergeInfo } from './types';
 import {
   hasOwn,
   fieldNameFromStoreName,
@@ -46,13 +33,10 @@ import {
   isArray,
 } from './helpers';
 import { cacheSlot } from './reactiveVars';
-import {
-  keyArgsFnFromSpecifier,
-  keyFieldsFnFromSpecifier,
-} from './key-extractor';
+import { keyArgsFnFromSpecifier, keyFieldsFnFromSpecifier } from './key-extractor';
 
 export type TypePolicies = {
-  [__typename: string]: TypePolicy,
+  [__typename: string]: TypePolicy;
 };
 
 // TypeScript 3.7 will allow recursive type aliases, so this should work:
@@ -63,17 +47,17 @@ export type KeyFieldsContext = {
   // The __typename of the incoming object, even if the __typename field was
   // aliased to another name in the raw result object. May be undefined when
   // dataIdFromObject is called for objects without __typename fields.
-  typename: string | undefined,
+  typename: string | undefined;
 
   // The object to be identified, after processing to remove aliases and
   // normalize identifiable child objects with references.
-  storeObject: StoreObject,
+  storeObject: StoreObject;
 
   // Handy tool for reading additional fields from context.storeObject, either
   // readField("fieldName") to read storeObject[fieldName], or readField("name",
   // objectOrReference) to read from another object or Reference. If you read a
   // field with a read function, that function will be invoked.
-  readField: ReadFieldFunction,
+  readField: ReadFieldFunction;
 
   // If you are writing a custom keyFields function, and you plan to use the raw
   // result object passed as the first argument, you may also need access to the
@@ -86,17 +70,17 @@ export type KeyFieldsContext = {
   // well as objects) instead of the raw result object in your keyFields
   // functions, or just rely on the internal implementation of keyFields:[...]
   // syntax to get these details right for you.
-  selectionSet?: SelectionSetNode,
-  fragmentMap?: FragmentMap,
+  selectionSet?: SelectionSetNode;
+  fragmentMap?: FragmentMap;
 
   // Internal. May be set by the KeyFieldsFunction to report fields that were
   // involved in computing the ID. Never passed in by the caller.
-  keyObject?: Record<string, any>,
+  keyObject?: Record<string, any>;
 };
 
 export type KeyFieldsFunction = (
   object: Readonly<StoreObject>,
-  context: KeyFieldsContext
+  context: KeyFieldsContext,
 ) => KeySpecifier | false | ReturnType<IdGetter>;
 
 type KeyFieldsResult = Exclude<ReturnType<KeyFieldsFunction>, KeySpecifier>;
@@ -106,7 +90,7 @@ type KeyFieldsResult = Exclude<ReturnType<KeyFieldsFunction>, KeySpecifier>;
 export type TypePolicy = {
   // Allows defining the primary key fields for this type, either using an
   // array of field names or a function that returns an arbitrary string.
-  keyFields?: KeySpecifier | KeyFieldsFunction | false,
+  keyFields?: KeySpecifier | KeyFieldsFunction | false;
 
   // Allows defining a merge function (or merge:true/false shorthand) to
   // be used for merging objects of this type wherever they appear, unless
@@ -115,28 +99,28 @@ export type TypePolicy = {
   // functions). In many cases, defining merge:true for a given type
   // policy can save you from specifying merge:true for all the field
   // policies where that type might be encountered.
-  merge?: FieldMergeFunction | boolean,
+  merge?: FieldMergeFunction | boolean;
 
   // In the rare event that your schema happens to use a different
   // __typename for the root Query, Mutation, and/or Schema types, you can
   // express your deviant preferences by enabling one of these options.
-  queryType?: true,
-  mutationType?: true,
-  subscriptionType?: true,
+  queryType?: true;
+  mutationType?: true;
+  subscriptionType?: true;
 
   fields?: {
-    [fieldName: string]: FieldPolicy<any> | FieldReadFunction<any>,
-  },
+    [fieldName: string]: FieldPolicy<any> | FieldReadFunction<any>;
+  };
 };
 
 export type KeyArgsFunction = (
   args: Record<string, any> | null,
   context: {
-    typename: string,
-    fieldName: string,
-    field: FieldNode | null,
-    variables?: Record<string, any>,
-  }
+    typename: string;
+    fieldName: string;
+    field: FieldNode | null;
+    variables?: Record<string, any>;
+  },
 ) => KeySpecifier | false | ReturnType<IdGetter>;
 
 export type FieldPolicy<
@@ -156,25 +140,18 @@ export type FieldPolicy<
   // developer
   TOptions extends FieldFunctionOptions = FieldFunctionOptions,
 > = {
-  keyArgs?: KeySpecifier | KeyArgsFunction | false,
-  read?: FieldReadFunction<TExisting, TReadResult, TOptions>,
-  merge?: FieldMergeFunction<TExisting, TIncoming, TOptions> | boolean,
+  keyArgs?: KeySpecifier | KeyArgsFunction | false;
+  read?: FieldReadFunction<TExisting, TReadResult, TOptions>;
+  merge?: FieldMergeFunction<TExisting, TIncoming, TOptions> | boolean;
 };
 
 export type StorageType = Record<string, any>;
 
 function argsFromFieldSpecifier(spec: FieldSpecifier) {
-  return (
-    spec.args !== void 0 ? spec.args
-      : spec.field ? argumentsObjectFromField(spec.field, spec.variables)
-        : null
-  );
+  return spec.args !== void 0 ? spec.args : spec.field ? argumentsObjectFromField(spec.field, spec.variables) : null;
 }
 
-export interface FieldFunctionOptions<
-  TArgs = Record<string, any>,
-  TVars = Record<string, any>,
-> {
+export interface FieldFunctionOptions<TArgs = Record<string, any>, TVars = Record<string, any>> {
   args: TArgs | null;
 
   // The name of the field, equal to options.field.name.value when
@@ -226,10 +203,7 @@ export interface FieldFunctionOptions<
   mergeObjects: MergeObjectsFunction;
 }
 
-type MergeObjectsFunction = <T extends StoreObject | Reference>(
-  existing: T,
-  incoming: T
-) => T;
+type MergeObjectsFunction = <T extends StoreObject | Reference>(existing: T, incoming: T) => T;
 
 export type FieldReadFunction<
   TExisting = any,
@@ -245,7 +219,7 @@ export type FieldReadFunction<
   // developer to annotate it with a type, without also having to provide
   // a whole new type for the options object.
   existing: SafeReadonly<TExisting> | undefined,
-  options: TOptions
+  options: TOptions,
 ) => TReadResult | undefined;
 
 export type FieldMergeFunction<
@@ -259,7 +233,7 @@ export type FieldMergeFunction<
   // The incoming parameter needs to be positional as well, for the same
   // reasons discussed in FieldReadFunction above.
   incoming: SafeReadonly<TIncoming>,
-  options: TOptions
+  options: TOptions,
 ) => SafeReadonly<TExisting>;
 
 const nullKeyFieldsFn: KeyFieldsFunction = () => void 0;
@@ -267,34 +241,30 @@ const simpleKeyArgsFn: KeyArgsFunction = (_args, context) => context.fieldName;
 
 // These merge functions can be selected by specifying merge:true or
 // merge:false in a field policy.
-const mergeTrueFn: FieldMergeFunction<any> = (
-  existing,
-  incoming,
-  { mergeObjects }
-) => mergeObjects(existing, incoming);
+const mergeTrueFn: FieldMergeFunction<any> = (existing, incoming, { mergeObjects }) => mergeObjects(existing, incoming);
 const mergeFalseFn: FieldMergeFunction<any> = (_, incoming) => incoming;
 
 export type PossibleTypesMap = {
-  [supertype: string]: string[],
+  [supertype: string]: string[];
 };
 
 export class Policies {
   private typePolicies: {
     [__typename: string]: {
-      keyFn?: KeyFieldsFunction,
-      merge?: FieldMergeFunction<any>,
+      keyFn?: KeyFieldsFunction;
+      merge?: FieldMergeFunction<any>;
       fields: {
         [fieldName: string]: {
-          keyFn?: KeyArgsFunction,
-          read?: FieldReadFunction<any>,
-          merge?: FieldMergeFunction<any>,
-        },
-      },
-    },
+          keyFn?: KeyArgsFunction;
+          read?: FieldReadFunction<any>;
+          merge?: FieldMergeFunction<any>;
+        };
+      };
+    };
   } = Object.create(null);
 
   private toBeAdded: {
-    [__typename: string]: TypePolicy[],
+    [__typename: string]: TypePolicy[];
   } = Object.create(null);
 
   // Map from subtype names to sets of supertype names. Note that this
@@ -311,21 +281,19 @@ export class Policies {
 
   public readonly cache: ApolloCache<any>;
 
-  public readonly rootIdsByTypename: Record<string, string>
-    = Object.create(null);
+  public readonly rootIdsByTypename: Record<string, string> = Object.create(null);
 
-  public readonly rootTypenamesById: Record<string, string>
-    = Object.create(null);
+  public readonly rootTypenamesById: Record<string, string> = Object.create(null);
 
   public readonly usingPossibleTypes = false;
 
   constructor(
     private config: {
-      cache: ApolloCache<any>,
-      dataIdFromObject?: KeyFieldsFunction,
-      possibleTypes?: PossibleTypesMap,
-      typePolicies?: TypePolicies,
-    }
+      cache: ApolloCache<any>;
+      dataIdFromObject?: KeyFieldsFunction;
+      possibleTypes?: PossibleTypesMap;
+      typePolicies?: TypePolicies;
+    },
   ) {
     this.config = {
       dataIdFromObject: defaultDataIdFromObject,
@@ -347,16 +315,11 @@ export class Policies {
     }
   }
 
-  public identify(
-    object: StoreObject,
-    partialContext?: Partial<KeyFieldsContext>
-  ): [string?, StoreObject?] {
+  public identify(object: StoreObject, partialContext?: Partial<KeyFieldsContext>): [string?, StoreObject?] {
     const policies = this;
 
-    const typename
-      = (partialContext &&
-        (partialContext.typename || partialContext.storeObject?.__typename)) ||
-      object.__typename;
+    const typename =
+      (partialContext && (partialContext.typename || partialContext.storeObject?.__typename)) || object.__typename;
 
     // It should be possible to write root Query fields with writeFragment,
     // using { __typename: "Query", ... } as the data, but it does not make
@@ -368,8 +331,7 @@ export class Policies {
     }
 
     // Default context.storeObject to object if not otherwise provided.
-    const storeObject
-      = (partialContext && partialContext.storeObject) || object;
+    const storeObject = (partialContext && partialContext.storeObject) || object;
 
     const context: KeyFieldsContext = {
       ...partialContext,
@@ -377,7 +339,7 @@ export class Policies {
       storeObject,
       readField:
         (partialContext && partialContext.readField) ||
-        function() {
+        function () {
           const options = normalizeReadFieldOptions(arguments, storeObject);
           return policies.readField(options, {
             store: policies.cache['data'],
@@ -405,9 +367,8 @@ export class Policies {
   }
 
   public addTypePolicies(typePolicies: TypePolicies) {
-    Object.keys(typePolicies).forEach((typename) => {
-      const { queryType, mutationType, subscriptionType, ...incoming }
-        = typePolicies[typename];
+    Object.keys(typePolicies).forEach(typename => {
+      const { queryType, mutationType, subscriptionType, ...incoming } = typePolicies[typename];
 
       // Though {query,mutation,subscription}Type configurations are rare,
       // it's important to call setRootTypename as early as possible,
@@ -439,18 +400,18 @@ export class Policies {
     const existing = this.getTypePolicy(typename);
     const { keyFields, fields } = incoming;
 
-    function setMerge(
-      existing: { merge?: FieldMergeFunction | boolean },
-      merge?: FieldMergeFunction | boolean
-    ) {
-      existing.merge
-        = typeof merge === 'function' ? merge
-          // Pass merge:true as a shorthand for a merge implementation
-          // that returns options.mergeObjects(existing, incoming).
-          : merge === true ? mergeTrueFn
-          // Pass merge:false to make incoming always replace existing
-          // without any warnings about data clobbering.
-            : merge === false ? mergeFalseFn
+    function setMerge(existing: { merge?: FieldMergeFunction | boolean }, merge?: FieldMergeFunction | boolean) {
+      existing.merge =
+        typeof merge === 'function'
+          ? merge
+          : // Pass merge:true as a shorthand for a merge implementation
+            // that returns options.mergeObjects(existing, incoming).
+            merge === true
+            ? mergeTrueFn
+            : // Pass merge:false to make incoming always replace existing
+              // without any warnings about data clobbering.
+              merge === false
+              ? mergeFalseFn
               : existing.merge;
     }
 
@@ -458,19 +419,22 @@ export class Policies {
     // using field policies to merge child objects.
     setMerge(existing, incoming.merge);
 
-    existing.keyFn
+    existing.keyFn =
       // Pass false to disable normalization for this typename.
-      = keyFields === false ? nullKeyFieldsFn
-        // Pass an array of strings to use those fields to compute a
-        // composite ID for objects of this typename.
-        : isArray(keyFields) ? keyFieldsFnFromSpecifier(keyFields)
-        // Pass a function to take full control over identification.
-          : typeof keyFields === 'function' ? keyFields
-          // Leave existing.keyFn unchanged if above cases fail.
-            : existing.keyFn;
+      keyFields === false
+        ? nullKeyFieldsFn
+        : // Pass an array of strings to use those fields to compute a
+          // composite ID for objects of this typename.
+          isArray(keyFields)
+          ? keyFieldsFnFromSpecifier(keyFields)
+          : // Pass a function to take full control over identification.
+            typeof keyFields === 'function'
+            ? keyFields
+            : // Leave existing.keyFn unchanged if above cases fail.
+              existing.keyFn;
 
     if (fields) {
-      Object.keys(fields).forEach((fieldName) => {
+      Object.keys(fields).forEach(fieldName => {
         const existing = this.getFieldPolicy(typename, fieldName, true)!;
         const incoming = fields[fieldName];
 
@@ -479,17 +443,20 @@ export class Policies {
         } else {
           const { keyArgs, read, merge } = incoming;
 
-          existing.keyFn
+          existing.keyFn =
             // Pass false to disable argument-based differentiation of
             // field identities.
-            = keyArgs === false ? simpleKeyArgsFn
-              // Pass an array of strings to use named arguments to
-              // compute a composite identity for the field.
-              : isArray(keyArgs) ? keyArgsFnFromSpecifier(keyArgs)
-              // Pass a function to take full control over field identity.
-                : typeof keyArgs === 'function' ? keyArgs
-                // Leave existing.keyFn unchanged if above cases fail.
-                  : existing.keyFn;
+            keyArgs === false
+              ? simpleKeyArgsFn
+              : // Pass an array of strings to use named arguments to
+                // compute a composite identity for the field.
+                isArray(keyArgs)
+                ? keyArgsFnFromSpecifier(keyArgs)
+                : // Pass a function to take full control over field identity.
+                  typeof keyArgs === 'function'
+                  ? keyArgs
+                  : // Leave existing.keyFn unchanged if above cases fail.
+                    existing.keyFn;
 
           if (typeof read === 'function') {
             existing.read = read;
@@ -510,18 +477,11 @@ export class Policies {
     }
   }
 
-  private setRootTypename(
-    which: 'Query' | 'Mutation' | 'Subscription',
-    typename: string = which
-  ) {
+  private setRootTypename(which: 'Query' | 'Mutation' | 'Subscription', typename: string = which) {
     const rootId = `ROOT_${which.toUpperCase()}`;
     const old = this.rootTypenamesById[rootId];
     if (typename !== old) {
-      invariant(
-        !old || old === which,
-        `Cannot change root %s __typename more than once`,
-        which
-      );
+      invariant(!old || old === which, `Cannot change root %s __typename more than once`, which);
       // First, delete any old __typename associated with this rootId from
       // rootIdsByTypename.
       if (old) delete this.rootIdsByTypename[old];
@@ -534,13 +494,13 @@ export class Policies {
 
   public addPossibleTypes(possibleTypes: PossibleTypesMap) {
     (this.usingPossibleTypes as boolean) = true;
-    Object.keys(possibleTypes).forEach((supertype) => {
+    Object.keys(possibleTypes).forEach(supertype => {
       // Make sure all types have an entry in this.supertypeMap, even if
       // their supertype set is empty, so we can return false immediately
       // from policies.fragmentMatches for unknown supertypes.
       this.getSupertypeSet(supertype, true);
 
-      possibleTypes[supertype].forEach((subtype) => {
+      possibleTypes[supertype].forEach(subtype => {
         this.getSupertypeSet(subtype, true)!.add(supertype);
         const match = subtype.match(TypeOrFieldNameRegExp);
         if (!match || match[0] !== subtype) {
@@ -553,9 +513,7 @@ export class Policies {
 
   private getTypePolicy(typename: string): Policies['typePolicies'][string] {
     if (!hasOwn.call(this.typePolicies, typename)) {
-      const policy: Policies['typePolicies'][string] = (this.typePolicies[
-        typename
-      ] = Object.create(null));
+      const policy: Policies['typePolicies'][string] = (this.typePolicies[typename] = Object.create(null));
       policy.fields = Object.create(null);
 
       // When the TypePolicy for typename is first accessed, instead of
@@ -597,15 +555,13 @@ export class Policies {
             // associated supertype(s) in this.supertypeMap.
             const fuzzySupertypes = this.supertypeMap.get(fuzzy);
             if (fuzzySupertypes) {
-              fuzzySupertypes.forEach(supertype =>
-                supertypes!.add(supertype)
-              );
+              fuzzySupertypes.forEach(supertype => supertypes!.add(supertype));
             }
           }
         });
       }
       if (supertypes && supertypes.size) {
-        supertypes.forEach((supertype) => {
+        supertypes.forEach(supertype => {
           const { fields, ...rest } = this.getTypePolicy(supertype);
           Object.assign(policy, rest);
           Object.assign(policy.fields, fields);
@@ -617,7 +573,7 @@ export class Policies {
     if (inbox && inbox.length) {
       // Merge the pending policies into this.typePolicies, in the order they
       // were originally passed to addTypePolicy.
-      inbox.splice(0).forEach((policy) => {
+      inbox.splice(0).forEach(policy => {
         this.updateTypePolicy(typename, policy);
       });
     }
@@ -628,27 +584,21 @@ export class Policies {
   private getFieldPolicy(
     typename: string | undefined,
     fieldName: string,
-    createIfMissing: boolean
+    createIfMissing: boolean,
   ):
     | {
-        keyFn?: KeyArgsFunction,
-        read?: FieldReadFunction<any>,
-        merge?: FieldMergeFunction<any>,
+        keyFn?: KeyArgsFunction;
+        read?: FieldReadFunction<any>;
+        merge?: FieldMergeFunction<any>;
       }
     | undefined {
     if (typename) {
       const fieldPolicies = this.getTypePolicy(typename).fields;
-      return (
-        fieldPolicies[fieldName] ||
-        (createIfMissing && (fieldPolicies[fieldName] = Object.create(null)))
-      );
+      return fieldPolicies[fieldName] || (createIfMissing && (fieldPolicies[fieldName] = Object.create(null)));
     }
   }
 
-  private getSupertypeSet(
-    subtype: string,
-    createIfMissing: boolean
-  ): Set<string> | undefined {
+  private getSupertypeSet(subtype: string, createIfMissing: boolean): Set<string> | undefined {
     let supertypeSet = this.supertypeMap.get(subtype);
     if (!supertypeSet && createIfMissing) {
       this.supertypeMap.set(subtype, (supertypeSet = new Set<string>()));
@@ -660,7 +610,7 @@ export class Policies {
     fragment: InlineFragmentNode | FragmentDefinitionNode,
     typename: string | undefined,
     result?: Record<string, any>,
-    variables?: Record<string, any>
+    variables?: Record<string, any>,
   ): boolean {
     if (!fragment.typeCondition) return true;
 
@@ -677,11 +627,7 @@ export class Policies {
       const workQueue = [typenameSupertypeSet];
       const maybeEnqueue = (subtype: string) => {
         const supertypeSet = this.getSupertypeSet(subtype, false);
-        if (
-          supertypeSet &&
-          supertypeSet.size &&
-          workQueue.indexOf(supertypeSet) < 0
-        ) {
+        if (supertypeSet && supertypeSet.size && workQueue.indexOf(supertypeSet) < 0) {
           workQueue.push(supertypeSet);
         }
       };
@@ -703,11 +649,7 @@ export class Policies {
         if (supertypeSet.has(supertype)) {
           if (!typenameSupertypeSet.has(supertype)) {
             if (checkingFuzzySubtypes) {
-              invariant.warn(
-                `Inferring subtype %s of supertype %s`,
-                typename,
-                supertype
-              );
+              invariant.warn(`Inferring subtype %s of supertype %s`, typename, supertype);
             }
             // Record positive results for faster future lookup.
             // Unfortunately, we cannot safely cache negative results,
@@ -787,10 +729,9 @@ export class Policies {
     }
 
     if (storeFieldName === void 0) {
-      storeFieldName
-        = fieldSpec.field
-          ? storeKeyNameFromField(fieldSpec.field, fieldSpec.variables)
-          : getStoreKeyName(fieldName, argsFromFieldSpecifier(fieldSpec));
+      storeFieldName = fieldSpec.field
+        ? storeKeyNameFromField(fieldSpec.field, fieldSpec.variables)
+        : getStoreKeyName(fieldName, argsFromFieldSpecifier(fieldSpec));
     }
 
     // Returning false from a keyArgs function is like configuring
@@ -802,13 +743,12 @@ export class Policies {
     // Make sure custom field names start with the actual field.name.value
     // of the field, so we can always figure out which properties of a
     // StoreObject correspond to which original field names.
-    return fieldName === fieldNameFromStoreName(storeFieldName) ? storeFieldName
-      : `${fieldName}:${storeFieldName}`;
+    return fieldName === fieldNameFromStoreName(storeFieldName) ? storeFieldName : `${fieldName}:${storeFieldName}`;
   }
 
   public readField<V = StoreValue>(
     options: ReadFieldOptions,
-    context: ReadMergeModifyContext
+    context: ReadMergeModifyContext,
   ): SafeReadonly<V> | undefined {
     const objectOrReference = options.from;
     if (!objectOrReference) return;
@@ -817,19 +757,13 @@ export class Policies {
     if (!nameOrField) return;
 
     if (options.typename === void 0) {
-      const typename = context.store.getFieldValue<string>(
-        objectOrReference,
-        '__typename'
-      );
+      const typename = context.store.getFieldValue<string>(objectOrReference, '__typename');
       if (typename) options.typename = typename;
     }
 
     const storeFieldName = this.getStoreFieldName(options);
     const fieldName = fieldNameFromStoreName(storeFieldName);
-    const existing = context.store.getFieldValue<V>(
-      objectOrReference,
-      storeFieldName
-    );
+    const existing = context.store.getFieldValue<V>(objectOrReference, storeFieldName);
     const policy = this.getFieldPolicy(options.typename, fieldName, false);
     const read = policy && policy.read;
 
@@ -840,27 +774,19 @@ export class Policies {
         options,
         context,
         context.store.getStorage(
-          isReference(objectOrReference)
-            ? objectOrReference.__ref
-            : objectOrReference,
-          storeFieldName
-        )
+          isReference(objectOrReference) ? objectOrReference.__ref : objectOrReference,
+          storeFieldName,
+        ),
       );
 
       // Call read(existing, readOptions) with cacheSlot holding this.cache.
-      return cacheSlot.withValue(this.cache, read, [
-        existing,
-        readOptions,
-      ]) as SafeReadonly<V>;
+      return cacheSlot.withValue(this.cache, read, [existing, readOptions]) as SafeReadonly<V>;
     }
 
     return existing;
   }
 
-  public getReadFunction(
-    typename: string | undefined,
-    fieldName: string
-  ): FieldReadFunction | undefined {
+  public getReadFunction(typename: string | undefined, fieldName: string): FieldReadFunction | undefined {
     const policy = this.getFieldPolicy(typename, fieldName, false);
     return policy && policy.read;
   }
@@ -868,12 +794,10 @@ export class Policies {
   public getMergeFunction(
     parentTypename: string | undefined,
     fieldName: string,
-    childTypename: string | undefined
+    childTypename: string | undefined,
   ): FieldMergeFunction | undefined {
-    let policy:
-      | Policies['typePolicies'][string]
-      | Policies['typePolicies'][string]['fields'][string]
-      | undefined = this.getFieldPolicy(parentTypename, fieldName, false);
+    let policy: Policies['typePolicies'][string] | Policies['typePolicies'][string]['fields'][string] | undefined =
+      this.getFieldPolicy(parentTypename, fieldName, false);
     let merge = policy && policy.merge;
     if (!merge && childTypename) {
       policy = this.getTypePolicy(childTypename);
@@ -887,16 +811,13 @@ export class Policies {
     incoming: StoreValue,
     { field, typename, merge }: MergeInfo,
     context: WriteContext,
-    storage?: StorageType
+    storage?: StorageType,
   ) {
     if (merge === mergeTrueFn) {
       // Instead of going to the trouble of creating a full
       // FieldFunctionOptions object and calling mergeTrueFn, we can
       // simply call mergeObjects, as mergeTrueFn would.
-      return makeMergeObjectsFunction(context.store)(
-        existing as StoreObject,
-        incoming as StoreObject
-      );
+      return makeMergeObjectsFunction(context.store)(existing as StoreObject, incoming as StoreObject);
     }
 
     if (merge === mergeFalseFn) {
@@ -936,8 +857,8 @@ export class Policies {
           variables: context.variables,
         },
         context,
-        storage || Object.create(null)
-      )
+        storage || Object.create(null),
+      ),
     );
   }
 }
@@ -947,7 +868,7 @@ function makeFieldFunctionOptions(
   objectOrReference: StoreObject | Reference | undefined,
   fieldSpec: FieldSpecifier,
   context: ReadMergeModifyContext,
-  storage: StorageType
+  storage: StorageType,
 ): FieldFunctionOptions {
   const storeFieldName = policies.getStoreFieldName(fieldSpec);
   const fieldName = fieldNameFromStoreName(storeFieldName);
@@ -966,10 +887,7 @@ function makeFieldFunctionOptions(
     cache: policies.cache,
     canRead,
     readField<T>() {
-      return policies.readField<T>(
-        normalizeReadFieldOptions(arguments, objectOrReference, variables),
-        context
-      );
+      return policies.readField<T>(normalizeReadFieldOptions(arguments, objectOrReference, variables), context);
     },
     mergeObjects: makeMergeObjectsFunction(context.store),
   };
@@ -978,7 +896,7 @@ function makeFieldFunctionOptions(
 export function normalizeReadFieldOptions(
   readFieldArgs: IArguments,
   objectOrReference: StoreObject | Reference | undefined,
-  variables?: ReadMergeModifyContext['variables']
+  variables?: ReadMergeModifyContext['variables'],
 ): ReadFieldOptions {
   const { 0: fieldNameOrOptions, 1: from, length: argc } = readFieldArgs;
 
@@ -1004,7 +922,7 @@ export function normalizeReadFieldOptions(
   if (__DEV__ && options.from === void 0) {
     invariant.warn(
       `Undefined 'from' passed to readField with arguments %s`,
-      stringifyForDisplay(Array.from(readFieldArgs))
+      stringifyForDisplay(Array.from(readFieldArgs)),
     );
   }
 
@@ -1015,9 +933,7 @@ export function normalizeReadFieldOptions(
   return options;
 }
 
-function makeMergeObjectsFunction(
-  store: NormalizedCache
-): MergeObjectsFunction {
+function makeMergeObjectsFunction(store: NormalizedCache): MergeObjectsFunction {
   return function mergeObjects(existing, incoming) {
     if (isArray(existing) || isArray(incoming)) {
       throw newInvariantError('Cannot automatically merge arrays');
@@ -1053,10 +969,7 @@ function makeMergeObjectsFunction(
         return incoming;
       }
 
-      if (
-        storeValueIsStoreObject(existing) &&
-        storeValueIsStoreObject(incoming)
-      ) {
+      if (storeValueIsStoreObject(existing) && storeValueIsStoreObject(incoming)) {
         return { ...existing, ...incoming };
       }
     }

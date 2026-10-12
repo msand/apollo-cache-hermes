@@ -12,16 +12,11 @@
     "node_modules/": true,
     "output/": true
   },
-  "eslint.validate": [
-    "typescript",
-    "typescriptreact"
-  ],
+  "eslint.validate": ["typescript", "typescriptreact"],
   "eslint.options": {
     "reportUnusedDisableDirectives": true
   },
   "jsDocCompletion.enabled": false,
   "todohighlight.keywordsPattern": "TODO(\\(\\w+\\))?:",
-  "cSpell.words": [
-    "queryable"
-  ]
+  "cSpell.words": ["queryable"]
 }

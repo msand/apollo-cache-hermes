@@ -13,19 +13,20 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 // It just isn't very fruitful to unit test the individual steps of the write
 // workflow in isolation, given the contextual state that must be passed around.
 describe(`operations.write`, () => {
-
   const context = new CacheContext(strictConfig);
   const empty = new GraphSnapshot();
 
   describe(`updates parameterized value`, () => {
-
     let baseline: GraphSnapshot, snapshot: GraphSnapshot, editedNodeIds: Set<NodeId>, parameterizedId: NodeId;
     beforeAll(() => {
-      const parameterizedQuery = query(`query getAFoo($id: ID!) {
+      const parameterizedQuery = query(
+        `query getAFoo($id: ID!) {
         foo(id: $id, withExtra: true) {
           name extra
         }
-      }`, { id: 1 });
+      }`,
+        { id: 1 },
+      );
 
       parameterizedId = nodeIdForParameterizedValue(QueryRootId, ['foo'], { id: 1, withExtra: true });
 
@@ -58,6 +59,5 @@ describe(`operations.write`, () => {
     it(`emits a ParameterizedValueSnapshot`, () => {
       jestExpect(snapshot.getNodeSnapshot(parameterizedId)).toBeInstanceOf(ParameterizedValueSnapshot);
     });
-
   });
 });

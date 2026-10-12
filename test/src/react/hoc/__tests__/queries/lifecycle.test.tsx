@@ -13,7 +13,7 @@ import { Hermes } from '../../../../../../src';
 
 describe('[queries] lifecycle', () => {
   // lifecycle
-  it('reruns the query if it changes', async() => {
+  it('reruns the query if it changes', async () => {
     const count = 0;
     const query: DocumentNode = gql`
       query people($first: Int) {
@@ -35,7 +35,7 @@ describe('[queries] lifecycle', () => {
 
     const link = mockSingleLink(
       { request: { query, variables: variables1 }, result: { data: data1 } },
-      { request: { query, variables: variables2 }, result: { data: data2 } }
+      { request: { query, variables: variables2 }, result: { data: data2 } },
     );
 
     const client = new ApolloClient({
@@ -54,7 +54,7 @@ describe('[queries] lifecycle', () => {
           ProfiledApp.replaceSnapshot(this.props.data!);
           return null;
         }
-      }
+      },
     );
 
     const ProfiledApp = profile<DataValue<Data, Vars>, Vars>({
@@ -62,9 +62,7 @@ describe('[queries] lifecycle', () => {
     });
 
     const { rerender } = render(<ProfiledApp first={1} />, {
-      wrapper: ({ children }) => (
-        <ApolloProvider client={client}>{children}</ApolloProvider>
-      ),
+      wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
     });
 
     {
@@ -97,7 +95,7 @@ describe('[queries] lifecycle', () => {
     }
   });
 
-  it('rebuilds the queries on prop change when using `options`', async() => {
+  it('rebuilds the queries on prop change when using `options`', async () => {
     const query: DocumentNode = gql`
       query people {
         allPeople(first: 1) {
@@ -152,7 +150,7 @@ describe('[queries] lifecycle', () => {
     render(
       <ApolloProvider client={client}>
         <ChangingProps />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     await waitFor(() => {
@@ -163,7 +161,7 @@ describe('[queries] lifecycle', () => {
     });
   });
 
-  it('reruns the query if just the variables change', async() => {
+  it('reruns the query if just the variables change', async () => {
     let count = 0;
     const query: DocumentNode = gql`
       query people($first: Int) {
@@ -186,7 +184,7 @@ describe('[queries] lifecycle', () => {
 
     const link = mockSingleLink(
       { request: { query, variables: variables1 }, result: { data: data1 } },
-      { request: { query, variables: variables2 }, result: { data: data2 } }
+      { request: { query, variables: variables2 }, result: { data: data2 } },
     );
 
     const client = new ApolloClient({
@@ -231,7 +229,7 @@ describe('[queries] lifecycle', () => {
         render() {
           return null;
         }
-      }
+      },
     );
 
     class ChangingProps extends React.Component<any, { first: number }> {
@@ -251,13 +249,13 @@ describe('[queries] lifecycle', () => {
     render(
       <ApolloProvider client={client}>
         <ChangingProps />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     await waitFor(() => expect(count).toBe(3));
   });
 
-  it('reruns the queries on prop change when using passed props', async() => {
+  it('reruns the queries on prop change when using passed props', async () => {
     let count = 0;
     const query: DocumentNode = gql`
       query people($first: Int) {
@@ -280,7 +278,7 @@ describe('[queries] lifecycle', () => {
 
     const link = mockSingleLink(
       { request: { query, variables: variables1 }, result: { data: data1 } },
-      { request: { query, variables: variables2 }, result: { data: data2 } }
+      { request: { query, variables: variables2 }, result: { data: data2 } },
     );
 
     const client = new ApolloClient({
@@ -321,7 +319,7 @@ describe('[queries] lifecycle', () => {
         render() {
           return null;
         }
-      }
+      },
     );
 
     class ChangingProps extends React.Component<any, { first: number }> {
@@ -341,13 +339,13 @@ describe('[queries] lifecycle', () => {
     render(
       <ApolloProvider client={client}>
         <ChangingProps />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     await waitFor(() => expect(count).toBe(3));
   });
 
-  it('stays subscribed to updates after irrelevant prop changes', async() => {
+  it('stays subscribed to updates after irrelevant prop changes', async () => {
     const query: DocumentNode = gql`
       query people($first: Int) {
         allPeople(first: $first) {
@@ -365,7 +363,7 @@ describe('[queries] lifecycle', () => {
     const data2 = { allPeople: { people: [{ name: 'Leia Skywalker' }] } };
     const link = mockSingleLink(
       { request: { query, variables }, result: { data: data1 } },
-      { request: { query, variables }, result: { data: data2 } }
+      { request: { query, variables }, result: { data: data2 } },
     );
     const client = new ApolloClient({
       link,
@@ -409,31 +407,26 @@ describe('[queries] lifecycle', () => {
         render() {
           return null;
         }
-      }
+      },
     );
 
     class Parent extends React.Component<any, any> {
       state = { foo: 42 };
       render() {
-        return (
-          <Container
-            foo={this.state.foo}
-            changeState={() => this.setState({ foo: 43 })}
-          />
-        );
+        return <Container foo={this.state.foo} changeState={() => this.setState({ foo: 43 })} />;
       }
     }
 
     render(
       <ApolloProvider client={client}>
         <Parent />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     await waitFor(() => expect(count).toBe(3));
   });
 
-  it('correctly rebuilds props on remount', async() => {
+  it('correctly rebuilds props on remount', async () => {
     const query: DocumentNode = gql`
       query pollingPeople {
         allPeople(first: 1) {
@@ -482,7 +475,7 @@ describe('[queries] lifecycle', () => {
         render() {
           return null;
         }
-      }
+      },
     );
 
     const app = (
@@ -498,7 +491,7 @@ describe('[queries] lifecycle', () => {
     });
   });
 
-  it('will re-execute a query when the client changes', async() => {
+  it('will re-execute a query when the client changes', async () => {
     const query: DocumentNode = gql`
       {
         a
@@ -514,7 +507,7 @@ describe('[queries] lifecycle', () => {
       {
         request: { query },
         result: { data: { a: 1, b: 2, c: 3 } },
-      }
+      },
     );
     const link2 = mockSingleLink(
       {
@@ -524,7 +517,7 @@ describe('[queries] lifecycle', () => {
       {
         request: { query },
         result: { data: { a: 4, b: 5, c: 6 } },
-      }
+      },
     );
     const link3 = mockSingleLink({
       request: { query },
@@ -684,7 +677,7 @@ describe('[queries] lifecycle', () => {
 
           return null;
         }
-      }
+      },
     );
 
     class ClientSwitcher extends React.Component<any, any> {
@@ -693,7 +686,7 @@ describe('[queries] lifecycle', () => {
       };
 
       componentDidMount() {
-        switchClient = (newClient) => {
+        switchClient = newClient => {
           this.setState({ client: newClient });
         };
       }
@@ -717,7 +710,7 @@ describe('[queries] lifecycle', () => {
     });
   });
 
-  it('handles synchronous racecondition with prefilled data from the server', async() => {
+  it('handles synchronous racecondition with prefilled data from the server', async () => {
     const query: DocumentNode = gql`
       query GetUser($first: Int) {
         user(first: $first) {
@@ -757,7 +750,7 @@ describe('[queries] lifecycle', () => {
     const Container = graphql<Vars, Data>(query)(
       class extends React.Component<ChildProps<Vars, Data>> {
         componentDidMount() {
-          this.props.data!.refetch().then((result) => {
+          this.props.data!.refetch().then(result => {
             expect(result.data!.user.name).toBe('Luke Skywalker');
             done = true;
           });
@@ -772,19 +765,19 @@ describe('[queries] lifecycle', () => {
           }
           return null;
         }
-      }
+      },
     );
 
     render(
       <ApolloProvider client={client}>
         <Container first={1} />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     await waitFor(() => expect(done).toBeTruthy());
   });
 
-  it('handles asynchronous racecondition with prefilled data from the server', async() => {
+  it('handles asynchronous racecondition with prefilled data from the server', async () => {
     const query: DocumentNode = gql`
       query Q {
         books {

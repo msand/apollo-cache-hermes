@@ -1,8 +1,4 @@
-import {
-  invariant,
-  newInvariantError,
-  InvariantError,
-} from './invariantWrappers';
+import { invariant, newInvariantError, InvariantError } from './invariantWrappers';
 
 export { maybe } from './maybe';
 export { default as global } from './global';

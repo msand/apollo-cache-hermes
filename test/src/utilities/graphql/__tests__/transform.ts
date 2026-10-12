@@ -53,10 +53,7 @@ describe('removeArgumentsFromDocument', () => {
         network
       }
     `;
-    const doc = removeArgumentsFromDocument(
-      [{ name: 'variable', remove: true }],
-      query
-    )!;
+    const doc = removeArgumentsFromDocument([{ name: 'variable', remove: true }], query)!;
     expect(print(doc)).toBe(print(expected));
   });
 });
@@ -93,10 +90,7 @@ describe('removeFragmentSpreadFromDocument', () => {
         zab
       }
     `;
-    const doc = removeFragmentSpreadFromDocument(
-      [{ name: 'FragmentSpread', remove: true }],
-      query
-    )!;
+    const doc = removeFragmentSpreadFromDocument([{ name: 'FragmentSpread', remove: true }], query)!;
     expect(print(doc)).toBe(print(expected));
   });
 });
@@ -127,10 +121,7 @@ describe('removeDirectivesFromDocument', () => {
       }
     `;
 
-    const doc = removeDirectivesFromDocument(
-      [{ name: 'client', remove: true }],
-      query
-    )!;
+    const doc = removeDirectivesFromDocument([{ name: 'client', remove: true }], query)!;
     expect(print(doc)).toBe(print(expected));
   });
 
@@ -167,10 +158,7 @@ describe('removeDirectivesFromDocument', () => {
       }
     `;
 
-    const doc = removeDirectivesFromDocument(
-      [{ name: 'client', remove: true }],
-      query
-    )!;
+    const doc = removeDirectivesFromDocument([{ name: 'client', remove: true }], query)!;
     expect(print(doc)).toBe(print(expected));
   });
 
@@ -188,10 +176,7 @@ describe('removeDirectivesFromDocument', () => {
       }
     `;
 
-    const doc = removeDirectivesFromDocument(
-      [{ name: 'client', remove: true }],
-      query
-    )!;
+    const doc = removeDirectivesFromDocument([{ name: 'client', remove: true }], query)!;
     expect(print(doc)).toBe(print(expected));
   });
 
@@ -216,10 +201,7 @@ describe('removeDirectivesFromDocument', () => {
       }
     `;
 
-    const doc = removeDirectivesFromDocument(
-      [{ name: 'client', remove: true }],
-      query
-    )!;
+    const doc = removeDirectivesFromDocument([{ name: 'client', remove: true }], query)!;
     expect(print(doc)).toBe(print(expected));
   });
 
@@ -253,10 +235,7 @@ describe('removeDirectivesFromDocument', () => {
       }
     `;
 
-    const doc = removeDirectivesFromDocument(
-      [{ name: 'client', remove: true }],
-      query
-    )!;
+    const doc = removeDirectivesFromDocument([{ name: 'client', remove: true }], query)!;
     expect(print(doc)).toBe(print(expected));
   });
 
@@ -387,10 +366,7 @@ describe('removeDirectivesFromDocument', () => {
         keep
       }
     `;
-    const doc = removeDirectivesFromDocument(
-      [{ name: 'storage', remove: true }],
-      query
-    )!;
+    const doc = removeDirectivesFromDocument([{ name: 'storage', remove: true }], query)!;
     expect(print(doc)).toBe(print(expected));
   });
 
@@ -420,10 +396,7 @@ describe('removeDirectivesFromDocument', () => {
       }
     `;
 
-    const doc = removeDirectivesFromDocument(
-      [{ name: 'storage', remove: true }],
-      query
-    );
+    const doc = removeDirectivesFromDocument([{ name: 'storage', remove: true }], query);
 
     expect(doc).toBe(null);
   });
@@ -451,10 +424,7 @@ describe('removeDirectivesFromDocument', () => {
       }
     `;
 
-    const doc = removeDirectivesFromDocument(
-      [{ name: 'storage', remove: true }],
-      query
-    )!;
+    const doc = removeDirectivesFromDocument([{ name: 'storage', remove: true }], query)!;
     expect(print(doc)).toBe(print(query));
   });
 
@@ -473,10 +443,7 @@ describe('removeDirectivesFromDocument', () => {
       }
     `;
 
-    const doc = removeDirectivesFromDocument(
-      [{ name: 'storage', remove: true }],
-      query
-    );
+    const doc = removeDirectivesFromDocument([{ name: 'storage', remove: true }], query);
 
     expect(doc).toBe(null);
   });
@@ -510,10 +477,7 @@ describe('removeDirectivesFromDocument', () => {
         bar
       }
     `;
-    const doc = removeDirectivesFromDocument(
-      [{ name: 'storage', remove: true }],
-      query
-    )!;
+    const doc = removeDirectivesFromDocument([{ name: 'storage', remove: true }], query)!;
     expect(print(doc)).toBe(print(expectedQuery));
   });
 
@@ -528,10 +492,7 @@ describe('removeDirectivesFromDocument', () => {
       }
     `;
 
-    const doc = removeDirectivesFromDocument(
-      [{ name: 'storage', remove: true }],
-      query
-    );
+    const doc = removeDirectivesFromDocument([{ name: 'storage', remove: true }], query);
 
     expect(doc).toBe(null);
   });
@@ -552,10 +513,7 @@ describe('removeDirectivesFromDocument', () => {
     `;
 
     expect(() => {
-      removeDirectivesFromDocument(
-        [{ name: 'storage', remove: true }],
-        addTypenameToDocument(query)
-      );
+      removeDirectivesFromDocument([{ name: 'storage', remove: true }], addTypenameToDocument(query));
     }).not.toThrow();
   });
 });
@@ -704,7 +662,7 @@ describe('query transforms', () => {
 
     const fragmentSubtree: DocumentNode = {
       ...originalQuery,
-      definitions: originalQuery.definitions.map((def) => {
+      definitions: originalQuery.definitions.map(def => {
         if (def.kind === Kind.FRAGMENT_DEFINITION) {
           return addTypenameToDocument(def);
         }
@@ -727,22 +685,19 @@ describe('query transforms', () => {
           lastName
           __typename
         }
-      `)
+      `),
     );
 
     const userFieldSubtree: DocumentNode = {
       ...originalQuery,
-      definitions: originalQuery.definitions.map((def) => {
+      definitions: originalQuery.definitions.map(def => {
         if (def.kind === Kind.OPERATION_DEFINITION) {
           return {
             ...def,
             selectionSet: {
               ...def.selectionSet,
-              selections: def.selectionSet.selections.map((selection) => {
-                if (
-                  selection.kind === Kind.FIELD &&
-                  selection.name.value === 'user'
-                ) {
+              selections: def.selectionSet.selections.map(selection => {
+                if (selection.kind === Kind.FIELD && selection.name.value === 'user') {
                   return addTypenameToDocument(selection);
                 }
                 return selection;
@@ -770,18 +725,14 @@ describe('query transforms', () => {
           firstName
           lastName
         }
-      `)
+      `),
     );
 
-    const wholeQueryFromJustTheFragment
-      = addTypenameToDocument(userFieldSubtree);
+    const wholeQueryFromJustTheFragment = addTypenameToDocument(userFieldSubtree);
 
-    const wholeQueryFromUserFieldSubtree
-      = addTypenameToDocument(fragmentSubtree);
+    const wholeQueryFromUserFieldSubtree = addTypenameToDocument(fragmentSubtree);
 
-    expect(print(wholeQueryFromUserFieldSubtree)).toEqual(
-      print(wholeQueryFromJustTheFragment)
-    );
+    expect(print(wholeQueryFromUserFieldSubtree)).toEqual(print(wholeQueryFromJustTheFragment));
 
     expect(print(wholeQueryFromUserFieldSubtree)).toEqual(
       print(gql`
@@ -800,7 +751,7 @@ describe('query transforms', () => {
           lastName
           __typename
         }
-      `)
+      `),
     );
   });
 
@@ -1172,8 +1123,7 @@ describe('removeClientSetsFromDocument', () => {
       }
     `;
 
-    const docInAnotherOrder
-      = removeClientSetsFromDocument(queryInAnotherOrder)!;
+    const docInAnotherOrder = removeClientSetsFromDocument(queryInAnotherOrder)!;
     expect(print(docInAnotherOrder)).toBe(print(expected));
   });
 
@@ -1234,8 +1184,7 @@ describe('removeClientSetsFromDocument', () => {
       }
     `;
 
-    const docInAnotherOrder
-      = removeClientSetsFromDocument(queryInAnotherOrder)!;
+    const docInAnotherOrder = removeClientSetsFromDocument(queryInAnotherOrder)!;
     expect(print(docInAnotherOrder)).toBe(print(expected));
   });
 

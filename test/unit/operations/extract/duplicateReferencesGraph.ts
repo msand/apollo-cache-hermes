@@ -6,7 +6,6 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.extract`, () => {
   describe(`duplicate GraphSnapshot`, () => {
-
     let extractResult: Serializable.GraphSnapshot;
     beforeAll(() => {
       const cacheContext = createStrictCacheContext();
@@ -20,7 +19,8 @@ describe(`operations.extract`, () => {
             { id: 'b', bar: { id: 1 } },
           ],
           baz: {
-            id: 'a', bar: { id: 1 },
+            id: 'a',
+            bar: { id: 1 },
           },
         },
         `{
@@ -33,7 +33,7 @@ describe(`operations.extract`, () => {
             bar { id }
           }
         }`,
-        cacheContext
+        cacheContext,
       );
 
       extractResult = extract(snapshot, cacheContext);
@@ -66,7 +66,7 @@ describe(`operations.extract`, () => {
             id: 1,
           },
         },
-        'a': {
+        a: {
           type: Serializable.NodeSnapshotType.EntitySnapshot,
           inbound: [
             { id: QueryRootId, path: ['foo', 0] },
@@ -80,7 +80,7 @@ describe(`operations.extract`, () => {
             bar: undefined,
           },
         },
-        'b': {
+        b: {
           type: Serializable.NodeSnapshotType.EntitySnapshot,
           inbound: [
             { id: QueryRootId, path: ['foo', 2] },
@@ -94,6 +94,5 @@ describe(`operations.extract`, () => {
         },
       });
     });
-
   });
 });

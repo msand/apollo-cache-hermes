@@ -1,8 +1,5 @@
 import { Observable, maybe } from '../../index';
-import {
-  handleError,
-  readMultipartBody,
-} from '../../../link/http/parseAndCheckHttpResponse';
+import { handleError, readMultipartBody } from '../../../link/http/parseAndCheckHttpResponse';
 import { serializeFetchParameter } from '../../../core/index';
 import type { Body } from '../../../link/http/selectHttpOptionsAndBody';
 import { generateOptionsForMultipartSubscription } from '../shared';
@@ -12,19 +9,19 @@ const backupFetch = maybe(() => fetch);
 
 export function createFetchMultipartSubscription(
   uri: string,
-  { fetch: preferredFetch, headers }: CreateMultipartSubscriptionOptions = {}
+  { fetch: preferredFetch, headers }: CreateMultipartSubscriptionOptions = {},
 ) {
   return function multipartSubscriptionForwarder({
     query,
     variables,
   }: {
-    query?: string,
-    variables: undefined | Record<string, any>,
+    query?: string;
+    variables: undefined | Record<string, any>;
   }) {
     const body: Body = { variables, query };
     const options = generateOptionsForMultipartSubscription(headers || {});
 
-    return new Observable((observer) => {
+    return new Observable(observer => {
       try {
         options.body = serializeFetchParameter(body, 'Payload');
       } catch (parseError) {
@@ -35,7 +32,7 @@ export function createFetchMultipartSubscription(
       const observerNext = observer.next.bind(observer);
 
       currentFetch!(uri, options)
-        .then((response) => {
+        .then(response => {
           const ctype = response.headers?.get('content-type');
 
           if (ctype !== null && /^multipart\/mixed/i.test(ctype)) {

@@ -21,30 +21,21 @@ export type QueryListener = (queryInfo: QueryInfo) => void;
 export type OnQueryUpdated<TResult> = (
   observableQuery: ObservableQuery<any>,
   diff: Cache.DiffResult<any>,
-  lastDiff: Cache.DiffResult<any> | undefined
+  lastDiff: Cache.DiffResult<any> | undefined,
 ) => boolean | TResult;
 
 export type RefetchQueryDescriptor = string | DocumentNode;
-export type InternalRefetchQueryDescriptor =
-  | RefetchQueryDescriptor
-  | QueryOptions;
+export type InternalRefetchQueryDescriptor = RefetchQueryDescriptor | QueryOptions;
 
 type RefetchQueriesIncludeShorthand = 'all' | 'active';
 
-export type RefetchQueriesInclude =
-  | RefetchQueryDescriptor[]
-  | RefetchQueriesIncludeShorthand;
+export type RefetchQueriesInclude = RefetchQueryDescriptor[] | RefetchQueriesIncludeShorthand;
 
-export type InternalRefetchQueriesInclude =
-  | InternalRefetchQueryDescriptor[]
-  | RefetchQueriesIncludeShorthand;
+export type InternalRefetchQueriesInclude = InternalRefetchQueryDescriptor[] | RefetchQueriesIncludeShorthand;
 
 // Used by ApolloClient["refetchQueries"]
 // TODO Improve documentation comments for this public type.
-export interface RefetchQueriesOptions<
-  TCache extends ApolloCache<any>,
-  TResult,
-> {
+export interface RefetchQueriesOptions<TCache extends ApolloCache<any>, TResult> {
   updateCache?: (cache: TCache) => void;
   // The client.refetchQueries method discourages passing QueryOptions, by
   // restricting the public type of options.include to exclude QueryOptions as
@@ -71,28 +62,30 @@ export type RefetchQueriesPromiseResults<TResult> =
   // we get if we don't check for any. I hoped `any extends TResult` would do
   // the trick here, instead of IsStrictlyAny, but you can see for yourself what
   // fails in the refetchQueries tests if you try making that simplification.
-  IsStrictlyAny<TResult> extends true ? any[]
-  : // If the onQueryUpdated function passed to client.refetchQueries returns true
-  // or false, that means either to refetch the query (true) or to skip the
-  // query (false). Since refetching produces an ApolloQueryResult<any>, and
-  // skipping produces nothing, the fully-resolved array of all results produced
-  // will be an ApolloQueryResult<any>[], when TResult extends boolean.
-  TResult extends boolean ? ApolloQueryResult<any>[]
-  : // If onQueryUpdated returns a PromiseLike<U>, that thenable will be passed as
-  // an array element to Promise.all, so we infer/unwrap the array type U here.
-  TResult extends PromiseLike<infer U> ? U[]
-  : // All other onQueryUpdated results end up in the final Promise.all array as
-    // themselves, with their original TResult type. Note that TResult will
-    // default to ApolloQueryResult<any> if no onQueryUpdated function is passed
-    // to client.refetchQueries.
-    TResult[];
+  IsStrictlyAny<TResult> extends true
+    ? any[]
+    : // If the onQueryUpdated function passed to client.refetchQueries returns true
+      // or false, that means either to refetch the query (true) or to skip the
+      // query (false). Since refetching produces an ApolloQueryResult<any>, and
+      // skipping produces nothing, the fully-resolved array of all results produced
+      // will be an ApolloQueryResult<any>[], when TResult extends boolean.
+      TResult extends boolean
+      ? ApolloQueryResult<any>[]
+      : // If onQueryUpdated returns a PromiseLike<U>, that thenable will be passed as
+        // an array element to Promise.all, so we infer/unwrap the array type U here.
+        TResult extends PromiseLike<infer U>
+        ? U[]
+        : // All other onQueryUpdated results end up in the final Promise.all array as
+          // themselves, with their original TResult type. Note that TResult will
+          // default to ApolloQueryResult<any> if no onQueryUpdated function is passed
+          // to client.refetchQueries.
+          TResult[];
 
 // The result of client.refetchQueries is thenable/awaitable, if you just want
 // an array of fully resolved results, but you can also access the raw results
 // immediately by examining the additional { queries, results } properties of
 // the RefetchQueriesResult<TResult> object.
-export interface RefetchQueriesResult<TResult>
-  extends Promise<RefetchQueriesPromiseResults<TResult>> {
+export interface RefetchQueriesResult<TResult> extends Promise<RefetchQueriesPromiseResults<TResult>> {
   // An array of ObservableQuery objects corresponding 1:1 to TResult values
   // in the results arrays (both the TResult[] array below, and the results
   // array resolved by the Promise above).
@@ -103,10 +96,10 @@ export interface RefetchQueriesResult<TResult>
 }
 
 // Used by QueryManager["refetchQueries"]
-export interface InternalRefetchQueriesOptions<
-  TCache extends ApolloCache<any>,
-  TResult,
-> extends Omit<RefetchQueriesOptions<TCache, TResult>, 'include'> {
+export interface InternalRefetchQueriesOptions<TCache extends ApolloCache<any>, TResult> extends Omit<
+  RefetchQueriesOptions<TCache, TResult>,
+  'include'
+> {
   // Just like the refetchQueries option for a mutation, an array of strings,
   // DocumentNode objects, and/or QueryOptions objects, or one of the shorthand
   // strings "all" or "active", to select every (active) query.
@@ -120,16 +113,14 @@ export type InternalRefetchQueriesResult<TResult> =
   // If onQueryUpdated returns a boolean, that's equivalent to refetching the
   // query when the boolean is true and skipping the query when false, so the
   // internal type of refetched results is Promise<ApolloQueryResult<any>>.
-  TResult extends boolean ? Promise<ApolloQueryResult<any>>
-  : // Otherwise, onQueryUpdated returns whatever it returns. If onQueryUpdated is
-    // not provided, TResult defaults to Promise<ApolloQueryResult<any>> (see the
-    // generic type parameters of client.refetchQueries).
-    TResult;
+  TResult extends boolean
+    ? Promise<ApolloQueryResult<any>>
+    : // Otherwise, onQueryUpdated returns whatever it returns. If onQueryUpdated is
+      // not provided, TResult defaults to Promise<ApolloQueryResult<any>> (see the
+      // generic type parameters of client.refetchQueries).
+      TResult;
 
-export type InternalRefetchQueriesMap<TResult> = Map<
-  ObservableQuery,
-  InternalRefetchQueriesResult<TResult>
->;
+export type InternalRefetchQueriesMap<TResult> = Map<ObservableQuery, InternalRefetchQueriesResult<TResult>>;
 
 // TODO Remove this unnecessary type in Apollo Client 4.
 export type { QueryOptions as PureQueryOptions };
@@ -161,14 +152,14 @@ export interface ApolloQueryResult<T> {
 export type MutationQueryReducer<T> = (
   previousResult: Record<string, any>,
   options: {
-    mutationResult: FetchResult<T>,
-    queryName: string | undefined,
-    queryVariables: Record<string, any>,
-  }
+    mutationResult: FetchResult<T>;
+    queryName: string | undefined;
+    queryVariables: Record<string, any>;
+  },
 ) => Record<string, any>;
 
 export type MutationQueryReducersMap<T = { [key: string]: any }> = {
-  [queryName: string]: MutationQueryReducer<T>,
+  [queryName: string]: MutationQueryReducer<T>;
 };
 
 /**
@@ -179,24 +170,19 @@ export type MutationUpdaterFn<T = { [key: string]: any }> = (
   // type parameter T for both the cache and the mutationResult. Do not use this
   // type unless you absolutely need it for backwards compatibility.
   cache: ApolloCache<T>,
-  mutationResult: FetchResult<T>
+  mutationResult: FetchResult<T>,
 ) => void;
 
-export type MutationUpdaterFunction<
-  TData,
-  TVariables,
-  TContext,
-  TCache extends ApolloCache<any>,
-> = (
+export type MutationUpdaterFunction<TData, TVariables, TContext, TCache extends ApolloCache<any>> = (
   cache: TCache,
   result: Omit<FetchResult<TData>, 'context'>,
   options: {
-    context?: TContext,
-    variables?: TVariables,
-  }
+    context?: TContext;
+    variables?: TVariables;
+  },
 ) => void;
 export interface Resolvers {
   [key: string]: {
-    [field: string]: Resolver,
+    [field: string]: Resolver;
   };
 }

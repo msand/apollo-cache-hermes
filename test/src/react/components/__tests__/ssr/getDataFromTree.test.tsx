@@ -4,10 +4,7 @@ import gql from 'graphql-tag';
 import { DocumentNode } from 'graphql';
 import { ApolloClient, ApolloProvider } from '@apollo/client';
 
-import {
-  getApolloContext,
-  ApolloContextValue,
-} from '../../../context';
+import { getApolloContext, ApolloContextValue } from '../../../context';
 import { getDataFromTree } from '../../../ssr';
 import { itAsync, mockSingleLink } from '../../../../testing';
 import { Query } from '../../Query';
@@ -16,9 +13,7 @@ import { Hermes } from '../../../../../../src';
 describe('SSR', () => {
   describe('`getDataFromTree`', () => {
     it('should support passing a root context', () => {
-      const apolloContext = getApolloContext() as unknown as React.Context<
-        ApolloContextValue & { text: string }
-      >;
+      const apolloContext = getApolloContext() as unknown as React.Context<ApolloContextValue & { text: string }>;
       class Consumer extends React.Component {
         static contextType = apolloContext;
         declare context: React.ContextType<typeof apolloContext>;
@@ -30,7 +25,7 @@ describe('SSR', () => {
 
       return getDataFromTree(<Consumer />, {
         text: 'oyez',
-      }).then((html) => {
+      }).then(html => {
         expect(html).toEqual('<div>oyez</div>');
       });
     });
@@ -56,16 +51,14 @@ describe('SSR', () => {
 
       interface Data {
         currentUser?: {
-          firstName: string,
+          firstName: string;
         };
       }
 
       const WrappedElement = () => (
         <Query query={query}>
-          {({ data, loading }: { data: Data, loading: boolean }) => (
-            <div>
-              {loading || !data ? 'loading' : data.currentUser!.firstName}
-            </div>
+          {({ data, loading }: { data: Data; loading: boolean }) => (
+            <div>{loading || !data ? 'loading' : data.currentUser!.firstName}</div>
           )}
         </Query>
       );
@@ -76,7 +69,7 @@ describe('SSR', () => {
         </ApolloProvider>
       );
 
-      return getDataFromTree(app).then((markup) => {
+      return getDataFromTree(app).then(markup => {
         expect(markup).toMatch(/James/);
       });
     });
@@ -117,9 +110,7 @@ describe('SSR', () => {
                 if (!loading) {
                   expect(data).toMatchObject({ allPeople: { people: null } });
                   expect(error).toBeDefined();
-                  expect(error.graphQLErrors[0].message).toEqual(
-                    'this is an error'
-                  );
+                  expect(error.graphQLErrors[0].message).toEqual('this is an error');
                   resolve();
                 }
                 return null;
@@ -129,7 +120,7 @@ describe('SSR', () => {
         );
 
         getDataFromTree(app);
-      }
+      },
     );
   });
 });

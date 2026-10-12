@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import gql from 'graphql-tag';
 
-import { Hermes }  from '../../../src';
+import { Hermes } from '../../../src';
 import { nodeIdForParameterizedValue } from '../../../src/operations/SnapshotEditor';
 import { StaticNodeId } from '../../../src/schema';
 import { strictConfig } from '../../helpers';
@@ -9,7 +9,6 @@ import { strictConfig } from '../../helpers';
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`transform document before writeFragmetn`, () => {
-
   let hermes: Hermes;
   beforeAll(() => {
     hermes = new Hermes({
@@ -41,13 +40,9 @@ describe(`transform document before writeFragmetn`, () => {
       },
     });
     hermes.writeFragment({
-      id: nodeIdForParameterizedValue(
-        QueryRootId,
-        ['viewer'],
-        {
-          count: 2,
-        },
-      ),
+      id: nodeIdForParameterizedValue(QueryRootId, ['viewer'], {
+        count: 2,
+      }),
       fragment: gql(`
         fragment viewer on Viewer {
           id
@@ -70,8 +65,9 @@ describe(`transform document before writeFragmetn`, () => {
   });
 
   it(`correctly writeFragment with __typename`, () => {
-    expect(hermes.readQuery({
-      query: gql(`
+    expect(
+      hermes.readQuery({
+        query: gql(`
       query getViewer {
         viewer(count: 2) {
           id
@@ -79,7 +75,8 @@ describe(`transform document before writeFragmetn`, () => {
         }
       }
       `),
-    })).to.deep.eq({
+      }),
+    ).to.deep.eq({
       viewer: [
         {
           id: 0,
@@ -94,5 +91,4 @@ describe(`transform document before writeFragmetn`, () => {
       ],
     });
   });
-
 });

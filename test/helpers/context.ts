@@ -13,7 +13,7 @@ export const strictConfig: CacheContext.Configuration = {
     group: jest.fn(),
     groupEnd: jest.fn(),
   },
-  entityIdForNode: (obj) => {
+  entityIdForNode: obj => {
     const id = obj?.id;
     return typeof id === 'string' || typeof id === 'number' ? id : undefined;
   },
@@ -29,7 +29,7 @@ export const silentConfig: CacheContext.Configuration = {
     group: jest.fn(),
     groupEnd: jest.fn(),
   },
-  entityIdForNode: (obj) => {
+  entityIdForNode: obj => {
     const id = obj?.id;
     return typeof id === 'string' || typeof id === 'number' ? id : undefined;
   },

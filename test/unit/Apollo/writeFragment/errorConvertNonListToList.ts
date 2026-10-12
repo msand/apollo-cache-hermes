@@ -5,7 +5,6 @@ import { Hermes } from '../../../../src';
 import { strictConfig } from '../../../helpers';
 
 describe(`writeFragment`, () => {
-
   let hermes: Hermes;
   beforeAll(() => {
     hermes = new Hermes(strictConfig);
@@ -64,5 +63,4 @@ describe(`writeFragment`, () => {
       });
     }).to.throw(/Unsupported transition from a non-list to list value/i);
   });
-
 });

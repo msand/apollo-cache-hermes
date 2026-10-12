@@ -5,7 +5,6 @@ import { Hermes } from '../../../../src';
 import { strictConfig } from '../../../helpers';
 
 describe(`writeFragment with parameterized references within arrays`, () => {
-
   let hermes: Hermes;
   beforeAll(() => {
     hermes = new Hermes(strictConfig);
@@ -72,9 +71,10 @@ describe(`writeFragment with parameterized references within arrays`, () => {
   });
 
   it(`returns parameterized data`, () => {
-    expect(hermes.readFragment({
-      id: '123',
-      fragment: gql(`
+    expect(
+      hermes.readFragment({
+        id: '123',
+        fragment: gql(`
       fragment viewer on Viewer {
         id
         name
@@ -91,11 +91,12 @@ describe(`writeFragment with parameterized references within arrays`, () => {
         }
       }
     `),
-      variables: {
-        city: 'Seattle',
-        area: 'PNW',
-      },
-    })).to.deep.eq({
+        variables: {
+          city: 'Seattle',
+          area: 'PNW',
+        },
+      }),
+    ).to.deep.eq({
       id: 123,
       name: 'Gouda',
       __typename: 'Viewer',
@@ -127,5 +128,4 @@ describe(`writeFragment with parameterized references within arrays`, () => {
       ],
     });
   });
-
 });

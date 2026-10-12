@@ -16,11 +16,7 @@ describe(`operations.prune`, () => {
               { id: 'a', value: 1 },
               { id: 'b', value: 2 },
             ],
-            [
-              { id: 'c', value: 3 },
-              { id: 'd', value: 4 },
-              null,
-            ],
+            [{ id: 'c', value: 3 }, { id: 'd', value: 4 }, null],
             null,
           ],
         },
@@ -47,7 +43,8 @@ describe(`operations.prune`, () => {
             value
           }
         }
-      }`, { tableName: 'Something else' }
+      }`,
+      { tableName: 'Something else' },
     );
     const pruned = prune(cacheContext, snapshot, pruneQuery);
     jestExpect(pruned.complete).toBeFalsy();
@@ -55,5 +52,4 @@ describe(`operations.prune`, () => {
     const extractResult = extract(pruned.snapshot, cacheContext);
     jestExpect(extractResult).toEqual({});
   });
-
 });

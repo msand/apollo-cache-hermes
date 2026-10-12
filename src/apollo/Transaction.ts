@@ -20,7 +20,6 @@ function getOriginalFieldArguments(id: NodeId): { [argName: string]: string } | 
  * Apollo-specific transaction interface.
  */
 export class ApolloTransaction<TSerialized> extends ApolloQueryable<TSerialized> {
-
   constructor(
     /** The underlying transaction. */
     protected _queryable: CacheTransaction<TSerialized>,
@@ -78,9 +77,9 @@ export class ApolloTransaction<TSerialized> extends ApolloQueryable<TSerialized>
   updateParameterizedReferences(
     containerId: NodeId,
     pathToParameterizedField: PathPart[],
-    { writeFragment, writeFragmentName }: { writeFragment: DocumentNode, writeFragmentName?: string },
-    { readFragment, readFragmentName }: { readFragment: DocumentNode, readFragmentName?: string },
-    updateFieldCallback: (previousList: JsonValue[], fieldArgs?: { [argName: string]: string }) => any
+    { writeFragment, writeFragmentName }: { writeFragment: DocumentNode; writeFragmentName?: string },
+    { readFragment, readFragmentName }: { readFragment: DocumentNode; readFragmentName?: string },
+    updateFieldCallback: (previousList: JsonValue[], fieldArgs?: { [argName: string]: string }) => any,
   ) {
     const currentContainerNode = this._queryable.getCurrentNodeSnapshot(containerId);
     if (!currentContainerNode || !currentContainerNode.parameterized) {
@@ -100,7 +99,7 @@ export class ApolloTransaction<TSerialized> extends ApolloQueryable<TSerialized>
                 fragmentName: readFragmentName,
                 variables: fieldArguments,
               },
-              this._queryable.isOptimisticTransaction()
+              this._queryable.isOptimisticTransaction(),
             );
           } catch (error) {
             continue;
@@ -111,7 +110,9 @@ export class ApolloTransaction<TSerialized> extends ApolloQueryable<TSerialized>
           // we won't allow the field to be updated
           if (!Array.isArray(previousData) && typeof previousData !== 'object') {
             const details = `${verboseTypeof(previousData)} at ContainerId ${containerId} with readFragment ${readFragmentName}`;
-            throw new Error(`updateParameterizedReferences() expects previousData to be an array or object instead got ${details}`);
+            throw new Error(
+              `updateParameterizedReferences() expects previousData to be an array or object instead got ${details}`,
+            );
           }
 
           const updateData = updateFieldCallback(previousData, fieldArguments);
@@ -128,5 +129,4 @@ export class ApolloTransaction<TSerialized> extends ApolloQueryable<TSerialized>
       }
     }
   }
-
 }

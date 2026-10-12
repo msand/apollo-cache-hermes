@@ -12,7 +12,6 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 // It just isn't very fruitful to unit test the individual steps of the write
 // workflow in isolation, given the contextual state that must be passed around.
 describe(`operations.write`, () => {
-
   const context = new CacheContext(strictConfig);
   const empty = new GraphSnapshot();
 
@@ -57,8 +56,7 @@ describe(`operations.write`, () => {
               title: null,
               details: {
                 body: 'world - body',
-                ref: null
-                ,
+                ref: null,
               },
             },
           ],
@@ -87,8 +85,7 @@ describe(`operations.write`, () => {
               title: null,
               details: {
                 body: 'world - body',
-                ref: null
-                ,
+                ref: null,
               },
             },
           ],
@@ -114,8 +111,7 @@ describe(`operations.write`, () => {
             title: null,
             details: {
               body: 'world - body',
-              ref: null
-              ,
+              ref: null,
             },
           },
         ],
@@ -156,5 +152,4 @@ describe(`operations.write`, () => {
       jestExpect(snapshot.allNodeIds()).toEqual(jestExpect.arrayContaining([QueryRootId, '123']));
     });
   });
-
 });

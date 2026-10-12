@@ -10,38 +10,24 @@ import type {
   DefaultContext,
 } from '../../core/index';
 import type { ApolloError } from '../../errors/index';
-import type {
-  MutationFunction,
-  BaseQueryOptions,
-  BaseMutationOptions,
-  MutationResult,
-} from '../types/types';
+import type { MutationFunction, BaseQueryOptions, BaseMutationOptions, MutationResult } from '../types/types';
 
-export interface QueryControls<
-  TData = any,
-  TGraphQLVariables = OperationVariables,
-> {
+export interface QueryControls<TData = any, TGraphQLVariables = OperationVariables> {
   error?: ApolloError;
   networkStatus: number;
   loading: boolean;
   variables: TGraphQLVariables;
   fetchMore: (
-    fetchMoreOptions: FetchMoreQueryOptions<TGraphQLVariables, TData> &
-      FetchMoreOptions<TData, TGraphQLVariables>
+    fetchMoreOptions: FetchMoreQueryOptions<TGraphQLVariables, TData> & FetchMoreOptions<TData, TGraphQLVariables>,
   ) => Promise<ApolloQueryResult<TData>>;
   refetch: (variables?: TGraphQLVariables) => Promise<ApolloQueryResult<TData>>;
   startPolling: (pollInterval: number) => void;
   stopPolling: () => void;
   subscribeToMore: (options: SubscribeToMoreOptions) => () => void;
-  updateQuery: (
-    mapFn: (previousQueryResult: any, options: UpdateQueryOptions<any>) => any
-  ) => void;
+  updateQuery: (mapFn: (previousQueryResult: any, options: UpdateQueryOptions<any>) => any) => void;
 }
 
-export type DataValue<
-  TData,
-  TGraphQLVariables = OperationVariables,
-> = QueryControls<TData, TGraphQLVariables> &
+export type DataValue<TData, TGraphQLVariables = OperationVariables> = QueryControls<TData, TGraphQLVariables> &
   // data may not yet be loaded
   Partial<TData>;
 
@@ -49,40 +35,23 @@ export interface DataProps<TData, TGraphQLVariables = OperationVariables> {
   data: DataValue<TData, TGraphQLVariables>;
 }
 
-export interface MutateProps<
-  TData = any,
-  TGraphQLVariables = OperationVariables,
-> {
+export interface MutateProps<TData = any, TGraphQLVariables = OperationVariables> {
   mutate: MutationFunction<TData, TGraphQLVariables>;
   result: MutationResult<TData>;
 }
 
-export type ChildProps<
-  TProps = {},
-  TData = {},
-  TGraphQLVariables = OperationVariables,
-> = TProps &
+export type ChildProps<TProps = {}, TData = {}, TGraphQLVariables = OperationVariables> = TProps &
   Partial<DataProps<TData, TGraphQLVariables>> &
   Partial<MutateProps<TData, TGraphQLVariables>>;
 
-export type ChildDataProps<
-  TProps = {},
-  TData = {},
-  TGraphQLVariables = OperationVariables,
-> = TProps & DataProps<TData, TGraphQLVariables>;
+export type ChildDataProps<TProps = {}, TData = {}, TGraphQLVariables = OperationVariables> = TProps &
+  DataProps<TData, TGraphQLVariables>;
 
-export type ChildMutateProps<
-  TProps = {},
-  TData = {},
-  TGraphQLVariables = OperationVariables,
-> = TProps & MutateProps<TData, TGraphQLVariables>;
+export type ChildMutateProps<TProps = {}, TData = {}, TGraphQLVariables = OperationVariables> = TProps &
+  MutateProps<TData, TGraphQLVariables>;
 
-export interface OptionProps<
-  TProps = any,
-  TData = any,
-  TGraphQLVariables = OperationVariables,
-> extends Partial<DataProps<TData, TGraphQLVariables>>,
-    Partial<MutateProps<TData, TGraphQLVariables>> {
+export interface OptionProps<TProps = any, TData = any, TGraphQLVariables = OperationVariables>
+  extends Partial<DataProps<TData, TGraphQLVariables>>, Partial<MutateProps<TData, TGraphQLVariables>> {
   ownProps: TProps;
 }
 
@@ -98,14 +67,9 @@ export interface OperationOption<
     | BaseQueryOptions<TGraphQLVariables>
     | BaseMutationOptions<TData, TGraphQLVariables, TContext, TCache>
     | ((
-        props: TProps
-      ) =>
-        | BaseQueryOptions<TGraphQLVariables>
-        | BaseMutationOptions<TData, TGraphQLVariables, TContext, TCache>);
-  props?: (
-    props: OptionProps<TProps, TData, TGraphQLVariables>,
-    lastProps?: TChildProps | void
-  ) => TChildProps;
+        props: TProps,
+      ) => BaseQueryOptions<TGraphQLVariables> | BaseMutationOptions<TData, TGraphQLVariables, TContext, TCache>);
+  props?: (props: OptionProps<TProps, TData, TGraphQLVariables>, lastProps?: TChildProps | void) => TChildProps;
   skip?: boolean | ((props: TProps) => boolean);
   name?: string;
   withRef?: boolean;

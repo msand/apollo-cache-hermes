@@ -7,9 +7,7 @@ import { Hermes } from '../../../src';
 
 const isSub = (operation: Operation) =>
   (operation.query as DocumentNode).definitions
-    .filter(
-      (x): x is OperationDefinitionNode => x.kind === 'OperationDefinition'
-    )
+    .filter((x): x is OperationDefinitionNode => x.kind === 'OperationDefinition')
     .some(x => x.operation === 'subscription');
 
 describe('subscribeToMore', () => {
@@ -165,70 +163,67 @@ describe('subscribeToMore', () => {
     }
   });
 
-  itAsync(
-    'prints unhandled subscription errors to the console',
-    (resolve, reject) => {
-      let latestResult: any = null;
+  itAsync('prints unhandled subscription errors to the console', (resolve, reject) => {
+    let latestResult: any = null;
 
-      const wSLink = mockObservableLink();
-      const httpLink = mockSingleLink(req1).setOnError(reject);
+    const wSLink = mockObservableLink();
+    const httpLink = mockSingleLink(req1).setOnError(reject);
 
-      const link = ApolloLink.split(isSub, wSLink, httpLink);
+    const link = ApolloLink.split(isSub, wSLink, httpLink);
 
-      let counter = 0;
+    let counter = 0;
 
-      const client = new ApolloClient({
-        link,
-        cache: new Hermes({ addTypename: false }),
+    const client = new ApolloClient({
+      link,
+      cache: new Hermes({ addTypename: false }),
+    });
+
+    const obsHandle = client.watchQuery({
+      query,
+    });
+    const sub = obsHandle.subscribe({
+      next(queryResult: any) {
+        latestResult = queryResult;
+        counter++;
+      },
+    });
+
+    let errorCount = 0;
+    const consoleErr = console.error;
+    console.error = (_: Error) => {
+      errorCount += 1;
+    };
+
+    obsHandle.subscribeToMore({
+      document: gql`
+        subscription newValues {
+          name
+        }
+      `,
+      updateQuery: () => {
+        throw new Error('should not be called because of initial error');
+      },
+    });
+
+    setTimeout(() => {
+      sub.unsubscribe();
+      expect(latestResult).toEqual({
+        data: { entry: { value: '1' } },
+        loading: false,
+        networkStatus: 7,
       });
+      expect(counter).toBe(1);
+      expect(errorCount).toBe(1);
+      console.error = consoleErr;
+      resolve();
+    }, 15);
 
-      const obsHandle = client.watchQuery({
-        query,
-      });
-      const sub = obsHandle.subscribe({
-        next(queryResult: any) {
-          latestResult = queryResult;
-          counter++;
-        },
-      });
-
-      let errorCount = 0;
-      const consoleErr = console.error;
-      console.error = (_: Error) => {
-        errorCount += 1;
-      };
-
-      obsHandle.subscribeToMore({
-        document: gql`
-          subscription newValues {
-            name
-          }
-        `,
-        updateQuery: () => {
-          throw new Error('should not be called because of initial error');
-        },
-      });
-
-      setTimeout(() => {
-        sub.unsubscribe();
-        expect(latestResult).toEqual({
-          data: { entry: { value: '1' } },
-          loading: false,
-          networkStatus: 7,
-        });
-        expect(counter).toBe(1);
-        expect(errorCount).toBe(1);
-        console.error = consoleErr;
-        resolve();
-      }, 15);
-
-      for (let i = 0; i < 2; i++) {
-        wSLink.simulateResult(results3[i]);
-      }
+    for (let i = 0; i < 2; i++) {
+      wSLink.simulateResult(results3[i]);
     }
-  );
+  });
 
-  itAsync('should not corrupt the cache (#3062)', async(resolve, reject) => {
+  itAsync('should not corrupt the cache (#3062)', async (resolve, reject) => {
     let latestResult: any = null;
     const wSLink = mockObservableLink();
     const httpLink = mockSingleLink(req4).setOnError(reject);
@@ -278,16 +273,12 @@ describe('subscribeToMore', () => {
       },
     });
 
-    const wait = (dur: any) =>
-      new Promise(resolve => setTimeout(resolve, dur));
+    const wait = (dur: any) => new Promise(resolve => setTimeout(resolve, dur));
 
     for (let i = 0; i < 2; i++) {
       // init optimistic mutation
-      const data = client.cache.readQuery<(typeof req4)['result']['data']>(
-        { query },
-      false
-      );
-      client.cache.recordOptimisticTransaction((proxy) => {
+      const data = client.cache.readQuery<(typeof req4)['result']['data']>({ query }, false);
+      client.cache.recordOptimisticTransaction(proxy => {
         nextMutation = { value: results[i].result.data.name };
         proxy.writeQuery({
           data: { entry: [...((data && data.entry) || []), nextMutation] },
@@ -327,79 +318,76 @@ describe('subscribeToMore', () => {
   });
   // TODO add a test that checks that subscriptions are cancelled when obs is unsubscribed from.
 
-  itAsync(
-    'allows specification of custom types for variables and payload (#4246)',
-    (resolve, reject) => {
-      interface TypedOperation extends Operation {
-        variables: {
-          someNumber: number,
-        };
-      }
-      const typedReq = {
-        request: { query, variables: { someNumber: 1 } } as TypedOperation,
-        result,
+  itAsync('allows specification of custom types for variables and payload (#4246)', (resolve, reject) => {
+    interface TypedOperation extends Operation {
+      variables: {
+        someNumber: number;
       };
-      interface TypedSubscriptionVariables {
-        someString: string;
-      }
-
-      let latestResult: any = null;
-      const wSLink = mockObservableLink();
-      const httpLink = mockSingleLink(typedReq).setOnError(reject);
-
-      const link = ApolloLink.split(isSub, wSLink, httpLink);
-      let counter = 0;
-
-      const client = new ApolloClient({
-        cache: new Hermes({ addTypename: false }),
-        link,
-      });
-
-      type TData = (typeof typedReq)['result']['data'];
-      type TVars = (typeof typedReq)['request']['variables'];
-      const obsHandle = client.watchQuery<TData, TVars>({
-        query,
-        variables: { someNumber: 1 },
-      });
-
-      const sub = obsHandle.subscribe({
-        next(queryResult: any) {
-          latestResult = queryResult;
-          if (++counter === 3) {
-            sub.unsubscribe();
-            expect(latestResult).toEqual({
-              data: { entry: { value: 'Amanda Liu' } },
-              loading: false,
-              networkStatus: 7,
-            });
-            resolve();
-          }
-        },
-      });
-
-      obsHandle.subscribeToMore<SubscriptionData, TypedSubscriptionVariables>({
-        document: gql`
-          subscription newValues {
-            name
-          }
-        `,
-        variables: {
-          someString: 'foo',
-        },
-        updateQuery: (_, { subscriptionData }) => {
-          return { entry: { value: subscriptionData.data.name } };
-        },
-      });
-
-      let i = 0;
-      function simulate() {
-        const result = results[i++];
-        if (result) {
-          wSLink.simulateResult(result);
-          setTimeout(simulate, 10);
-        }
-      }
-      simulate();
     }
-  );
+    const typedReq = {
+      request: { query, variables: { someNumber: 1 } } as TypedOperation,
+      result,
+    };
+    interface TypedSubscriptionVariables {
+      someString: string;
+    }
+
+    let latestResult: any = null;
+    const wSLink = mockObservableLink();
+    const httpLink = mockSingleLink(typedReq).setOnError(reject);
+
+    const link = ApolloLink.split(isSub, wSLink, httpLink);
+    let counter = 0;
+
+    const client = new ApolloClient({
+      cache: new Hermes({ addTypename: false }),
+      link,
+    });
+
+    type TData = (typeof typedReq)['result']['data'];
+    type TVars = (typeof typedReq)['request']['variables'];
+    const obsHandle = client.watchQuery<TData, TVars>({
+      query,
+      variables: { someNumber: 1 },
+    });
+
+    const sub = obsHandle.subscribe({
+      next(queryResult: any) {
+        latestResult = queryResult;
+        if (++counter === 3) {
+          sub.unsubscribe();
+          expect(latestResult).toEqual({
+            data: { entry: { value: 'Amanda Liu' } },
+            loading: false,
+            networkStatus: 7,
+          });
+          resolve();
+        }
+      },
+    });
+
+    obsHandle.subscribeToMore<SubscriptionData, TypedSubscriptionVariables>({
+      document: gql`
+        subscription newValues {
+          name
+        }
+      `,
+      variables: {
+        someString: 'foo',
+      },
+      updateQuery: (_, { subscriptionData }) => {
+        return { entry: { value: subscriptionData.data.name } };
+      },
+    });
+
+    let i = 0;
+    function simulate() {
+      const result = results[i++];
+      if (result) {
+        wSLink.simulateResult(result);
+        setTimeout(simulate, 10);
+      }
+    }
+    simulate();
+  });
 });

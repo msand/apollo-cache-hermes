@@ -4,7 +4,7 @@ import { NodeSnapshot } from './nodes';
 import { QueryResult, QueryResultWithNodeIds } from './operations/read';
 import { NodeId, OperationInstance } from './schema';
 
-export type NodeSnapshotMap = { [Key in NodeId]: NodeSnapshot; };
+export type NodeSnapshotMap = { [Key in NodeId]: NodeSnapshot };
 /**
  * Maintains an identity map of all value snapshots that reference into a
  * particular version of the graph.
@@ -14,7 +14,6 @@ export type NodeSnapshotMap = { [Key in NodeId]: NodeSnapshot; };
  * Also provides a place to hang per-snapshot caches off of.
  */
 export class GraphSnapshot {
-
   /** Cached results for queries. */
   public readonly readCache = new Map<OperationInstance<GraphSnapshot>, QueryResult | QueryResultWithNodeIds>();
 
@@ -67,5 +66,4 @@ export class GraphSnapshot {
   freeze(): void {
     deepFreeze(this._values);
   }
-
 }

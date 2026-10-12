@@ -23,7 +23,7 @@ describe('queries', () => {
   });
 
   // general api
-  it('binds a query to props', async() => {
+  it('binds a query to props', async () => {
     let done = false;
     const query: DocumentNode = gql`
       query people {
@@ -45,13 +45,11 @@ describe('queries', () => {
 
     interface Data {
       allPeople?: {
-        people: { name: string }[],
+        people: { name: string }[];
       };
     }
 
-    const ContainerWithData = graphql<any, Data>(query)(({
-      data,
-    }: DataProps<Data>) => {
+    const ContainerWithData = graphql<any, Data>(query)(({ data }: DataProps<Data>) => {
       expect(data).toBeTruthy();
       done = true;
       return null;
@@ -60,7 +58,7 @@ describe('queries', () => {
     render(
       <ApolloProvider client={client}>
         <ContainerWithData />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     await waitFor(() => {
@@ -96,8 +94,8 @@ describe('queries', () => {
     interface Data {
       allPeople: {
         people: {
-          name: string,
-        },
+          name: string;
+        };
       };
     }
 
@@ -117,109 +115,106 @@ describe('queries', () => {
     render(
       <ApolloProvider client={client}>
         <ContainerWithData first={1} />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     waitFor(
       () => {
         expect(renderCount).toBe(2);
       },
-      { timeout: TIME_SCALE }
+      { timeout: TIME_SCALE },
     ).then(resolve, reject);
   });
 
-  itAsync(
-    'should update query variables when props change',
-    (resolve, reject) => {
-      const query: DocumentNode = gql`
-        query people($someId: ID) {
-          allPeople(someId: $someId) {
-            people {
-              name
-            }
+  itAsync('should update query variables when props change', (resolve, reject) => {
+    const query: DocumentNode = gql`
+      query people($someId: ID) {
+        allPeople(someId: $someId) {
+          people {
+            name
           }
         }
-      `;
+      }
+    `;
 
-      const link = mockSingleLink(
-        {
-          request: { query, variables: { someId: 1 } },
-          result: {
-            data: { allPeople: { people: [{ name: 'Luke Skywalker' }] } },
-          },
+    const link = mockSingleLink(
+      {
+        request: { query, variables: { someId: 1 } },
+        result: {
+          data: { allPeople: { people: [{ name: 'Luke Skywalker' }] } },
         },
-        {
-          request: { query, variables: { someId: 2 } },
-          result: {
-            data: { allPeople: { people: [{ name: 'Darth Vader' }] } },
-          },
-        }
-      );
-      const client = new ApolloClient({
-        link,
-        cache: new Hermes({ addTypename: false }),
-      });
+      },
+      {
+        request: { query, variables: { someId: 2 } },
+        result: {
+          data: { allPeople: { people: [{ name: 'Darth Vader' }] } },
+        },
+      },
+    );
+    const client = new ApolloClient({
+      link,
+      cache: new Hermes({ addTypename: false }),
+    });
 
-      interface Data {
-        allPeople: {
-          people: {
-            name: string,
-          },
+    interface Data {
+      allPeople: {
+        people: {
+          name: string;
         };
-      }
-
-      interface Variables {
-        someId: number;
-      }
-
-      const options = {
-        options: {},
       };
-
-      let count = 0;
-      const ContainerWithData = graphql<Variables, Data, Variables>(
-        query,
-        options
-      )(({ data }: ChildProps<Variables, Data, Variables>) => {
-        expect(data).toBeTruthy();
-        switch (++count) {
-          case 1:
-            expect(data!.loading).toBe(true);
-            expect(data!.variables).toEqual({ someId: 1 });
-            break;
-          case 2:
-            expect(data!.loading).toBe(true);
-            expect(data!.variables).toEqual({ someId: 2 });
-            break;
-          case 3:
-            expect(data!.loading).toBe(false);
-            expect(data!.variables).toEqual({ someId: 2 });
-            break;
-          default:
-            reject(`too many renders (${count})`);
-        }
-
-        return null;
-      });
-
-      const { rerender } = render(
-        <ApolloProvider client={client}>
-          <ContainerWithData someId={1} />
-        </ApolloProvider>
-      );
-      rerender(
-        <ApolloProvider client={client}>
-          <ContainerWithData someId={2} />
-        </ApolloProvider>
-      );
-
-      waitFor(() => {
-        expect(count).toBe(3);
-      }).then(resolve, reject);
     }
-  );
 
-  it('shouldn\'t warn about fragments', () => {
+    interface Variables {
+      someId: number;
+    }
+
+    const options = {
+      options: {},
+    };
+
+    let count = 0;
+    const ContainerWithData = graphql<Variables, Data, Variables>(
+      query,
+      options,
+    )(({ data }: ChildProps<Variables, Data, Variables>) => {
+      expect(data).toBeTruthy();
+      switch (++count) {
+        case 1:
+          expect(data!.loading).toBe(true);
+          expect(data!.variables).toEqual({ someId: 1 });
+          break;
+        case 2:
+          expect(data!.loading).toBe(true);
+          expect(data!.variables).toEqual({ someId: 2 });
+          break;
+        case 3:
+          expect(data!.loading).toBe(false);
+          expect(data!.variables).toEqual({ someId: 2 });
+          break;
+        default:
+          reject(`too many renders (${count})`);
+      }
+
+      return null;
+    });
+
+    const { rerender } = render(
+      <ApolloProvider client={client}>
+        <ContainerWithData someId={1} />
+      </ApolloProvider>,
+    );
+    rerender(
+      <ApolloProvider client={client}>
+        <ContainerWithData someId={2} />
+      </ApolloProvider>,
+    );
+
+    waitFor(() => {
+      expect(count).toBe(3);
+    }).then(resolve, reject);
+  });
+
+  it("shouldn't warn about fragments", () => {
     const oldWarn = console.warn;
     const warnings: any[] = [];
     console.warn = (str: any) => warnings.push(str);
@@ -271,13 +266,13 @@ describe('queries', () => {
         render() {
           return null;
         }
-      }
+      },
     );
 
     render(
       <ApolloProvider client={client}>
         <Container />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     waitFor(() => {
@@ -329,13 +324,13 @@ describe('queries', () => {
         render() {
           return null;
         }
-      }
+      },
     );
 
     render(
       <ApolloProvider client={client}>
         <Container />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     waitFor(() => {
@@ -382,13 +377,13 @@ describe('queries', () => {
         render() {
           return null;
         }
-      }
+      },
     );
 
     render(
       <ApolloProvider client={client}>
         <Container first={1} />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     waitFor(() => {
@@ -396,139 +391,133 @@ describe('queries', () => {
     }).then(resolve, reject);
   });
 
-  itAsync(
-    'doesn\'t care about the order of variables in a request',
-    (resolve, reject) => {
-      let done = false;
-      const query: DocumentNode = gql`
-        query people($first: Int, $jedi: Boolean) {
-          allPeople(first: $first, jedi: $jedi) {
-            people {
-              name
-            }
+  itAsync("doesn't care about the order of variables in a request", (resolve, reject) => {
+    let done = false;
+    const query: DocumentNode = gql`
+      query people($first: Int, $jedi: Boolean) {
+        allPeople(first: $first, jedi: $jedi) {
+          people {
+            name
           }
         }
-      `;
-      const data = { allPeople: { people: [{ name: 'Luke Skywalker' }] } };
-      type Data = typeof data;
-      const variables = { jedi: true, first: 1 };
-      type Vars = typeof variables;
+      }
+    `;
+    const data = { allPeople: { people: [{ name: 'Luke Skywalker' }] } };
+    type Data = typeof data;
+    const variables = { jedi: true, first: 1 };
+    type Vars = typeof variables;
 
-      const mocks = [
-        {
-          request: {
-            query,
-            variables,
-          },
-          result: {
-            data,
-          },
+    const mocks = [
+      {
+        request: {
+          query,
+          variables,
         },
-      ];
-      const link = mockSingleLink(...mocks);
-      const client = new ApolloClient({
-        link,
-        cache: new Hermes({ addTypename: false }),
-      });
-      const options = {
-        options: {
-          variables: {
-            jedi: true,
-            first: 1,
-          },
+        result: {
+          data,
         },
-      };
+      },
+    ];
+    const link = mockSingleLink(...mocks);
+    const client = new ApolloClient({
+      link,
+      cache: new Hermes({ addTypename: false }),
+    });
+    const options = {
+      options: {
+        variables: {
+          jedi: true,
+          first: 1,
+        },
+      },
+    };
 
-      const Container = graphql<{}, Data, Vars>(
-        query,
-        options
-      )(
-        class extends React.Component<ChildProps<{}, Data, Vars>> {
-          componentDidUpdate() {
-            const { props } = this;
-            try {
-              expect(props.data!.loading).toBeFalsy();
-              expect(props.data!.allPeople).toEqual(data.allPeople);
-              done = true;
-            } catch (error) {
-              reject(error);
-            }
-          }
-
-          render() {
-            return null;
-          }
-        }
-      );
-
-      render(
-        <ApolloProvider client={client}>
-          <Container />
-        </ApolloProvider>
-      );
-
-      waitFor(() => {
-        expect(done).toBe(true);
-      }).then(resolve, reject);
-    }
-  );
-
-  itAsync(
-    'allows falsy values in the mapped variables from props',
-    (resolve, reject) => {
-      let done = false;
-      const query: DocumentNode = gql`
-        query people($first: Int) {
-          allPeople(first: $first) {
-            people {
-              name
-            }
-          }
-        }
-      `;
-      const data = { allPeople: { people: [{ name: 'Luke Skywalker' }] } };
-      type Data = typeof data;
-
-      const variables = { first: null };
-      type Vars = typeof variables;
-
-      const link = mockSingleLink({
-        request: { query, variables },
-        result: { data },
-      });
-      const client = new ApolloClient({
-        link,
-        cache: new Hermes({ addTypename: false }),
-      });
-
-      const Container = graphql<Partial<Vars>, Data, Vars>(query)(
-        class extends React.Component<ChildProps<Partial<Vars>, Data, Vars>> {
-          componentDidUpdate() {
-            const { props } = this;
+    const Container = graphql<{}, Data, Vars>(
+      query,
+      options,
+    )(
+      class extends React.Component<ChildProps<{}, Data, Vars>> {
+        componentDidUpdate() {
+          const { props } = this;
+          try {
             expect(props.data!.loading).toBeFalsy();
             expect(props.data!.allPeople).toEqual(data.allPeople);
             done = true;
-          }
-
-          render() {
-            return null;
+          } catch (error) {
+            reject(error);
           }
         }
-      );
 
-      render(
-        <ApolloProvider client={client}>
-          <Container first={null} />
-        </ApolloProvider>
-      );
+        render() {
+          return null;
+        }
+      },
+    );
 
-      waitFor(() => {
-        expect(done).toBe(true);
-      }).then(resolve, reject);
-    }
-  );
+    render(
+      <ApolloProvider client={client}>
+        <Container />
+      </ApolloProvider>,
+    );
 
-  it('doesn\'t error on optional required props', () => {
+    waitFor(() => {
+      expect(done).toBe(true);
+    }).then(resolve, reject);
+  });
+
+  itAsync('allows falsy values in the mapped variables from props', (resolve, reject) => {
+    let done = false;
+    const query: DocumentNode = gql`
+      query people($first: Int) {
+        allPeople(first: $first) {
+          people {
+            name
+          }
+        }
+      }
+    `;
+    const data = { allPeople: { people: [{ name: 'Luke Skywalker' }] } };
+    type Data = typeof data;
+
+    const variables = { first: null };
+    type Vars = typeof variables;
+
+    const link = mockSingleLink({
+      request: { query, variables },
+      result: { data },
+    });
+    const client = new ApolloClient({
+      link,
+      cache: new Hermes({ addTypename: false }),
+    });
+
+    const Container = graphql<Partial<Vars>, Data, Vars>(query)(
+      class extends React.Component<ChildProps<Partial<Vars>, Data, Vars>> {
+        componentDidUpdate() {
+          const { props } = this;
+          expect(props.data!.loading).toBeFalsy();
+          expect(props.data!.allPeople).toEqual(data.allPeople);
+          done = true;
+        }
+
+        render() {
+          return null;
+        }
+      },
+    );
+
+    render(
+      <ApolloProvider client={client}>
+        <Container first={null} />
+      </ApolloProvider>,
+    );
+
+    waitFor(() => {
+      expect(done).toBe(true);
+    }).then(resolve, reject);
+  });
+
+  it("doesn't error on optional required props", () => {
     const query: DocumentNode = gql`
       query people($first: Int) {
         allPeople(first: $first) {
@@ -559,7 +548,7 @@ describe('queries', () => {
       const { unmount } = render(
         <ApolloProvider client={client}>
           <Container first={1} />
-        </ApolloProvider>
+        </ApolloProvider>,
       );
       unmount();
     } catch (e) {
@@ -603,13 +592,10 @@ describe('queries', () => {
         render() {
           return <div>{this.props.children}</div>;
         }
-      }
+      },
     );
 
-    class ContextContainer extends React.Component<
-      React.PropsWithChildren,
-      { color: string }
-    > {
+    class ContextContainer extends React.Component<React.PropsWithChildren, { color: string }> {
       constructor(props: {}) {
         super(props);
         this.state = { color: 'purple' };
@@ -661,7 +647,7 @@ describe('queries', () => {
             <ChildContextContainer />
           </Container>
         </ContextContainer>
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     waitFor(() => expect(done).toBeTruthy()).then(resolve, reject);
@@ -685,13 +671,13 @@ describe('queries', () => {
         render() {
           return null;
         }
-      }
+      },
     );
 
     expect(Container.displayName).toEqual('Apollo(Container)');
   });
 
-  it('uses a custom wrapped component name when \'alias\' is specified', () => {
+  it("uses a custom wrapped component name when 'alias' is specified", () => {
     const query: DocumentNode = gql`
       query people {
         allPeople(first: 1) {
@@ -736,7 +722,7 @@ describe('queries', () => {
         result: {
           data: { allPeople: { people: [{ name: 'Luke Skywalker' }] } },
         },
-      })
+      }),
     );
     const client = new ApolloClient({
       link,
@@ -745,7 +731,7 @@ describe('queries', () => {
 
     interface Data {
       allPeople?: {
-        people: { name: string }[],
+        people: { name: string }[];
       };
     }
 
@@ -756,7 +742,7 @@ describe('queries', () => {
     render(
       <ApolloProvider client={client}>
         <ContainerWithData context={true} />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     waitFor(() => {
@@ -832,7 +818,7 @@ describe('queries', () => {
             expect(this.props.data.cars).toBeUndefined();
             return null;
           }
-        }
+        },
       );
 
       const App = () => (
@@ -918,7 +904,7 @@ describe('queries', () => {
             }
             return null;
           }
-        }
+        },
       );
 
       const App = () => (

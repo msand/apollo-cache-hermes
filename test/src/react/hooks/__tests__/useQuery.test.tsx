@@ -32,12 +32,7 @@ import {
   MockedResponse,
 } from '../../../testing';
 import { useMutation } from '../useMutation';
-import {
-  createProfiler,
-  disableActWarnings,
-  profileHook,
-  spyOnConsole,
-} from '../../../testing/internal';
+import { createProfiler, disableActWarnings, profileHook, spyOnConsole } from '../../../testing/internal';
 import { useApolloClient } from '../useApolloClient';
 import { Hermes } from '../../../../../src';
 
@@ -46,7 +41,7 @@ const IS_REACT_19 = React.version.startsWith('19');
 
 describe('useQuery Hook', () => {
   describe('General use', () => {
-    it('should handle a simple query', async() => {
+    it('should handle a simple query', async () => {
       const query = gql`
         {
           hello
@@ -59,9 +54,7 @@ describe('useQuery Hook', () => {
         },
       ];
 
-      const wrapper = ({ children }: any) => (
-        <MockedProvider mocks={mocks}>{children}</MockedProvider>
-      );
+      const wrapper = ({ children }: any) => <MockedProvider mocks={mocks}>{children}</MockedProvider>;
 
       const { result } = renderHook(() => useQuery(query), { wrapper });
 
@@ -71,12 +64,12 @@ describe('useQuery Hook', () => {
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual({ hello: 'world' });
     });
 
-    it('useQuery result is referentially stable', async() => {
+    it('useQuery result is referentially stable', async () => {
       const query = gql`
         {
           hello
@@ -88,9 +81,7 @@ describe('useQuery Hook', () => {
           result: { data: { hello: 'world' } },
         },
       ];
-      const wrapper = ({ children }: any) => (
-        <MockedProvider mocks={mocks}>{children}</MockedProvider>
-      );
+      const wrapper = ({ children }: any) => <MockedProvider mocks={mocks}>{children}</MockedProvider>;
       const { result, rerender } = renderHook(() => useQuery(query), {
         wrapper,
       });
@@ -112,7 +103,7 @@ describe('useQuery Hook', () => {
       });
     });
 
-    it('useQuery produces the expected renders initially', async() => {
+    it('useQuery produces the expected renders initially', async () => {
       const query = gql`
         {
           hello
@@ -124,9 +115,7 @@ describe('useQuery Hook', () => {
           result: { data: { hello: 'world' } },
         },
       ];
-      const wrapper = ({ children }: any) => (
-        <MockedProvider mocks={mocks}>{children}</MockedProvider>
-      );
+      const wrapper = ({ children }: any) => <MockedProvider mocks={mocks}>{children}</MockedProvider>;
       const { result, rerender } = renderHook(() => useQuery(query), {
         wrapper,
       });
@@ -149,7 +138,7 @@ describe('useQuery Hook', () => {
       expect(result.current.data).toEqual({ hello: 'world' });
     });
 
-    it('useQuery produces the expected frames when variables change', async() => {
+    it('useQuery produces the expected frames when variables change', async () => {
       const query = gql`
         query ($id: Int) {
           hello(id: $id)
@@ -165,13 +154,11 @@ describe('useQuery Hook', () => {
           result: { data: { hello: 'world 2' } },
         },
       ];
-      const wrapper = ({ children }: any) => (
-        <MockedProvider mocks={mocks}>{children}</MockedProvider>
-      );
-      const { result, rerender } = renderHook(
-        options => useQuery(query, options),
-        { wrapper, initialProps: { variables: { id: 1 } } }
-      );
+      const wrapper = ({ children }: any) => <MockedProvider mocks={mocks}>{children}</MockedProvider>;
+      const { result, rerender } = renderHook(options => useQuery(query, options), {
+        wrapper,
+        initialProps: { variables: { id: 1 } },
+      });
       await waitFor(() => result.current.loading === false);
       await waitFor(() => {
         expect(result.current.loading).toBe(false);
@@ -213,7 +200,7 @@ describe('useQuery Hook', () => {
       });
     });
 
-    it('should read and write results from the cache', async() => {
+    it('should read and write results from the cache', async () => {
       const query = gql`
         {
           hello
@@ -243,7 +230,7 @@ describe('useQuery Hook', () => {
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual({ hello: 'world' });
 
@@ -252,7 +239,7 @@ describe('useQuery Hook', () => {
       expect(result.current.data).toEqual({ hello: 'world' });
     });
 
-    it('should preserve functions between renders', async() => {
+    it('should preserve functions between renders', async () => {
       const query = gql`
         {
           hello
@@ -274,13 +261,12 @@ describe('useQuery Hook', () => {
 
       const { result } = renderHook(() => useQuery(query), { wrapper });
       expect(result.current.loading).toBe(true);
-      const { refetch, fetchMore, startPolling, stopPolling, subscribeToMore }
-        = result.current;
+      const { refetch, fetchMore, startPolling, stopPolling, subscribeToMore } = result.current;
       await waitFor(
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(refetch).toBe(result.current.refetch);
       expect(fetchMore).toBe(result.current.fetchMore);
@@ -289,7 +275,7 @@ describe('useQuery Hook', () => {
       expect(subscribeToMore).toBe(result.current.subscribeToMore);
     });
 
-    it('should set called to true by default', async() => {
+    it('should set called to true by default', async () => {
       const query = gql`
         {
           hello
@@ -317,7 +303,7 @@ describe('useQuery Hook', () => {
       unmount();
     });
 
-    it('should set called to false when skip option is true', async() => {
+    it('should set called to false when skip option is true', async () => {
       const query = gql`
         {
           hello
@@ -337,16 +323,13 @@ describe('useQuery Hook', () => {
         </MockedProvider>
       );
 
-      const { result, unmount } = renderHook(
-        () => useQuery(query, { skip: true }),
-        { wrapper }
-      );
+      const { result, unmount } = renderHook(() => useQuery(query, { skip: true }), { wrapper });
 
       expect(result.current.called).toBe(false);
       unmount();
     });
 
-    it('should work with variables', async() => {
+    it('should work with variables', async () => {
       const query = gql`
         query ($id: Int) {
           hello(id: $id)
@@ -371,10 +354,10 @@ describe('useQuery Hook', () => {
         </MockedProvider>
       );
 
-      const { result, rerender } = renderHook(
-        ({ id }) => useQuery(query, { variables: { id } }),
-        { wrapper, initialProps: { id: 1 } }
-      );
+      const { result, rerender } = renderHook(({ id }) => useQuery(query, { variables: { id } }), {
+        wrapper,
+        initialProps: { id: 1 },
+      });
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBe(undefined);
 
@@ -382,7 +365,7 @@ describe('useQuery Hook', () => {
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual({ hello: 'world 1' });
 
@@ -394,12 +377,12 @@ describe('useQuery Hook', () => {
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual({ hello: 'world 2' });
     });
 
-    it('should return the same results for the same variables', async() => {
+    it('should return the same results for the same variables', async () => {
       const query = gql`
         query ($id: Int) {
           hello(id: $id)
@@ -424,10 +407,10 @@ describe('useQuery Hook', () => {
         </MockedProvider>
       );
 
-      const { result, rerender } = renderHook(
-        ({ id }) => useQuery(query, { variables: { id } }),
-        { wrapper, initialProps: { id: 1 } }
-      );
+      const { result, rerender } = renderHook(({ id }) => useQuery(query, { variables: { id } }), {
+        wrapper,
+        initialProps: { id: 1 },
+      });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBe(undefined);
@@ -435,7 +418,7 @@ describe('useQuery Hook', () => {
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual({ hello: 'world 1' });
 
@@ -446,7 +429,7 @@ describe('useQuery Hook', () => {
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual({ hello: 'world 2' });
 
@@ -455,7 +438,7 @@ describe('useQuery Hook', () => {
       expect(result.current.data).toEqual({ hello: 'world 2' });
     });
 
-    it('should work with variables 2', async() => {
+    it('should work with variables 2', async () => {
       const query = gql`
         query ($name: String) {
           names(name: $name)
@@ -484,10 +467,10 @@ describe('useQuery Hook', () => {
         </MockedProvider>
       );
 
-      const { result, rerender } = renderHook(
-        ({ name }) => useQuery(query, { variables: { name } }),
-        { wrapper, initialProps: { name: '' } }
-      );
+      const { result, rerender } = renderHook(({ name }) => useQuery(query, { variables: { name } }), {
+        wrapper,
+        initialProps: { name: '' },
+      });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBe(undefined);
@@ -495,7 +478,7 @@ describe('useQuery Hook', () => {
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual({ names: ['Alice', 'Bob', 'Eve'] });
 
@@ -507,7 +490,7 @@ describe('useQuery Hook', () => {
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual({ names: [] });
 
@@ -519,13 +502,13 @@ describe('useQuery Hook', () => {
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual({ names: [] });
     });
 
     // An unsuccessful attempt to reproduce https://github.com/apollographql/apollo-client/issues/9135.
-    it('should not return stale variables when stored in state', async() => {
+    it('should not return stale variables when stored in state', async () => {
       const query = gql`
         query myQuery($name: String) {
           hello(name: $name)
@@ -577,7 +560,7 @@ describe('useQuery Hook', () => {
               {children}
             </MockedProvider>
           ),
-        }
+        },
       );
 
       expect(result.current[0].loading).toBe(true);
@@ -587,7 +570,7 @@ describe('useQuery Hook', () => {
         () => {
           expect(result.current[0].loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current[0].data).toEqual({ hello: 'world 1' });
@@ -615,7 +598,7 @@ describe('useQuery Hook', () => {
     });
 
     // TODO: Rewrite this test
-    it('should not error when forcing an update with React >= 16.13.0', async() => {
+    it('should not error when forcing an update with React >= 16.13.0', async () => {
       const CAR_QUERY: DocumentNode = gql`
         query {
           cars {
@@ -679,7 +662,7 @@ describe('useQuery Hook', () => {
             <WrapperComponent something={3} />
             <WrapperComponent something={5} />
           </Fragment>
-        </MockedProvider>
+        </MockedProvider>,
       );
 
       await waitFor(() => {
@@ -688,7 +671,7 @@ describe('useQuery Hook', () => {
       console.error = consoleError;
     });
 
-    it('should tear down the query on unmount', async() => {
+    it('should tear down the query on unmount', async () => {
       const query = gql`
         {
           hello
@@ -699,9 +682,7 @@ describe('useQuery Hook', () => {
         cache: new Hermes(),
       });
 
-      const wrapper = ({ children }: any) => (
-        <ApolloProvider client={client}>{children}</ApolloProvider>
-      );
+      const wrapper = ({ children }: any) => <ApolloProvider client={client}>{children}</ApolloProvider>;
 
       const { unmount } = renderHook(() => useQuery(query), { wrapper });
 
@@ -711,7 +692,7 @@ describe('useQuery Hook', () => {
       expect(client.getObservableQueries().size).toBe(0);
     });
 
-    it('should work with ssr: false', async() => {
+    it('should work with ssr: false', async () => {
       const query = gql`
         {
           hello
@@ -725,9 +706,7 @@ describe('useQuery Hook', () => {
       ];
 
       const { result } = renderHook(() => useQuery(query, { ssr: false }), {
-        wrapper: ({ children }) => (
-          <MockedProvider mocks={mocks}>{children}</MockedProvider>
-        ),
+        wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
       });
 
       expect(result.current.loading).toBe(true);
@@ -736,12 +715,12 @@ describe('useQuery Hook', () => {
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual({ hello: 'world' });
     });
 
-    it('should keep `no-cache` results when the tree is re-rendered', async() => {
+    it('should keep `no-cache` results when the tree is re-rendered', async () => {
       const query1 = gql`
         query people {
           allPeople(first: 1) {
@@ -782,21 +761,16 @@ describe('useQuery Hook', () => {
           request: { query: query2 },
           result: { data: allThingsData },
           delay: 50,
-        }
+        },
       );
 
       const client = new ApolloClient({
         link,
         cache: new Hermes(),
       });
-      const ProfiledHook = profileHook(() => [
-        useQuery(query1, { fetchPolicy: 'no-cache' }),
-        useQuery(query2),
-      ]);
+      const ProfiledHook = profileHook(() => [useQuery(query1, { fetchPolicy: 'no-cache' }), useQuery(query2)]);
       const { rerender } = render(<ProfiledHook />, {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
       });
 
       {
@@ -834,7 +808,7 @@ describe('useQuery Hook', () => {
       await expect(ProfiledHook).not.toRerender();
     });
 
-    it('changing queries', async() => {
+    it('changing queries', async () => {
       const query1 = gql`
         query {
           hello
@@ -858,17 +832,14 @@ describe('useQuery Hook', () => {
       ];
 
       const cache = new Hermes();
-      const { result, rerender } = renderHook(
-        ({ query }) => useQuery(query, { pollInterval: 10 }),
-        {
-          wrapper: ({ children }) => (
-            <MockedProvider mocks={mocks} cache={cache}>
-              {children}
-            </MockedProvider>
-          ),
-          initialProps: { query: query1 },
-        }
-      );
+      const { result, rerender } = renderHook(({ query }) => useQuery(query, { pollInterval: 10 }), {
+        wrapper: ({ children }) => (
+          <MockedProvider mocks={mocks} cache={cache}>
+            {children}
+          </MockedProvider>
+        ),
+        initialProps: { query: query1 },
+      });
 
       expect(result.current.loading).toBe(true);
       rerender({ query: query2 });
@@ -878,12 +849,12 @@ describe('useQuery Hook', () => {
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual(mocks[1].result.data);
     });
 
-    it('`cache-and-network` fetch policy', async() => {
+    it('`cache-and-network` fetch policy', async () => {
       const query = gql`
         {
           hello
@@ -904,14 +875,9 @@ describe('useQuery Hook', () => {
 
       cache.writeQuery({ query, data: { hello: 'from cache' } });
 
-      const { result } = renderHook(
-        () => useQuery(query, { fetchPolicy: 'cache-and-network' }),
-        {
-          wrapper: ({ children }) => (
-            <ApolloProvider client={client}>{children}</ApolloProvider>
-          ),
-        }
-      );
+      const { result } = renderHook(() => useQuery(query, { fetchPolicy: 'cache-and-network' }), {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      });
 
       // TODO: FIXME
       expect(result.current.loading).toBe(true);
@@ -921,12 +887,12 @@ describe('useQuery Hook', () => {
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual({ hello: 'from link' });
     });
 
-    it('should not use the cache when using `network-only`', async() => {
+    it('should not use the cache when using `network-only`', async () => {
       const query = gql`
         {
           hello
@@ -945,16 +911,13 @@ describe('useQuery Hook', () => {
         data: { hello: 'from cache' },
       });
 
-      const { result } = renderHook(
-        () => useQuery(query, { fetchPolicy: 'network-only' }),
-        {
-          wrapper: ({ children }) => (
-            <MockedProvider mocks={mocks} cache={cache}>
-              {children}
-            </MockedProvider>
-          ),
-        }
-      );
+      const { result } = renderHook(() => useQuery(query, { fetchPolicy: 'network-only' }), {
+        wrapper: ({ children }) => (
+          <MockedProvider mocks={mocks} cache={cache}>
+            {children}
+          </MockedProvider>
+        ),
+      });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBeUndefined();
@@ -963,12 +926,12 @@ describe('useQuery Hook', () => {
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual({ hello: 'from link' });
     });
 
-    it('should use the cache when in ssrMode and fetchPolicy is `network-only`', async() => {
+    it('should use the cache when in ssrMode and fetchPolicy is `network-only`', async () => {
       const query = gql`
         query {
           hello
@@ -986,14 +949,9 @@ describe('useQuery Hook', () => {
       });
 
       const client = new ApolloClient({ link, cache, ssrMode: true });
-      const { result } = renderHook(
-        () => useQuery(query, { fetchPolicy: 'network-only' }),
-        {
-          wrapper: ({ children }) => (
-            <ApolloProvider client={client}>{children}</ApolloProvider>
-          ),
-        }
-      );
+      const { result } = renderHook(() => useQuery(query, { fetchPolicy: 'network-only' }), {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      });
 
       expect(result.current.loading).toBe(false);
       expect(result.current.data).toEqual({ hello: 'from cache' });
@@ -1003,12 +961,12 @@ describe('useQuery Hook', () => {
           () => {
             expect(result.current.data).toEqual({ hello: 'from link' });
           },
-          { interval: 1, timeout: 20 }
-        )
+          { interval: 1, timeout: 20 },
+        ),
       ).rejects.toThrow();
     });
 
-    it('should not hang when ssrMode is true but the cache is not populated for some reason', async() => {
+    it('should not hang when ssrMode is true but the cache is not populated for some reason', async () => {
       const query = gql`
         query {
           hello
@@ -1026,9 +984,7 @@ describe('useQuery Hook', () => {
       });
 
       const { result } = renderHook(() => useQuery(query), {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
       });
 
       expect(result.current.loading).toBe(true);
@@ -1038,14 +994,14 @@ describe('useQuery Hook', () => {
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual({ hello: 'from link' });
     });
   });
 
   describe('options.defaultOptions', () => {
-    it('can provide a default fetchPolicy', async() => {
+    it('can provide a default fetchPolicy', async () => {
       const query = gql`
         query {
           hello
@@ -1076,10 +1032,8 @@ describe('useQuery Hook', () => {
           return result;
         },
         {
-          wrapper: ({ children }) => (
-            <ApolloProvider client={client}>{children}</ApolloProvider>
-          ),
-        }
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        },
       );
 
       expect(result.current.loading).toBe(true);
@@ -1094,20 +1048,17 @@ describe('useQuery Hook', () => {
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.data).toEqual({ hello: 'from link' });
-      expect(fetchPolicyLog).toEqual([
-        'cache-and-network',
-        'cache-and-network',
-      ]);
+      expect(fetchPolicyLog).toEqual(['cache-and-network', 'cache-and-network']);
     });
 
-    it('can provide individual default variables', async() => {
+    it('can provide individual default variables', async () => {
       const query: TypedDocumentNode<
         {
-          vars: OperationVariables,
+          vars: OperationVariables;
         },
         OperationVariables
       > = gql`
@@ -1119,14 +1070,14 @@ describe('useQuery Hook', () => {
       const client = new ApolloClient({
         link: new ApolloLink(
           request =>
-            new Observable((observer) => {
+            new Observable(observer => {
               observer.next({
                 data: {
                   vars: request.variables,
                 },
               });
               observer.complete();
-            })
+            }),
         ),
 
         cache: new Hermes(),
@@ -1161,10 +1112,8 @@ describe('useQuery Hook', () => {
           return result;
         },
         {
-          wrapper: ({ children }) => (
-            <ApolloProvider client={client}>{children}</ApolloProvider>
-          ),
-        }
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        },
       );
 
       expect(result.current.loading).toBe(true);
@@ -1175,14 +1124,12 @@ describe('useQuery Hook', () => {
         mandatory: true,
       });
 
-      expect(result.current.observable.options.fetchPolicy).toBe(
-        'cache-and-network'
-      );
+      expect(result.current.observable.options.fetchPolicy).toBe('cache-and-network');
 
       expect(
         // The defaultOptions field is for useQuery options (QueryHookOptions),
         // not the more general WatchQueryOptions that ObservableQuery sees.
-        'defaultOptions' in result.current.observable.options
+        'defaultOptions' in result.current.observable.options,
       ).toBe(false);
 
       expect(fetchPolicyLog).toEqual(['cache-and-network']);
@@ -1191,7 +1138,7 @@ describe('useQuery Hook', () => {
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.data).toEqual({
@@ -1202,10 +1149,7 @@ describe('useQuery Hook', () => {
         },
       });
 
-      expect(fetchPolicyLog).toEqual([
-        'cache-and-network',
-        'cache-and-network',
-      ]);
+      expect(fetchPolicyLog).toEqual(['cache-and-network', 'cache-and-network']);
 
       const reobservePromise = act(() =>
         result.current.observable
@@ -1220,7 +1164,7 @@ describe('useQuery Hook', () => {
               sourceOfVar: 'reobserve',
             },
           })
-          .then((finalResult) => {
+          .then(finalResult => {
             expect(finalResult.loading).toBe(false);
             expect(finalResult.data).toEqual({
               vars: {
@@ -1229,7 +1173,7 @@ describe('useQuery Hook', () => {
                 mandatory: true,
               },
             });
-          })
+          }),
       );
 
       expect(result.current.observable.options.fetchPolicy).toBe('cache-first');
@@ -1252,15 +1196,9 @@ describe('useQuery Hook', () => {
           mandatory: true,
         },
       });
-      expect(result.current.observable.variables).toEqual(
-        result.current.data!.vars
-      );
+      expect(result.current.observable.variables).toEqual(result.current.data!.vars);
 
-      expect(fetchPolicyLog).toEqual([
-        'cache-and-network',
-        'cache-and-network',
-        'cache-first',
-      ]);
+      expect(fetchPolicyLog).toEqual(['cache-and-network', 'cache-and-network', 'cache-first']);
 
       const reobserveNoVarMergePromise = act(() =>
         result.current.observable
@@ -1273,7 +1211,7 @@ describe('useQuery Hook', () => {
               sourceOfVar: 'reobserve without variable merge',
             },
           })
-          .then((finalResult) => {
+          .then(finalResult => {
             expect(finalResult.loading).toBe(false);
             expect(finalResult.data).toEqual({
               vars: {
@@ -1284,7 +1222,7 @@ describe('useQuery Hook', () => {
                 // mandatory: true,
               },
             });
-          })
+          }),
       );
 
       expect(result.current.observable.options.fetchPolicy).toBe('cache-first');
@@ -1303,21 +1241,14 @@ describe('useQuery Hook', () => {
           sourceOfVar: 'reobserve without variable merge',
         },
       });
-      expect(result.current.observable.variables).toEqual(
-        result.current.data!.vars
-      );
+      expect(result.current.observable.variables).toEqual(result.current.data!.vars);
 
-      expect(fetchPolicyLog).toEqual([
-        'cache-and-network',
-        'cache-and-network',
-        'cache-first',
-        'cache-first',
-      ]);
+      expect(fetchPolicyLog).toEqual(['cache-and-network', 'cache-and-network', 'cache-first', 'cache-first']);
     });
 
-    it('defaultOptions do not confuse useQuery when unskipping a query (issue #9635)', async() => {
+    it('defaultOptions do not confuse useQuery when unskipping a query (issue #9635)', async () => {
       const query: TypedDocumentNode<{
-        counter: number,
+        counter: number;
       }> = gql`
         query GetCounter {
           counter
@@ -1329,7 +1260,7 @@ describe('useQuery Hook', () => {
         cache: new Hermes(),
         link: new ApolloLink(
           request =>
-            new Observable((observer) => {
+            new Observable(observer => {
               if (request.operationName === 'GetCounter') {
                 observer.next({
                   data: {
@@ -1340,13 +1271,9 @@ describe('useQuery Hook', () => {
                   observer.complete();
                 }, 10);
               } else {
-                observer.error(
-                  new Error(
-                    `Unknown query: ${request.operationName || request.query}`
-                  )
-                );
+                observer.error(new Error(`Unknown query: ${request.operationName || request.query}`));
               }
-            })
+            }),
         ),
       });
 
@@ -1366,10 +1293,8 @@ describe('useQuery Hook', () => {
           };
         },
         {
-          wrapper: ({ children }) => (
-            <ApolloProvider client={client}>{children}</ApolloProvider>
-          ),
-        }
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        },
       );
 
       expect(result.current.query.loading).toBe(false);
@@ -1381,8 +1306,8 @@ describe('useQuery Hook', () => {
           () => {
             expect(result.current.query.data).toEqual({ counter: 1 });
           },
-          { interval: 1, timeout: 20 }
-        )
+          { interval: 1, timeout: 20 },
+        ),
       ).rejects.toThrow();
 
       act(() => {
@@ -1395,7 +1320,7 @@ describe('useQuery Hook', () => {
         () => {
           expect(result.current.query.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.query.networkStatus).toBe(NetworkStatus.ready);
       expect(result.current.query.data).toEqual({ counter: 1 });
@@ -1415,8 +1340,8 @@ describe('useQuery Hook', () => {
           () => {
             expect(result.current.query.data).toEqual({ counter: 1 });
           },
-          { interval: 1, timeout: 20 }
-        )
+          { interval: 1, timeout: 20 },
+        ),
       ).rejects.toThrow();
 
       act(() => {
@@ -1429,7 +1354,7 @@ describe('useQuery Hook', () => {
         () => {
           expect(result.current.query.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.query.networkStatus).toBe(NetworkStatus.ready);
       expect(result.current.query.data).toEqual({ counter: 2 });
@@ -1438,7 +1363,7 @@ describe('useQuery Hook', () => {
     });
   });
 
-  it('can provide options.client without ApolloProvider', async() => {
+  it('can provide options.client without ApolloProvider', async () => {
     const query = gql`
       query {
         hello
@@ -1456,7 +1381,7 @@ describe('useQuery Hook', () => {
     });
 
     const { result } = renderHook(
-      () => useQuery(query, { client })
+      () => useQuery(query, { client }),
       // We deliberately do not provide the usual ApolloProvider wrapper for
       // this test, since we are providing the client directly to useQuery.
       // {
@@ -1475,16 +1400,16 @@ describe('useQuery Hook', () => {
       () => {
         expect(result.current.loading).toBe(false);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
 
     expect(result.current.data).toEqual({ hello: 'from link' });
   });
 
   describe('<React.StrictMode>', () => {
-    it('double-rendering should not trigger duplicate network requests', async() => {
+    it('double-rendering should not trigger duplicate network requests', async () => {
       const query: TypedDocumentNode<{
-        linkCount: number,
+        linkCount: number;
       }> = gql`
         query Counter {
           linkCount
@@ -1496,7 +1421,7 @@ describe('useQuery Hook', () => {
         cache: new Hermes(),
         link: new ApolloLink(
           request =>
-            new Observable((observer) => {
+            new Observable(observer => {
               if (request.operationName === 'Counter') {
                 observer.next({
                   data: {
@@ -1505,7 +1430,7 @@ describe('useQuery Hook', () => {
                 });
                 observer.complete();
               }
-            })
+            }),
         ),
       });
 
@@ -1520,7 +1445,7 @@ describe('useQuery Hook', () => {
               <ApolloProvider client={client}>{children}</ApolloProvider>
             </React.StrictMode>
           ),
-        }
+        },
       );
 
       expect(result.current.loading).toBe(true);
@@ -1531,7 +1456,7 @@ describe('useQuery Hook', () => {
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.networkStatus).toBe(NetworkStatus.ready);
       expect(result.current.data).toEqual({
@@ -1570,7 +1495,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
         const activeSet = new Set<typeof result.current.observable>();
         const inactiveSet = new Set<typeof result.current.observable>();
-        obsQueries.forEach((obsQuery) => {
+        obsQueries.forEach(obsQuery => {
           if (obsQuery.hasObservers()) {
             expect(inactiveSet.has(obsQuery)).toBe(false);
             activeSet.add(obsQuery);
@@ -1592,7 +1517,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       checkObservableQueries(1);
 
-      await result.current.reobserve().then((result) => {
+      await result.current.reobserve().then(result => {
         expect(result.loading).toBe(false);
         expect(result.loading).toBe(false);
         expect(result.networkStatus).toBe(NetworkStatus.ready);
@@ -1610,13 +1535,13 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             linkCount: 2,
           });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           expect(result.current.networkStatus).toBe(NetworkStatus.ready);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       checkObservableQueries(2);
@@ -1624,7 +1549,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
   });
 
   describe('polling', () => {
-    it('should support polling', async() => {
+    it('should support polling', async () => {
       const query = gql`
         {
           hello
@@ -1652,10 +1577,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const { result } = renderHook(
-        () => useQuery(query, { pollInterval: 10 }),
-        { wrapper }
-      );
+      const { result } = renderHook(() => useQuery(query, { pollInterval: 10 }), { wrapper });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBe(undefined);
@@ -1664,7 +1586,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.data).toEqual({ hello: 'world 1' });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.loading).toBe(false);
@@ -1673,7 +1595,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.data).toEqual({ hello: 'world 2' });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.loading).toBe(false);
@@ -1682,7 +1604,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.data).toEqual({ hello: 'world 3' });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.loading).toBe(false);
@@ -1694,12 +1616,12 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           () => {
             expect(result.current.data).not.toEqual(previousData);
           },
-          { interval: 1, timeout: 20 }
-        )
+          { interval: 1, timeout: 20 },
+        ),
       ).rejects.toThrow();
     });
 
-    it('should start polling when skip goes from true to false', async() => {
+    it('should start polling when skip goes from true to false', async () => {
       const query = gql`
         {
           hello
@@ -1722,7 +1644,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       const cache = new Hermes();
       const ProfiledUseQuery = profileHook(({ skip }: { skip?: boolean }) =>
-        useQuery(query, { pollInterval: 10, skip })
+        useQuery(query, { pollInterval: 10, skip }),
       );
       const { rerender } = render(<ProfiledUseQuery />, {
         wrapper: ({ children }) => (
@@ -1771,7 +1693,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       }
     });
 
-    it('should return data from network when clients default fetch policy set to network-only', async() => {
+    it('should return data from network when clients default fetch policy set to network-only', async () => {
       const query = gql`
         {
           hello
@@ -1792,11 +1714,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       });
 
       const wrapper = ({ children }: any) => (
-        <MockedProvider
-          mocks={mocks}
-          cache={cache}
-          defaultOptions={{ watchQuery: { fetchPolicy: 'network-only' } }}
-        >
+        <MockedProvider mocks={mocks} cache={cache} defaultOptions={{ watchQuery: { fetchPolicy: 'network-only' } }}>
           {children}
         </MockedProvider>
       );
@@ -1810,12 +1728,12 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual(data);
     });
 
-    it('should stop polling when component unmounts', async() => {
+    it('should stop polling when component unmounts', async () => {
       const query = gql`
         {
           hello
@@ -1851,9 +1769,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const ProfiledHook = profileHook(() =>
-        useQuery(query, { pollInterval: 20 })
-      );
+      const ProfiledHook = profileHook(() => useQuery(query, { pollInterval: 20 }));
 
       const { unmount } = render(<ProfiledHook />, { wrapper });
 
@@ -1883,8 +1799,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             const newRequestCount = requestSpy.mock.calls.length;
             expect(newRequestCount).toBeGreaterThan(requestCount);
           },
-          { interval: 1, timeout: 40 }
-        )
+          { interval: 1, timeout: 40 },
+        ),
       ).rejects.toThrow();
 
       await waitFor(() => {
@@ -1896,7 +1812,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
     // https://github.com/apollographql/apollo-client/issues/9431
     // https://github.com/apollographql/apollo-client/issues/11750
-    it('stops polling when component unmounts with cache-and-network fetch policy', async() => {
+    it('stops polling when component unmounts with cache-and-network fetch policy', async () => {
       const query: TypedDocumentNode<{ hello: string }> = gql`
         query {
           hello
@@ -1928,9 +1844,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       const onErrorFn = jest.fn();
       link.setOnError(onErrorFn);
 
-      const ProfiledHook = profileHook(() =>
-        useQuery(query, { pollInterval: 10, fetchPolicy: 'cache-and-network' })
-      );
+      const ProfiledHook = profileHook(() => useQuery(query, { pollInterval: 10, fetchPolicy: 'cache-and-network' }));
 
       const client = new ApolloClient({
         queryDeduplication: false,
@@ -1939,9 +1853,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       });
 
       const { unmount } = render(<ProfiledHook />, {
-        wrapper: ({ children }: any) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
+        wrapper: ({ children }: any) => <ApolloProvider client={client}>{children}</ApolloProvider>,
       });
 
       {
@@ -1978,7 +1890,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       expect(onErrorFn).toHaveBeenCalledTimes(0);
     });
 
-    it('should stop polling when component is unmounted in Strict Mode', async() => {
+    it('should stop polling when component is unmounted in Strict Mode', async () => {
       const query = gql`
         {
           hello
@@ -2015,10 +1927,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </React.StrictMode>
       );
 
-      const { result, unmount } = renderHook(
-        () => useQuery(query, { pollInterval: 10 }),
-        { wrapper }
-      );
+      const { result, unmount } = renderHook(() => useQuery(query, { pollInterval: 10 }), { wrapper });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBe(undefined);
@@ -2027,7 +1936,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual({ hello: 'world 1' });
 
@@ -2042,8 +1951,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           () => {
             expect(requestSpy).toHaveBeenCalledTimes(requestSpyCallCount + 1);
           },
-          { interval: 1, timeout: 20 }
-        )
+          { interval: 1, timeout: 20 },
+        ),
       ).rejects.toThrow();
       expect(requestSpy).toHaveBeenCalledTimes(requestSpyCallCount);
       expect(onErrorFn).toHaveBeenCalledTimes(0);
@@ -2053,7 +1962,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
     // https://github.com/apollographql/apollo-client/issues/9431
     // https://github.com/apollographql/apollo-client/issues/11750
-    it('stops polling when component unmounts in strict mode with cache-and-network fetch policy', async() => {
+    it('stops polling when component unmounts in strict mode with cache-and-network fetch policy', async () => {
       const query: TypedDocumentNode<{ hello: string }> = gql`
         query {
           hello
@@ -2085,9 +1994,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       const onErrorFn = jest.fn();
       link.setOnError(onErrorFn);
 
-      const ProfiledHook = profileHook(() =>
-        useQuery(query, { pollInterval: 10, fetchPolicy: 'cache-and-network' })
-      );
+      const ProfiledHook = profileHook(() => useQuery(query, { pollInterval: 10, fetchPolicy: 'cache-and-network' }));
 
       const client = new ApolloClient({ link, cache });
 
@@ -2132,7 +2039,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       expect(onErrorFn).toHaveBeenCalledTimes(0);
     });
 
-    it('should start and stop polling in Strict Mode', async() => {
+    it('should start and stop polling in Strict Mode', async () => {
       const query = gql`
         {
           hello
@@ -2170,10 +2077,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </React.StrictMode>
       );
 
-      const { result } = renderHook(
-        () => useQuery(query, { pollInterval: 20 }),
-        { wrapper }
-      );
+      const { result } = renderHook(() => useQuery(query, { pollInterval: 20 }), { wrapper });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBe(undefined);
@@ -2182,7 +2086,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.data).toEqual({ hello: 'world 1' });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.loading).toBe(false);
 
@@ -2190,7 +2094,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.data).toEqual({ hello: 'world 2' });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.loading).toBe(false);
 
@@ -2201,8 +2105,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           () => {
             expect(result.current.data).toEqual({ hello: 'world 3' });
           },
-          { interval: 1, timeout: 20 }
-        )
+          { interval: 1, timeout: 20 },
+        ),
       ).rejects.toThrow();
       result.current.startPolling(20);
 
@@ -2213,7 +2117,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.data).toEqual({ hello: 'world 3' });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.loading).toBe(false);
 
@@ -2221,7 +2125,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.data).toEqual({ hello: 'world 4' });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.loading).toBe(false);
       expect(requestSpy).toHaveBeenCalledTimes(4);
@@ -2229,7 +2133,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       requestSpy.mockRestore();
     });
 
-    it('should not throw an error if stopPolling is called manually', async() => {
+    it('should not throw an error if stopPolling is called manually', async () => {
       const query = gql`
         {
           hello
@@ -2262,7 +2166,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.data).toEqual({ hello: 'world' });
@@ -2281,7 +2185,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         jest.useRealTimers();
       });
 
-      it('when defined as a global default option', async() => {
+      it('when defined as a global default option', async () => {
         const skipPollAttempt = jest.fn().mockImplementation(() => false);
 
         const query = gql`
@@ -2301,7 +2205,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           {
             request: { query },
             result: { data: { hello: 'world 3' } },
-          }
+          },
         );
 
         const client = new ApolloClient({
@@ -2314,14 +2218,9 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           },
         });
 
-        const wrapper = ({ children }: any) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        );
+        const wrapper = ({ children }: any) => <ApolloProvider client={client}>{children}</ApolloProvider>;
 
-        const { result } = renderHook(
-          () => useQuery(query, { pollInterval: 10 }),
-          { wrapper }
-        );
+        const { result } = renderHook(() => useQuery(query, { pollInterval: 10 }), { wrapper });
 
         expect(result.current.loading).toBe(true);
         expect(result.current.data).toBe(undefined);
@@ -2330,7 +2229,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           () => {
             expect(result.current.data).toEqual({ hello: 'world 1' });
           },
-          { interval: 1 }
+          { interval: 1 },
         );
 
         expect(result.current.loading).toBe(false);
@@ -2339,29 +2238,20 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           () => {
             expect(result.current.data).toEqual({ hello: 'world 2' });
           },
-          { interval: 1 }
+          { interval: 1 },
         );
 
         skipPollAttempt.mockImplementation(() => true);
         expect(result.current.loading).toBe(false);
 
         await jest.advanceTimersByTime(12);
-        await waitFor(
-          () => expect(result.current.data).toEqual({ hello: 'world 2' }),
-          { interval: 1 }
-        );
+        await waitFor(() => expect(result.current.data).toEqual({ hello: 'world 2' }), { interval: 1 });
 
         await jest.advanceTimersByTime(12);
-        await waitFor(
-          () => expect(result.current.data).toEqual({ hello: 'world 2' }),
-          { interval: 1 }
-        );
+        await waitFor(() => expect(result.current.data).toEqual({ hello: 'world 2' }), { interval: 1 });
 
         await jest.advanceTimersByTime(12);
-        await waitFor(
-          () => expect(result.current.data).toEqual({ hello: 'world 2' }),
-          { interval: 1 }
-        );
+        await waitFor(() => expect(result.current.data).toEqual({ hello: 'world 2' }), { interval: 1 });
 
         skipPollAttempt.mockImplementation(() => false);
         expect(result.current.loading).toBe(false);
@@ -2370,11 +2260,11 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           () => {
             expect(result.current.data).toEqual({ hello: 'world 3' });
           },
-          { interval: 1 }
+          { interval: 1 },
         );
       });
 
-      it('when defined for a single query', async() => {
+      it('when defined for a single query', async () => {
         const skipPollAttempt = jest.fn().mockImplementation(() => false);
 
         const query = gql`
@@ -2410,7 +2300,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
               pollInterval: 10,
               skipPollAttempt,
             }),
-          { wrapper }
+          { wrapper },
         );
 
         expect(result.current.loading).toBe(true);
@@ -2420,7 +2310,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           () => {
             expect(result.current.data).toEqual({ hello: 'world 1' });
           },
-          { interval: 1 }
+          { interval: 1 },
         );
 
         expect(result.current.loading).toBe(false);
@@ -2429,29 +2319,20 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           () => {
             expect(result.current.data).toEqual({ hello: 'world 2' });
           },
-          { interval: 1 }
+          { interval: 1 },
         );
 
         skipPollAttempt.mockImplementation(() => true);
         expect(result.current.loading).toBe(false);
 
         await jest.advanceTimersByTime(12);
-        await waitFor(
-          () => expect(result.current.data).toEqual({ hello: 'world 2' }),
-          { interval: 1 }
-        );
+        await waitFor(() => expect(result.current.data).toEqual({ hello: 'world 2' }), { interval: 1 });
 
         await jest.advanceTimersByTime(12);
-        await waitFor(
-          () => expect(result.current.data).toEqual({ hello: 'world 2' }),
-          { interval: 1 }
-        );
+        await waitFor(() => expect(result.current.data).toEqual({ hello: 'world 2' }), { interval: 1 });
 
         await jest.advanceTimersByTime(12);
-        await waitFor(
-          () => expect(result.current.data).toEqual({ hello: 'world 2' }),
-          { interval: 1 }
-        );
+        await waitFor(() => expect(result.current.data).toEqual({ hello: 'world 2' }), { interval: 1 });
 
         skipPollAttempt.mockImplementation(() => false);
         expect(result.current.loading).toBe(false);
@@ -2460,14 +2341,14 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           () => {
             expect(result.current.data).toEqual({ hello: 'world 3' });
           },
-          { interval: 1 }
+          { interval: 1 },
         );
       });
     });
   });
 
   describe('Error handling', () => {
-    it('should pass along GraphQL errors', async() => {
+    it('should pass along GraphQL errors', async () => {
       const query = gql`
         query TestQuery {
           rates(currency: "USD") {
@@ -2500,13 +2381,13 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.error).toBeInstanceOf(ApolloError);
       expect(result.current.error!.message).toBe('error');
     });
 
-    it('calls `onError` when a GraphQL error is returned', async() => {
+    it('calls `onError` when a GraphQL error is returned', async () => {
       const query = gql`
         {
           hello
@@ -2540,7 +2421,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.data).toBeUndefined();
@@ -2551,13 +2432,11 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         expect(onError).toHaveBeenCalledTimes(1);
       });
       await waitFor(() => {
-        expect(onError).toHaveBeenCalledWith(
-          new ApolloError({ graphQLErrors: [new GraphQLError('error')] })
-        );
+        expect(onError).toHaveBeenCalledWith(new ApolloError({ graphQLErrors: [new GraphQLError('error')] }));
       });
     });
 
-    it('calls `onError` when a network error has occurred', async() => {
+    it('calls `onError` when a network error has occurred', async () => {
       const query = gql`
         {
           hello
@@ -2590,27 +2469,23 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.data).toBeUndefined();
       expect(result.current.error).toBeInstanceOf(ApolloError);
       expect(result.current.error!.message).toBe('Could not fetch');
-      expect(result.current.error!.networkError).toEqual(
-        new Error('Could not fetch')
-      );
+      expect(result.current.error!.networkError).toEqual(new Error('Could not fetch'));
 
       await waitFor(() => {
         expect(onError).toHaveBeenCalledTimes(1);
       });
       await waitFor(() => {
-        expect(onError).toHaveBeenCalledWith(
-          new ApolloError({ networkError: new Error('Could not fetch') })
-        );
+        expect(onError).toHaveBeenCalledWith(new ApolloError({ networkError: new Error('Could not fetch') }));
       });
     });
 
-    it('removes partial data from result when response has errors', async() => {
+    it('removes partial data from result when response has errors', async () => {
       const query = gql`
         {
           hello
@@ -2646,18 +2521,16 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.data).toBeUndefined();
       expect(result.current.error).toBeInstanceOf(ApolloError);
       expect(result.current.error!.message).toBe('Could not fetch "hello"');
-      expect(result.current.error!.graphQLErrors).toEqual([
-        new GraphQLError('Could not fetch "hello"'),
-      ]);
+      expect(result.current.error!.graphQLErrors).toEqual([new GraphQLError('Could not fetch "hello"')]);
     });
 
-    it('does not call `onError` when returning GraphQL errors while using an `errorPolicy` set to "ignore"', async() => {
+    it('does not call `onError` when returning GraphQL errors while using an `errorPolicy` set to "ignore"', async () => {
       const query = gql`
         {
           hello
@@ -2680,10 +2553,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       );
 
       const onError = jest.fn();
-      const { result } = renderHook(
-        () => useQuery(query, { onError, errorPolicy: 'ignore' }),
-        { wrapper }
-      );
+      const { result } = renderHook(() => useQuery(query, { onError, errorPolicy: 'ignore' }), { wrapper });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBe(undefined);
@@ -2693,7 +2563,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.data).toBeUndefined();
@@ -2704,7 +2574,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       expect(onError).not.toHaveBeenCalled();
     });
 
-    it('calls `onError` when a network error has occurred while using an `errorPolicy` set to "ignore"', async() => {
+    it('calls `onError` when a network error has occurred while using an `errorPolicy` set to "ignore"', async () => {
       const query = gql`
         {
           hello
@@ -2725,10 +2595,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       );
 
       const onError = jest.fn();
-      const { result } = renderHook(
-        () => useQuery(query, { onError, errorPolicy: 'ignore' }),
-        { wrapper }
-      );
+      const { result } = renderHook(() => useQuery(query, { onError, errorPolicy: 'ignore' }), { wrapper });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBe(undefined);
@@ -2738,27 +2605,23 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.data).toBeUndefined();
       expect(result.current.error).toBeInstanceOf(ApolloError);
       expect(result.current.error!.message).toBe('Could not fetch');
-      expect(result.current.error!.networkError).toEqual(
-        new Error('Could not fetch')
-      );
+      expect(result.current.error!.networkError).toEqual(new Error('Could not fetch'));
 
       await waitFor(() => {
         expect(onError).toHaveBeenCalledTimes(1);
       });
       await waitFor(() => {
-        expect(onError).toHaveBeenCalledWith(
-          new ApolloError({ networkError: new Error('Could not fetch') })
-        );
+        expect(onError).toHaveBeenCalledWith(new ApolloError({ networkError: new Error('Could not fetch') }));
       });
     });
 
-    it('returns partial data and discards GraphQL errors when using an `errorPolicy` set to "ignore"', async() => {
+    it('returns partial data and discards GraphQL errors when using an `errorPolicy` set to "ignore"', async () => {
       const query = gql`
         {
           hello
@@ -2781,10 +2644,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const { result } = renderHook(
-        () => useQuery(query, { errorPolicy: 'ignore' }),
-        { wrapper }
-      );
+      const { result } = renderHook(() => useQuery(query, { errorPolicy: 'ignore' }), { wrapper });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBe(undefined);
@@ -2793,14 +2653,14 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.data).toEqual({ hello: null });
       expect(result.current.error).toBeUndefined();
     });
 
-    it('calls `onCompleted` with partial data but avoids calling `onError` when using an `errorPolicy` set to "ignore"', async() => {
+    it('calls `onCompleted` with partial data but avoids calling `onError` when using an `errorPolicy` set to "ignore"', async () => {
       const query = gql`
         {
           hello
@@ -2825,10 +2685,9 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       const onError = jest.fn();
       const onCompleted = jest.fn();
-      const { result } = renderHook(
-        () => useQuery(query, { onError, onCompleted, errorPolicy: 'ignore' }),
-        { wrapper }
-      );
+      const { result } = renderHook(() => useQuery(query, { onError, onCompleted, errorPolicy: 'ignore' }), {
+        wrapper,
+      });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBe(undefined);
@@ -2837,7 +2696,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.data).toEqual({ hello: null });
@@ -2854,7 +2713,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       });
     });
 
-    it('calls `onError` when returning GraphQL errors while using an `errorPolicy` set to "all"', async() => {
+    it('calls `onError` when returning GraphQL errors while using an `errorPolicy` set to "all"', async () => {
       const query = gql`
         {
           hello
@@ -2877,10 +2736,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       );
 
       const onError = jest.fn();
-      const { result } = renderHook(
-        () => useQuery(query, { onError, errorPolicy: 'all' }),
-        { wrapper }
-      );
+      const { result } = renderHook(() => useQuery(query, { onError, errorPolicy: 'all' }), { wrapper });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBe(undefined);
@@ -2889,27 +2745,23 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.data).toBeUndefined();
       expect(result.current.error).toBeInstanceOf(ApolloError);
       expect(result.current.error!.message).toBe('error');
-      expect(result.current.error!.graphQLErrors).toEqual([
-        new GraphQLError('error'),
-      ]);
+      expect(result.current.error!.graphQLErrors).toEqual([new GraphQLError('error')]);
 
       await waitFor(() => {
         expect(onError).toHaveBeenCalledTimes(1);
       });
       await waitFor(() => {
-        expect(onError).toHaveBeenCalledWith(
-          new ApolloError({ graphQLErrors: [new GraphQLError('error')] })
-        );
+        expect(onError).toHaveBeenCalledWith(new ApolloError({ graphQLErrors: [new GraphQLError('error')] }));
       });
     });
 
-    it('returns partial data when returning GraphQL errors while using an `errorPolicy` set to "all"', async() => {
+    it('returns partial data when returning GraphQL errors while using an `errorPolicy` set to "all"', async () => {
       const query = gql`
         {
           hello
@@ -2933,10 +2785,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       );
 
       const onError = jest.fn();
-      const { result } = renderHook(
-        () => useQuery(query, { onError, errorPolicy: 'all' }),
-        { wrapper }
-      );
+      const { result } = renderHook(() => useQuery(query, { onError, errorPolicy: 'all' }), { wrapper });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBe(undefined);
@@ -2945,18 +2794,16 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.data).toEqual({ hello: null });
       expect(result.current.error).toBeInstanceOf(ApolloError);
       expect(result.current.error!.message).toBe('Could not fetch "hello"');
-      expect(result.current.error!.graphQLErrors).toEqual([
-        new GraphQLError('Could not fetch "hello"'),
-      ]);
+      expect(result.current.error!.graphQLErrors).toEqual([new GraphQLError('Could not fetch "hello"')]);
     });
 
-    it('calls `onError` but not `onCompleted` when returning partial data with GraphQL errors while using an `errorPolicy` set to "all"', async() => {
+    it('calls `onError` but not `onCompleted` when returning partial data with GraphQL errors while using an `errorPolicy` set to "all"', async () => {
       const query = gql`
         {
           hello
@@ -2981,10 +2828,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       const onError = jest.fn();
       const onCompleted = jest.fn();
-      const { result } = renderHook(
-        () => useQuery(query, { onError, onCompleted, errorPolicy: 'all' }),
-        { wrapper }
-      );
+      const { result } = renderHook(() => useQuery(query, { onError, onCompleted, errorPolicy: 'all' }), { wrapper });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBe(undefined);
@@ -2993,15 +2837,13 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.data).toEqual({ hello: null });
       expect(result.current.error).toBeInstanceOf(ApolloError);
       expect(result.current.error!.message).toBe('Could not fetch "hello"');
-      expect(result.current.error!.graphQLErrors).toEqual([
-        new GraphQLError('Could not fetch "hello"'),
-      ]);
+      expect(result.current.error!.graphQLErrors).toEqual([new GraphQLError('Could not fetch "hello"')]);
 
       await waitFor(() => {
         expect(onError).toHaveBeenCalledTimes(1);
@@ -3010,7 +2852,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         expect(onError).toHaveBeenCalledWith(
           new ApolloError({
             graphQLErrors: [new GraphQLError('Could not fetch "hello"')],
-          })
+          }),
         );
       });
       await waitFor(() => {
@@ -3018,7 +2860,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       });
     });
 
-    it('calls `onError` a single time when refetching returns a successful result', async() => {
+    it('calls `onError` a single time when refetching returns a successful result', async () => {
       const query = gql`
         {
           hello
@@ -3054,7 +2896,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             onError,
             notifyOnNetworkStatusChange: true,
           }),
-        { wrapper }
+        { wrapper },
       );
 
       expect(result.current.loading).toBe(true);
@@ -3064,7 +2906,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.error).toBeInstanceOf(ApolloError);
@@ -3078,7 +2920,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(true);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.error).toBe(undefined);
 
@@ -3086,13 +2928,13 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual({ hello: 'world' });
       expect(onError).toHaveBeenCalledTimes(1);
     });
 
-    it('should persist errors on re-render if they are still valid', async() => {
+    it('should persist errors on re-render if they are still valid', async () => {
       const query = gql`
         {
           hello
@@ -3121,7 +2963,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           updates++;
           return useQuery(query);
         },
-        { wrapper }
+        { wrapper },
       );
 
       expect(result.current.loading).toBe(true);
@@ -3132,7 +2974,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.loading).toBe(false);
@@ -3153,12 +2995,12 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           () => {
             expect(updates).not.toEqual(previousUpdates);
           },
-          { interval: 1, timeout: 20 }
-        )
+          { interval: 1, timeout: 20 },
+        ),
       ).rejects.toThrow();
     });
 
-    it('should not return partial data from cache on refetch with errorPolicy: none (default) and notifyOnNetworkStatusChange: true', async() => {
+    it('should not return partial data from cache on refetch with errorPolicy: none (default) and notifyOnNetworkStatusChange: true', async () => {
       const query = gql`
         {
           dogs {
@@ -3197,9 +3039,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       const detailsMock = (breed: string) => ({
         request: { query: GET_DOG_DETAILS, variables: { breed } },
         result: {
-          errors: [
-            new GraphQLError(`Cannot query field "unexisting" on type "Dog".`),
-          ],
+          errors: [new GraphQLError(`Cannot query field "unexisting" on type "Dog".`)],
         },
       });
 
@@ -3214,10 +3054,10 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         detailsMock('airedale'),
       ];
       const Dogs: React.FC<{
-        onDogSelected: (event: React.ChangeEvent<HTMLSelectElement>) => void,
+        onDogSelected: (event: React.ChangeEvent<HTMLSelectElement>) => void;
       }> = ({ onDogSelected }) => {
         const { loading, error, data } = useQuery<{
-          dogs: { id: string, breed: string }[],
+          dogs: { id: string; breed: string }[];
         }>(query);
 
         if (loading) return <>Loading...</>;
@@ -3235,15 +3075,12 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       };
 
       const DogDetails: React.FC<{
-        breed: string,
+        breed: string;
       }> = ({ breed }) => {
-        const { loading, error, data, refetch, networkStatus } = useQuery(
-          GET_DOG_DETAILS,
-          {
-            variables: { breed },
-            notifyOnNetworkStatusChange: true,
-          }
-        );
+        const { loading, error, data, refetch, networkStatus } = useQuery(GET_DOG_DETAILS, {
+          variables: { breed },
+          notifyOnNetworkStatusChange: true,
+        });
         if (networkStatus === 4) return <p>Refetching!</p>;
         if (loading) return <p>Loading!</p>;
         return (
@@ -3279,29 +3116,22 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       // the user selects a different dog from the dropdown which
       // fires the GET_DOG_DETAILS query, retuning an error
       const user = userEvent.setup();
-      await user.selectOptions(
-        screen.getByRole('combobox'),
-        screen.getByRole('option', { name: 'airedale' })
-      );
+      await user.selectOptions(screen.getByRole('combobox'), screen.getByRole('option', { name: 'airedale' }));
 
       // With the default errorPolicy of 'none', the error is rendered
       // and partial data is not
-      await screen.findByText(
-        'Error!: ApolloError: Cannot query field "unexisting" on type "Dog".'
-      );
+      await screen.findByText('Error!: ApolloError: Cannot query field "unexisting" on type "Dog".');
       expect(screen.queryByText(/partial data rendered/i)).toBeNull();
 
       // When we call refetch...
       await user.click(screen.getByRole('button', { name: /Refetch!/i }));
 
       // The error is still present, and partial data still not rendered
-      await screen.findByText(
-        'Error!: ApolloError: Cannot query field "unexisting" on type "Dog".'
-      );
+      await screen.findByText('Error!: ApolloError: Cannot query field "unexisting" on type "Dog".');
       expect(screen.queryByText(/partial data rendered/i)).toBeNull();
     });
 
-    it('should return partial data from cache on refetch', async() => {
+    it('should return partial data from cache on refetch', async () => {
       const GET_DOG_DETAILS = gql`
         query dog($breed: String!) {
           dog(breed: $breed) {
@@ -3329,7 +3159,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       ];
 
       const DogDetails: React.FC<{
-        breed?: string,
+        breed?: string;
       }> = ({ breed = 'airedale' }) => {
         const { data, refetch, networkStatus } = useQuery(GET_DOG_DETAILS, {
           variables: { breed },
@@ -3362,14 +3192,14 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(screen.getByText('Loading!')).toBeTruthy();
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       await waitFor(
         () => {
           expect(screen.getByText('Data rendered')).toBeTruthy();
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       // When we call refetch...
@@ -3380,7 +3210,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       expect(screen.getByText('Data rendered')).toBeTruthy();
     });
 
-    it('should persist errors on re-render with inline onError/onCompleted callbacks', async() => {
+    it('should persist errors on re-render with inline onError/onCompleted callbacks', async () => {
       const query = gql`
         {
           hello
@@ -3410,12 +3240,11 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           updates++;
           return useQuery(query, {
-            onError: () => {
-            }, onCompleted: () => {
-            },
+            onError: () => {},
+            onCompleted: () => {},
           });
         },
-        { wrapper }
+        { wrapper },
       );
 
       expect(result.current.loading).toBe(true);
@@ -3426,7 +3255,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.loading).toBe(false);
@@ -3448,12 +3277,12 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           () => {
             expect(updates).not.toEqual(previousUpdates);
           },
-          { interval: 1, timeout: 20 }
-        )
+          { interval: 1, timeout: 20 },
+        ),
       ).rejects.toThrow();
     });
 
-    it('should not persist errors when variables change', async() => {
+    it('should not persist errors when variables change', async () => {
       const query = gql`
         query hello($id: ID) {
           hello(id: $id)
@@ -3490,15 +3319,10 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         },
       ];
 
-      const { result, rerender } = renderHook(
-        ({ id }) => useQuery(query, { variables: { id } }),
-        {
-          wrapper: ({ children }) => (
-            <MockedProvider mocks={mocks}>{children}</MockedProvider>
-          ),
-          initialProps: { id: 1 },
-        }
-      );
+      const { result, rerender } = renderHook(({ id }) => useQuery(query, { variables: { id } }), {
+        wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+        initialProps: { id: 1 },
+      });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBe(undefined);
@@ -3508,7 +3332,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.data).toBe(undefined);
@@ -3524,7 +3348,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual({ hello: 'world 2' });
       expect(result.current.error).toBe(undefined);
@@ -3538,13 +3362,13 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual({ hello: 'world 1' });
       expect(result.current.error).toBe(undefined);
     });
 
-    it('should render multiple errors when refetching', async() => {
+    it('should render multiple errors when refetching', async () => {
       const query = gql`
         {
           hello
@@ -3573,9 +3397,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const ProfiledHook = profileHook(() =>
-        useQuery(query, { notifyOnNetworkStatusChange: true })
-      );
+      const ProfiledHook = profileHook(() => useQuery(query, { notifyOnNetworkStatusChange: true }));
       render(<ProfiledHook />, { wrapper });
 
       {
@@ -3615,7 +3437,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       expect(catchFn.mock.calls[0][0].message).toBe('error 2');
     });
 
-    it('should render the same error on refetch', async() => {
+    it('should render the same error on refetch', async () => {
       const query = gql`
         {
           hello
@@ -3644,10 +3466,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const { result } = renderHook(
-        () => useQuery(query, { notifyOnNetworkStatusChange: true }),
-        { wrapper }
-      );
+      const { result } = renderHook(() => useQuery(query, { notifyOnNetworkStatusChange: true }), { wrapper });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBe(undefined);
@@ -3657,7 +3476,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.data).toBe(undefined);
@@ -3665,7 +3484,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       expect(result.current.error!.message).toBe('same error');
 
       const catchFn = jest.fn();
-      await act(async() => {
+      await act(async () => {
         await result.current.refetch().catch(catchFn);
       });
 
@@ -3680,7 +3499,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       expect(catchFn.mock.calls[0][0].message).toBe('same error');
     });
 
-    it('should render data and errors with refetch', async() => {
+    it('should render data and errors with refetch', async () => {
       const query = gql`
         {
           hello
@@ -3716,9 +3535,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const ProfiledHook = profileHook(() =>
-        useQuery(query, { notifyOnNetworkStatusChange: true })
-      );
+      const ProfiledHook = profileHook(() => useQuery(query, { notifyOnNetworkStatusChange: true }));
       render(<ProfiledHook />, { wrapper });
 
       {
@@ -3772,7 +3589,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       expect(catchFn.mock.calls[0][0].message).toBe('same error');
     });
 
-    it('should call onCompleted when variables change', async() => {
+    it('should call onCompleted when variables change', async () => {
       const query = gql`
         query people($first: Int) {
           allPeople(first: $first) {
@@ -3798,17 +3615,12 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       const onCompleted = jest.fn();
 
-      const { result, rerender } = renderHook(
-        ({ variables }) => useQuery(query, { variables, onCompleted }),
-        {
-          wrapper: ({ children }) => (
-            <MockedProvider mocks={mocks}>{children}</MockedProvider>
-          ),
-          initialProps: {
-            variables: { first: 1 },
-          },
-        }
-      );
+      const { result, rerender } = renderHook(({ variables }) => useQuery(query, { variables, onCompleted }), {
+        wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+        initialProps: {
+          variables: { first: 1 },
+        },
+      });
 
       expect(result.current.loading).toBe(true);
 
@@ -3816,7 +3628,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual(data1);
       expect(onCompleted).toHaveBeenLastCalledWith(data1);
@@ -3828,7 +3640,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual(data2);
       expect(onCompleted).toHaveBeenLastCalledWith(data2);
@@ -3840,7 +3652,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(onCompleted).toHaveBeenLastCalledWith(data1);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(onCompleted).toHaveBeenCalledTimes(3);
@@ -3887,18 +3699,13 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       },
     ];
 
-    it('should fetchMore with updateQuery', async() => {
+    it('should fetchMore with updateQuery', async () => {
       // TODO: Calling fetchMore with an updateQuery callback is deprecated
       using _warnSpy = spyOnConsole('warn');
 
-      const wrapper = ({ children }: any) => (
-        <MockedProvider mocks={mocks}>{children}</MockedProvider>
-      );
+      const wrapper = ({ children }: any) => <MockedProvider mocks={mocks}>{children}</MockedProvider>;
 
-      const { result } = renderHook(
-        () => useQuery(query, { variables: { limit: 2 } }),
-        { wrapper }
-      );
+      const { result } = renderHook(() => useQuery(query, { variables: { limit: 2 } }), { wrapper });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.networkStatus).toBe(NetworkStatus.loading);
@@ -3917,26 +3724,24 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             updateQuery: (prev, { fetchMoreResult }) => ({
               letters: prev.letters.concat(fetchMoreResult.letters),
             }),
-          })
+          }),
       );
 
       await waitFor(
         () => {
           expect(result.current.data).toEqual({ letters: ab.concat(cd) });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.loading).toBe(false);
       expect(result.current.networkStatus).toBe(NetworkStatus.ready);
     });
 
-    it('should fetchMore with updateQuery and notifyOnNetworkStatusChange', async() => {
+    it('should fetchMore with updateQuery and notifyOnNetworkStatusChange', async () => {
       // TODO: Calling fetchMore with an updateQuery callback is deprecated
       using _warnSpy = spyOnConsole('warn');
 
-      const wrapper = ({ children }: any) => (
-        <MockedProvider mocks={mocks}>{children}</MockedProvider>
-      );
+      const wrapper = ({ children }: any) => <MockedProvider mocks={mocks}>{children}</MockedProvider>;
 
       const { result } = renderHook(
         () =>
@@ -3944,7 +3749,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             variables: { limit: 2 },
             notifyOnNetworkStatusChange: true,
           }),
-        { wrapper }
+        { wrapper },
       );
 
       expect(result.current.loading).toBe(true);
@@ -3955,7 +3760,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.networkStatus).toBe(NetworkStatus.ready);
@@ -3968,7 +3773,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             updateQuery: (prev, { fetchMoreResult }) => ({
               letters: prev.letters.concat(fetchMoreResult.letters),
             }),
-          })
+          }),
       );
 
       expect(result.current.loading).toBe(true);
@@ -3979,13 +3784,13 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.networkStatus).toBe(NetworkStatus.ready);
       expect(result.current.data).toEqual({ letters: ab.concat(cd) });
     });
 
-    it('fetchMore with concatPagination', async() => {
+    it('fetchMore with concatPagination', async () => {
       const cache = new Hermes({
         typePolicies: {
           Query: {
@@ -4002,10 +3807,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const { result } = renderHook(
-        () => useQuery(query, { variables: { limit: 2 } }),
-        { wrapper }
-      );
+      const { result } = renderHook(() => useQuery(query, { variables: { limit: 2 } }), { wrapper });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.networkStatus).toBe(NetworkStatus.loading);
@@ -4015,7 +3817,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.networkStatus).toBe(NetworkStatus.ready);
       expect(result.current.data).toEqual({ letters: ab });
@@ -4026,12 +3828,12 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.data).toEqual({ letters: ab.concat(cd) });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.networkStatus).toBe(NetworkStatus.ready);
     });
 
-    it('fetchMore with concatPagination and notifyOnNetworkStatusChange', async() => {
+    it('fetchMore with concatPagination and notifyOnNetworkStatusChange', async () => {
       const cache = new Hermes({
         typePolicies: {
           Query: {
@@ -4054,7 +3856,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             variables: { limit: 2 },
             notifyOnNetworkStatusChange: true,
           }),
-        { wrapper }
+        { wrapper },
       );
 
       expect(result.current.loading).toBe(true);
@@ -4065,7 +3867,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.networkStatus).toBe(NetworkStatus.ready);
       expect(result.current.data).toEqual({ letters: ab });
@@ -4079,13 +3881,13 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.networkStatus).toBe(NetworkStatus.ready);
       expect(result.current.data).toEqual({ letters: ab.concat(cd) });
     });
 
-    it('regression test for issue #8600', async() => {
+    it('regression test for issue #8600', async () => {
       const cache = new Hermes({
         typePolicies: {
           Country: {
@@ -4178,25 +3980,25 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual({ countries });
     });
   });
 
   // https://github.com/apollographql/apollo-client/issues/11400
-  it('does not return partial data unexpectedly when one query errors, then another succeeds with overlapping data', async() => {
+  it('does not return partial data unexpectedly when one query errors, then another succeeds with overlapping data', async () => {
     interface Query1 {
       person: {
-        __typename: 'Person',
-        id: number,
-        firstName: string,
-        alwaysFails: boolean,
+        __typename: 'Person';
+        id: number;
+        firstName: string;
+        alwaysFails: boolean;
       } | null;
     }
 
     interface Query2 {
-      person: { __typename: 'Person', id: number, lastName: string } | null;
+      person: { __typename: 'Person'; id: number; lastName: string } | null;
     }
 
     interface Variables {
@@ -4364,9 +4166,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       // ensure we aren't setting a value on the observable query that contains
       // the partial result
-      expect(
-        snapshot.useQueryResult?.observable.getCurrentResult(false)
-      ).toEqual({
+      expect(snapshot.useQueryResult?.observable.getCurrentResult(false)).toEqual({
         data: undefined,
         error: new ApolloError({
           graphQLErrors: [new GraphQLError('Intentional error')],
@@ -4418,9 +4218,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       // ensure we aren't setting a value on the observable query that contains
       // the partial result
-      expect(
-        snapshot.useQueryResult?.observable.getCurrentResult(false)
-      ).toEqual({
+      expect(snapshot.useQueryResult?.observable.getCurrentResult(false)).toEqual({
         data: undefined,
         error: new ApolloError({
           graphQLErrors: [new GraphQLError('Intentional error')],
@@ -4442,21 +4240,21 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
     await expect(Profiler).not.toRerender();
   });
 
-  it('rerenders errored query for full cache write', async() => {
+  it('rerenders errored query for full cache write', async () => {
     interface Query1 {
       person: {
-        __typename: 'Person',
-        id: number,
-        firstName: string,
+        __typename: 'Person';
+        id: number;
+        firstName: string;
       } | null;
     }
 
     interface Query2 {
       person: {
-        __typename: 'Person',
-        id: number,
-        firstName: string,
-        lastName: string,
+        __typename: 'Person';
+        id: number;
+        firstName: string;
+        lastName: string;
       } | null;
     }
 
@@ -4666,21 +4464,21 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
     await expect(Profiler).not.toRerender();
   });
 
-  it('does not rerender or refetch queries with errors for partial cache writes with returnPartialData: true', async() => {
+  it('does not rerender or refetch queries with errors for partial cache writes with returnPartialData: true', async () => {
     interface Query1 {
       person: {
-        __typename: 'Person',
-        id: number,
-        firstName: string,
-        alwaysFails: boolean,
+        __typename: 'Person';
+        id: number;
+        firstName: string;
+        alwaysFails: boolean;
       } | null;
     }
 
     interface Query2 {
       person: {
-        __typename: 'Person',
-        id: number,
-        lastName: string,
+        __typename: 'Person';
+        id: number;
+        lastName: string;
       } | null;
     }
 
@@ -4856,7 +4654,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
     await expect(Profiler).not.toRerender();
   });
 
-  it('delivers the full network response when a merge function returns an incomplete result', async() => {
+  it('delivers the full network response when a merge function returns an incomplete result', async () => {
     const query = gql`
       query {
         author {
@@ -4961,7 +4759,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
     await expect(Profiler).not.toRerender();
   });
 
-  it('triggers a network request and rerenders with the new result when a mutation causes a partial cache update due to an incomplete merge function result', async() => {
+  it('triggers a network request and rerenders with the new result when a mutation causes a partial cache update due to an incomplete merge function result', async () => {
     const query = gql`
       query {
         author {
@@ -5170,7 +4968,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
   });
 
   describe('Refetching', () => {
-    it('refetching with different variables', async() => {
+    it('refetching with different variables', async () => {
       const query = gql`
         query ($id: Int) {
           hello(id: $id)
@@ -5200,7 +4998,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         useQuery(query, {
           variables: { id: 1 },
           notifyOnNetworkStatusChange: true,
-        })
+        }),
       );
 
       render(<ProfiledHook />, { wrapper });
@@ -5227,7 +5025,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       }
     });
 
-    it('refetching after an error', async() => {
+    it('refetching after an error', async () => {
       const query = gql`
         {
           hello
@@ -5255,7 +5053,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       const ProfiledHook = profileHook(() =>
         useQuery(query, {
           notifyOnNetworkStatusChange: true,
-        })
+        }),
       );
 
       render(<ProfiledHook />, {
@@ -5341,7 +5139,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         },
       ];
 
-      it('should support explicit "overwrite"', async() => {
+      it('should support explicit "overwrite"', async () => {
         const mergeParams: [any, any][] = [];
         const cache = new Hermes({
           typePolicies: {
@@ -5373,7 +5171,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
               // This is the key line in this test.
               refetchWritePolicy: 'overwrite',
             }),
-          { wrapper }
+          { wrapper },
         );
 
         expect(result.current.loading).toBe(true);
@@ -5385,7 +5183,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           () => {
             expect(result.current.loading).toBe(false);
           },
-          { interval: 1 }
+          { interval: 1 },
         );
         expect(result.current.error).toBeUndefined();
         expect(result.current.data).toEqual({ primes: [2, 3, 5, 7, 11] });
@@ -5398,7 +5196,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           () => {
             expect(result.current.loading).toBe(true);
           },
-          { interval: 1 }
+          { interval: 1 },
         );
         expect(result.current.error).toBe(undefined);
         expect(result.current.data).toEqual({
@@ -5414,7 +5212,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           () => {
             expect(result.current.loading).toBe(false);
           },
-          { interval: 1 }
+          { interval: 1 },
         );
 
         expect(result.current.error).toBe(undefined);
@@ -5434,7 +5232,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         });
       });
 
-      it('should support explicit "merge"', async() => {
+      it('should support explicit "merge"', async () => {
         const mergeParams: [any, any][] = [];
         const cache = new Hermes({
           typePolicies: {
@@ -5466,7 +5264,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
               // This is the key line in this test.
               refetchWritePolicy: 'merge',
             }),
-          { wrapper }
+          { wrapper },
         );
 
         expect(result.current.loading).toBe(true);
@@ -5478,7 +5276,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           () => {
             expect(result.current.loading).toBe(false);
           },
-          { interval: 1 }
+          { interval: 1 },
         );
         expect(result.current.error).toBeUndefined();
         expect(result.current.data).toEqual({ primes: [2, 3, 5, 7, 11] });
@@ -5491,7 +5289,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           () => {
             expect(result.current.loading).toBe(true);
           },
-          { interval: 1 }
+          { interval: 1 },
         );
         expect(result.current.error).toBe(undefined);
         expect(result.current.data).toEqual({
@@ -5505,7 +5303,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           () => {
             expect(result.current.loading).toBe(false);
           },
-          { interval: 1 }
+          { interval: 1 },
         );
 
         expect(result.current.error).toBe(undefined);
@@ -5538,7 +5336,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         });
       });
 
-      it('should assume default refetchWritePolicy value is "overwrite"', async() => {
+      it('should assume default refetchWritePolicy value is "overwrite"', async () => {
         const mergeParams: [any, any][] = [];
         const cache = new Hermes({
           typePolicies: {
@@ -5566,7 +5364,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             variables: { min: 0, max: 12 },
             notifyOnNetworkStatusChange: true,
             // Intentionally not passing refetchWritePolicy.
-          })
+          }),
         );
 
         render(<ProfiledHook />, { wrapper });
@@ -5587,9 +5385,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         }
 
         const thenFn = jest.fn();
-        ProfiledHook.getCurrentSnapshot()
-          .refetch({ min: 12, max: 30 })
-          .then(thenFn);
+        ProfiledHook.getCurrentSnapshot().refetch({ min: 12, max: 30 }).then(thenFn);
 
         {
           const result = await ProfiledHook.takeSnapshot();
@@ -5612,7 +5408,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           expect(mergeParams.shift()).toEqual(
             // Without refetchWritePolicy: "overwrite", this array will be
             // all 10 primes (2 through 29) together.
-            [undefined, [13, 17, 19, 23, 29]]
+            [undefined, [13, 17, 19, 23, 29]],
           );
 
           expect(thenFn).toHaveBeenCalledTimes(1);
@@ -5625,7 +5421,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       });
     });
 
-    it('keeps cache consistency when a call to refetchQueries is interrupted with another query caused by changing variables and the second query returns before the first one', async() => {
+    it('keeps cache consistency when a call to refetchQueries is interrupted with another query caused by changing variables and the second query returns before the first one', async () => {
       const CAR_QUERY_BY_ID = gql`
         query Car($id: Int) {
           car(id: $id) {
@@ -5665,7 +5461,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       const link = new ApolloLink(
         operation =>
-          new Observable((observer) => {
+          new Observable(observer => {
             if (operation.variables.id === 1) {
               // Queries for this ID return after a delay
               setTimeout(() => {
@@ -5681,7 +5477,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             } else {
               observer.error(new Error('Unexpected query'));
             }
-          })
+          }),
       );
 
       const hookResponse = jest.fn().mockReturnValue(null);
@@ -5696,10 +5492,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         const hasRefetchedRef = useRef(false);
 
         useEffect(() => {
-          if (
-            result.networkStatus === NetworkStatus.ready &&
-            !hasRefetchedRef.current
-          ) {
+          if (result.networkStatus === NetworkStatus.ready && !hasRefetchedRef.current) {
             client.reFetchObservableQueries();
             hasRefetchedRef.current = true;
           }
@@ -5708,14 +5501,9 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         return children(result);
       }
 
-      const { rerender } = render(
-        <Component id={1}>{hookResponse}</Component>,
-        {
-          wrapper: ({ children }) => (
-            <MockedProvider link={link}>{children}</MockedProvider>
-          ),
-        }
-      );
+      const { rerender } = render(<Component id={1}>{hookResponse}</Component>, {
+        wrapper: ({ children }) => <MockedProvider link={link}>{children}</MockedProvider>,
+      });
 
       await waitFor(() => {
         // Resolves as soon as reFetchObservableQueries is
@@ -5759,7 +5547,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
   });
 
   describe('Callbacks', () => {
-    it('onCompleted is called once with cached data', async() => {
+    it('onCompleted is called once with cached data', async () => {
       const query = gql`
         {
           hello
@@ -5785,37 +5573,37 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             fetchPolicy: 'cache-only',
             onCompleted,
           }),
-        { wrapper }
+        { wrapper },
       );
 
       await waitFor(
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           expect(result.current.data).toEqual({ hello: 'world' });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           expect(onCompleted).toHaveBeenCalledTimes(1);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           expect(onCompleted).toHaveBeenCalledWith({ hello: 'world' });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(onCompleted).toHaveBeenCalledTimes(1);
     });
 
-    it('onCompleted is called once despite state changes', async() => {
+    it('onCompleted is called once despite state changes', async () => {
       const query = gql`
         {
           hello
@@ -5841,7 +5629,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           useQuery(query, {
             onCompleted,
           }),
-        { wrapper }
+        { wrapper },
       );
 
       expect(result.current.loading).toBe(true);
@@ -5851,7 +5639,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.data).toEqual({ hello: 'world' });
@@ -5866,7 +5654,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       expect(onCompleted).toHaveBeenCalledTimes(1);
     });
 
-    it('should not call onCompleted if skip is true', async() => {
+    it('should not call onCompleted if skip is true', async () => {
       const query = gql`
         {
           hello
@@ -5893,7 +5681,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             skip: true,
             onCompleted,
           }),
-        { wrapper }
+        { wrapper },
       );
 
       expect(result.current.loading).toBe(false);
@@ -5906,14 +5694,14 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           () => {
             expect(onCompleted).toHaveBeenCalledTimes(1);
           },
-          { interval: 1, timeout: 20 }
-        )
+          { interval: 1, timeout: 20 },
+        ),
       ).rejects.toThrow();
 
       expect(onCompleted).toHaveBeenCalledTimes(0);
     });
 
-    it('should not make extra network requests when `onCompleted` is defined with a `network-only` fetch policy', async() => {
+    it('should not make extra network requests when `onCompleted` is defined with a `network-only` fetch policy', async () => {
       const query = gql`
         {
           hello
@@ -5945,7 +5733,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
           return pendingResult;
         },
-        { wrapper }
+        { wrapper },
       );
 
       expect(result.current.loading).toBe(true);
@@ -5954,7 +5742,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual({ hello: 'world' });
       const previousUpdates = updates;
@@ -5963,13 +5751,13 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           () => {
             expect(updates).not.toEqual(previousUpdates);
           },
-          { interval: 1, timeout: 20 }
-        )
+          { interval: 1, timeout: 20 },
+        ),
       ).rejects.toThrow();
       expect(onCompleted).toHaveBeenCalledTimes(1);
     });
 
-    it('onCompleted should not fire for polling queries without notifyOnNetworkStatusChange: true', async() => {
+    it('onCompleted should not fire for polling queries without notifyOnNetworkStatusChange: true', async () => {
       const query = gql`
         {
           hello
@@ -6004,7 +5792,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
               {children}
             </MockedProvider>
           ),
-        }
+        },
       );
 
       expect(result.current.loading).toBe(true);
@@ -6013,7 +5801,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.data).toEqual({ hello: 'world 1' });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.loading).toBe(false);
       expect(onCompleted).toHaveBeenCalledTimes(1);
@@ -6022,7 +5810,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.data).toEqual({ hello: 'world 2' });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.loading).toBe(false);
       expect(onCompleted).toHaveBeenCalledTimes(1);
@@ -6031,13 +5819,13 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.data).toEqual({ hello: 'world 3' });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.loading).toBe(false);
       expect(onCompleted).toHaveBeenCalledTimes(1);
     });
 
-    it('onCompleted should fire when polling with notifyOnNetworkStatusChange: true', async() => {
+    it('onCompleted should fire when polling with notifyOnNetworkStatusChange: true', async () => {
       const query = gql`
         {
           hello
@@ -6068,7 +5856,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           onCompleted,
           notifyOnNetworkStatusChange: true,
           pollInterval: 110,
-        })
+        }),
       );
       render(<ProfiledHook />, {
         wrapper: ({ children }) => (
@@ -6116,7 +5904,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
     });
 
     // This test was added for issue https://github.com/apollographql/apollo-client/issues/9794
-    it('onCompleted can set state without causing react errors', async() => {
+    it('onCompleted can set state without causing react errors', async () => {
       using consoleSpy = spyOnConsole('error');
       const query = gql`
         {
@@ -6131,7 +5919,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       });
 
       const ChildComponent: React.FC<{
-        setOnCompletedCalled: React.Dispatch<React.SetStateAction<boolean>>,
+        setOnCompletedCalled: React.Dispatch<React.SetStateAction<boolean>>;
       }> = ({ setOnCompletedCalled }) => {
         useQuery(query, {
           fetchPolicy: 'cache-only',
@@ -6160,7 +5948,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       expect(consoleSpy.error).not.toHaveBeenCalled();
     });
 
-    it('onCompleted should not execute on cache writes after initial query execution', async() => {
+    it('onCompleted should not execute on cache writes after initial query execution', async () => {
       const query = gql`
         {
           hello
@@ -6210,20 +5998,16 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       render(<ParentComponent />);
 
       await screen.findByText('Data: foo');
-      await userEvent.click(
-        screen.getByRole('button', { name: /refetch queries/i })
-      );
+      await userEvent.click(screen.getByRole('button', { name: /refetch queries/i }));
       expect(onCompleted).toHaveBeenCalledTimes(1);
       await screen.findByText('Data: bar');
-      await userEvent.click(
-        screen.getByRole('button', { name: /update word/i })
-      );
+      await userEvent.click(screen.getByRole('button', { name: /update word/i }));
       expect(onCompleted).toHaveBeenCalledTimes(1);
       await screen.findByText('Data: baz');
       expect(onCompleted).toHaveBeenCalledTimes(1);
     });
 
-    it('onCompleted should execute on cache writes after initial query execution with notifyOnNetworkStatusChange: true', async() => {
+    it('onCompleted should execute on cache writes after initial query execution with notifyOnNetworkStatusChange: true', async () => {
       const query = gql`
         {
           hello
@@ -6277,15 +6061,11 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       await screen.findByText('Data: foo');
       expect(onCompleted).toHaveBeenCalledTimes(1);
-      await userEvent.click(
-        screen.getByRole('button', { name: /refetch queries/i })
-      );
+      await userEvent.click(screen.getByRole('button', { name: /refetch queries/i }));
       // onCompleted increments when refetch occurs since we're hitting the network...
       expect(onCompleted).toHaveBeenCalledTimes(2);
       await screen.findByText('Data: bar');
-      await userEvent.click(
-        screen.getByRole('button', { name: /update word/i })
-      );
+      await userEvent.click(screen.getByRole('button', { name: /update word/i }));
       // but not on direct cache write, since there's no network request to complete
       expect(onCompleted).toHaveBeenCalledTimes(2);
       await screen.findByText('Data: baz');
@@ -6294,7 +6074,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
   });
 
   describe('Optimistic data', () => {
-    it('should display rolled back optimistic data when an error occurs', async() => {
+    it('should display rolled back optimistic data when an error occurs', async () => {
       const query = gql`
         query AllCars {
           cars {
@@ -6375,12 +6155,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
                     `,
                   });
 
-                  if (
-                    existing.some(
-                      (ref: Reference) =>
-                        readField('id', ref) === data!.addCar.id
-                    )
-                  ) {
+                  if (existing.some((ref: Reference) => readField('id', ref) === data!.addCar.id)) {
                     return existing;
                   }
 
@@ -6450,7 +6225,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
   });
 
   describe('Partial refetch', () => {
-    it('should attempt a refetch when data is missing and partialRefetch is true', async() => {
+    it('should attempt a refetch when data is missing and partialRefetch is true', async () => {
       using consoleSpy = spyOnConsole('error');
       const query = gql`
         {
@@ -6468,7 +6243,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           request: { query },
           result: { data: { hello: 'world' } },
           delay: 20,
-        }
+        },
       );
 
       const client = new ApolloClient({
@@ -6483,10 +6258,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             notifyOnNetworkStatusChange: true,
           }),
         {
-          wrapper: ({ children }) => (
-            <ApolloProvider client={client}>{children}</ApolloProvider>
-          ),
-        }
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        },
       );
 
       expect(result.current.loading).toBe(true);
@@ -6498,7 +6271,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.networkStatus).toBe(NetworkStatus.refetch);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBe(undefined);
@@ -6511,7 +6284,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.networkStatus).toBe(NetworkStatus.ready);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.loading).toBe(false);
@@ -6519,7 +6292,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       expect(result.current.error).toBe(undefined);
     });
 
-    it('should attempt a refetch when data is missing and partialRefetch is true 2', async() => {
+    it('should attempt a refetch when data is missing and partialRefetch is true 2', async () => {
       const query = gql`
         query people {
           allPeople(first: 1) {
@@ -6537,7 +6310,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       using consoleSpy = spyOnConsole('error');
       const link = mockSingleLink(
         { request: { query }, result: { data: {} }, delay: 20 },
-        { request: { query }, result: { data }, delay: 20 }
+        { request: { query }, result: { data }, delay: 20 },
       );
 
       const client = new ApolloClient({
@@ -6552,10 +6325,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             notifyOnNetworkStatusChange: true,
           }),
         {
-          wrapper: ({ children }) => (
-            <ApolloProvider client={client}>{children}</ApolloProvider>
-          ),
-        }
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        },
       );
 
       expect(result.current.loading).toBe(true);
@@ -6567,7 +6338,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.networkStatus).toBe(NetworkStatus.refetch);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBe(undefined);
@@ -6580,14 +6351,14 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.networkStatus).toBe(NetworkStatus.ready);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.loading).toBe(false);
       expect(result.current.data).toEqual(data);
       expect(result.current.error).toBe(undefined);
     });
 
-    it('should attempt a refetch when data is missing, partialRefetch is true and addTypename is false for the cache', async() => {
+    it('should attempt a refetch when data is missing, partialRefetch is true and addTypename is false for the cache', async () => {
       using _disabledActWarnings = disableActWarnings();
       using consoleSpy = spyOnConsole('error');
       const query = gql`
@@ -6606,7 +6377,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           request: { query },
           result: { data: { hello: 'world' } },
           delay: 20,
-        }
+        },
       );
 
       const client = new ApolloClient({
@@ -6615,15 +6386,13 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         cache: new Hermes({ addTypename: false }),
       });
 
-      const wrapper = ({ children }: any) => (
-        <ApolloProvider client={client}>{children}</ApolloProvider>
-      );
+      const wrapper = ({ children }: any) => <ApolloProvider client={client}>{children}</ApolloProvider>;
 
       const ProfiledHook = profileHook(() =>
         useQuery(query, {
           partialRefetch: true,
           notifyOnNetworkStatusChange: true,
-        })
+        }),
       );
 
       render(<ProfiledHook />, { wrapper });
@@ -6662,7 +6431,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
   });
 
   describe('Client Resolvers', () => {
-    it('should receive up to date @client(always: true) fields on entity update', async() => {
+    it('should receive up to date @client(always: true) fields on entity update', async () => {
       const query = gql`
         query GetClientData($id: ID) {
           clientEntity(id: $id) @client(always: true) {
@@ -6726,14 +6495,9 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         },
       });
 
-      const wrapper = ({ children }: any) => (
-        <ApolloProvider client={client}>{children}</ApolloProvider>
-      );
+      const wrapper = ({ children }: any) => <ApolloProvider client={client}>{children}</ApolloProvider>;
 
-      const { result } = renderHook(
-        () => useQuery(query, { variables: { id: entityId } }),
-        { wrapper }
-      );
+      const { result } = renderHook(() => useQuery(query, { variables: { id: entityId } }), { wrapper });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBe(undefined);
@@ -6741,7 +6505,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.data).toEqual({
@@ -6774,7 +6538,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             },
           });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
     });
   });
@@ -6799,7 +6563,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       },
     ];
 
-    it('should skip running a query when `skip` is `true`', async() => {
+    it('should skip running a query when `skip` is `true`', async () => {
       const query = gql`
         {
           hello
@@ -6819,10 +6583,10 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const { result, rerender } = renderHook(
-        ({ skip }) => useQuery(query, { skip }),
-        { wrapper, initialProps: { skip: true } }
-      );
+      const { result, rerender } = renderHook(({ skip }) => useQuery(query, { skip }), {
+        wrapper,
+        initialProps: { skip: true },
+      });
 
       expect(result.current.loading).toBe(false);
       expect(result.current.data).toBe(undefined);
@@ -6835,12 +6599,12 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBeFalsy();
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual({ hello: 'world' });
     });
 
-    it('should not make network requests when `skip` is `true`', async() => {
+    it('should not make network requests when `skip` is `true`', async () => {
       const linkFn = jest.fn();
       const link = new ApolloLink((o, f) => {
         linkFn();
@@ -6851,14 +6615,12 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         cache: new Hermes(),
       });
 
-      const wrapper = ({ children }: any) => (
-        <ApolloProvider client={client}>{children}</ApolloProvider>
-      );
+      const wrapper = ({ children }: any) => <ApolloProvider client={client}>{children}</ApolloProvider>;
 
-      const { result, rerender } = renderHook(
-        ({ skip, variables }) => useQuery(query, { skip, variables }),
-        { wrapper, initialProps: { skip: false, variables: undefined as any } }
-      );
+      const { result, rerender } = renderHook(({ skip, variables }) => useQuery(query, { skip, variables }), {
+        wrapper,
+        initialProps: { skip: false, variables: undefined as any },
+      });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBe(undefined);
@@ -6867,7 +6629,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual({ hello: 'world' });
 
@@ -6877,15 +6639,13 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       expect(linkFn).toHaveBeenCalledTimes(1);
     });
 
-    it('should tear down the query if `skip` is `true`', async() => {
+    it('should tear down the query if `skip` is `true`', async () => {
       const client = new ApolloClient({
         link: new ApolloLink(() => Observable.of({ data: { hello: 'world' } })),
         cache: new Hermes(),
       });
 
-      const wrapper = ({ children }: any) => (
-        <ApolloProvider client={client}>{children}</ApolloProvider>
-      );
+      const wrapper = ({ children }: any) => <ApolloProvider client={client}>{children}</ApolloProvider>;
 
       const { unmount } = renderHook(() => useQuery(query, { skip: true }), {
         wrapper,
@@ -6897,7 +6657,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       expect(client.getObservableQueries('all').size).toBe(0);
     });
 
-    it('should treat fetchPolicy standby like skip', async() => {
+    it('should treat fetchPolicy standby like skip', async () => {
       const query = gql`
         {
           hello
@@ -6909,15 +6669,10 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           result: { data: { hello: 'world' } },
         },
       ];
-      const { result, rerender } = renderHook(
-        ({ fetchPolicy }) => useQuery(query, { fetchPolicy }),
-        {
-          wrapper: ({ children }) => (
-            <MockedProvider mocks={mocks}>{children}</MockedProvider>
-          ),
-          initialProps: { fetchPolicy: 'standby' as any },
-        }
-      );
+      const { result, rerender } = renderHook(({ fetchPolicy }) => useQuery(query, { fetchPolicy }), {
+        wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+        initialProps: { fetchPolicy: 'standby' as any },
+      });
 
       expect(result.current.loading).toBe(false);
       expect(result.current.data).toBe(undefined);
@@ -6927,8 +6682,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           () => {
             expect(result.current.loading).toBe(true);
           },
-          { interval: 1, timeout: 20 }
-        )
+          { interval: 1, timeout: 20 },
+        ),
       ).rejects.toThrow();
 
       rerender({ fetchPolicy: 'cache-first' });
@@ -6938,13 +6693,13 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBeFalsy();
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual({ hello: 'world' });
     });
 
     // Amusingly, #8270 thinks this is a bug, but #9101 thinks this is not.
-    it('should refetch when skip is true', async() => {
+    it('should refetch when skip is true', async () => {
       const query = gql`
         {
           hello
@@ -6953,7 +6708,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       const link = new ApolloLink(() =>
         Observable.of({
           data: { hello: 'world' },
-        })
+        }),
       );
 
       const requestSpy = jest.spyOn(link, 'request');
@@ -6963,13 +6718,11 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       });
 
       const { result } = renderHook(() => useQuery(query, { skip: true }), {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
       });
 
       let promise;
-      await waitFor(async() => {
+      await waitFor(async () => {
         promise = result.current.refetch();
       });
 
@@ -6978,7 +6731,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.data).toBe(undefined);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.loading).toBe(false);
@@ -6986,7 +6739,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.data).toBe(undefined);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(requestSpy).toHaveBeenCalledTimes(1);
       requestSpy.mockRestore();
@@ -6997,7 +6750,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       });
     });
 
-    it('should set correct initialFetchPolicy even if skip:true', async() => {
+    it('should set correct initialFetchPolicy even if skip:true', async () => {
       const query = gql`
         {
           hello
@@ -7007,7 +6760,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       const link = new ApolloLink(() =>
         Observable.of({
           data: { hello: ++linkCount },
-        })
+        }),
       );
 
       const client = new ApolloClient({
@@ -7015,13 +6768,12 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         link,
       });
 
-      const correctInitialFetchPolicy: WatchQueryFetchPolicy
-        = 'cache-and-network';
+      const correctInitialFetchPolicy: WatchQueryFetchPolicy = 'cache-and-network';
 
       const { result, rerender } = renderHook<
         QueryResult,
         {
-          skip: boolean,
+          skip: boolean;
         }
       >(
         ({ skip = true }) =>
@@ -7036,19 +6788,14 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           initialProps: {
             skip: true,
           },
-          wrapper: ({ children }) => (
-            <ApolloProvider client={client}>{children}</ApolloProvider>
-          ),
-        }
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        },
       );
 
       expect(result.current.loading).toBe(false);
       expect(result.current.data).toBeUndefined();
 
-      function check(
-        expectedFetchPolicy: WatchQueryFetchPolicy,
-        expectedInitialFetchPolicy: WatchQueryFetchPolicy
-      ) {
+      function check(expectedFetchPolicy: WatchQueryFetchPolicy, expectedInitialFetchPolicy: WatchQueryFetchPolicy) {
         const { observable } = result.current;
         const { fetchPolicy, initialFetchPolicy } = observable.options;
 
@@ -7066,7 +6813,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.data).toEqual({
@@ -7089,7 +6836,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             return currentFetchPolicy;
           },
         })
-        .then((result) => {
+        .then(result => {
           expect(result.loading).toBe(false);
           expect(result.data).toEqual({ hello: 2 });
         });
@@ -7102,7 +6849,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             hello: 2,
           });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       await reobservePromise;
@@ -7112,7 +6859,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
   });
 
   describe('Missing Fields', () => {
-    it('should log debug messages about MissingFieldErrors from the cache', async() => {
+    it('should log debug messages about MissingFieldErrors from the cache', async () => {
       using consoleSpy = spyOnConsole('error');
 
       const carQuery: DocumentNode = gql`
@@ -7153,10 +6900,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const { result } = renderHook(
-        () => useQuery(carQuery, { variables: { id: 1 } }),
-        { wrapper }
-      );
+      const { result } = renderHook(() => useQuery(carQuery, { variables: { id: 1 } }), { wrapper });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBe(undefined);
@@ -7165,26 +6909,22 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual(carData);
       expect(result.current.error).toBeUndefined();
 
       expect(consoleSpy.error).toHaveBeenCalled();
-      expect(consoleSpy.error).toHaveBeenLastCalledWith(
-        `Missing field '%s' while writing result %o`,
-        'vin',
-        {
-          id: 1,
-          make: 'Audi',
-          model: 'RS8',
-          vine: 'DOLLADOLLABILL',
-          __typename: 'Car',
-        }
-      );
+      expect(consoleSpy.error).toHaveBeenLastCalledWith(`Missing field '%s' while writing result %o`, 'vin', {
+        id: 1,
+        make: 'Audi',
+        model: 'RS8',
+        vine: 'DOLLADOLLABILL',
+        __typename: 'Car',
+      });
     });
 
-    it('should return partial cache data when `returnPartialData` is true', async() => {
+    it('should return partial cache data when `returnPartialData` is true', async () => {
       const cache = new Hermes();
       const client = new ApolloClient({
         cache,
@@ -7236,14 +6976,9 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         }
       `;
 
-      const { result } = renderHook(
-        () => useQuery(partialQuery, { returnPartialData: true }),
-        {
-          wrapper: ({ children }) => (
-            <ApolloProvider client={client}>{children}</ApolloProvider>
-          ),
-        }
-      );
+      const { result } = renderHook(() => useQuery(partialQuery, { returnPartialData: true }), {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toEqual({
@@ -7313,20 +7048,15 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         }
       `;
 
-      const { result } = renderHook(
-        () => useQuery(partialQuery, { returnPartialData: false }),
-        {
-          wrapper: ({ children }) => (
-            <ApolloProvider client={client}>{children}</ApolloProvider>
-          ),
-        }
-      );
+      const { result } = renderHook(() => useQuery(partialQuery, { returnPartialData: false }), {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBe(undefined);
     });
 
-    it('should not return partial cache data when `returnPartialData` is false and new variables are passed in', async() => {
+    it('should not return partial cache data when `returnPartialData` is false and new variables are passed in', async () => {
       const cache = new Hermes();
       const client = new ApolloClient({
         cache,
@@ -7390,10 +7120,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           });
         },
         {
-          wrapper: ({ children }) => (
-            <ApolloProvider client={client}>{children}</ApolloProvider>
-          ),
-        }
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        },
       );
 
       expect(result.current.loading).toBe(false);
@@ -7414,7 +7142,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(true);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       expect(result.current.data).toBe(undefined);
@@ -7422,7 +7150,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
   });
 
   describe('Previous data', () => {
-    it('should persist previous data when a query is re-run', async() => {
+    it('should persist previous data when a query is re-run', async () => {
       const query = gql`
         query car {
           car {
@@ -7460,9 +7188,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const ProfiledHook = profileHook(() =>
-        useQuery(query, { notifyOnNetworkStatusChange: true })
-      );
+      const ProfiledHook = profileHook(() => useQuery(query, { notifyOnNetworkStatusChange: true }));
 
       render(<ProfiledHook />, { wrapper });
 
@@ -7497,16 +7223,16 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       }
     });
 
-    it('should persist result.previousData across multiple results', async() => {
+    it('should persist result.previousData across multiple results', async () => {
       const query: TypedDocumentNode<
         {
           car: {
-            id: string,
-            make: string,
-          },
+            id: string;
+            make: string;
+          };
         },
         {
-          vin?: string,
+          vin?: string;
         }
       > = gql`
         query car($vin: String) {
@@ -7560,10 +7286,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const { result } = renderHook(
-        () => useQuery(query, { notifyOnNetworkStatusChange: true }),
-        { wrapper }
-      );
+      const { result } = renderHook(() => useQuery(query, { notifyOnNetworkStatusChange: true }), { wrapper });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBe(undefined);
@@ -7573,7 +7296,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual(data1);
       expect(result.current.previousData).toBe(undefined);
@@ -7583,7 +7306,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(true);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual(data1);
       expect(result.current.previousData).toEqual(data1);
@@ -7597,15 +7320,15 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual(data3);
       expect(result.current.previousData).toEqual(data1);
     });
 
-    it('should persist result.previousData even if query changes', async() => {
+    it('should persist result.previousData even if query changes', async () => {
       const aQuery: TypedDocumentNode<{
-        a: string,
+        a: string;
       }> = gql`
         query A {
           a
@@ -7613,8 +7336,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       `;
 
       const abQuery: TypedDocumentNode<{
-        a: string,
-        b: number,
+        a: string;
+        b: number;
       }> = gql`
         query AB {
           a
@@ -7623,7 +7346,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       `;
 
       const bQuery: TypedDocumentNode<{
-        b: number,
+        b: number;
       }> = gql`
         query B {
           b
@@ -7636,7 +7359,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         cache: new Hermes(),
         link: new ApolloLink(
           request =>
-            new Observable((observer) => {
+            new Observable(observer => {
               switch (request.operationName) {
                 case 'A': {
                   observer.next({
@@ -7667,7 +7390,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
               setTimeout(() => {
                 observer.complete();
               }, 10);
-            })
+            }),
         ),
       });
 
@@ -7684,10 +7407,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           };
         },
         {
-          wrapper: ({ children }: any) => (
-            <ApolloProvider client={client}>{children}</ApolloProvider>
-          ),
-        }
+          wrapper: ({ children }: any) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        },
       );
 
       await waitFor(
@@ -7695,21 +7416,21 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           const { loading } = result.current.useQueryResult;
           expect(loading).toBe(true);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           const { data } = result.current.useQueryResult;
           expect(data).toEqual({ a: 'a' });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           const { previousData } = result.current.useQueryResult;
           expect(previousData).toBeUndefined();
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       await waitFor(
@@ -7717,21 +7438,21 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           const { loading } = result.current.useQueryResult;
           expect(loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           const { data } = result.current.useQueryResult;
           expect(data).toEqual({ a: 'a' });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           const { previousData } = result.current.useQueryResult;
           expect(previousData).toBe(undefined);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       await expect(
@@ -7739,8 +7460,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           () => {
             result.current.setQuery(abQuery);
           },
-          { interval: 1 }
-        )
+          { interval: 1 },
+        ),
       );
 
       await waitFor(
@@ -7748,21 +7469,21 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           const { loading } = result.current.useQueryResult;
           expect(loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           const { data } = result.current.useQueryResult;
           expect(data).toEqual({ a: 'aa', b: 1 });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           const { previousData } = result.current.useQueryResult;
           expect(previousData).toEqual({ a: 'a' });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       await waitFor(
@@ -7770,31 +7491,31 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           const { loading } = result.current.useQueryResult;
           expect(loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           const { data } = result.current.useQueryResult;
           expect(data).toEqual({ a: 'aa', b: 1 });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           const { previousData } = result.current.useQueryResult;
           expect(previousData).toEqual({ a: 'a' });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       await waitFor(
         () => {
-          result.current.useQueryResult.reobserve().then((result) => {
+          result.current.useQueryResult.reobserve().then(result => {
             expect(result.loading).toBe(false);
             expect(result.data).toEqual({ a: 'aaa', b: 2 });
           });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       await waitFor(
@@ -7802,28 +7523,28 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           const { loading } = result.current.useQueryResult;
           expect(loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           const { data } = result.current.useQueryResult;
           expect(data).toEqual({ a: 'aaa', b: 2 });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           const { previousData } = result.current.useQueryResult;
           expect(previousData).toEqual({ a: 'aa', b: 1 });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       await waitFor(
         () => {
           result.current.setQuery(bQuery);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       await waitFor(
@@ -7831,46 +7552,46 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           const { loading } = result.current.useQueryResult;
           expect(loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           const { data } = result.current.useQueryResult;
           expect(data).toEqual({ b: 3 });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           const { previousData } = result.current.useQueryResult;
           expect(previousData).toEqual({ b: 2 });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           const { loading } = result.current.useQueryResult;
           expect(loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           const { data } = result.current.useQueryResult;
           expect(data).toEqual({ b: 3 });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           const { previousData } = result.current.useQueryResult;
           expect(previousData).toEqual({ b: 2 });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
     });
 
-    it('should be cleared when variables change causes cache miss', async() => {
+    it('should be cleared when variables change causes cache miss', async () => {
       const peopleData = [
         { id: 1, name: 'John Smith', gender: 'male' },
         { id: 2, name: 'Sara Smith', gender: 'female' },
@@ -7879,14 +7600,15 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         { id: 5, name: 'Ada Lovelace', gender: 'female' },
       ];
 
-      const link = new ApolloLink((operation) => {
-        return new Observable((observer) => {
+      const link = new ApolloLink(operation => {
+        return new Observable(observer => {
           const { gender } = operation.variables;
           new Promise(resolve => setTimeout(resolve, 300)).then(() => {
             observer.next({
               data: {
                 people:
-                  gender === 'all' ? peopleData
+                  gender === 'all'
+                    ? peopleData
                     : gender
                       ? peopleData.filter(person => person.gender === gender)
                       : peopleData,
@@ -7898,13 +7620,13 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       });
 
       type Person = {
-        __typename: string,
-        id: string,
-        name: string,
+        __typename: string;
+        id: string;
+        name: string;
       };
 
       const query: TypedDocumentNode<{
-        people: Person[],
+        people: Person[];
       }> = gql`
         query AllPeople($gender: String!) {
           people(gender: $gender) {
@@ -7925,7 +7647,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         useQuery(query, {
           variables: { gender },
           fetchPolicy: 'network-only',
-        })
+        }),
       );
       const { rerender } = render(<ProfiledHook gender='all' />, { wrapper });
 
@@ -7958,9 +7680,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         expect(result.loading).toBe(false);
         expect(result.networkStatus).toBe(NetworkStatus.ready);
         expect(result.data).toEqual({
-          people: peopleData
-            .filter(person => person.gender === 'female')
-            .map(({ gender, ...person }) => person),
+          people: peopleData.filter(person => person.gender === 'female').map(({ gender, ...person }) => person),
         });
       }
 
@@ -7977,16 +7697,14 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         expect(result.loading).toBe(false);
         expect(result.networkStatus).toBe(NetworkStatus.ready);
         expect(result.data).toEqual({
-          people: peopleData
-            .filter(person => person.gender === 'nonbinary')
-            .map(({ gender, ...person }) => person),
+          people: peopleData.filter(person => person.gender === 'nonbinary').map(({ gender, ...person }) => person),
         });
       }
     });
   });
 
   describe('defaultOptions', () => {
-    it('should allow polling options to be passed to the client', async() => {
+    it('should allow polling options to be passed to the client', async () => {
       const query = gql`
         {
           hello
@@ -8005,7 +7723,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         {
           request: { query },
           result: { data: { hello: 'world 3' } },
-        }
+        },
       );
 
       const client = new ApolloClient({
@@ -8019,9 +7737,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       });
 
       const { result } = renderHook(() => useQuery(query), {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
       });
 
       expect(result.current.loading).toBe(true);
@@ -8031,45 +7747,45 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           expect(result.current.data).toEqual({ hello: 'world 1' });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       await waitFor(
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           expect(result.current.data).toEqual({ hello: 'world 2' });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       await waitFor(
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           expect(result.current.data).toEqual({ hello: 'world 3' });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
     });
   });
 
   describe('canonical cache results', () => {
-    it('can be disabled via useQuery options', async() => {
+    it('can be disabled via useQuery options', async () => {
       const cache = new InMemoryCache({
         canonizeResults: true,
         typePolicies: {
@@ -8101,9 +7817,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         data: { results },
       });
 
-      const wrapper = ({ children }: any) => (
-        <MockedProvider cache={cache}>{children}</MockedProvider>
-      );
+      const wrapper = ({ children }: any) => <MockedProvider cache={cache}>{children}</MockedProvider>;
 
       const { result, rerender } = renderHook(
         ({ canonizeResults }) =>
@@ -8111,7 +7825,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             fetchPolicy: 'cache-only',
             canonizeResults,
           }),
-        { wrapper, initialProps: { canonizeResults: false } }
+        { wrapper, initialProps: { canonizeResults: false } },
       );
 
       expect(result.current.loading).toBe(false);
@@ -8143,13 +7857,13 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           expect(result.current.data).toEqual({ results });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data.results.length).toBe(7);
       resultSet = new Set(result.current.data.results);
@@ -8164,7 +7878,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
   // eslint-disable-next-line jest/no-identical-title
   describe('canonical cache results', () => {
-    it('can be disabled via useQuery options', async() => {
+    it('can be disabled via useQuery options', async () => {
       const cache = new InMemoryCache({
         canonizeResults: true,
         typePolicies: {
@@ -8196,9 +7910,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         data: { results },
       });
 
-      const wrapper = ({ children }: any) => (
-        <MockedProvider cache={cache}>{children}</MockedProvider>
-      );
+      const wrapper = ({ children }: any) => <MockedProvider cache={cache}>{children}</MockedProvider>;
 
       const { result, rerender } = renderHook(
         ({ canonizeResults }) =>
@@ -8206,7 +7918,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             fetchPolicy: 'cache-only',
             canonizeResults,
           }),
-        { wrapper, initialProps: { canonizeResults: false } }
+        { wrapper, initialProps: { canonizeResults: false } },
       );
 
       expect(result.current.loading).toBe(false);
@@ -8238,13 +7950,13 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           expect(result.current.data).toEqual({ results });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data.results.length).toBe(7);
       resultSet = new Set(result.current.data.results);
@@ -8259,12 +7971,12 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
   describe('multiple useQuery calls per component', () => {
     type ABFields = {
-      id: number,
-      name: string,
+      id: number;
+      name: string;
     };
 
     const aQuery: TypedDocumentNode<{
-      a: ABFields,
+      a: ABFields;
     }> = gql`
       query A {
         a {
@@ -8275,7 +7987,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
     `;
 
     const bQuery: TypedDocumentNode<{
-      b: ABFields,
+      b: ABFields;
     }> = gql`
       query B {
         b {
@@ -8306,7 +8018,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         cache: new Hermes(),
         link: new ApolloLink(
           operation =>
-            new Observable((observer) => {
+            new Observable(observer => {
               switch (operation.operationName) {
                 case 'A':
                   setTimeout(() => {
@@ -8321,15 +8033,12 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
                   }, 10);
                   break;
               }
-            })
+            }),
         ),
       });
     }
 
-    async function check(
-      aFetchPolicy: WatchQueryFetchPolicy,
-      bFetchPolicy: WatchQueryFetchPolicy
-    ) {
+    async function check(aFetchPolicy: WatchQueryFetchPolicy, bFetchPolicy: WatchQueryFetchPolicy) {
       const client = makeClient();
       const { result } = renderHook(
         () => ({
@@ -8337,10 +8046,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           b: useQuery(bQuery, { fetchPolicy: bFetchPolicy }),
         }),
         {
-          wrapper: ({ children }) => (
-            <ApolloProvider client={client}>{children}</ApolloProvider>
-          ),
-        }
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        },
       );
 
       expect(result.current.a.loading).toBe(true);
@@ -8360,32 +8067,25 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
     it('cache-first for both', () => check('cache-first', 'cache-first'));
 
-    it('cache-first first, cache-and-network second', () =>
-      check('cache-first', 'cache-and-network'));
+    it('cache-first first, cache-and-network second', () => check('cache-first', 'cache-and-network'));
 
-    it('cache-first first, network-only second', () =>
-      check('cache-first', 'network-only'));
+    it('cache-first first, network-only second', () => check('cache-first', 'network-only'));
 
-    it('cache-and-network for both', () =>
-      check('cache-and-network', 'cache-and-network'));
+    it('cache-and-network for both', () => check('cache-and-network', 'cache-and-network'));
 
-    it('cache-and-network first, cache-first second', () =>
-      check('cache-and-network', 'cache-first'));
+    it('cache-and-network first, cache-first second', () => check('cache-and-network', 'cache-first'));
 
-    it('cache-and-network first, network-only second', () =>
-      check('cache-and-network', 'network-only'));
+    it('cache-and-network first, network-only second', () => check('cache-and-network', 'network-only'));
 
     it('network-only for both', () => check('network-only', 'network-only'));
 
-    it('network-only first, cache-first second', () =>
-      check('network-only', 'cache-first'));
+    it('network-only first, cache-first second', () => check('network-only', 'cache-first'));
 
-    it('network-only first, cache-and-network second', () =>
-      check('network-only', 'cache-and-network'));
+    it('network-only first, cache-and-network second', () => check('network-only', 'cache-and-network'));
   });
 
   describe('regression test issue #9204', () => {
-    it('should handle a simple query', async() => {
+    it('should handle a simple query', async () => {
       const query = gql`
         {
           hello
@@ -8427,7 +8127,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       render(
         <MockedProvider mocks={mocks}>
           <Component query={query} />
-        </MockedProvider>
+        </MockedProvider>,
       );
 
       await waitFor(() => {
@@ -8438,7 +8138,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
   // https://github.com/apollographql/apollo-client/issues/10222
   describe('regression test issue #10222', () => {
-    it('maintains initial fetch policy when component unmounts and remounts', async() => {
+    it('maintains initial fetch policy when component unmounts and remounts', async () => {
       let helloCount = 1;
       const query = gql`
         {
@@ -8446,7 +8146,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         }
       `;
       const link = new ApolloLink(() => {
-        return new Observable((observer) => {
+        return new Observable(observer => {
           const timer = setTimeout(() => {
             observer.next({ data: { hello: `hello ${helloCount++}` } });
             observer.complete();
@@ -8485,7 +8185,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
               <Toggler>{children}</Toggler>
             </ApolloProvider>
           ),
-        }
+        },
       );
 
       expect(result.current.loading).toBe(true);
@@ -8519,7 +8219,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
   });
 
   describe('defer', () => {
-    it('should handle deferred queries', async() => {
+    it('should handle deferred queries', async () => {
       const query = gql`
         {
           greeting {
@@ -8541,9 +8241,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       });
 
       const { result } = renderHook(() => useQuery(query), {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
       });
 
       expect(result.current.loading).toBe(true);
@@ -8566,7 +8264,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual({
         greeting: {
@@ -8600,7 +8298,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
@@ -8615,11 +8313,11 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             },
           });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
     });
 
-    it('should handle deferred queries in lists', async() => {
+    it('should handle deferred queries in lists', async () => {
       const query = gql`
         {
           greetings {
@@ -8641,9 +8339,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       });
 
       const { result } = renderHook(() => useQuery(query), {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
       });
 
       expect(result.current.loading).toBe(true);
@@ -8666,7 +8362,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       expect(result.current.data).toEqual({
         greetings: [
@@ -8699,7 +8395,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
@@ -8714,7 +8410,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             ],
           });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       setTimeout(() => {
@@ -8741,7 +8437,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
@@ -8760,11 +8456,11 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             ],
           });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
     });
 
-    it('should handle deferred queries in lists, merging arrays', async() => {
+    it('should handle deferred queries in lists, merging arrays', async () => {
       const query = gql`
         query DeferVariation {
           allProducts {
@@ -8789,9 +8485,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       });
 
       const { result } = renderHook(() => useQuery(query), {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
       });
 
       expect(result.current.loading).toBe(true);
@@ -8828,7 +8522,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
@@ -8853,7 +8547,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             ],
           });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       setTimeout(() => {
@@ -8886,7 +8580,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
@@ -8915,11 +8609,11 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             ],
           });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
     });
 
-    it('should handle deferred queries with fetch policy no-cache', async() => {
+    it('should handle deferred queries with fetch policy no-cache', async () => {
       const query = gql`
         {
           greeting {
@@ -8940,14 +8634,9 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         cache: new Hermes(),
       });
 
-      const { result } = renderHook(
-        () => useQuery(query, { fetchPolicy: 'no-cache' }),
-        {
-          wrapper: ({ children }) => (
-            <ApolloProvider client={client}>{children}</ApolloProvider>
-          ),
-        }
-      );
+      const { result } = renderHook(() => useQuery(query, { fetchPolicy: 'no-cache' }), {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBe(undefined);
@@ -8969,7 +8658,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
@@ -8980,7 +8669,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             },
           });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       setTimeout(() => {
@@ -9007,7 +8696,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
@@ -9022,11 +8711,11 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             },
           });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
     });
 
-    it('should handle deferred queries with errors returned on the incremental batched result', async() => {
+    it('should handle deferred queries with errors returned on the incremental batched result', async () => {
       const query = gql`
         query {
           hero {
@@ -9050,9 +8739,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       });
 
       const { result } = renderHook(() => useQuery(query), {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
       });
 
       expect(result.current.loading).toBe(true);
@@ -9084,7 +8771,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
@@ -9104,7 +8791,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             },
           });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       setTimeout(() => {
@@ -9114,10 +8801,9 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
               {
                 path: ['hero', 'heroFriends', 0],
                 errors: [
-                  new GraphQLError(
-                    'homeWorld for character with ID 1000 could not be fetched.',
-                    { path: ['hero', 'heroFriends', 0, 'homeWorld'] }
-                  ),
+                  new GraphQLError('homeWorld for character with ID 1000 could not be fetched.', {
+                    path: ['hero', 'heroFriends', 0, 'homeWorld'],
+                  }),
                 ],
                 data: {
                   homeWorld: null,
@@ -9139,21 +8825,19 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           expect(result.current.error).toBeInstanceOf(ApolloError);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
-          expect(result.current.error!.message).toBe(
-            'homeWorld for character with ID 1000 could not be fetched.'
-          );
+          expect(result.current.error!.message).toBe('homeWorld for character with ID 1000 could not be fetched.');
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
@@ -9174,11 +8858,11 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             },
           });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
     });
 
-    it('should handle deferred queries with errors returned on the incremental batched result and errorPolicy "all"', async() => {
+    it('should handle deferred queries with errors returned on the incremental batched result and errorPolicy "all"', async () => {
       const query = gql`
         query {
           hero {
@@ -9201,14 +8885,9 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         cache: new Hermes(),
       });
 
-      const { result } = renderHook(
-        () => useQuery(query, { errorPolicy: 'all' }),
-        {
-          wrapper: ({ children }) => (
-            <ApolloProvider client={client}>{children}</ApolloProvider>
-          ),
-        }
-      );
+      const { result } = renderHook(() => useQuery(query, { errorPolicy: 'all' }), {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.data).toBe(undefined);
@@ -9239,7 +8918,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
@@ -9259,7 +8938,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             },
           });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       setTimeout(() => {
@@ -9269,10 +8948,9 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
               {
                 path: ['hero', 'heroFriends', 0],
                 errors: [
-                  new GraphQLError(
-                    'homeWorld for character with ID 1000 could not be fetched.',
-                    { path: ['hero', 'heroFriends', 0, 'homeWorld'] }
-                  ),
+                  new GraphQLError('homeWorld for character with ID 1000 could not be fetched.', {
+                    path: ['hero', 'heroFriends', 0, 'homeWorld'],
+                  }),
                 ],
                 data: {
                   homeWorld: null,
@@ -9302,35 +8980,33 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           // @ts-ignore
           expect(result.current.label).toBe(undefined);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           // @ts-ignore
           expect(result.current.extensions).toBe(undefined);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           expect(result.current.error).toBeInstanceOf(ApolloError);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
-          expect(result.current.error!.message).toBe(
-            'homeWorld for character with ID 1000 could not be fetched.'
-          );
+          expect(result.current.error!.message).toBe('homeWorld for character with ID 1000 could not be fetched.');
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
@@ -9357,11 +9033,11 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             },
           });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
     });
 
-    it('returns eventually consistent data from deferred queries with data in the cache while using a "cache-and-network" fetch policy', async() => {
+    it('returns eventually consistent data from deferred queries with data in the cache while using a "cache-and-network" fetch policy', async () => {
       const query = gql`
         query {
           greeting {
@@ -9390,14 +9066,9 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         },
       });
 
-      const { result } = renderHook(
-        () => useQuery(query, { fetchPolicy: 'cache-and-network' }),
-        {
-          wrapper: ({ children }) => (
-            <ApolloProvider client={client}>{children}</ApolloProvider>
-          ),
-        }
-      );
+      const { result } = renderHook(() => useQuery(query, { fetchPolicy: 'cache-and-network' }), {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      });
 
       expect(result.current.loading).toBe(true);
       expect(result.current.networkStatus).toBe(NetworkStatus.loading);
@@ -9422,13 +9093,13 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           expect(result.current.networkStatus).toBe(NetworkStatus.ready);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
@@ -9440,7 +9111,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             },
           });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       link.simulateResult({
@@ -9462,13 +9133,13 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           expect(result.current.networkStatus).toBe(NetworkStatus.ready);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
@@ -9480,11 +9151,11 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             },
           });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
     });
 
-    it('returns eventually consistent data from deferred queries with partial data in the cache and using a "cache-first" fetch policy with `returnPartialData`', async() => {
+    it('returns eventually consistent data from deferred queries with partial data in the cache and using a "cache-first" fetch policy with `returnPartialData`', async () => {
       const query = gql`
         query {
           greeting {
@@ -9524,10 +9195,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             returnPartialData: true,
           }),
         {
-          wrapper: ({ children }) => (
-            <ApolloProvider client={client}>{children}</ApolloProvider>
-          ),
-        }
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        },
       );
 
       expect(result.current.loading).toBe(true);
@@ -9552,13 +9221,13 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           expect(result.current.networkStatus).toBe(NetworkStatus.ready);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
@@ -9570,7 +9239,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             },
           });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
 
       link.simulateResult({
@@ -9592,13 +9261,13 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         () => {
           expect(result.current.loading).toBe(false);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
           expect(result.current.networkStatus).toBe(NetworkStatus.ready);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
       await waitFor(
         () => {
@@ -9610,7 +9279,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             },
           });
         },
-        { interval: 1 }
+        { interval: 1 },
       );
     });
   });
@@ -9642,12 +9311,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       [`standby`, cacheData, false, false],
     ])(
       'fetchPolicy %s, cache: %p should fetch during `disableNetworkFetches`: %p and after `disableNetworkFetches` has been disabled: %p',
-      async(
-        policy,
-        initialQueryValue,
-        shouldFetchOnFirstRender,
-        shouldFetchOnSecondRender
-      ) => {
+      async (policy, initialQueryValue, shouldFetchOnFirstRender, shouldFetchOnSecondRender) => {
         const query: TypedDocumentNode<TestQueryValue> = gql`
           query CallMe {
             something
@@ -9669,19 +9333,11 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         }
         client.disableNetworkFetches = true;
 
-        const { rerender } = renderHook(
-          () =>
-            useQuery(query, { fetchPolicy: policy, nextFetchPolicy: policy }),
-          {
-            wrapper: ({ children }) => (
-              <ApolloProvider client={client}>{children}</ApolloProvider>
-            ),
-          }
-        );
+        const { rerender } = renderHook(() => useQuery(query, { fetchPolicy: policy, nextFetchPolicy: policy }), {
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        });
 
-        expect(requestSpy).toHaveBeenCalledTimes(
-          shouldFetchOnFirstRender ? 1 : 0
-        );
+        expect(requestSpy).toHaveBeenCalledTimes(shouldFetchOnFirstRender ? 1 : 0);
 
         // We need to wait a moment before the rerender for everything to settle down.
         // This part is unfortunately bound to be flaky - but in some cases there is
@@ -9692,10 +9348,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         client.disableNetworkFetches = false;
 
         rerender();
-        expect(requestSpy).toHaveBeenCalledTimes(
-          shouldFetchOnSecondRender ? 1 : 0
-        );
-      }
+        expect(requestSpy).toHaveBeenCalledTimes(shouldFetchOnSecondRender ? 1 : 0);
+      },
     );
   });
 });

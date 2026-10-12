@@ -8,7 +8,6 @@ import { query, strictConfig } from '../../../../helpers';
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.write`, () => {
-
   const context = new CacheContext(strictConfig);
   const empty = new GraphSnapshot();
 
@@ -53,18 +52,15 @@ describe(`operations.write`, () => {
           [
             {
               id: '0',
-              path: [
-                'user',
-              ],
+              path: ['user'],
             },
           ],
-        )
+        ),
       );
     });
 
     it(`checks only one entity node on RootQuery`, () => {
       jestExpect(snapshot.allNodeIds()).toEqual(jestExpect.arrayContaining([QueryRootId]));
     });
-
   });
 });

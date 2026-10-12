@@ -12,10 +12,7 @@ export interface RejectedPromise<TValue> extends Promise<TValue> {
   reason: unknown;
 }
 
-export type PromiseWithState<TValue> =
-  | PendingPromise<TValue>
-  | FulfilledPromise<TValue>
-  | RejectedPromise<TValue>;
+export type PromiseWithState<TValue> = PendingPromise<TValue> | FulfilledPromise<TValue> | RejectedPromise<TValue>;
 
 export function createFulfilledPromise<TValue>(value: TValue) {
   const promise = Promise.resolve(value) as FulfilledPromise<TValue>;
@@ -38,15 +35,11 @@ export function createRejectedPromise<TValue = unknown>(reason: unknown) {
   return promise;
 }
 
-export function isStatefulPromise<TValue>(
-  promise: Promise<TValue>
-): promise is PromiseWithState<TValue> {
+export function isStatefulPromise<TValue>(promise: Promise<TValue>): promise is PromiseWithState<TValue> {
   return 'status' in promise;
 }
 
-export function wrapPromiseWithState<TValue>(
-  promise: Promise<TValue>
-): PromiseWithState<TValue> {
+export function wrapPromiseWithState<TValue>(promise: Promise<TValue>): PromiseWithState<TValue> {
   if (isStatefulPromise(promise)) {
     return promise;
   }
@@ -55,10 +48,9 @@ export function wrapPromiseWithState<TValue>(
   pendingPromise.status = 'pending';
 
   pendingPromise.then(
-    (value) => {
+    value => {
       if (pendingPromise.status === 'pending') {
-        const fulfilledPromise
-          = pendingPromise as unknown as FulfilledPromise<TValue>;
+        const fulfilledPromise = pendingPromise as unknown as FulfilledPromise<TValue>;
 
         fulfilledPromise.status = 'fulfilled';
         fulfilledPromise.value = value;
@@ -66,13 +58,12 @@ export function wrapPromiseWithState<TValue>(
     },
     (reason: unknown) => {
       if (pendingPromise.status === 'pending') {
-        const rejectedPromise
-          = pendingPromise as unknown as RejectedPromise<TValue>;
+        const rejectedPromise = pendingPromise as unknown as RejectedPromise<TValue>;
 
         rejectedPromise.status = 'rejected';
         rejectedPromise.reason = reason;
       }
-    }
+    },
   );
 
   return promise as PromiseWithState<TValue>;

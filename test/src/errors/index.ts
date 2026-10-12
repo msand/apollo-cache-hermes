@@ -13,14 +13,14 @@ import type { FetchResult } from '../link/core/index';
 export const PROTOCOL_ERRORS_SYMBOL: unique symbol = Symbol();
 
 type FetchResultWithSymbolExtensions<T> = FetchResult<T> & {
-  extensions: Record<string | symbol, any>,
+  extensions: Record<string | symbol, any>;
 };
 
 export interface ApolloErrorOptions {
   graphQLErrors?: ReadonlyArray<GraphQLError>;
   protocolErrors?: ReadonlyArray<{
-    message: string,
-    extensions?: GraphQLErrorExtensions[],
+    message: string;
+    extensions?: GraphQLErrorExtensions[];
   }>;
   clientErrors?: ReadonlyArray<Error>;
   networkError?: Error | ServerParseError | ServerError | null;
@@ -29,14 +29,10 @@ export interface ApolloErrorOptions {
 }
 
 export function graphQLResultHasProtocolErrors<T>(
-  result: FetchResult<T>
+  result: FetchResult<T>,
 ): result is FetchResultWithSymbolExtensions<T> {
   if (result.extensions) {
-    return Array.isArray(
-      (result as FetchResultWithSymbolExtensions<T>).extensions[
-        PROTOCOL_ERRORS_SYMBOL
-      ]
-    );
+    return Array.isArray((result as FetchResultWithSymbolExtensions<T>).extensions[PROTOCOL_ERRORS_SYMBOL]);
   }
   return false;
 }
@@ -50,19 +46,12 @@ export function isApolloError(err: Error): err is ApolloError {
 // If the error message has already been set through the
 // constructor or otherwise, this function is a nop.
 const generateErrorMessage = (err: ApolloError) => {
-  const errors = [
-    ...err.graphQLErrors,
-    ...err.clientErrors,
-    ...err.protocolErrors,
-  ];
+  const errors = [...err.graphQLErrors, ...err.clientErrors, ...err.protocolErrors];
   if (err.networkError) errors.push(err.networkError);
   return (
     errors
       // The rest of the code sometimes unsafely types non-Error objects as GraphQLErrors
-      .map(
-        err =>
-          (isNonNullObject(err) && err.message) || 'Error message not found.'
-      )
+      .map(err => (isNonNullObject(err) && err.message) || 'Error message not found.')
       .join('\n')
   );
 };
@@ -76,8 +65,8 @@ export class ApolloError extends Error {
   public message: string;
   public graphQLErrors: GraphQLErrors;
   public protocolErrors: ReadonlyArray<{
-    message: string,
-    extensions?: GraphQLErrorExtensions[],
+    message: string;
+    extensions?: GraphQLErrorExtensions[];
   }>;
 
   public clientErrors: ReadonlyArray<Error>;

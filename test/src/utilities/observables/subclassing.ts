@@ -10,9 +10,7 @@ import { Observable } from './Observable';
 // different parameters. Defining this static Symbol.species property on
 // the subclass is a hint to generic Observable code to use the default
 // constructor instead of trying to do `new Subclass(observer => ...)`.
-export function fixObservableSubclass<
-  S extends new(...args: any[]) => Observable<any>,
->(subclass: S): S {
+export function fixObservableSubclass<S extends new (...args: any[]) => Observable<any>>(subclass: S): S {
   function set(key: symbol | string) {
     // Object.defineProperty is necessary because the Symbol.species
     // property is a getter by default in modern JS environments, so we

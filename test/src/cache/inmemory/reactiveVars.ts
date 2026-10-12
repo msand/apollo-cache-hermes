@@ -21,8 +21,8 @@ export const cacheSlot = new Slot<ApolloCache<any>>();
 const cacheInfoMap = new WeakMap<
   ApolloCache<any>,
   {
-    vars: Set<ReactiveVar<any>>,
-    dep: OptimisticDependencyFunction<ReactiveVar<any>>,
+    vars: Set<ReactiveVar<any>>;
+    dep: OptimisticDependencyFunction<ReactiveVar<any>>;
   }
 >();
 
@@ -34,7 +34,7 @@ function getCacheInfo(cache: ApolloCache<any>) {
       (info = {
         vars: new Set(),
         dep: dep(),
-      })
+      }),
     );
   }
   return info;
@@ -60,11 +60,11 @@ export function makeVar<T>(value: T): ReactiveVar<T> {
   const caches = new Set<ApolloCache<any>>();
   const listeners = new Set<ReactiveListener<T>>();
 
-  const rv: ReactiveVar<T> = function(newValue) {
+  const rv: ReactiveVar<T> = function (newValue) {
     if (arguments.length > 0) {
       if (value !== newValue) {
         value = newValue!;
-        caches.forEach((cache) => {
+        caches.forEach(cache => {
           // Invalidate any fields with custom read functions that
           // consumed this variable, so query results involving those
           // fields will be recomputed the next time we read them.
@@ -92,14 +92,14 @@ export function makeVar<T>(value: T): ReactiveVar<T> {
     return value;
   };
 
-  rv.onNextChange = (listener) => {
+  rv.onNextChange = listener => {
     listeners.add(listener);
     return () => {
       listeners.delete(listener);
     };
   };
 
-  const attach = (rv.attachCache = (cache) => {
+  const attach = (rv.attachCache = cache => {
     caches.add(cache);
     getCacheInfo(cache).vars.add(rv);
     return rv;
@@ -113,7 +113,7 @@ export function makeVar<T>(value: T): ReactiveVar<T> {
 type Broadcastable = ApolloCache<any> & {
   // This method is protected in InMemoryCache, which we are ignoring, but
   // we still want some semblance of type safety when we call it.
-  broadcastWatches?: InMemoryCache['broadcastWatches'],
+  broadcastWatches?: InMemoryCache['broadcastWatches'];
 };
 
 function broadcast(cache: Broadcastable) {

@@ -1,10 +1,6 @@
 import { FieldFunctionOptions, InMemoryCache } from '@apollo/client';
 
-import {
-  isReference,
-  makeReference,
-  StoreObject,
-} from '../../../cache';
+import { isReference, makeReference, StoreObject } from '../../../cache';
 import { relayStylePagination, TRelayPageInfo } from '../pagination';
 import { Hermes } from '../../../../../src';
 
@@ -37,7 +33,7 @@ describe('relayStylePagination', () => {
             hasNextPage: true,
           } as TRelayPageInfo,
         },
-        fakeReadOptions
+        fakeReadOptions,
       );
 
       expect(resultWithStartCursor && resultWithStartCursor.pageInfo).toEqual({
@@ -58,7 +54,7 @@ describe('relayStylePagination', () => {
             hasNextPage: true,
           } as TRelayPageInfo,
         },
-        fakeReadOptions
+        fakeReadOptions,
       );
 
       expect(resultWithEndCursor && resultWithEndCursor.pageInfo).toEqual({
@@ -80,7 +76,7 @@ describe('relayStylePagination', () => {
             hasNextPage: true,
           },
         },
-        fakeReadOptions
+        fakeReadOptions,
       );
 
       expect(resultWithEndCursor && resultWithEndCursor.pageInfo).toEqual({
@@ -108,7 +104,7 @@ describe('relayStylePagination', () => {
             hasNextPage: true,
           },
         },
-        fakeReadOptions
+        fakeReadOptions,
       );
 
       expect(resultWithEndCursor && resultWithEndCursor.pageInfo).toEqual({
@@ -136,7 +132,7 @@ describe('relayStylePagination', () => {
             hasNextPage: true,
           },
         },
-        fakeReadOptions
+        fakeReadOptions,
       );
 
       expect(resultWithEndCursor && resultWithEndCursor.pageInfo).toEqual({
@@ -158,7 +154,7 @@ describe('relayStylePagination', () => {
             hasNextPage: true,
           },
         },
-        fakeReadOptions
+        fakeReadOptions,
       );
 
       expect(resultWithEndCursor && resultWithEndCursor.pageInfo).toEqual({
@@ -213,13 +209,9 @@ describe('relayStylePagination', () => {
     });
 
     it('should maintain existing PageInfo when adding a page', () => {
-      const existingEdges = [
-        { cursor: 'alpha', node: makeReference('fakeAlpha') },
-      ];
+      const existingEdges = [{ cursor: 'alpha', node: makeReference('fakeAlpha') }];
 
-      const incomingEdges = [
-        { cursor: 'omega', node: makeReference('fakeOmega') },
-      ];
+      const incomingEdges = [{ cursor: 'omega', node: makeReference('fakeOmega') }];
 
       const result = merge(
         {
@@ -245,7 +237,7 @@ describe('relayStylePagination', () => {
           args: {
             after: 'alpha',
           },
-        }
+        },
       );
 
       expect(result).toEqual({
@@ -260,9 +252,7 @@ describe('relayStylePagination', () => {
     });
 
     it('should preserve existing if incoming is null', () => {
-      const existingEdges = [
-        { cursor: 'alpha', node: makeReference('fakeAlpha') },
-      ];
+      const existingEdges = [{ cursor: 'alpha', node: makeReference('fakeAlpha') }];
 
       const fakeExisting = {
         edges: existingEdges,
@@ -289,9 +279,7 @@ describe('relayStylePagination', () => {
     });
 
     it('should replace existing null with incoming', () => {
-      const incomingEdges = [
-        { cursor: 'alpha', node: makeReference('fakeAlpha') },
-      ];
+      const incomingEdges = [{ cursor: 'alpha', node: makeReference('fakeAlpha') }];
       const incoming = {
         edges: incomingEdges,
         pageInfo: {
@@ -312,13 +300,9 @@ describe('relayStylePagination', () => {
     });
 
     it('should maintain extra PageInfo properties', () => {
-      const existingEdges = [
-        { cursor: 'alpha', node: makeReference('fakeAlpha') },
-      ];
+      const existingEdges = [{ cursor: 'alpha', node: makeReference('fakeAlpha') }];
 
-      const incomingEdges = [
-        { cursor: 'omega', node: makeReference('fakeOmega') },
-      ];
+      const incomingEdges = [{ cursor: 'omega', node: makeReference('fakeOmega') }];
 
       const result = merge(
         {
@@ -346,7 +330,7 @@ describe('relayStylePagination', () => {
           args: {
             after: 'alpha',
           },
-        }
+        },
       );
 
       expect(result).toEqual({

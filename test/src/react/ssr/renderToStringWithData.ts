@@ -3,9 +3,7 @@ import { renderToString } from 'react-dom/server';
 
 import { getMarkupFromTree } from './getDataFromTree';
 
-export function renderToStringWithData(
-  component: ReactTypes.ReactElement<any>
-): Promise<string> {
+export function renderToStringWithData(component: ReactTypes.ReactElement<any>): Promise<string> {
   return getMarkupFromTree({
     tree: component,
     renderFunction: renderToString,

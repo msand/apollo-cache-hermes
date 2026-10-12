@@ -37,9 +37,9 @@ const entryPoints = [
 ];
 
 const lookupTrie = Object.create(null);
-entryPoints.forEach((info) => {
+entryPoints.forEach(info => {
   let node = lookupTrie;
-  info.dirs.forEach((dir) => {
+  info.dirs.forEach(dir => {
     const dirs = node.dirs || (node.dirs = Object.create(null));
     node = dirs[dir] || (dirs[dir] = { isEntry: false });
   });
@@ -67,9 +67,8 @@ export function check(id, parentId) {
     if (entryPointIndex >= 0) {
       const parentParts = partsAfterDist(parentId);
       const parentEntryPointIndex = lengthOfLongestEntryPoint(parentParts);
-      const sameEntryPoint
-        = entryPointIndex === parentEntryPointIndex &&
-        arraysEqualUpTo(importedParts, parentParts, entryPointIndex);
+      const sameEntryPoint =
+        entryPointIndex === parentEntryPointIndex && arraysEqualUpTo(importedParts, parentParts, entryPointIndex);
 
       // If the imported ID and the parent ID have the same longest entry
       // point prefix, then this import is safely confined within that
@@ -80,11 +79,7 @@ export function check(id, parentId) {
         return false;
       }
 
-      console.warn(
-        `Risky cross-entry-point nested import of ${id} in ${partsAfterDist(
-          parentId
-        ).join('/')}`
-      );
+      console.warn(`Risky cross-entry-point nested import of ${id} in ${partsAfterDist(parentId).join('/')}`);
     }
   }
 
@@ -130,11 +125,9 @@ function arraysEqualUpTo(a, b, end) {
 
 export function buildDocEntryPoints(context) {
   const dist = path.resolve(__dirname, '../dist');
-  const entryPoints = map((entryPoint) => {
+  const entryPoints = map(entryPoint => {
     return `export * from "${dist}/${entryPoint.dirs.join('/')}/index.d.ts";`;
   }, context);
-  entryPoints.push(
-    `export * from "${dist}/react/types/types.documentation.ts";`
-  );
+  entryPoints.push(`export * from "${dist}/react/types/types.documentation.ts";`);
   return entryPoints.join('\n');
 }

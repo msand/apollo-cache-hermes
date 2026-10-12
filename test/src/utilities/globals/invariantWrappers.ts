@@ -7,7 +7,7 @@ import { stringifyForDisplay } from '../common/stringifyForDisplay';
 import global from './global';
 
 function wrap(fn: (msg?: string, ...args: any[]) => void) {
-  return function(message?: string | number, ...args: any[]) {
+  return function (message?: string | number, ...args: any[]) {
     if (typeof message === 'number') {
       const arg0 = message;
       message = getHandledErrorMsg(arg0);
@@ -36,7 +36,7 @@ type LogFunction = {
    *
    * String substitutions like %s, %o, %d or %f are supported.
    */
-  (message?: any, ...optionalParams: unknown[]): void,
+  (message?: any, ...optionalParams: unknown[]): void;
 };
 
 type WrappedInvariant = {
@@ -55,28 +55,17 @@ type WrappedInvariant = {
    * pretty-stringified objects.
    * Excess `optionalParams` will be swallowed.
    */
-  (
-    condition: any,
-    message?: string | number,
-    ...optionalParams: unknown[]
-  ): asserts condition,
+  (condition: any, message?: string | number, ...optionalParams: unknown[]): asserts condition;
 
-  debug: LogFunction,
-  log: LogFunction,
-  warn: LogFunction,
-  error: LogFunction,
+  debug: LogFunction;
+  log: LogFunction;
+  warn: LogFunction;
+  error: LogFunction;
 };
 const invariant: WrappedInvariant = Object.assign(
-  function invariant(
-    condition: any,
-    message?: string | number,
-    ...args: unknown[]
-  ): asserts condition {
+  function invariant(condition: any, message?: string | number, ...args: unknown[]): asserts condition {
     if (!condition) {
-      originalInvariant(
-        condition,
-        getHandledErrorMsg(message, args) || getFallbackErrorMsg(message, args)
-      );
+      originalInvariant(condition, getHandledErrorMsg(message, args) || getFallbackErrorMsg(message, args));
     }
   },
   {
@@ -84,7 +73,7 @@ const invariant: WrappedInvariant = Object.assign(
     log: wrap(originalInvariant.log),
     warn: wrap(originalInvariant.warn),
     error: wrap(originalInvariant.error),
-  }
+  },
 );
 
 /**
@@ -97,23 +86,17 @@ const invariant: WrappedInvariant = Object.assign(
  * pretty-stringified objects.
  * Excess `optionalParams` will be swallowed.
  */
-function newInvariantError(
-  message?: string | number,
-  ...optionalParams: unknown[]
-) {
+function newInvariantError(message?: string | number, ...optionalParams: unknown[]) {
   return new InvariantError(
-    getHandledErrorMsg(message, optionalParams) ||
-      getFallbackErrorMsg(message, optionalParams)
+    getHandledErrorMsg(message, optionalParams) || getFallbackErrorMsg(message, optionalParams),
   );
 }
 
-const ApolloErrorMessageHandler = Symbol.for(
-  `ApolloErrorMessageHandler_${version}`
-);
+const ApolloErrorMessageHandler = Symbol.for(`ApolloErrorMessageHandler_${version}`);
 declare global {
   interface Window {
     [ApolloErrorMessageHandler]?: {
-      (message: string | number, args: string[]): string | undefined,
+      (message: string | number, args: string[]): string | undefined;
     } & ErrorCodes;
   }
 }
@@ -130,34 +113,20 @@ function stringify(arg: any) {
   }
 }
 
-function getHandledErrorMsg(
-  message?: string | number,
-  messageArgs: unknown[] = []
-) {
+function getHandledErrorMsg(message?: string | number, messageArgs: unknown[] = []) {
   if (!message) return;
-  return (
-    global[ApolloErrorMessageHandler] &&
-    global[ApolloErrorMessageHandler](message, messageArgs.map(stringify))
-  );
+  return global[ApolloErrorMessageHandler] && global[ApolloErrorMessageHandler](message, messageArgs.map(stringify));
 }
 
-function getFallbackErrorMsg(
-  message?: string | number,
-  messageArgs: unknown[] = []
-) {
+function getFallbackErrorMsg(message?: string | number, messageArgs: unknown[] = []) {
   if (!message) return;
   return `An error occurred! For more details, see the full error text at https://go.apollo.dev/c/err#${encodeURIComponent(
     JSON.stringify({
       version,
       message,
       args: messageArgs.map(stringify),
-    })
+    }),
   )}`;
 }
 
-export {
-  invariant,
-  InvariantError,
-  newInvariantError,
-  ApolloErrorMessageHandler,
-};
+export { invariant, InvariantError, newInvariantError, ApolloErrorMessageHandler };

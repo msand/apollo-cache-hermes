@@ -15,9 +15,9 @@ const Blob = require('blob-polyfill').Blob;
 function makeCallback<TArgs extends any[]>(
   resolve: () => void,
   reject: (error: Error) => void,
-  callback: (...args: TArgs) => any
+  callback: (...args: TArgs) => any,
 ) {
-  return function() {
+  return function () {
     try {
       // @ts-expect-error
       callback.apply(this, arguments);
@@ -45,26 +45,22 @@ function matchesResults<T>(
   resolve: () => void,
   reject: (err: any) => void,
   observable: Observable<T>,
-  results: Array<T>
+  results: Array<T>,
 ) {
   // TODO: adding a second observer to the observable will consume the
   // observable. I want to test completion, but the subscribeAndCount API
   // doesn’t have anything like that.
-  subscribeAndCount(
-    reject,
-    observable as unknown as ObservableQuery,
-    (count, result) => {
-      // subscribeAndCount is 1-indexed for some terrible reason.
-      if (count <= 0 || count > results.length) {
-        reject(new Error('Unexpected result'));
-      }
-
-      expect(result).toEqual(results[count - 1]);
-      if (count === results.length) {
-        resolve();
-      }
+  subscribeAndCount(reject, observable as unknown as ObservableQuery, (count, result) => {
+    // subscribeAndCount is 1-indexed for some terrible reason.
+    if (count <= 0 || count > results.length) {
+      reject(new Error('Unexpected result'));
     }
-  );
+
+    expect(result).toEqual(results[count - 1]);
+    if (count === results.length) {
+      resolve();
+    }
+  });
 }
 
 describe('multipart responses', () => {
@@ -219,7 +215,7 @@ describe('multipart responses', () => {
       },
     });
 
-    const fetch = jest.fn(async() => ({
+    const fetch = jest.fn(async () => ({
       status: 200,
       body: stream,
       headers: new Headers({
@@ -235,145 +231,122 @@ describe('multipart responses', () => {
     matchesResults(resolve, reject, observable, results);
   });
 
-  itAsync(
-    'can handle whatwg stream bodies with arbitrary splits',
-    (resolve, reject) => {
-      const stream = new ReadableStream({
-        async start(controller) {
-          const chunks: Array<string> = [];
-          const chunkSize = 15;
-          for (let i = 0; i < bodyCustomBoundary.length; i += chunkSize) {
-            chunks.push(bodyCustomBoundary.slice(i, i + chunkSize));
+  itAsync('can handle whatwg stream bodies with arbitrary splits', (resolve, reject) => {
+    const stream = new ReadableStream({
+      async start(controller) {
+        const chunks: Array<string> = [];
+        const chunkSize = 15;
+        for (let i = 0; i < bodyCustomBoundary.length; i += chunkSize) {
+          chunks.push(bodyCustomBoundary.slice(i, i + chunkSize));
+        }
+
+        try {
+          for (const chunk of chunks) {
+            controller.enqueue(chunk);
           }
+        } finally {
+          controller.close();
+        }
+      },
+    });
 
-          try {
-            for (const chunk of chunks) {
-              controller.enqueue(chunk);
-            }
-          } finally {
-            controller.close();
-          }
-        },
-      });
+    const fetch = jest.fn(async () => ({
+      status: 200,
+      body: stream,
+      headers: new Headers({
+        'content-type': `multipart/mixed; boundary=${BOUNDARY}`,
+      }),
+    }));
 
-      const fetch = jest.fn(async() => ({
-        status: 200,
-        body: stream,
-        headers: new Headers({
-          'content-type': `multipart/mixed; boundary=${BOUNDARY}`,
-        }),
-      }));
+    const link = new HttpLink({
+      fetch: fetch as any,
+    });
 
-      const link = new HttpLink({
-        fetch: fetch as any,
-      });
+    const observable = execute(link, { query: sampleDeferredQuery });
+    matchesResults(resolve, reject, observable, results);
+  });
 
-      const observable = execute(link, { query: sampleDeferredQuery });
-      matchesResults(resolve, reject, observable, results);
+  itAsync('can handle node stream bodies (strings) with default boundary', (resolve, reject) => {
+    const stream = Readable.from(bodyDefaultBoundary.split('\r\n').map(line => `${line}\r\n`));
+
+    const fetch = jest.fn(async () => ({
+      status: 200,
+      body: stream,
+      // if no boundary is specified, default to -
+      headers: new Headers({
+        'content-type': `multipart/mixed`,
+      }),
+    }));
+    const link = new HttpLink({
+      fetch: fetch as any,
+    });
+
+    const observable = execute(link, { query: sampleDeferredQuery });
+    matchesResults(resolve, reject, observable, results);
+  });
+
+  itAsync('can handle node stream bodies (strings) with arbitrary splits', (resolve, reject) => {
+    const chunks: Array<string> = [];
+    const chunkSize = 15;
+    for (let i = 0; i < bodyCustomBoundary.length; i += chunkSize) {
+      chunks.push(bodyCustomBoundary.slice(i, i + chunkSize));
     }
-  );
+    const stream = Readable.from(chunks);
 
-  itAsync(
-    'can handle node stream bodies (strings) with default boundary',
-    (resolve, reject) => {
-      const stream = Readable.from(
-        bodyDefaultBoundary.split('\r\n').map(line => `${line}\r\n`)
-      );
+    const fetch = jest.fn(async () => ({
+      status: 200,
+      body: stream,
+      headers: new Headers({
+        'content-type': `multipart/mixed; boundary=${BOUNDARY}`,
+      }),
+    }));
+    const link = new HttpLink({
+      fetch: fetch as any,
+    });
 
-      const fetch = jest.fn(async() => ({
-        status: 200,
-        body: stream,
-        // if no boundary is specified, default to -
-        headers: new Headers({
-          'content-type': `multipart/mixed`,
-        }),
-      }));
-      const link = new HttpLink({
-        fetch: fetch as any,
-      });
+    const observable = execute(link, { query: sampleDeferredQuery });
+    matchesResults(resolve, reject, observable, results);
+  });
 
-      const observable = execute(link, { query: sampleDeferredQuery });
-      matchesResults(resolve, reject, observable, results);
-    }
-  );
+  itAsync('can handle node stream bodies (array buffers)', (resolve, reject) => {
+    const stream = Readable.from(
+      bodyDefaultBoundary.split('\r\n').map(line => new TextEncoder().encode(`${line}\r\n`)),
+    );
 
-  itAsync(
-    'can handle node stream bodies (strings) with arbitrary splits',
-    (resolve, reject) => {
-      const chunks: Array<string> = [];
-      const chunkSize = 15;
-      for (let i = 0; i < bodyCustomBoundary.length; i += chunkSize) {
-        chunks.push(bodyCustomBoundary.slice(i, i + chunkSize));
-      }
-      const stream = Readable.from(chunks);
+    const fetch = jest.fn(async () => ({
+      status: 200,
+      body: stream,
+      // if no boundary is specified, default to -
+      headers: new Headers({
+        'content-type': `multipart/mixed`,
+      }),
+    }));
+    const link = new HttpLink({
+      fetch: fetch as any,
+    });
 
-      const fetch = jest.fn(async() => ({
-        status: 200,
-        body: stream,
-        headers: new Headers({
-          'content-type': `multipart/mixed; boundary=${BOUNDARY}`,
-        }),
-      }));
-      const link = new HttpLink({
-        fetch: fetch as any,
-      });
+    const observable = execute(link, { query: sampleDeferredQuery });
+    matchesResults(resolve, reject, observable, results);
+  });
 
-      const observable = execute(link, { query: sampleDeferredQuery });
-      matchesResults(resolve, reject, observable, results);
-    }
-  );
+  itAsync('can handle node stream bodies (array buffers) with batched results', (resolve, reject) => {
+    const stream = Readable.from(bodyBatchedResults.split('\r\n').map(line => new TextEncoder().encode(`${line}\r\n`)));
 
-  itAsync(
-    'can handle node stream bodies (array buffers)',
-    (resolve, reject) => {
-      const stream = Readable.from(
-        bodyDefaultBoundary
-          .split('\r\n')
-          .map(line => new TextEncoder().encode(`${line}\r\n`))
-      );
+    const fetch = jest.fn(async () => ({
+      status: 200,
+      body: stream,
+      // if no boundary is specified, default to -
+      headers: new Headers({
+        'content-type': `multipart/mixed;boundary="graphql";deferSpec=20220824`,
+      }),
+    }));
+    const link = new HttpLink({
+      fetch: fetch as any,
+    });
 
-      const fetch = jest.fn(async() => ({
-        status: 200,
-        body: stream,
-        // if no boundary is specified, default to -
-        headers: new Headers({
-          'content-type': `multipart/mixed`,
-        }),
-      }));
-      const link = new HttpLink({
-        fetch: fetch as any,
-      });
-
-      const observable = execute(link, { query: sampleDeferredQuery });
-      matchesResults(resolve, reject, observable, results);
-    }
-  );
-
-  itAsync(
-    'can handle node stream bodies (array buffers) with batched results',
-    (resolve, reject) => {
-      const stream = Readable.from(
-        bodyBatchedResults
-          .split('\r\n')
-          .map(line => new TextEncoder().encode(`${line}\r\n`))
-      );
-
-      const fetch = jest.fn(async() => ({
-        status: 200,
-        body: stream,
-        // if no boundary is specified, default to -
-        headers: new Headers({
-          'content-type': `multipart/mixed;boundary="graphql";deferSpec=20220824`,
-        }),
-      }));
-      const link = new HttpLink({
-        fetch: fetch as any,
-      });
-
-      const observable = execute(link, { query: sampleDeferredQuery });
-      matchesResults(resolve, reject, observable, batchedResults);
-    }
-  );
+    const observable = execute(link, { query: sampleDeferredQuery });
+    matchesResults(resolve, reject, observable, batchedResults);
+  });
 
   itAsync('can handle streamable blob bodies', (resolve, reject) => {
     const body = new Blob(bodyCustomBoundary.split('\r\n'), {
@@ -392,7 +365,7 @@ describe('multipart responses', () => {
       },
     });
     body.stream = () => stream;
-    const fetch = jest.fn(async() => ({
+    const fetch = jest.fn(async () => ({
       status: 200,
       body,
       headers: new Headers({
@@ -410,11 +383,11 @@ describe('multipart responses', () => {
   itAsync('can handle non-streamable blob bodies', (resolve, reject) => {
     const body = new Blob(
       bodyCustomBoundary.split('\r\n').map(i => `${i}\r\n`),
-      { type: 'application/text' }
+      { type: 'application/text' },
     );
     body.stream = undefined;
 
-    const fetch = jest.fn(async() => ({
+    const fetch = jest.fn(async () => ({
       status: 200,
       body,
       headers: new Headers({
@@ -432,7 +405,7 @@ describe('multipart responses', () => {
   itAsync('throws error on non-streamable body', (resolve, reject) => {
     // non-streamable body
     const body = 12345;
-    const fetch = jest.fn(async() => ({
+    const fetch = jest.fn(async () => ({
       status: 200,
       body,
       headers: new Headers({
@@ -444,17 +417,15 @@ describe('multipart responses', () => {
     });
     const observable = execute(link, { query: sampleDeferredQuery });
     const mockError = {
-      throws: new Error(
-        'Unknown body type for responseIterator. Please pass a streamable response.'
-      ),
+      throws: new Error('Unknown body type for responseIterator. Please pass a streamable response.'),
     };
 
     observable.subscribe(
       () => reject('next should not have been called'),
-      makeCallback(resolve, reject, (error) => {
+      makeCallback(resolve, reject, error => {
         expect(error).toEqual(mockError.throws);
       }),
-      () => reject('complete should not have been called')
+      () => reject('complete should not have been called'),
     );
   });
 
@@ -493,37 +464,30 @@ describe('multipart responses', () => {
       globalThis.TextDecoder = originalTextDecoder;
     });
 
-    itAsync(
-      'throws error if TextDecoder not defined in the environment',
-      (resolve, reject) => {
-        const stream = Readable.from(
-          bodyIncorrectChunkType.split('\r\n').map(line => `${line}\r\n`)
-        );
-        const fetch = jest.fn(async() => ({
-          status: 200,
-          body: stream,
-          headers: new Headers({
-            'content-type': `multipart/mixed; boundary=${BOUNDARY}`,
-          }),
-        }));
-        const link = new HttpLink({
-          fetch: fetch as any,
-        });
-        const observable = execute(link, { query: sampleDeferredQuery });
-        const mockError = {
-          throws: new Error(
-            'TextDecoder must be defined in the environment: please import a polyfill.'
-          ),
-        };
+    itAsync('throws error if TextDecoder not defined in the environment', (resolve, reject) => {
+      const stream = Readable.from(bodyIncorrectChunkType.split('\r\n').map(line => `${line}\r\n`));
+      const fetch = jest.fn(async () => ({
+        status: 200,
+        body: stream,
+        headers: new Headers({
+          'content-type': `multipart/mixed; boundary=${BOUNDARY}`,
+        }),
+      }));
+      const link = new HttpLink({
+        fetch: fetch as any,
+      });
+      const observable = execute(link, { query: sampleDeferredQuery });
+      const mockError = {
+        throws: new Error('TextDecoder must be defined in the environment: please import a polyfill.'),
+      };
 
-        observable.subscribe(
-          () => reject('next should not have been called'),
-          makeCallback(resolve, reject, (error) => {
-            expect(error).toEqual(mockError.throws);
-          }),
-          () => reject('complete should not have been called')
-        );
-      }
-    );
+      observable.subscribe(
+        () => reject('next should not have been called'),
+        makeCallback(resolve, reject, error => {
+          expect(error).toEqual(mockError.throws);
+        }),
+        () => reject('complete should not have been called'),
+      );
+    });
   });
 });

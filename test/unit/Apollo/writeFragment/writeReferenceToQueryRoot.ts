@@ -10,7 +10,6 @@ import { strictConfig } from '../../../helpers';
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`writeFragment directly to root query`, () => {
-
   let hermes: Hermes, baseline: GraphSnapshot;
   beforeAll(() => {
     hermes = new Hermes(strictConfig);
@@ -42,7 +41,7 @@ describe(`writeFragment directly to root query`, () => {
         },
         /* inbound */ undefined,
         [{ id: '123', path: [] }],
-      )
+      ),
     );
     expect(baseline.getNodeData(QueryRootId)).to.eq(baseline.getNodeData('123'));
   });
@@ -57,8 +56,7 @@ describe(`writeFragment directly to root query`, () => {
         },
         [{ id: QueryRootId, path: [] }],
         /* outbound */ undefined,
-      )
+      ),
     );
   });
-
 });

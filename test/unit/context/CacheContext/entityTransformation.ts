@@ -13,7 +13,6 @@ import { query, strictConfig } from '../../../helpers';
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`context.CacheContext`, () => {
-
   function queryWithTypename(gqlString: string, variables?: JsonObject, rootId?: NodeId) {
     const rawOperation = query(gqlString, variables, rootId);
     return { ...rawOperation, document: addTypenameToDocument(rawOperation.document) };
@@ -23,14 +22,17 @@ describe(`context.CacheContext`, () => {
     describe(`no entity transformer`, () => {
       let viewerQuery: RawOperation, entityTransformerContext: CacheContext, snapshot: GraphSnapshot;
       beforeAll(() => {
-        viewerQuery = queryWithTypename(`
+        viewerQuery = queryWithTypename(
+          `
           query getViewer($id:ID!) {
             viewer(id:$id) {
               id
               name
             }
           }
-        `, { id: '4' });
+        `,
+          { id: '4' },
+        );
 
         entityTransformerContext = new CacheContext({
           ...strictConfig,
@@ -48,7 +50,10 @@ describe(`context.CacheContext`, () => {
 
       it(`check helper methods does not exist`, () => {
         const viewerParameterizedId = nodeIdForParameterizedValue(QueryRootId, ['viewer'], { id: '4' });
-        expect(Object.getPrototypeOf(snapshot.getNodeData(viewerParameterizedId))).to.not.include.all.keys(['getName', 'getId']);
+        expect(Object.getPrototypeOf(snapshot.getNodeData(viewerParameterizedId))).to.not.include.all.keys([
+          'getName',
+          'getId',
+        ]);
       });
     });
 
@@ -74,10 +79,10 @@ describe(`context.CacheContext`, () => {
           ...strictConfig,
           entityTransformer: (node: JsonObject): void => {
             mixinHelperMethods(node, {
-              getName(this: { id: string, name: string }) {
+              getName(this: { id: string; name: string }) {
                 return this.name;
               },
-              getId(this: { id: string, name: string }) {
+              getId(this: { id: string; name: string }) {
                 return this.id;
               },
             });
@@ -103,7 +108,10 @@ describe(`context.CacheContext`, () => {
 
       it(`check helper methods exists`, () => {
         expect(Object.getPrototypeOf(snapshot.getNodeData(QueryRootId))).to.not.include.all.keys(['getName', 'getId']);
-        expect(Object.getPrototypeOf(snapshot.getNodeData(QueryRootId).viewer)).to.include.all.keys(['getName', 'getId']);
+        expect(Object.getPrototypeOf(snapshot.getNodeData(QueryRootId).viewer)).to.include.all.keys([
+          'getName',
+          'getId',
+        ]);
       });
     });
 
@@ -140,14 +148,14 @@ describe(`context.CacheContext`, () => {
           nickName: string;
           contact: {
             address: {
-              city: string,
-              state: string,
-            },
-            phone: number,
+              city: string;
+              state: string;
+            };
+            phone: number;
           };
         }
 
-        function mixinHelperMethods(obj: any, proto: object| null): void {
+        function mixinHelperMethods(obj: any, proto: object | null): void {
           if (obj['__typename'] === 'user') {
             const newPrototype = _.clone(Object.getPrototypeOf(obj));
             Object.assign(newPrototype, proto);
@@ -213,15 +221,27 @@ describe(`context.CacheContext`, () => {
       });
 
       it(`check helper methods exists`, () => {
-        expect(Object.getPrototypeOf(snapshot.getNodeData(QueryRootId).user)).to.include.all.keys(
-          ['getName', 'getId', 'getJustPhoneNumber', 'getCity']);
+        expect(Object.getPrototypeOf(snapshot.getNodeData(QueryRootId).user)).to.include.all.keys([
+          'getName',
+          'getId',
+          'getJustPhoneNumber',
+          'getCity',
+        ]);
       });
 
       it(`check helper method not attached to other entity`, () => {
-        expect(Object.getPrototypeOf(snapshot.getNodeData(QueryRootId))).to.not.include.all.keys(
-          ['getName', 'getId', 'getJustPhoneNumber', 'getCity']);
-        expect(Object.getPrototypeOf(snapshot.getNodeData('1'))).to.not.include.all.keys(
-          ['getName', 'getId', 'getJustPhoneNumber', 'getCity']);
+        expect(Object.getPrototypeOf(snapshot.getNodeData(QueryRootId))).to.not.include.all.keys([
+          'getName',
+          'getId',
+          'getJustPhoneNumber',
+          'getCity',
+        ]);
+        expect(Object.getPrototypeOf(snapshot.getNodeData('1'))).to.not.include.all.keys([
+          'getName',
+          'getId',
+          'getJustPhoneNumber',
+          'getCity',
+        ]);
       });
     });
 
@@ -258,14 +278,14 @@ describe(`context.CacheContext`, () => {
           nickName: string;
           contact: {
             address: {
-              city: string,
-              state: string,
-            },
-            phone: number,
+              city: string;
+              state: string;
+            };
+            phone: number;
           };
         }
 
-        function mixinHelperMethods(obj: any, proto: object| null): void {
+        function mixinHelperMethods(obj: any, proto: object | null): void {
           if (obj['__typename'] === 'user') {
             const newPrototype = _.clone(Object.getPrototypeOf(obj));
             Object.assign(newPrototype, proto);
@@ -331,15 +351,27 @@ describe(`context.CacheContext`, () => {
       });
 
       it(`check helper methods exists`, () => {
-        expect(Object.getPrototypeOf(snapshot.getNodeData(QueryRootId).user)).to.include.all.keys(
-          ['getName', 'getId', 'getJustPhoneNumber', 'getCity']);
+        expect(Object.getPrototypeOf(snapshot.getNodeData(QueryRootId).user)).to.include.all.keys([
+          'getName',
+          'getId',
+          'getJustPhoneNumber',
+          'getCity',
+        ]);
       });
 
       it(`check helper method not attached to other entity`, () => {
-        expect(Object.getPrototypeOf(snapshot.getNodeData(QueryRootId))).to.not.include.all.keys(
-          ['getName', 'getId', 'getJustPhoneNumber', 'getCity']);
-        expect(Object.getPrototypeOf(snapshot.getNodeData('1'))).to.not.include.all.keys(
-          ['getName', 'getId', 'getJustPhoneNumber', 'getCity']);
+        expect(Object.getPrototypeOf(snapshot.getNodeData(QueryRootId))).to.not.include.all.keys([
+          'getName',
+          'getId',
+          'getJustPhoneNumber',
+          'getCity',
+        ]);
+        expect(Object.getPrototypeOf(snapshot.getNodeData('1'))).to.not.include.all.keys([
+          'getName',
+          'getId',
+          'getJustPhoneNumber',
+          'getCity',
+        ]);
       });
     });
 
@@ -378,13 +410,16 @@ describe(`context.CacheContext`, () => {
     describe(`mixing additional helper on parameterized query`, () => {
       let viewerQuery: RawOperation, entityTransformerContext: CacheContext, snapshot: GraphSnapshot;
       beforeAll(() => {
-        viewerQuery = queryWithTypename(`
+        viewerQuery = queryWithTypename(
+          `
         query getViewer($id:ID!) {
           viewer(id:$id) {
             id
             name
           }
-        }`, { id: '4' });
+        }`,
+          { id: '4' },
+        );
 
         function mixinHelperMethods(obj: Record<string, unknown>, proto: object | null): void {
           if (obj['__typename'] === 'viewer') {
@@ -398,10 +433,10 @@ describe(`context.CacheContext`, () => {
           ...strictConfig,
           entityTransformer: (node: JsonObject): void => {
             mixinHelperMethods(node, {
-              getName(this: { id: string, name: string }) {
+              getName(this: { id: string; name: string }) {
                 return this.name;
               },
-              getId(this: { id: string, name: string }) {
+              getId(this: { id: string; name: string }) {
                 return this.id;
               },
             });
@@ -427,7 +462,10 @@ describe(`context.CacheContext`, () => {
 
       it(`check helper methods exists`, () => {
         const viewerParameterizedId = nodeIdForParameterizedValue(QueryRootId, ['viewer'], { id: '4' });
-        expect(Object.getPrototypeOf(snapshot.getNodeData(viewerParameterizedId))).to.include.all.keys(['getName', 'getId']);
+        expect(Object.getPrototypeOf(snapshot.getNodeData(viewerParameterizedId))).to.include.all.keys([
+          'getName',
+          'getId',
+        ]);
       });
     });
   });

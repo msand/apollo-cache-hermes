@@ -14,13 +14,7 @@
     "esModuleInterop": true,
     "experimentalDecorators": true,
     "inlineSourceMap": true,
-    "lib": [
-      "dom",
-      "es2015",
-      "esnext.asynciterable",
-      "ES2021.WeakRef",
-      "scripthost"
-    ],
+    "lib": ["dom", "es2015", "esnext.asynciterable", "ES2021.WeakRef", "scripthost"],
     "newLine": "LF",
     "noImplicitReturns": false,
     "noImplicitThis": true,

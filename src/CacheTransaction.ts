@@ -45,9 +45,9 @@ function isInvalidateModifier(value: any): value is InvalidateModifier {
 }
 
 type Node<TSerialized> = {
-  node: any,
-  previous: JsonValue | undefined,
-  updater: CacheContext.EntityUpdater<TSerialized>,
+  node: any;
+  previous: JsonValue | undefined;
+  updater: CacheContext.EntityUpdater<TSerialized>;
 };
 
 /**
@@ -58,7 +58,6 @@ type Node<TSerialized> = {
  * (an optimistic update).  Otherwise edits are made against the baseline state.
  */
 export class CacheTransaction<TSerialized> implements Queryable {
-
   /** The set of nodes edited throughout the transaction. */
   private _editedNodeIds = new Set<NodeId>();
 
@@ -95,7 +94,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
       this._context,
       query,
       this._optimisticChangeId ? this._snapshot.optimistic : this._snapshot.baseline,
-      Object.create(null)
+      Object.create(null),
     );
   }
 
@@ -136,7 +135,11 @@ export class CacheTransaction<TSerialized> implements Queryable {
    * Complete the transaction, returning the new snapshot and the ids of any
    * nodes that were edited.
    */
-  commit(): { snapshot: CacheSnapshotType, editedNodeIds: Set<NodeId>, writtenQueries: Set<OperationInstance<TSerialized>> } {
+  commit(): {
+    snapshot: CacheSnapshotType;
+    editedNodeIds: Set<NodeId>;
+    writtenQueries: Set<OperationInstance<TSerialized>>;
+  } {
     this._triggerEntityUpdaters();
 
     let snapshot = this._snapshot;
@@ -187,7 +190,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
       const either = node || previous;
 
       if (!(either instanceof EntitySnapshot)) continue; // Only entities
-      let typeName = isObject(either.data) && either.data.__typename as string | undefined;
+      let typeName = isObject(either.data) && (either.data.__typename as string | undefined);
       const isRoot = nodeId === StaticNodeId.QueryRoot;
       if (!typeName && isRoot) {
         typeName = 'Query';
@@ -220,7 +223,12 @@ export class CacheTransaction<TSerialized> implements Queryable {
   private _writeBaseline(query: RawOperation, payload: JsonObject) {
     const current = this._snapshot;
 
-    const { snapshot: baseline, editedNodeIds, writtenQueries, ref } = write(this._context, current.baseline, query, payload);
+    const {
+      snapshot: baseline,
+      editedNodeIds,
+      writtenQueries,
+      ref,
+    } = write(this._context, current.baseline, query, payload);
     addToSet(this._editedNodeIds, editedNodeIds);
     addToSet(this._writtenQueries, writtenQueries);
 
@@ -250,7 +258,12 @@ export class CacheTransaction<TSerialized> implements Queryable {
   private _writeOptimistic(query: RawOperation, payload: JsonObject) {
     this._deltas.push({ query, payload });
 
-    const { snapshot: optimistic, editedNodeIds, writtenQueries, ref } = write(this._context, this._snapshot.optimistic, query, payload);
+    const {
+      snapshot: optimistic,
+      editedNodeIds,
+      writtenQueries,
+      ref,
+    } = write(this._context, this._snapshot.optimistic, query, payload);
     addToSet(this._writtenQueries, writtenQueries);
     addToSet(this._editedNodeIds, editedNodeIds);
 
@@ -279,7 +292,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
       if (datum != null) {
         return [{ d: datum, k: null }];
       }
-      const nodes: { d: any, k: string }[] = obj.parameterized?.get(key)?.map(nodeRefToMatch) ?? [];
+      const nodes: { d: any; k: string }[] = obj.parameterized?.get(key)?.map(nodeRefToMatch) ?? [];
       const out = obj.outbound?.get(key);
       if (out) {
         const k = out.id;
@@ -321,7 +334,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
 
     const readField = (
       fieldNameOrOptions: string | ReadFieldOptions,
-      from: StoreObject | Reference = (tempStore[id]?.data ?? node.data) as StoreObject
+      from: StoreObject | Reference = (tempStore[id]?.data ?? node.data) as StoreObject,
     ) => {
       if (typeof fieldNameOrOptions === 'object') {
         from = fieldNameOrOptions.from ?? from;
@@ -363,9 +376,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
       DELETE,
       INVALIDATE,
       canRead(value: StoreValue): boolean {
-        return isReference(value)
-          ? snapshot.has(value.__ref)
-          : typeof value === 'object' && value !== null;
+        return isReference(value) ? snapshot.has(value.__ref) : typeof value === 'object' && value !== null;
       },
       fieldName: '',
       isReference,
@@ -375,7 +386,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
         const entityId = this._context.entityIdForValue(value);
         if (entityId && mergeIntoStore && !isReference(value) && typeof value !== 'string') {
           const nodeSnapshot = ensureNewSnapshot(entityId);
-          nodeSnapshot.data = { ...nodeSnapshot.data as {}, ...value };
+          nodeSnapshot.data = { ...(nodeSnapshot.data as {}), ...value };
           modified = true;
         }
         return entityId ? makeRef(entityId) : undefined;
@@ -384,7 +395,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
 
     const data = node.data ?? {};
     const keys = Object.keys(data);
-    const payload: JsonObject = { };
+    const payload: JsonObject = {};
     const deleted = new Set<string>();
 
     let modified = false;
@@ -412,9 +423,11 @@ export class CacheTransaction<TSerialized> implements Queryable {
           const useRef = k?.includes('❖');
           const copyOrCurrent = Array.isArray(d)
             ? Array.prototype.slice.call(d)
-            : useRef ? { __ref: k } : typeof d === 'object'
-              ? { ...d }
-              : d;
+            : useRef
+              ? { __ref: k }
+              : typeof d === 'object'
+                ? { ...d }
+                : d;
           details.fieldName = key;
           details.storeFieldName = storeFieldName;
           const value = field(copyOrCurrent, details);
@@ -425,7 +438,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
             this._editedNodeIds.add(id);
             let dirty = this._context.dirty.get(id);
             if (!dirty) {
-              this._context.dirty.set(id, dirty = new Set());
+              this._context.dirty.set(id, (dirty = new Set()));
             }
             dirty.add(key);
             dirty.add(storeFieldName);
@@ -436,9 +449,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
           }
         }
       }
-      if (
-        keys.length !== 0 && keys.length === deleted.size && keys.every(key => deleted.has(key))
-      ) {
+      if (keys.length !== 0 && keys.length === deleted.size && keys.every(key => deleted.has(key))) {
         allDeleted = true;
         modified = true;
       }
@@ -451,9 +462,11 @@ export class CacheTransaction<TSerialized> implements Queryable {
           const useRef = k?.includes('❖');
           const copyOrCurrent = Array.isArray(d)
             ? Array.prototype.slice.call(d)
-            : useRef ? { __ref: k } : typeof d === 'object'
-              ? { ...d }
-              : d;
+            : useRef
+              ? { __ref: k }
+              : typeof d === 'object'
+                ? { ...d }
+                : d;
           details.fieldName = key;
           details.storeFieldName = storeFieldName;
           const value = field(copyOrCurrent, details);
@@ -464,7 +477,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
             this._editedNodeIds.add(id);
             let dirty = this._context.dirty.get(id);
             if (!dirty) {
-              this._context.dirty.set(id, dirty = new Set());
+              this._context.dirty.set(id, (dirty = new Set()));
             }
             dirty.add(key);
             dirty.add(storeFieldName);
@@ -478,9 +491,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
           }
         }
       }
-      if (
-        keys.length !== 0 && keys.length === deleted.size && keys.every(key => deleted.has(key))
-      ) {
+      if (keys.length !== 0 && keys.length === deleted.size && keys.every(key => deleted.has(key))) {
         allDeleted = true;
         modified = true;
       }
@@ -563,9 +574,11 @@ export class CacheTransaction<TSerialized> implements Queryable {
     };
     return this.modify({
       id: options.id ?? 'ROOT_QUERY',
-      fields: options.fieldName ? {
-        [options.fieldName]: modifier,
-      } : modifier,
+      fields: options.fieldName
+        ? {
+            [options.fieldName]: modifier,
+          }
+        : modifier,
       broadcast: options.broadcast,
     });
   }
@@ -612,5 +625,4 @@ export class CacheTransaction<TSerialized> implements Queryable {
 
     return true;
   }
-
 }

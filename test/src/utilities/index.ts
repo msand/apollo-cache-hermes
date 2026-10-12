@@ -1,9 +1,6 @@
 export { DEV, maybe } from './globals/index';
 
-export type {
-  DirectiveInfo,
-  InclusionDirectives,
-} from './graphql/directives';
+export type { DirectiveInfo, InclusionDirectives } from './graphql/directives';
 export {
   shouldInclude,
   hasDirectives,
@@ -18,11 +15,7 @@ export type { DocumentTransformCacheKey } from './graphql/DocumentTransform';
 export { DocumentTransform } from './graphql/DocumentTransform';
 
 export type { FragmentMap, FragmentMapFunction } from './graphql/fragments';
-export {
-  createFragmentMap,
-  getFragmentQueryDocument,
-  getFragmentFromSelection,
-} from './graphql/fragments';
+export { createFragmentMap, getFragmentQueryDocument, getFragmentFromSelection } from './graphql/fragments';
 
 export {
   checkDocument,
@@ -80,22 +73,11 @@ export {
   removeClientSetsFromDocument,
 } from './graphql/transform';
 
-export {
-  isMutationOperation,
-  isQueryOperation,
-  isSubscriptionOperation,
-} from './graphql/operations';
+export { isMutationOperation, isQueryOperation, isSubscriptionOperation } from './graphql/operations';
 
-export {
-  concatPagination,
-  offsetLimitPagination,
-  relayStylePagination,
-} from './policies/pagination';
+export { concatPagination, offsetLimitPagination, relayStylePagination } from './policies/pagination';
 
-export type {
-  Observer,
-  ObservableSubscription,
-} from './observables/Observable';
+export type { Observer, ObservableSubscription } from './observables/Observable';
 export { Observable } from './observables/Observable';
 
 export type { PromiseWithState } from './promises/decoration';
@@ -132,10 +114,5 @@ export type { DeepOmit } from './types/DeepOmit';
 export type { DeepPartial } from './types/DeepPartial';
 export type { OnlyRequiredProperties } from './types/OnlyRequiredProperties';
 
-export {
-  AutoCleanedStrongCache,
-  AutoCleanedWeakCache,
-  cacheSizes,
-  defaultCacheSizes,
-} from './caching/index';
+export { AutoCleanedStrongCache, AutoCleanedWeakCache, cacheSizes, defaultCacheSizes } from './caching/index';
 export type { CacheSizes } from './caching/index';

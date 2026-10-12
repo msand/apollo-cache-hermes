@@ -21,11 +21,7 @@ export function renderWithClient<
   BaseElement extends Element | DocumentFragment = Container,
 >(
   ui: ReactElement,
-  {
-    client,
-    wrapper: Wrapper = React.Fragment,
-    ...renderOptions
-  }: RenderWithClientOptions<Q, Container, BaseElement>
+  { client, wrapper: Wrapper = React.Fragment, ...renderOptions }: RenderWithClientOptions<Q, Container, BaseElement>,
 ) {
   return render(ui, {
     ...renderOptions,
@@ -43,8 +39,8 @@ export interface RenderWithMocksOptions<
   Q extends Queries = typeof queries,
   Container extends Element | DocumentFragment = HTMLElement,
   BaseElement extends Element | DocumentFragment = Container,
-> extends RenderOptions<Q, Container, BaseElement>,
-    MockedProviderProps<any> {}
+>
+  extends RenderOptions<Q, Container, BaseElement>, MockedProviderProps<any> {}
 
 export function renderWithMocks<
   Q extends Queries = typeof queries,
@@ -52,10 +48,7 @@ export function renderWithMocks<
   BaseElement extends Element | DocumentFragment = Container,
 >(
   ui: ReactElement,
-  {
-    wrapper: Wrapper = React.Fragment,
-    ...renderOptions
-  }: RenderWithMocksOptions<Q, Container, BaseElement>
+  { wrapper: Wrapper = React.Fragment, ...renderOptions }: RenderWithMocksOptions<Q, Container, BaseElement>,
 ) {
   return render(ui, {
     ...renderOptions,

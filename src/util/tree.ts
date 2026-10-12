@@ -18,8 +18,11 @@ export type OperationVisitor = (parent: JsonValue | undefined, fields: string[],
  * Walk and run on ParsedQueryNode and the result.
  * This is used to verify result of the read operation.
  */
-export function walkOperation(rootOperation: ParsedQueryWithVariables, result: JsonObject | undefined, visitor: OperationVisitor) {
-
+export function walkOperation(
+  rootOperation: ParsedQueryWithVariables,
+  result: JsonObject | undefined,
+  visitor: OperationVisitor,
+) {
   // Perform the walk as a depth-first traversal; and unlike the payload walk,
   // we don't bother tracking the path.
   const queue = [new OperationWalkNode(rootOperation, [], result)];

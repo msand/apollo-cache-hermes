@@ -7,11 +7,7 @@ import { NodeId } from '../schema';
 /**
  * Mutates a snapshot, removing a reference from it.
  */
-export function removeInboundReference(
-  snapshot: NodeSnapshot,
-  id: NodeId,
-  path: PathPart[],
-) {
+export function removeInboundReference(snapshot: NodeSnapshot, id: NodeId, path: PathPart[]) {
   const map = snapshot.inbound;
   if (!map) return;
 
@@ -23,10 +19,7 @@ export function removeInboundReference(
     snapshot.inbound = undefined;
   }
 }
-export function removeOutboundReference(
-  snapshot: NodeSnapshot,
-  path: PathPart[],
-) {
+export function removeOutboundReference(snapshot: NodeSnapshot, path: PathPart[]) {
   const map = snapshot.outbound;
   if (!map) return;
 
@@ -38,11 +31,7 @@ export function removeOutboundReference(
     snapshot.outbound = undefined;
   }
 }
-export function removeParameterizedReference(
-  snapshot: NodeSnapshot,
-  id: NodeId,
-  path: PathPart[],
-) {
+export function removeParameterizedReference(snapshot: NodeSnapshot, id: NodeId, path: PathPart[]) {
   const map = snapshot.parameterized;
   if (!map) return;
 
@@ -68,11 +57,7 @@ export function removeParameterizedReference(
 /**
  * Mutates a snapshot, adding a new reference to it.
  */
-export function addInboundReference(
-  snapshot: NodeSnapshot,
-  id: NodeId,
-  path: PathPart[],
-) {
+export function addInboundReference(snapshot: NodeSnapshot, id: NodeId, path: PathPart[]) {
   const node: NodeReference = { id, path };
   let references = snapshot.inbound;
   if (!references) {
@@ -81,11 +66,7 @@ export function addInboundReference(
   const key = refToInKey(node);
   references.set(key, node);
 }
-export function addOutboundReference(
-  snapshot: NodeSnapshot,
-  id: NodeId,
-  path: PathPart[],
-) {
+export function addOutboundReference(snapshot: NodeSnapshot, id: NodeId, path: PathPart[]) {
   const node: NodeReference = { id, path };
   let references = snapshot.outbound;
   if (!references) {
@@ -94,11 +75,7 @@ export function addOutboundReference(
   const key = toOutKey(path);
   references.set(key, node);
 }
-export function addParameterizedReference(
-  snapshot: NodeSnapshot,
-  id: NodeId,
-  path: PathPart[],
-) {
+export function addParameterizedReference(snapshot: NodeSnapshot, id: NodeId, path: PathPart[]) {
   let references = snapshot.parameterized;
   if (!references) {
     references = snapshot.parameterized = new Map();
@@ -116,11 +93,7 @@ export function addParameterizedReference(
  * Return true if { id, path } is a valid reference in the node's references
  * array. Otherwise, return false.
  */
-export function hasParameterizedReference(
-  snapshot: NodeSnapshot,
-  id: NodeId,
-  path: PathPart[],
-): boolean {
+export function hasParameterizedReference(snapshot: NodeSnapshot, id: NodeId, path: PathPart[]): boolean {
   const refs = snapshot.parameterized?.get(toParamKey(path));
   return refs !== undefined && getIndexOfGivenReference(refs, id, path) > -1;
 }
@@ -130,7 +103,7 @@ export function hasParameterizedReference(
  * Otherwise, return -1.
  */
 export function getIndexOfGivenReference(references: NodeReference[], id: NodeId, path: PathPart[]): number {
-  return references.findIndex((reference) => {
+  return references.findIndex(reference => {
     const p = reference.path;
     return reference.id === id && path.every((part, i) => part === p[i]);
   });
@@ -225,7 +198,9 @@ function setParameterized(map: Map<string, NodeReference[]>, node: NodeReference
 
 export const set = setParameterized;
 
-export function getParameterized(parameterized: Iterable<NodeReference> | undefined): Map<string, NodeReference[]> | undefined {
+export function getParameterized(
+  parameterized: Iterable<NodeReference> | undefined,
+): Map<string, NodeReference[]> | undefined {
   if (!parameterized) {
     return parameterized;
   }
@@ -236,7 +211,7 @@ export function getParameterized(parameterized: Iterable<NodeReference> | undefi
   return map;
 }
 
-export function *iterParameterized(parameterized: Map<string, NodeReference[]> | undefined) {
+export function* iterParameterized(parameterized: Map<string, NodeReference[]> | undefined) {
   if (!parameterized) {
     return;
   }
@@ -247,7 +222,10 @@ export function *iterParameterized(parameterized: Map<string, NodeReference[]> |
   }
 }
 
-export function *iterRefs(outbound: Map<string, NodeReference> | undefined, parameterized: Map<string, NodeReference[]> | undefined): Generator<NodeReference> {
+export function* iterRefs(
+  outbound: Map<string, NodeReference> | undefined,
+  parameterized: Map<string, NodeReference[]> | undefined,
+): Generator<NodeReference> {
   if (parameterized !== undefined) {
     for (const refs of parameterized.values()) {
       for (const ref of refs) {

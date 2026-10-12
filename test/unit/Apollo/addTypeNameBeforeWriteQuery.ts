@@ -1,11 +1,10 @@
 import { expect } from 'chai';
 import gql from 'graphql-tag';
 
-import { Hermes }  from '../../../src';
+import { Hermes } from '../../../src';
 import { strictConfig } from '../../helpers';
 
 describe(`transform document before writeQuery`, () => {
-
   let hermes: Hermes;
   beforeAll(() => {
     hermes = new Hermes({
@@ -29,12 +28,12 @@ describe(`transform document before writeQuery`, () => {
         },
       },
     });
-
   });
 
   it(`correctly writeQuery with __typename`, () => {
-    expect(hermes.readQuery({
-      query: gql(`
+    expect(
+      hermes.readQuery({
+        query: gql(`
         query getViewer {
           viewer {
             id
@@ -42,7 +41,8 @@ describe(`transform document before writeQuery`, () => {
           }
         }
       `),
-    })).to.deep.eq({
+      }),
+    ).to.deep.eq({
       viewer: {
         id: 0,
         name: 'Gouda',
@@ -50,5 +50,4 @@ describe(`transform document before writeQuery`, () => {
       },
     });
   });
-
 });

@@ -1,12 +1,9 @@
 import type { MatcherFunction } from 'expect';
 
 import type { QueryRef } from '../../react/internal/index';
-import {
-  assertWrappedQueryRef,
-  unwrapQueryRef,
-} from '../../react/internal/index';
+import { assertWrappedQueryRef, unwrapQueryRef } from '../../react/internal/index';
 
-export const toBeDisposed: MatcherFunction<[]> = function(_queryRef) {
+export const toBeDisposed: MatcherFunction<[]> = function (_queryRef) {
   const hint = this.utils.matcherHint('toBeDisposed', 'queryRef', '', {
     isNot: this.isNot,
   });

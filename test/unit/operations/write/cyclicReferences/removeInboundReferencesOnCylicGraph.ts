@@ -8,7 +8,6 @@ import { createSnapshot, updateSnapshot } from '../../../../helpers';
 // workflow in isolation, given the contextual state that must be passed around.
 describe(`operations.write`, () => {
   describe(`remove inbound references on cyclic graph`, () => {
-
     let snapshot: GraphSnapshot, editedNodeIds: Set<NodeId>;
     beforeAll(() => {
       const cyclicRefQuery = `{
@@ -37,7 +36,7 @@ describe(`operations.write`, () => {
             },
           },
         },
-        cyclicRefQuery
+        cyclicRefQuery,
       ).snapshot;
 
       const result = updateSnapshot(
@@ -54,7 +53,7 @@ describe(`operations.write`, () => {
             },
           },
         },
-        cyclicRefQuery
+        cyclicRefQuery,
       );
 
       snapshot = result.snapshot;

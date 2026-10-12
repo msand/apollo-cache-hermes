@@ -30,9 +30,7 @@ interface DocumentTransformOptions {
    *
    * The default implementation of this function returns the `document` as the cache key.
    */
-  getCacheKey?: (
-    document: DocumentNode
-  ) => DocumentTransformCacheKey | undefined;
+  getCacheKey?: (document: DocumentNode) => DocumentTransformCacheKey | undefined;
 }
 
 function identity(document: DocumentNode) {
@@ -43,17 +41,14 @@ export class DocumentTransform {
   private readonly transform: TransformFn;
   private cached: boolean;
 
-  private readonly resultCache
-    = canUseWeakSet ? new WeakSet<DocumentNode>() : new Set<DocumentNode>();
+  private readonly resultCache = canUseWeakSet ? new WeakSet<DocumentNode>() : new Set<DocumentNode>();
 
   // This default implementation of getCacheKey can be overridden by providing
   // options.getCacheKey to the DocumentTransform constructor. In general, a
   // getCacheKey function may either return an array of keys (often including
   // the document) to be used as a cache key, or undefined to indicate the
   // transform for this document should not be cached.
-  private getCacheKey(
-    document: DocumentNode
-  ): DocumentTransformCacheKey | undefined {
+  private getCacheKey(document: DocumentNode): DocumentTransformCacheKey | undefined {
     return [document];
   }
 
@@ -67,26 +62,23 @@ export class DocumentTransform {
   static split(
     predicate: (document: DocumentNode) => boolean,
     left: DocumentTransform,
-    right: DocumentTransform = DocumentTransform.identity()
+    right: DocumentTransform = DocumentTransform.identity(),
   ) {
     return Object.assign(
       new DocumentTransform(
-        (document) => {
+        document => {
           const documentTransform = predicate(document) ? left : right;
 
           return documentTransform.transformDocument(document);
         },
         // Reasonably assume both `left` and `right` transforms handle their own caching
-        { cache: false }
+        { cache: false },
       ),
-      { left, right }
+      { left, right },
     );
   }
 
-  constructor(
-    transform: TransformFn,
-    options: DocumentTransformOptions = Object.create(null)
-  ) {
+  constructor(transform: TransformFn, options: DocumentTransformOptions = Object.create(null)) {
     this.transform = transform;
 
     if (options.getCacheKey) {
@@ -104,23 +96,17 @@ export class DocumentTransform {
   resetCache() {
     if (this.cached) {
       const stableCacheKeys = new Trie<WeakKey>(canUseWeakMap);
-      this.performWork = wrap(
-        DocumentTransform.prototype.performWork.bind(this),
-        {
-          makeCacheKey: (document) => {
-            const cacheKeys = this.getCacheKey(document);
-            if (cacheKeys) {
-              invariant(
-                Array.isArray(cacheKeys),
-                '`getCacheKey` must return an array or undefined'
-              );
-              return stableCacheKeys.lookupArray(cacheKeys);
-            }
-          },
-          max: cacheSizes['documentTransform.cache'],
-          cache: WeakCache<any, any>,
-        }
-      );
+      this.performWork = wrap(DocumentTransform.prototype.performWork.bind(this), {
+        makeCacheKey: document => {
+          const cacheKeys = this.getCacheKey(document);
+          if (cacheKeys) {
+            invariant(Array.isArray(cacheKeys), '`getCacheKey` must return an array or undefined');
+            return stableCacheKeys.lookupArray(cacheKeys);
+          }
+        },
+        max: cacheSizes['documentTransform.cache'],
+        cache: WeakCache<any, any>,
+      });
     }
   }
 
@@ -146,18 +132,16 @@ export class DocumentTransform {
   concat(otherTransform: DocumentTransform): DocumentTransform {
     return Object.assign(
       new DocumentTransform(
-        (document) => {
-          return otherTransform.transformDocument(
-            this.transformDocument(document)
-          );
+        document => {
+          return otherTransform.transformDocument(this.transformDocument(document));
         },
         // Reasonably assume both transforms handle their own caching
-        { cache: false }
+        { cache: false },
       ),
       {
         left: this,
         right: otherTransform,
-      }
+      },
     );
   }
 

@@ -8,7 +8,6 @@ import { strictConfig } from '../../../helpers';
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`readFragment with one fragment`, () => {
-
   let hermes: Hermes;
   beforeAll(() => {
     hermes = new Hermes(strictConfig);
@@ -29,19 +28,20 @@ describe(`readFragment with one fragment`, () => {
   });
 
   it(`correctly read a fragment`, () => {
-    expect(hermes.readFragment({
-      id: '123',
-      fragment: gql(`
+    expect(
+      hermes.readFragment({
+        id: '123',
+        fragment: gql(`
         fragment viewer on Viewer {
           id
           name
         }
       `),
-    })).to.be.deep.eq({
+      }),
+    ).to.be.deep.eq({
       id: 123,
       name: 'Gouda',
       __typename: 'Viewer',
     });
   });
-
 });

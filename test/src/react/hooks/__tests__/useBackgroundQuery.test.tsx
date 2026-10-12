@@ -1,37 +1,16 @@
 import * as React from 'react';
 import { act, screen, renderHook } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import {
-  ErrorBoundary as ReactErrorBoundary,
-  FallbackProps,
-} from 'react-error-boundary';
+import { ErrorBoundary as ReactErrorBoundary, FallbackProps } from 'react-error-boundary';
 import { expectTypeOf } from 'expect-type';
 import { GraphQLError } from 'graphql';
 import equal from '@wry/equality';
 import { ApolloClient, ApolloLink, ApolloProvider, InMemoryCache, skipToken } from '@apollo/client';
 import { Suspense } from 'react';
 
-import {
-  gql,
-  ApolloError,
-  ErrorPolicy,
-  NetworkStatus,
-  TypedDocumentNode,
-  Observable,
-} from '../../../core';
-import {
-  MockedResponse,
-  MockLink,
-  MockSubscriptionLink,
-  mockSingleLink,
-  MockedProvider,
-  wait,
-} from '../../../testing';
-import {
-  concatPagination,
-  offsetLimitPagination,
-  DeepPartial,
-} from '../../../utilities';
+import { gql, ApolloError, ErrorPolicy, NetworkStatus, TypedDocumentNode, Observable } from '../../../core';
+import { MockedResponse, MockLink, MockSubscriptionLink, mockSingleLink, MockedProvider, wait } from '../../../testing';
+import { concatPagination, offsetLimitPagination, DeepPartial } from '../../../utilities';
 import { useBackgroundQuery } from '../useBackgroundQuery';
 import { UseReadQueryResult, useReadQuery } from '../useReadQuery';
 import { QueryRef, QueryReference } from '../../internal';
@@ -60,9 +39,7 @@ afterEach(() => {
 
 function createDefaultTrackedComponents<
   Snapshot extends { result: UseReadQueryResult<any> | null },
-  TData = Snapshot['result'] extends UseReadQueryResult<infer TData> | null ?
-    TData
-  : unknown,
+  TData = Snapshot['result'] extends UseReadQueryResult<infer TData> | null ? TData : unknown,
 >(Profiler: Profiler<Snapshot>) {
   function SuspenseFallback() {
     useTrackRenders();
@@ -81,9 +58,7 @@ function createDefaultTrackedComponents<
   return { SuspenseFallback, ReadQueryHook };
 }
 
-function createTrackedErrorComponents<Snapshot extends { error: Error | null }>(
-  Profiler: Profiler<Snapshot>
-) {
+function createTrackedErrorComponents<Snapshot extends { error: Error | null }>(Profiler: Profiler<Snapshot>) {
   function ErrorFallback({ error }: FallbackProps) {
     useTrackRenders({ name: 'ErrorFallback' });
     Profiler.mergeSnapshot({ error } as Partial<Snapshot>);
@@ -92,11 +67,7 @@ function createTrackedErrorComponents<Snapshot extends { error: Error | null }>(
   }
 
   function ErrorBoundary({ children }: { children: React.ReactNode }) {
-    return (
-      <ReactErrorBoundary FallbackComponent={ErrorFallback}>
-        {children}
-      </ReactErrorBoundary>
-    );
+    return <ReactErrorBoundary FallbackComponent={ErrorFallback}>{children}</ReactErrorBoundary>;
   }
 
   return { ErrorBoundary };
@@ -119,13 +90,12 @@ function createDefaultProfiler<TData = unknown>() {
   });
 }
 
-it('fetches a simple query with minimal config', async() => {
+it('fetches a simple query with minimal config', async () => {
   const { query, mocks } = setupSimpleCase();
 
   const Profiler = createDefaultProfiler<SimpleCaseData>();
 
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -160,15 +130,14 @@ it('fetches a simple query with minimal config', async() => {
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('tears down the query on unmount', async() => {
+it('tears down the query on unmount', async () => {
   const { query, mocks } = setupSimpleCase();
   const client = new ApolloClient({
     link: new MockLink(mocks),
     cache: new Hermes(),
   });
   const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -204,7 +173,7 @@ it('tears down the query on unmount', async() => {
   expect(client).not.toHaveSuspenseCacheEntryUsing(query);
 });
 
-it('auto disposes of the queryRef if not used within timeout', async() => {
+it('auto disposes of the queryRef if not used within timeout', async () => {
   jest.useFakeTimers();
   const { query } = setupSimpleCase();
   const link = new MockSubscriptionLink();
@@ -232,7 +201,7 @@ it('auto disposes of the queryRef if not used within timeout', async() => {
   expect(client).not.toHaveSuspenseCacheEntryUsing(query);
 });
 
-it('auto disposes of the queryRef if not used within configured timeout', async() => {
+it('auto disposes of the queryRef if not used within configured timeout', async () => {
   jest.useFakeTimers();
   const { query } = setupSimpleCase();
   const link = new MockSubscriptionLink();
@@ -270,7 +239,7 @@ it('auto disposes of the queryRef if not used within configured timeout', async(
   expect(client).not.toHaveSuspenseCacheEntryUsing(query);
 });
 
-it('will resubscribe after disposed when mounting useReadQuery', async() => {
+it('will resubscribe after disposed when mounting useReadQuery', async () => {
   const { query, mocks } = setupSimpleCase();
   const user = userEvent.setup();
   const client = new ApolloClient({
@@ -287,8 +256,7 @@ it('will resubscribe after disposed when mounting useReadQuery', async() => {
   });
 
   const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -298,9 +266,7 @@ it('will resubscribe after disposed when mounting useReadQuery', async() => {
     return (
       <>
         <button onClick={() => setShow(show => !show)}>Toggle</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {show && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{show && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -354,7 +320,7 @@ it('will resubscribe after disposed when mounting useReadQuery', async() => {
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('auto resubscribes when mounting useReadQuery after naturally disposed by useReadQuery', async() => {
+it('auto resubscribes when mounting useReadQuery after naturally disposed by useReadQuery', async () => {
   const { query, mocks } = setupSimpleCase();
   const user = userEvent.setup();
   const client = new ApolloClient({
@@ -363,8 +329,7 @@ it('auto resubscribes when mounting useReadQuery after naturally disposed by use
   });
 
   const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -374,9 +339,7 @@ it('auto resubscribes when mounting useReadQuery after naturally disposed by use
     return (
       <>
         <button onClick={() => setShow(show => !show)}>Toggle</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {show && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{show && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -449,7 +412,7 @@ it('auto resubscribes when mounting useReadQuery after naturally disposed by use
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('does not recreate queryRef and execute a network request when rerendering useBackgroundQuery after queryRef is disposed', async() => {
+it('does not recreate queryRef and execute a network request when rerendering useBackgroundQuery after queryRef is disposed', async () => {
   const { query } = setupSimpleCase();
   const user = userEvent.setup();
   let fetchCount = 0;
@@ -457,7 +420,7 @@ it('does not recreate queryRef and execute a network request when rerendering us
     link: new ApolloLink(() => {
       fetchCount++;
 
-      return new Observable((observer) => {
+      return new Observable(observer => {
         setTimeout(() => {
           observer.next({ data: { greeting: 'Hello' } });
           observer.complete();
@@ -468,8 +431,7 @@ it('does not recreate queryRef and execute a network request when rerendering us
   });
 
   const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -481,9 +443,7 @@ it('does not recreate queryRef and execute a network request when rerendering us
     return (
       <>
         <button onClick={() => setShow(show => !show)}>Toggle</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {show && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{show && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -536,7 +496,7 @@ it('does not recreate queryRef and execute a network request when rerendering us
 });
 
 // https://github.com/apollographql/apollo-client/issues/11815
-it('does not recreate queryRef or execute a network request when rerendering useBackgroundQuery in strict mode', async() => {
+it('does not recreate queryRef or execute a network request when rerendering useBackgroundQuery in strict mode', async () => {
   const { query } = setupSimpleCase();
   const user = userEvent.setup();
   let fetchCount = 0;
@@ -544,7 +504,7 @@ it('does not recreate queryRef or execute a network request when rerendering use
     link: new ApolloLink(() => {
       fetchCount++;
 
-      return new Observable((observer) => {
+      return new Observable(observer => {
         setTimeout(() => {
           observer.next({ data: { greeting: 'Hello' } });
           observer.complete();
@@ -560,8 +520,7 @@ it('does not recreate queryRef or execute a network request when rerendering use
       result: null as UseReadQueryResult<SimpleCaseData> | null,
     },
   });
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -574,9 +533,7 @@ it('does not recreate queryRef or execute a network request when rerendering use
 
     return (
       <>
-        <button onClick={() => setCount(count => count + 1)}>
-          Increment
-        </button>
+        <button onClick={() => setCount(count => count + 1)}>Increment</button>
         <Suspense fallback={<SuspenseFallback />}>
           <ReadQueryHook queryRef={queryRef} />
         </Suspense>
@@ -616,7 +573,7 @@ it('does not recreate queryRef or execute a network request when rerendering use
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('disposes of the queryRef when unmounting before it is used by useReadQuery', async() => {
+it('disposes of the queryRef when unmounting before it is used by useReadQuery', async () => {
   const { query, mocks } = setupSimpleCase();
   const client = new ApolloClient({
     link: new MockLink(mocks),
@@ -650,7 +607,7 @@ it('disposes of the queryRef when unmounting before it is used by useReadQuery',
   expect(client).not.toHaveSuspenseCacheEntryUsing(query);
 });
 
-it('disposes of old queryRefs when changing variables before the queryRef is used by useReadQuery', async() => {
+it('disposes of old queryRefs when changing variables before the queryRef is used by useReadQuery', async () => {
   const { query, mocks } = setupVariablesCase();
   const client = new ApolloClient({
     link: new MockLink(mocks),
@@ -695,7 +652,7 @@ it('disposes of old queryRefs when changing variables before the queryRef is use
   });
 });
 
-it('does not prematurely dispose of the queryRef when using strict mode', async() => {
+it('does not prematurely dispose of the queryRef when using strict mode', async () => {
   const { query, mocks } = setupSimpleCase();
   const client = new ApolloClient({
     link: new MockLink(mocks),
@@ -732,7 +689,7 @@ it('does not prematurely dispose of the queryRef when using strict mode', async(
   expect(client).toHaveSuspenseCacheEntryUsing(query);
 });
 
-it('disposes of the queryRef when unmounting before it is used by useReadQuery even if it has been rerendered', async() => {
+it('disposes of the queryRef when unmounting before it is used by useReadQuery even if it has been rerendered', async () => {
   const { query, mocks } = setupSimpleCase();
   const client = new ApolloClient({
     link: new MockLink(mocks),
@@ -779,27 +736,22 @@ it('disposes of the queryRef when unmounting before it is used by useReadQuery e
   expect(client.getObservableQueries().size).toBe(0);
 });
 
-it('allows the client to be overridden', async() => {
+it('allows the client to be overridden', async () => {
   const { query } = setupSimpleCase();
 
   const globalClient = new ApolloClient({
-    link: new ApolloLink(() =>
-      Observable.of({ data: { greeting: 'global hello' } })
-    ),
+    link: new ApolloLink(() => Observable.of({ data: { greeting: 'global hello' } })),
     cache: new Hermes(),
   });
 
   const localClient = new ApolloClient({
-    link: new ApolloLink(() =>
-      Observable.of({ data: { greeting: 'local hello' } })
-    ),
+    link: new ApolloLink(() => Observable.of({ data: { greeting: 'local hello' } })),
     cache: new Hermes(),
   });
 
   const Profiler = createDefaultProfiler<SimpleCaseData>();
 
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -834,15 +786,15 @@ it('allows the client to be overridden', async() => {
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('passes context to the link', async() => {
+it('passes context to the link', async () => {
   const query = gql`
     query ContextQuery {
       context
     }
   `;
 
-  const link = new ApolloLink((operation) => {
-    return new Observable((observer) => {
+  const link = new ApolloLink(operation => {
+    return new Observable(observer => {
       const { valueA, valueB } = operation.getContext();
 
       observer.next({ data: { context: { valueA, valueB } } });
@@ -852,8 +804,7 @@ it('passes context to the link', async() => {
 
   const Profiler = createDefaultProfiler();
 
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -887,7 +838,7 @@ it('passes context to the link', async() => {
   }
 });
 
-it('enables canonical results when canonizeResults is "true"', async() => {
+it('enables canonical results when canonizeResults is "true"', async () => {
   interface Result {
     __typename: string;
     value: number;
@@ -926,8 +877,7 @@ it('enables canonical results when canonizeResults is "true"', async() => {
 
   const Profiler = createDefaultProfiler<Data>();
 
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -955,7 +905,7 @@ it('enables canonical results when canonizeResults is "true"', async() => {
   expect(values).toEqual([0, 1, 2, 3, 5]);
 });
 
-it('can disable canonical results when the cache\'s canonizeResults setting is true', async() => {
+it("can disable canonical results when the cache's canonizeResults setting is true", async () => {
   interface Result {
     __typename: string;
     value: number;
@@ -995,8 +945,7 @@ it('can disable canonical results when the cache\'s canonizeResults setting is t
 
   const Profiler = createDefaultProfiler<Data>();
 
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -1023,7 +972,7 @@ it('can disable canonical results when the cache\'s canonizeResults setting is t
   expect(values).toEqual([0, 1, 1, 2, 3, 5]);
 });
 
-it('returns initial cache data followed by network data when the fetch policy is `cache-and-network`', async() => {
+it('returns initial cache data followed by network data when the fetch policy is `cache-and-network`', async () => {
   const { query } = setupSimpleCase();
   const cache = new Hermes();
   const link = mockSingleLink({
@@ -1038,8 +987,7 @@ it('returns initial cache data followed by network data when the fetch policy is
 
   const Profiler = createDefaultProfiler<SimpleCaseData>();
 
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -1081,14 +1029,14 @@ it('returns initial cache data followed by network data when the fetch policy is
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('all data is present in the cache, no network request is made', async() => {
+it('all data is present in the cache, no network request is made', async () => {
   const { query } = setupSimpleCase();
   const cache = new Hermes();
 
   let fetchCount = 0;
-  const link = new ApolloLink((operation) => {
+  const link = new ApolloLink(operation => {
     fetchCount++;
-    return new Observable((observer) => {
+    return new Observable(observer => {
       setTimeout(() => {
         observer.next({ data: { greeting: 'from link' } });
         observer.complete();
@@ -1102,8 +1050,7 @@ it('all data is present in the cache, no network request is made', async() => {
 
   const Profiler = createDefaultProfiler<SimpleCaseData>();
 
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -1134,7 +1081,7 @@ it('all data is present in the cache, no network request is made', async() => {
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('partial data is present in the cache so it is ignored and network request is made', async() => {
+it('partial data is present in the cache so it is ignored and network request is made', async () => {
   const query = gql`
     {
       hello
@@ -1159,8 +1106,7 @@ it('partial data is present in the cache so it is ignored and network request is
 
   const Profiler = createDefaultProfiler();
 
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -1196,7 +1142,7 @@ it('partial data is present in the cache so it is ignored and network request is
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('existing data in the cache is ignored when fetchPolicy is \'network-only\'', async() => {
+it("existing data in the cache is ignored when fetchPolicy is 'network-only'", async () => {
   const { query } = setupSimpleCase();
   const cache = new Hermes();
   const link = mockSingleLink({
@@ -1211,8 +1157,7 @@ it('existing data in the cache is ignored when fetchPolicy is \'network-only\'',
 
   const Profiler = createDefaultProfiler<SimpleCaseData>();
 
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -1252,7 +1197,7 @@ it('existing data in the cache is ignored when fetchPolicy is \'network-only\'',
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('fetches data from the network but does not update the cache when fetchPolicy is \'no-cache\'', async() => {
+it("fetches data from the network but does not update the cache when fetchPolicy is 'no-cache'", async () => {
   const { query } = setupSimpleCase();
   const cache = new Hermes();
   const link = mockSingleLink({
@@ -1267,8 +1212,7 @@ it('fetches data from the network but does not update the cache when fetchPolicy
 
   const Profiler = createDefaultProfiler<SimpleCaseData>();
 
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -1306,16 +1250,16 @@ it('fetches data from the network but does not update the cache when fetchPolicy
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('works with startTransition to change variables', async() => {
+it('works with startTransition to change variables', async () => {
   type Variables = {
-    id: string,
+    id: string;
   };
 
   interface Data {
     todo: {
-      id: string,
-      name: string,
-      completed: boolean,
+      id: string;
+      name: string;
+      completed: boolean;
     };
   }
 
@@ -1362,8 +1306,7 @@ it('works with startTransition to change variables', async() => {
     },
   });
 
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -1458,12 +1401,12 @@ it('works with startTransition to change variables', async() => {
   }
 });
 
-it('does not suspend deferred queries with data in the cache and using a "cache-and-network" fetch policy', async() => {
+it('does not suspend deferred queries with data in the cache and using a "cache-and-network" fetch policy', async () => {
   interface Data {
     greeting: {
-      __typename: string,
-      message: string,
-      recipient: { name: string, __typename: string },
+      __typename: string;
+      message: string;
+      recipient: { name: string; __typename: string };
     };
   }
 
@@ -1496,8 +1439,7 @@ it('does not suspend deferred queries with data in the cache and using a "cache-
 
   const Profiler = createDefaultProfiler<Data>();
 
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -1592,7 +1534,7 @@ it('does not suspend deferred queries with data in the cache and using a "cache-
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('reacts to cache updates', async() => {
+it('reacts to cache updates', async () => {
   const { query, mocks } = setupSimpleCase();
 
   const client = new ApolloClient({
@@ -1602,8 +1544,7 @@ it('reacts to cache updates', async() => {
 
   const Profiler = createDefaultProfiler<SimpleCaseData>();
 
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -1669,13 +1610,12 @@ it('reacts to cache updates', async() => {
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('reacts to variables updates', async() => {
+it('reacts to variables updates', async () => {
   const { query, mocks } = setupVariablesCase();
 
   const Profiler = createDefaultProfiler<VariablesCaseData>();
 
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App({ id }: { id: string }) {
     useTrackRenders();
@@ -1734,22 +1674,17 @@ it('reacts to variables updates', async() => {
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('does not suspend when `skip` is true', async() => {
+it('does not suspend when `skip` is true', async () => {
   const { query, mocks } = setupSimpleCase();
 
   const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
     const [queryRef] = useBackgroundQuery(query, { skip: true });
 
-    return (
-      <Suspense fallback={<SuspenseFallback />}>
-        {queryRef && <ReadQueryHook queryRef={queryRef} />}
-      </Suspense>
-    );
+    return <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>;
   }
 
   renderWithMocks(<App />, { mocks, wrapper: Profiler });
@@ -1761,22 +1696,17 @@ it('does not suspend when `skip` is true', async() => {
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('does not suspend when using `skipToken` in options', async() => {
+it('does not suspend when using `skipToken` in options', async () => {
   const { query, mocks } = setupSimpleCase();
 
   const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
     const [queryRef] = useBackgroundQuery(query, skipToken);
 
-    return (
-      <Suspense fallback={<SuspenseFallback />}>
-        {queryRef && <ReadQueryHook queryRef={queryRef} />}
-      </Suspense>
-    );
+    return <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>;
   }
 
   renderWithMocks(<App />, { mocks, wrapper: Profiler });
@@ -1788,13 +1718,12 @@ it('does not suspend when using `skipToken` in options', async() => {
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('suspends when `skip` becomes `false` after it was `true`', async() => {
+it('suspends when `skip` becomes `false` after it was `true`', async () => {
   const { query, mocks } = setupSimpleCase();
   const user = userEvent.setup();
 
   const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -1804,9 +1733,7 @@ it('suspends when `skip` becomes `false` after it was `true`', async() => {
     return (
       <>
         <button onClick={() => setSkip(false)}>Run query</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -1840,13 +1767,12 @@ it('suspends when `skip` becomes `false` after it was `true`', async() => {
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('suspends when switching away from `skipToken` in options', async() => {
+it('suspends when switching away from `skipToken` in options', async () => {
   const { query, mocks } = setupSimpleCase();
 
   const user = userEvent.setup();
   const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -1856,9 +1782,7 @@ it('suspends when switching away from `skipToken` in options', async() => {
     return (
       <>
         <button onClick={() => setSkip(false)}>Run query</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -1892,13 +1816,12 @@ it('suspends when switching away from `skipToken` in options', async() => {
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('renders skip result, does not suspend, and maintains `data` when `skip` becomes `true` after it was `false`', async() => {
+it('renders skip result, does not suspend, and maintains `data` when `skip` becomes `true` after it was `false`', async () => {
   const { query, mocks } = setupSimpleCase();
 
   const user = userEvent.setup();
   const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -1908,9 +1831,7 @@ it('renders skip result, does not suspend, and maintains `data` when `skip` beco
     return (
       <>
         <button onClick={() => setSkip(skip => !skip)}>Toggle skip</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -1949,12 +1870,11 @@ it('renders skip result, does not suspend, and maintains `data` when `skip` beco
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('renders skip result, does not suspend, and maintains `data` when switching back to `skipToken`', async() => {
+it('renders skip result, does not suspend, and maintains `data` when switching back to `skipToken`', async () => {
   const { query, mocks } = setupSimpleCase();
   const user = userEvent.setup();
   const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -1964,9 +1884,7 @@ it('renders skip result, does not suspend, and maintains `data` when switching b
     return (
       <>
         <button onClick={() => setSkip(skip => !skip)}>Toggle skip</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -2005,19 +1923,17 @@ it('renders skip result, does not suspend, and maintains `data` when switching b
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('does not make network requests when `skip` is `true`', async() => {
+it('does not make network requests when `skip` is `true`', async () => {
   const { query, mocks } = setupSimpleCase();
   const user = userEvent.setup();
 
   let fetchCount = 0;
 
-  const link = new ApolloLink((operation) => {
-    return new Observable((observer) => {
+  const link = new ApolloLink(operation => {
+    return new Observable(observer => {
       fetchCount++;
 
-      const mock = mocks.find(({ request }) =>
-        equal(request.query, operation.query)
-      );
+      const mock = mocks.find(({ request }) => equal(request.query, operation.query));
 
       if (!mock) {
         throw new Error('Could not find mock for operation');
@@ -2034,8 +1950,7 @@ it('does not make network requests when `skip` is `true`', async() => {
   });
 
   const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -2045,9 +1960,7 @@ it('does not make network requests when `skip` is `true`', async() => {
     return (
       <>
         <button onClick={() => setSkip(skip => !skip)}>Toggle skip</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -2093,22 +2006,19 @@ it('does not make network requests when `skip` is `true`', async() => {
   }
 });
 
-it('does not make network requests when `skipToken` is used', async() => {
+it('does not make network requests when `skipToken` is used', async () => {
   const { query, mocks } = setupSimpleCase();
   const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
   const user = userEvent.setup();
 
   let fetchCount = 0;
 
-  const link = new ApolloLink((operation) => {
-    return new Observable((observer) => {
+  const link = new ApolloLink(operation => {
+    return new Observable(observer => {
       fetchCount++;
 
-      const mock = mocks.find(({ request }) =>
-        equal(request.query, operation.query)
-      );
+      const mock = mocks.find(({ request }) => equal(request.query, operation.query));
 
       if (!mock) {
         throw new Error('Could not find mock for operation');
@@ -2132,9 +2042,7 @@ it('does not make network requests when `skipToken` is used', async() => {
     return (
       <>
         <button onClick={() => setSkip(skip => !skip)}>Toggle skip</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -2180,22 +2088,19 @@ it('does not make network requests when `skipToken` is used', async() => {
   }
 });
 
-it('does not make network requests when `skipToken` is used in strict mode', async() => {
+it('does not make network requests when `skipToken` is used in strict mode', async () => {
   const { query, mocks } = setupSimpleCase();
   const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
   const user = userEvent.setup();
 
   let fetchCount = 0;
 
-  const link = new ApolloLink((operation) => {
-    return new Observable((observer) => {
+  const link = new ApolloLink(operation => {
+    return new Observable(observer => {
       fetchCount++;
 
-      const mock = mocks.find(({ request }) =>
-        equal(request.query, operation.query)
-      );
+      const mock = mocks.find(({ request }) => equal(request.query, operation.query));
 
       if (!mock) {
         throw new Error('Could not find mock for operation');
@@ -2219,9 +2124,7 @@ it('does not make network requests when `skipToken` is used in strict mode', asy
     return (
       <>
         <button onClick={() => setSkip(skip => !skip)}>Toggle skip</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -2273,22 +2176,19 @@ it('does not make network requests when `skipToken` is used in strict mode', asy
   await expect(Profiler).not.toRerender();
 });
 
-it('does not make network requests when using `skip` option in strict mode', async() => {
+it('does not make network requests when using `skip` option in strict mode', async () => {
   const { query, mocks } = setupSimpleCase();
   const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
   const user = userEvent.setup();
 
   let fetchCount = 0;
 
-  const link = new ApolloLink((operation) => {
-    return new Observable((observer) => {
+  const link = new ApolloLink(operation => {
+    return new Observable(observer => {
       fetchCount++;
 
-      const mock = mocks.find(({ request }) =>
-        equal(request.query, operation.query)
-      );
+      const mock = mocks.find(({ request }) => equal(request.query, operation.query));
 
       if (!mock) {
         throw new Error('Could not find mock for operation');
@@ -2312,9 +2212,7 @@ it('does not make network requests when using `skip` option in strict mode', asy
     return (
       <>
         <button onClick={() => setSkip(skip => !skip)}>Toggle skip</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -2366,14 +2264,13 @@ it('does not make network requests when using `skip` option in strict mode', asy
   await expect(Profiler).not.toRerender();
 });
 
-it('result is referentially stable', async() => {
+it('result is referentially stable', async () => {
   const { query, mocks } = setupSimpleCase();
 
   let result: UseReadQueryResult<SimpleCaseData> | null = null;
 
   const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -2415,7 +2312,7 @@ it('result is referentially stable', async() => {
   }
 });
 
-it('`skip` option works with `startTransition`', async() => {
+it('`skip` option works with `startTransition`', async () => {
   const { query, mocks } = setupSimpleCase();
 
   const user = userEvent.setup();
@@ -2425,8 +2322,7 @@ it('`skip` option works with `startTransition`', async() => {
       result: null as UseReadQueryResult<SimpleCaseData> | null,
     },
   });
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -2448,9 +2344,7 @@ it('`skip` option works with `startTransition`', async() => {
         >
           Toggle skip
         </button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -2493,7 +2387,7 @@ it('`skip` option works with `startTransition`', async() => {
   await expect(Profiler).not.toRerender();
 });
 
-it('`skipToken` works with `startTransition`', async() => {
+it('`skipToken` works with `startTransition`', async () => {
   const { query, mocks } = setupSimpleCase();
   const user = userEvent.setup();
 
@@ -2504,8 +2398,7 @@ it('`skipToken` works with `startTransition`', async() => {
     },
   });
 
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -2527,9 +2420,7 @@ it('`skipToken` works with `startTransition`', async() => {
         >
           Toggle skip
         </button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -2572,7 +2463,7 @@ it('`skipToken` works with `startTransition`', async() => {
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('applies `errorPolicy` on next fetch when it changes between renders', async() => {
+it('applies `errorPolicy` on next fetch when it changes between renders', async () => {
   const { query } = setupSimpleCase();
   const user = userEvent.setup();
 
@@ -2592,8 +2483,7 @@ it('applies `errorPolicy` on next fetch when it changes between renders', async(
   ];
 
   const Profiler = createErrorProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
   const { ErrorBoundary } = createTrackedErrorComponents(Profiler);
 
   function App() {
@@ -2605,9 +2495,7 @@ it('applies `errorPolicy` on next fetch when it changes between renders', async(
 
     return (
       <>
-        <button onClick={() => setErrorPolicy('all')}>
-          Change error policy
-        </button>
+        <button onClick={() => setErrorPolicy('all')}>Change error policy</button>
         <button onClick={() => refetch()}>Refetch greeting</button>
         <Suspense fallback={<SuspenseFallback />}>
           <ErrorBoundary>
@@ -2654,7 +2542,7 @@ it('applies `errorPolicy` on next fetch when it changes between renders', async(
   }
 });
 
-it('applies `context` on next fetch when it changes between renders', async() => {
+it('applies `context` on next fetch when it changes between renders', async () => {
   interface Data {
     context: Record<string, any>;
   }
@@ -2667,8 +2555,8 @@ it('applies `context` on next fetch when it changes between renders', async() =>
     }
   `;
 
-  const link = new ApolloLink((operation) => {
-    return new Observable((observer) => {
+  const link = new ApolloLink(operation => {
+    return new Observable(observer => {
       setTimeout(() => {
         const { phase } = operation.getContext();
         observer.next({ data: { context: { phase } } });
@@ -2680,8 +2568,7 @@ it('applies `context` on next fetch when it changes between renders', async() =>
   const client = new ApolloClient({ link, cache: new Hermes() });
 
   const Profiler = createDefaultProfiler<Data>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -2739,7 +2626,7 @@ it('applies `context` on next fetch when it changes between renders', async() =>
 // NOTE: We only test the `false` -> `true` path here. If the option changes
 // from `true` -> `false`, the data has already been canonized, so it has no
 // effect on the output.
-it('returns canonical results immediately when `canonizeResults` changes from `false` to `true` between renders', async() => {
+it('returns canonical results immediately when `canonizeResults` changes from `false` to `true` between renders', async () => {
   interface Result {
     __typename: string;
     value: number;
@@ -2782,8 +2669,7 @@ it('returns canonical results immediately when `canonizeResults` changes from `f
   });
 
   const Profiler = createDefaultProfiler<Data>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -2794,9 +2680,7 @@ it('returns canonical results immediately when `canonizeResults` changes from `f
 
     return (
       <>
-        <button onClick={() => setCanonizeResults(true)}>
-          Canonize results
-        </button>
+        <button onClick={() => setCanonizeResults(true)}>Canonize results</button>
         <Suspense fallback={<SuspenseFallback />}>
           <ReadQueryHook queryRef={queryRef} />
         </Suspense>
@@ -2833,14 +2717,14 @@ it('returns canonical results immediately when `canonizeResults` changes from `f
   }
 });
 
-it('applies changed `refetchWritePolicy` to next fetch when changing between renders', async() => {
+it('applies changed `refetchWritePolicy` to next fetch when changing between renders', async () => {
   interface Data {
     primes: number[];
   }
 
   const user = userEvent.setup();
 
-  const query: TypedDocumentNode<Data, { min: number, max: number }> = gql`
+  const query: TypedDocumentNode<Data, { min: number; max: number }> = gql`
     query GetPrimes($min: number, $max: number) {
       primes(min: $min, max: $max)
     }
@@ -2888,13 +2772,11 @@ it('applies changed `refetchWritePolicy` to next fetch when changing between ren
   });
 
   const Profiler = createDefaultProfiler<Data>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
-    const [refetchWritePolicy, setRefetchWritePolicy]
-      = React.useState<RefetchWritePolicy>('merge');
+    const [refetchWritePolicy, setRefetchWritePolicy] = React.useState<RefetchWritePolicy>('merge');
 
     const [queryRef, { refetch }] = useBackgroundQuery(query, {
       refetchWritePolicy,
@@ -2903,15 +2785,9 @@ it('applies changed `refetchWritePolicy` to next fetch when changing between ren
 
     return (
       <>
-        <button onClick={() => setRefetchWritePolicy('overwrite')}>
-          Change refetch write policy
-        </button>
-        <button onClick={() => refetch({ min: 12, max: 30 })}>
-          Refetch next
-        </button>
-        <button onClick={() => refetch({ min: 30, max: 50 })}>
-          Refetch last
-        </button>
+        <button onClick={() => setRefetchWritePolicy('overwrite')}>Change refetch write policy</button>
+        <button onClick={() => refetch({ min: 12, max: 30 })}>Refetch next</button>
+        <button onClick={() => refetch({ min: 30, max: 50 })}>Refetch last</button>
         <Suspense fallback={<SuspenseFallback />}>
           <ReadQueryHook queryRef={queryRef} />
         </Suspense>
@@ -2980,13 +2856,13 @@ it('applies changed `refetchWritePolicy` to next fetch when changing between ren
   }
 });
 
-it('applies `returnPartialData` on next fetch when it changes between renders', async() => {
+it('applies `returnPartialData` on next fetch when it changes between renders', async () => {
   const { query } = setupVariablesCase();
 
   interface PartialData {
     character: {
-      __typename: 'Character',
-      id: string,
+      __typename: 'Character';
+      id: string;
     };
   }
 
@@ -3043,8 +2919,7 @@ it('applies `returnPartialData` on next fetch when it changes between renders', 
   });
 
   const Profiler = createDefaultProfiler<VariablesCaseData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -3053,9 +2928,7 @@ it('applies `returnPartialData` on next fetch when it changes between renders', 
 
     return (
       <>
-        <button onClick={() => setReturnPartialData(true)}>
-          Update partial data
-        </button>
+        <button onClick={() => setReturnPartialData(true)}>Update partial data</button>
         <Suspense fallback={<SuspenseFallback />}>
           <ReadQueryHook queryRef={queryRef} />
         </Suspense>
@@ -3117,7 +2990,7 @@ it('applies `returnPartialData` on next fetch when it changes between renders', 
   }
 });
 
-it('applies updated `fetchPolicy` on next fetch when it changes between renders', async() => {
+it('applies updated `fetchPolicy` on next fetch when it changes between renders', async () => {
   const { query, mocks } = setupVariablesCase();
 
   const user = userEvent.setup();
@@ -3141,12 +3014,10 @@ it('applies updated `fetchPolicy` on next fetch when it changes between renders'
   });
 
   const Profiler = createDefaultProfiler<VariablesCaseData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
-    const [fetchPolicy, setFetchPolicy]
-      = React.useState<SuspenseQueryHookFetchPolicy>('cache-first');
+    const [fetchPolicy, setFetchPolicy] = React.useState<SuspenseQueryHookFetchPolicy>('cache-first');
 
     const [queryRef, { refetch }] = useBackgroundQuery(query, {
       fetchPolicy,
@@ -3155,9 +3026,7 @@ it('applies updated `fetchPolicy` on next fetch when it changes between renders'
 
     return (
       <>
-        <button onClick={() => setFetchPolicy('no-cache')}>
-          Change fetch policy
-        </button>
+        <button onClick={() => setFetchPolicy('no-cache')}>Change fetch policy</button>
         <button onClick={() => refetch()}>Refetch</button>
         <Suspense fallback={<SuspenseFallback />}>
           <ReadQueryHook queryRef={queryRef} />
@@ -3228,7 +3097,7 @@ it('applies updated `fetchPolicy` on next fetch when it changes between renders'
   });
 });
 
-it('properly handles changing options along with changing `variables`', async() => {
+it('properly handles changing options along with changing `variables`', async () => {
   const { query } = setupVariablesCase();
   const user = userEvent.setup();
   const mocks: MockedResponse<VariablesCaseData>[] = [
@@ -3276,8 +3145,7 @@ it('properly handles changing options along with changing `variables`', async() 
   });
 
   const Profiler = createErrorProfiler<VariablesCaseData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
   const { ErrorBoundary } = createTrackedErrorComponents(Profiler);
 
   function App() {
@@ -3393,7 +3261,7 @@ it('properly handles changing options along with changing `variables`', async() 
   }
 });
 
-it('does not suspend when partial data is in the cache and using a "cache-first" fetch policy with returnPartialData', async() => {
+it('does not suspend when partial data is in the cache and using a "cache-first" fetch policy with returnPartialData', async () => {
   const { query, mocks } = setupVariablesCase();
   const cache = new Hermes();
 
@@ -3414,8 +3282,7 @@ it('does not suspend when partial data is in the cache and using a "cache-first"
   });
 
   const Profiler = createDefaultProfiler<DeepPartial<VariablesCaseData>>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -3461,7 +3328,7 @@ it('does not suspend when partial data is in the cache and using a "cache-first"
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('suspends and does not use partial data from other variables in the cache when changing variables and using a "cache-first" fetch policy with returnPartialData: true', async() => {
+it('suspends and does not use partial data from other variables in the cache when changing variables and using a "cache-first" fetch policy with returnPartialData: true', async () => {
   const { query, mocks } = setupVariablesCase();
   const partialQuery = gql`
     query ($id: ID!) {
@@ -3480,8 +3347,7 @@ it('suspends and does not use partial data from other variables in the cache whe
   });
 
   const Profiler = createDefaultProfiler<DeepPartial<VariablesCaseData>>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App({ id }: { id: string }) {
     useTrackRenders();
@@ -3552,7 +3418,7 @@ it('suspends and does not use partial data from other variables in the cache whe
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('suspends when partial data is in the cache and using a "network-only" fetch policy with returnPartialData', async() => {
+it('suspends when partial data is in the cache and using a "network-only" fetch policy with returnPartialData', async () => {
   const { query, mocks } = setupVariablesCase();
 
   const partialQuery = gql`
@@ -3577,8 +3443,7 @@ it('suspends when partial data is in the cache and using a "network-only" fetch 
   });
 
   const Profiler = createDefaultProfiler<DeepPartial<VariablesCaseData>>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -3618,7 +3483,7 @@ it('suspends when partial data is in the cache and using a "network-only" fetch 
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('suspends when partial data is in the cache and using a "no-cache" fetch policy with returnPartialData', async() => {
+it('suspends when partial data is in the cache and using a "no-cache" fetch policy with returnPartialData', async () => {
   using _consoleSpy = spyOnConsole('warn');
   const { query, mocks } = setupVariablesCase();
 
@@ -3644,8 +3509,7 @@ it('suspends when partial data is in the cache and using a "no-cache" fetch poli
   });
 
   const Profiler = createDefaultProfiler<DeepPartial<VariablesCaseData>>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -3685,7 +3549,7 @@ it('suspends when partial data is in the cache and using a "no-cache" fetch poli
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('warns when using returnPartialData with a "no-cache" fetch policy', async() => {
+it('warns when using returnPartialData with a "no-cache" fetch policy', async () => {
   using _consoleSpy = spyOnConsole('warn');
 
   const query: TypedDocumentNode<SimpleCaseData> = gql`
@@ -3707,19 +3571,17 @@ it('warns when using returnPartialData with a "no-cache" fetch policy', async() 
         returnPartialData: true,
       }),
     {
-      wrapper: ({ children }) => (
-        <MockedProvider mocks={mocks}>{children}</MockedProvider>
-      ),
-    }
+      wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+    },
   );
 
   expect(console.warn).toHaveBeenCalledTimes(1);
   expect(console.warn).toHaveBeenCalledWith(
-    'Using `returnPartialData` with a `no-cache` fetch policy has no effect. To read partial data from the cache, consider using an alternate fetch policy.'
+    'Using `returnPartialData` with a `no-cache` fetch policy has no effect. To read partial data from the cache, consider using an alternate fetch policy.',
   );
 });
 
-it('does not suspend when partial data is in the cache and using a "cache-and-network" fetch policy with returnPartialData', async() => {
+it('does not suspend when partial data is in the cache and using a "cache-and-network" fetch policy with returnPartialData', async () => {
   const { query, mocks } = setupVariablesCase();
 
   const partialQuery = gql`
@@ -3744,8 +3606,7 @@ it('does not suspend when partial data is in the cache and using a "cache-and-ne
   });
 
   const Profiler = createDefaultProfiler<DeepPartial<VariablesCaseData>>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -3791,7 +3652,7 @@ it('does not suspend when partial data is in the cache and using a "cache-and-ne
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('suspends and does not use partial data when changing variables and using a "cache-and-network" fetch policy with returnPartialData', async() => {
+it('suspends and does not use partial data when changing variables and using a "cache-and-network" fetch policy with returnPartialData', async () => {
   const { query, mocks } = setupVariablesCase();
   const partialQuery = gql`
     query ($id: ID!) {
@@ -3810,8 +3671,7 @@ it('suspends and does not use partial data when changing variables and using a "
   });
 
   const Profiler = createDefaultProfiler<DeepPartial<VariablesCaseData>>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App({ id }: { id: string }) {
     useTrackRenders();
@@ -3882,15 +3742,15 @@ it('suspends and does not use partial data when changing variables and using a "
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('does not suspend deferred queries with partial data in the cache and using a "cache-first" fetch policy with `returnPartialData`', async() => {
+it('does not suspend deferred queries with partial data in the cache and using a "cache-first" fetch policy with `returnPartialData`', async () => {
   interface QueryData {
     greeting: {
-      __typename: string,
-      message?: string,
+      __typename: string;
+      message?: string;
       recipient?: {
-        __typename: string,
-        name: string,
-      },
+        __typename: string;
+        name: string;
+      };
     };
   }
 
@@ -3928,8 +3788,7 @@ it('does not suspend deferred queries with partial data in the cache and using a
   const client = new ApolloClient({ link, cache });
 
   const Profiler = createDefaultProfiler<DeepPartial<QueryData>>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -4004,7 +3863,7 @@ it('does not suspend deferred queries with partial data in the cache and using a
         hasNext: false,
       },
     },
-    true
+    true,
   );
 
   {
@@ -4027,13 +3886,9 @@ it('does not suspend deferred queries with partial data in the cache and using a
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it.each<SuspenseQueryHookFetchPolicy>([
-  'cache-first',
-  'network-only',
-  'cache-and-network',
-])(
+it.each<SuspenseQueryHookFetchPolicy>(['cache-first', 'network-only', 'cache-and-network'])(
   'responds to cache updates in strict mode while using a "%s" fetch policy',
-  async(fetchPolicy) => {
+  async fetchPolicy => {
     const { query, mocks } = setupSimpleCase();
 
     const client = new ApolloClient({
@@ -4042,8 +3897,7 @@ it.each<SuspenseQueryHookFetchPolicy>([
     });
 
     const Profiler = createDefaultProfiler<SimpleCaseData>();
-    const { SuspenseFallback, ReadQueryHook }
-      = createDefaultTrackedComponents(Profiler);
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
     function App() {
       useTrackRenders();
@@ -4097,16 +3951,15 @@ it.each<SuspenseQueryHookFetchPolicy>([
     }
 
     await expect(Profiler).not.toRerender({ timeout: 50 });
-  }
+  },
 );
 
 describe('refetch', () => {
-  it('re-suspends when calling `refetch`', async() => {
+  it('re-suspends when calling `refetch`', async () => {
     const { query, mocks: defaultMocks } = setupVariablesCase();
     const user = userEvent.setup();
     const Profiler = createDefaultProfiler<VariablesCaseData>();
-    const { SuspenseFallback, ReadQueryHook }
-      = createDefaultTrackedComponents(Profiler);
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
     const mocks: MockedResponse<VariablesCaseData>[] = [
       ...defaultMocks,
@@ -4193,12 +4046,11 @@ describe('refetch', () => {
     await expect(Profiler).not.toRerender({ timeout: 50 });
   });
 
-  it('re-suspends when calling `refetch` with new variables', async() => {
+  it('re-suspends when calling `refetch` with new variables', async () => {
     const { query, mocks } = setupVariablesCase();
     const user = userEvent.setup();
     const Profiler = createDefaultProfiler<VariablesCaseData>();
-    const { SuspenseFallback, ReadQueryHook }
-      = createDefaultTrackedComponents(Profiler);
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
     function App() {
       useTrackRenders();
@@ -4267,12 +4119,11 @@ describe('refetch', () => {
     await expect(Profiler).not.toRerender({ timeout: 50 });
   });
 
-  it('re-suspends multiple times when calling `refetch` multiple times', async() => {
+  it('re-suspends multiple times when calling `refetch` multiple times', async () => {
     const { query, mocks: defaultMocks } = setupVariablesCase();
     const user = userEvent.setup();
     const Profiler = createDefaultProfiler<VariablesCaseData>();
-    const { SuspenseFallback, ReadQueryHook }
-      = createDefaultTrackedComponents(Profiler);
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
     const mocks: MockedResponse<VariablesCaseData>[] = [
       ...defaultMocks,
@@ -4393,7 +4244,7 @@ describe('refetch', () => {
     await expect(Profiler).not.toRerender({ timeout: 50 });
   });
 
-  it('throws errors when errors are returned after calling `refetch`', async() => {
+  it('throws errors when errors are returned after calling `refetch`', async () => {
     using _consoleSpy = spyOnConsole('error');
     const { query, mocks: defaultMocks } = setupVariablesCase();
     const user = userEvent.setup();
@@ -4409,8 +4260,7 @@ describe('refetch', () => {
     ];
 
     const Profiler = createErrorProfiler<VariablesCaseData>();
-    const { SuspenseFallback, ReadQueryHook }
-      = createDefaultTrackedComponents(Profiler);
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
     const { ErrorBoundary } = createTrackedErrorComponents(Profiler);
 
     function App() {
@@ -4473,14 +4323,14 @@ describe('refetch', () => {
       expect(snapshot.error).toEqual(
         new ApolloError({
           graphQLErrors: [new GraphQLError('Something went wrong')],
-        })
+        }),
       );
     }
 
     await expect(Profiler).not.toRerender({ timeout: 50 });
   });
 
-  it('ignores errors returned after calling `refetch` when errorPolicy is set to "ignore"', async() => {
+  it('ignores errors returned after calling `refetch` when errorPolicy is set to "ignore"', async () => {
     const { query, mocks: defaultMocks } = setupVariablesCase();
     const user = userEvent.setup();
     const mocks = [
@@ -4495,8 +4345,7 @@ describe('refetch', () => {
     ];
 
     const Profiler = createErrorProfiler<VariablesCaseData | undefined>();
-    const { SuspenseFallback, ReadQueryHook }
-      = createDefaultTrackedComponents(Profiler);
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
     const { ErrorBoundary } = createTrackedErrorComponents(Profiler);
 
     function App() {
@@ -4575,7 +4424,7 @@ describe('refetch', () => {
     await expect(Profiler).not.toRerender({ timeout: 50 });
   });
 
-  it('returns errors after calling `refetch` when errorPolicy is set to "all"', async() => {
+  it('returns errors after calling `refetch` when errorPolicy is set to "all"', async () => {
     const { query, mocks: defaultMocks } = setupVariablesCase();
     const user = userEvent.setup();
     const mocks = [
@@ -4590,8 +4439,7 @@ describe('refetch', () => {
     ];
 
     const Profiler = createErrorProfiler<VariablesCaseData | undefined>();
-    const { SuspenseFallback, ReadQueryHook }
-      = createDefaultTrackedComponents(Profiler);
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
     const { ErrorBoundary } = createTrackedErrorComponents(Profiler);
 
     function App() {
@@ -4672,7 +4520,7 @@ describe('refetch', () => {
     await expect(Profiler).not.toRerender({ timeout: 50 });
   });
 
-  it('handles partial data results after calling `refetch` when errorPolicy is set to "all"', async() => {
+  it('handles partial data results after calling `refetch` when errorPolicy is set to "all"', async () => {
     const { query, mocks: defaultMocks } = setupVariablesCase();
     const user = userEvent.setup();
     const mocks = [
@@ -4688,8 +4536,7 @@ describe('refetch', () => {
     ];
 
     const Profiler = createErrorProfiler<VariablesCaseData | undefined>();
-    const { SuspenseFallback, ReadQueryHook }
-      = createDefaultTrackedComponents(Profiler);
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
     const { ErrorBoundary } = createTrackedErrorComponents(Profiler);
 
     function App() {
@@ -4770,16 +4617,16 @@ describe('refetch', () => {
     await expect(Profiler).not.toRerender({ timeout: 50 });
   });
 
-  it('can refetch after error is encountered', async() => {
+  it('can refetch after error is encountered', async () => {
     type Variables = {
-      id: string,
+      id: string;
     };
 
     interface Data {
       todo: {
-        id: string,
-        name: string,
-        completed: boolean,
+        id: string;
+        name: string;
+        completed: boolean;
       };
     }
 
@@ -4800,7 +4647,7 @@ describe('refetch', () => {
         request: { query, variables: { id: '1' } },
         result: {
           data: null,
-          errors: [new GraphQLError('Oops couldn\'t fetch')],
+          errors: [new GraphQLError("Oops couldn't fetch")],
         },
         delay: 10,
       },
@@ -4831,10 +4678,7 @@ describe('refetch', () => {
 
       return (
         <Suspense fallback={<SuspenseFallback />}>
-          <ReactErrorBoundary
-            onReset={() => refetch()}
-            FallbackComponent={ErrorFallback}
-          >
+          <ReactErrorBoundary onReset={() => refetch()} FallbackComponent={ErrorFallback}>
             <Todo queryRef={queryRef} />
           </ReactErrorBoundary>
         </Suspense>
@@ -4864,7 +4708,7 @@ describe('refetch', () => {
       expect(renderedComponents).toStrictEqual([ErrorFallback]);
       expect(snapshot).toEqual({
         error: new ApolloError({
-          graphQLErrors: [new GraphQLError('Oops couldn\'t fetch')],
+          graphQLErrors: [new GraphQLError("Oops couldn't fetch")],
         }),
         result: null,
       });
@@ -4887,7 +4731,7 @@ describe('refetch', () => {
         // the actual result. This makes it seem like the error is rendered, but
         // in this is just leftover from the previous snapshot.
         error: new ApolloError({
-          graphQLErrors: [new GraphQLError('Oops couldn\'t fetch')],
+          graphQLErrors: [new GraphQLError("Oops couldn't fetch")],
         }),
         result: {
           data: { todo: { id: '1', name: 'Clean room', completed: true } },
@@ -4898,18 +4742,18 @@ describe('refetch', () => {
     }
   });
 
-  it('throws errors on refetch after error is encountered after first fetch with error', async() => {
+  it('throws errors on refetch after error is encountered after first fetch with error', async () => {
     // Disable error message shown in the console due to an uncaught error.
     using _consoleSpy = spyOnConsole('error');
     type Variables = {
-      id: string,
+      id: string;
     };
 
     interface Data {
       todo: {
-        id: string,
-        name: string,
-        completed: boolean,
+        id: string;
+        name: string;
+        completed: boolean;
       };
     }
 
@@ -4929,7 +4773,7 @@ describe('refetch', () => {
         request: { query, variables: { id: '1' } },
         result: {
           data: null,
-          errors: [new GraphQLError('Oops couldn\'t fetch')],
+          errors: [new GraphQLError("Oops couldn't fetch")],
         },
         delay: 10,
       },
@@ -4937,7 +4781,7 @@ describe('refetch', () => {
         request: { query, variables: { id: '1' } },
         result: {
           data: null,
-          errors: [new GraphQLError('Oops couldn\'t fetch again')],
+          errors: [new GraphQLError("Oops couldn't fetch again")],
         },
         delay: 10,
       },
@@ -4961,10 +4805,7 @@ describe('refetch', () => {
 
       return (
         <Suspense fallback={<SuspenseFallback />}>
-          <ReactErrorBoundary
-            onReset={() => refetch()}
-            FallbackComponent={ErrorFallback}
-          >
+          <ReactErrorBoundary onReset={() => refetch()} FallbackComponent={ErrorFallback}>
             <Todo queryRef={queryRef} />
           </ReactErrorBoundary>
         </Suspense>
@@ -4992,7 +4833,7 @@ describe('refetch', () => {
       expect(renderedComponents).toStrictEqual([ErrorFallback]);
       expect(snapshot).toEqual({
         error: new ApolloError({
-          graphQLErrors: [new GraphQLError('Oops couldn\'t fetch')],
+          graphQLErrors: [new GraphQLError("Oops couldn't fetch")],
         }),
         result: null,
       });
@@ -5012,23 +4853,23 @@ describe('refetch', () => {
       expect(renderedComponents).toStrictEqual([ErrorFallback]);
       expect(snapshot).toEqual({
         error: new ApolloError({
-          graphQLErrors: [new GraphQLError('Oops couldn\'t fetch again')],
+          graphQLErrors: [new GraphQLError("Oops couldn't fetch again")],
         }),
         result: null,
       });
     }
   });
 
-  it('`refetch` works with startTransition to allow React to show stale UI until finished suspending', async() => {
+  it('`refetch` works with startTransition to allow React to show stale UI until finished suspending', async () => {
     type Variables = {
-      id: string,
+      id: string;
     };
 
     interface Data {
       todo: {
-        id: string,
-        name: string,
-        completed: boolean,
+        id: string;
+        name: string;
+        completed: boolean;
       };
     }
 
@@ -5068,8 +4909,7 @@ describe('refetch', () => {
       },
     });
 
-    const { SuspenseFallback, ReadQueryHook }
-      = createDefaultTrackedComponents(Profiler);
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
     function App() {
       useTrackRenders();
@@ -5160,15 +5000,14 @@ describe('refetch', () => {
     }
   });
 
-  it('honors refetchWritePolicy set to "merge"', async() => {
+  it('honors refetchWritePolicy set to "merge"', async () => {
     const user = userEvent.setup();
 
-    const query: TypedDocumentNode<QueryData, { min: number, max: number }>
-      = gql`
-        query GetPrimes($min: number, $max: number) {
-          primes(min: $min, max: $max)
-        }
-      `;
+    const query: TypedDocumentNode<QueryData, { min: number; max: number }> = gql`
+      query GetPrimes($min: number, $max: number) {
+        primes(min: $min, max: $max)
+      }
+    `;
 
     interface QueryData {
       primes: number[];
@@ -5205,8 +5044,7 @@ describe('refetch', () => {
     });
 
     const Profiler = createDefaultProfiler<QueryData>();
-    const { SuspenseFallback, ReadQueryHook }
-      = createDefaultTrackedComponents(Profiler);
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
     const client = new ApolloClient({
       link: new MockLink(mocks),
@@ -5275,15 +5113,14 @@ describe('refetch', () => {
     }
   });
 
-  it('defaults refetchWritePolicy to "overwrite"', async() => {
+  it('defaults refetchWritePolicy to "overwrite"', async () => {
     const user = userEvent.setup();
 
-    const query: TypedDocumentNode<QueryData, { min: number, max: number }>
-      = gql`
-        query GetPrimes($min: number, $max: number) {
-          primes(min: $min, max: $max)
-        }
-      `;
+    const query: TypedDocumentNode<QueryData, { min: number; max: number }> = gql`
+      query GetPrimes($min: number, $max: number) {
+        primes(min: $min, max: $max)
+      }
+    `;
 
     interface QueryData {
       primes: number[];
@@ -5325,8 +5162,7 @@ describe('refetch', () => {
     });
 
     const Profiler = createDefaultProfiler<QueryData>();
-    const { SuspenseFallback, ReadQueryHook }
-      = createDefaultTrackedComponents(Profiler);
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
     function App() {
       useTrackRenders();
@@ -5388,7 +5224,7 @@ describe('refetch', () => {
 });
 
 describe('fetchMore', () => {
-  it('re-suspends when calling `fetchMore` with different variables', async() => {
+  it('re-suspends when calling `fetchMore` with different variables', async () => {
     const { query, link } = setupPaginatedCase();
     const cache = new Hermes({
       typePolicies: {
@@ -5401,8 +5237,7 @@ describe('fetchMore', () => {
     });
     const user = userEvent.setup();
     const Profiler = createDefaultProfiler<PaginatedCaseData>();
-    const { SuspenseFallback, ReadQueryHook }
-      = createDefaultTrackedComponents(Profiler);
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
     function App() {
       useTrackRenders();
@@ -5410,11 +5245,7 @@ describe('fetchMore', () => {
 
       return (
         <>
-          <button
-            onClick={() => fetchMore({ variables: { offset: 2, limit: 2 } })}
-          >
-            Fetch more
-          </button>
+          <button onClick={() => fetchMore({ variables: { offset: 2, limit: 2 } })}>Fetch more</button>
           <Suspense fallback={<SuspenseFallback />}>
             <ReadQueryHook queryRef={queryRef} />
           </Suspense>
@@ -5469,12 +5300,11 @@ describe('fetchMore', () => {
     await expect(Profiler).not.toRerender({ timeout: 50 });
   });
 
-  it('properly uses `updateQuery` when calling `fetchMore`', async() => {
+  it('properly uses `updateQuery` when calling `fetchMore`', async () => {
     const { query, link } = setupPaginatedCase();
     const user = userEvent.setup();
     const Profiler = createDefaultProfiler<PaginatedCaseData>();
-    const { SuspenseFallback, ReadQueryHook }
-      = createDefaultTrackedComponents(Profiler);
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
     function App() {
       useTrackRenders();
@@ -5551,12 +5381,11 @@ describe('fetchMore', () => {
     await expect(Profiler).not.toRerender({ timeout: 50 });
   });
 
-  it('properly uses cache field policies when calling `fetchMore` without `updateQuery`', async() => {
+  it('properly uses cache field policies when calling `fetchMore` without `updateQuery`', async () => {
     const { query, link } = setupPaginatedCase();
     const user = userEvent.setup();
     const Profiler = createDefaultProfiler<PaginatedCaseData>();
-    const { SuspenseFallback, ReadQueryHook }
-      = createDefaultTrackedComponents(Profiler);
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
     const client = new ApolloClient({
       link,
@@ -5577,11 +5406,7 @@ describe('fetchMore', () => {
 
       return (
         <>
-          <button
-            onClick={() => fetchMore({ variables: { offset: 2, limit: 2 } })}
-          >
-            Fetch more
-          </button>
+          <button onClick={() => fetchMore({ variables: { offset: 2, limit: 2 } })}>Fetch more</button>
           <Suspense fallback={<SuspenseFallback />}>
             <ReadQueryHook queryRef={queryRef} />
           </Suspense>
@@ -5639,9 +5464,9 @@ describe('fetchMore', () => {
     await expect(Profiler).not.toRerender({ timeout: 50 });
   });
 
-  it('`fetchMore` works with startTransition to allow React to show stale UI until finished suspending', async() => {
+  it('`fetchMore` works with startTransition to allow React to show stale UI until finished suspending', async () => {
     type Variables = {
-      offset: number,
+      offset: number;
     };
 
     interface Todo {
@@ -5708,8 +5533,7 @@ describe('fetchMore', () => {
         result: null as UseReadQueryResult<Data> | null,
       },
     });
-    const { SuspenseFallback, ReadQueryHook }
-      = createDefaultTrackedComponents(Profiler);
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
     const client = new ApolloClient({
       link: new MockLink(mocks),
@@ -5848,9 +5672,9 @@ describe('fetchMore', () => {
   });
 
   // https://github.com/apollographql/apollo-client/issues/11708
-  it('`fetchMore` works with startTransition when setting errorPolicy as default option in ApolloClient constructor', async() => {
+  it('`fetchMore` works with startTransition when setting errorPolicy as default option in ApolloClient constructor', async () => {
     type Variables = {
-      offset: number,
+      offset: number;
     };
 
     interface Todo {
@@ -5916,8 +5740,7 @@ describe('fetchMore', () => {
       },
     });
 
-    const { SuspenseFallback, ReadQueryHook }
-      = createDefaultTrackedComponents(Profiler);
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
 
     const client = new ApolloClient({
       link: new MockLink(mocks),
@@ -6087,10 +5910,7 @@ describe.skip('type tests', () => {
     expectTypeOf(inferred).toEqualTypeOf<VariablesCaseData>();
     expectTypeOf(inferred).not.toEqualTypeOf<VariablesCaseData | undefined>();
 
-    const [explicitQueryRef] = useBackgroundQuery<
-      VariablesCaseData,
-      VariablesCaseVariables
-    >(query);
+    const [explicitQueryRef] = useBackgroundQuery<VariablesCaseData, VariablesCaseVariables>(query);
 
     const { data: explicit } = useReadQuery(explicitQueryRef);
 
@@ -6109,10 +5929,7 @@ describe.skip('type tests', () => {
     expectTypeOf(inferred).toEqualTypeOf<VariablesCaseData | undefined>();
     expectTypeOf(inferred).not.toEqualTypeOf<VariablesCaseData>();
 
-    const [explicitQueryRef] = useBackgroundQuery<
-      VariablesCaseData,
-      VariablesCaseVariables
-    >(query, {
+    const [explicitQueryRef] = useBackgroundQuery<VariablesCaseData, VariablesCaseVariables>(query, {
       errorPolicy: 'ignore',
     });
 
@@ -6173,10 +5990,7 @@ describe.skip('type tests', () => {
     expectTypeOf(inferred).toEqualTypeOf<DeepPartial<VariablesCaseData>>();
     expectTypeOf(inferred).not.toEqualTypeOf<VariablesCaseData>();
 
-    const [explicitQueryRef] = useBackgroundQuery<
-      VariablesCaseData,
-      VariablesCaseVariables
-    >(query, {
+    const [explicitQueryRef] = useBackgroundQuery<VariablesCaseData, VariablesCaseVariables>(query, {
       returnPartialData: true,
     });
 
@@ -6197,10 +6011,7 @@ describe.skip('type tests', () => {
     expectTypeOf(inferred).toEqualTypeOf<VariablesCaseData>();
     expectTypeOf(inferred).not.toEqualTypeOf<DeepPartial<VariablesCaseData>>();
 
-    const [explicitQueryRef] = useBackgroundQuery<
-      VariablesCaseData,
-      VariablesCaseVariables
-    >(query, {
+    const [explicitQueryRef] = useBackgroundQuery<VariablesCaseData, VariablesCaseVariables>(query, {
       returnPartialData: false,
     });
 
@@ -6221,10 +6032,7 @@ describe.skip('type tests', () => {
     expectTypeOf(inferred).toEqualTypeOf<VariablesCaseData>();
     expectTypeOf(inferred).not.toEqualTypeOf<DeepPartial<VariablesCaseData>>();
 
-    const [explicitQueryRef] = useBackgroundQuery<
-      VariablesCaseData,
-      VariablesCaseVariables
-    >(query, {
+    const [explicitQueryRef] = useBackgroundQuery<VariablesCaseData, VariablesCaseVariables>(query, {
       fetchPolicy: 'no-cache',
     });
 
@@ -6241,70 +6049,40 @@ describe.skip('type tests', () => {
       returnPartialData: true,
       errorPolicy: 'ignore',
     });
-    const { data: inferredPartialDataIgnore } = useReadQuery(
-      inferredPartialDataIgnoreQueryRef
-    );
+    const { data: inferredPartialDataIgnore } = useReadQuery(inferredPartialDataIgnoreQueryRef);
 
-    expectTypeOf(inferredPartialDataIgnore).toEqualTypeOf<
-      DeepPartial<VariablesCaseData> | undefined
-    >();
-    expectTypeOf(
-      inferredPartialDataIgnore
-    ).not.toEqualTypeOf<VariablesCaseData>();
+    expectTypeOf(inferredPartialDataIgnore).toEqualTypeOf<DeepPartial<VariablesCaseData> | undefined>();
+    expectTypeOf(inferredPartialDataIgnore).not.toEqualTypeOf<VariablesCaseData>();
 
-    const [explicitPartialDataIgnoreQueryRef] = useBackgroundQuery<
-      VariablesCaseData,
-      VariablesCaseVariables
-    >(query, {
+    const [explicitPartialDataIgnoreQueryRef] = useBackgroundQuery<VariablesCaseData, VariablesCaseVariables>(query, {
       returnPartialData: true,
       errorPolicy: 'ignore',
     });
 
-    const { data: explicitPartialDataIgnore } = useReadQuery(
-      explicitPartialDataIgnoreQueryRef
-    );
+    const { data: explicitPartialDataIgnore } = useReadQuery(explicitPartialDataIgnoreQueryRef);
 
-    expectTypeOf(explicitPartialDataIgnore).toEqualTypeOf<
-      DeepPartial<VariablesCaseData> | undefined
-    >();
-    expectTypeOf(
-      explicitPartialDataIgnore
-    ).not.toEqualTypeOf<VariablesCaseData>();
+    expectTypeOf(explicitPartialDataIgnore).toEqualTypeOf<DeepPartial<VariablesCaseData> | undefined>();
+    expectTypeOf(explicitPartialDataIgnore).not.toEqualTypeOf<VariablesCaseData>();
 
     const [inferredPartialDataNoneQueryRef] = useBackgroundQuery(query, {
       returnPartialData: true,
       errorPolicy: 'none',
     });
 
-    const { data: inferredPartialDataNone } = useReadQuery(
-      inferredPartialDataNoneQueryRef
-    );
+    const { data: inferredPartialDataNone } = useReadQuery(inferredPartialDataNoneQueryRef);
 
-    expectTypeOf(inferredPartialDataNone).toEqualTypeOf<
-      DeepPartial<VariablesCaseData>
-    >();
-    expectTypeOf(
-      inferredPartialDataNone
-    ).not.toEqualTypeOf<VariablesCaseData>();
+    expectTypeOf(inferredPartialDataNone).toEqualTypeOf<DeepPartial<VariablesCaseData>>();
+    expectTypeOf(inferredPartialDataNone).not.toEqualTypeOf<VariablesCaseData>();
 
-    const [explicitPartialDataNoneQueryRef] = useBackgroundQuery<
-      VariablesCaseData,
-      VariablesCaseVariables
-    >(query, {
+    const [explicitPartialDataNoneQueryRef] = useBackgroundQuery<VariablesCaseData, VariablesCaseVariables>(query, {
       returnPartialData: true,
       errorPolicy: 'none',
     });
 
-    const { data: explicitPartialDataNone } = useReadQuery(
-      explicitPartialDataNoneQueryRef
-    );
+    const { data: explicitPartialDataNone } = useReadQuery(explicitPartialDataNoneQueryRef);
 
-    expectTypeOf(explicitPartialDataNone).toEqualTypeOf<
-      DeepPartial<VariablesCaseData>
-    >();
-    expectTypeOf(
-      explicitPartialDataNone
-    ).not.toEqualTypeOf<VariablesCaseData>();
+    expectTypeOf(explicitPartialDataNone).toEqualTypeOf<DeepPartial<VariablesCaseData>>();
+    expectTypeOf(explicitPartialDataNone).not.toEqualTypeOf<VariablesCaseData>();
   });
 
   it('returns correct TData type when combined options that do not affect TData', () => {
@@ -6320,10 +6098,7 @@ describe.skip('type tests', () => {
     expectTypeOf(inferred).toEqualTypeOf<DeepPartial<VariablesCaseData>>();
     expectTypeOf(inferred).not.toEqualTypeOf<VariablesCaseData>();
 
-    const [explicitQueryRef] = useBackgroundQuery<
-      VariablesCaseData,
-      VariablesCaseVariables
-    >(query, {
+    const [explicitQueryRef] = useBackgroundQuery<VariablesCaseData, VariablesCaseVariables>(query, {
       fetchPolicy: 'no-cache',
       returnPartialData: true,
       errorPolicy: 'none',
@@ -6342,30 +6117,19 @@ describe.skip('type tests', () => {
       skip: true,
     });
 
-    expectTypeOf(inferredQueryRef).toEqualTypeOf<
-      QueryRef<VariablesCaseData, VariablesCaseVariables> | undefined
-    >();
+    expectTypeOf(inferredQueryRef).toEqualTypeOf<QueryRef<VariablesCaseData, VariablesCaseVariables> | undefined>();
     expectTypeOf(inferredQueryRef).toMatchTypeOf<
       QueryReference<VariablesCaseData, VariablesCaseVariables> | undefined
     >();
-    expectTypeOf(inferredQueryRef).not.toEqualTypeOf<
-      QueryRef<VariablesCaseData>
-    >();
+    expectTypeOf(inferredQueryRef).not.toEqualTypeOf<QueryRef<VariablesCaseData>>();
 
-    const [explicitQueryRef] = useBackgroundQuery<
-      VariablesCaseData,
-      VariablesCaseVariables
-    >(query, { skip: true });
+    const [explicitQueryRef] = useBackgroundQuery<VariablesCaseData, VariablesCaseVariables>(query, { skip: true });
 
-    expectTypeOf(explicitQueryRef).toEqualTypeOf<
-      QueryRef<VariablesCaseData, VariablesCaseVariables> | undefined
-    >();
+    expectTypeOf(explicitQueryRef).toEqualTypeOf<QueryRef<VariablesCaseData, VariablesCaseVariables> | undefined>();
     expectTypeOf(explicitQueryRef).toMatchTypeOf<
       QueryReference<VariablesCaseData, VariablesCaseVariables> | undefined
     >();
-    expectTypeOf(explicitQueryRef).not.toEqualTypeOf<
-      QueryRef<VariablesCaseData, VariablesCaseVariables>
-    >();
+    expectTypeOf(explicitQueryRef).not.toEqualTypeOf<QueryRef<VariablesCaseData, VariablesCaseVariables>>();
 
     // TypeScript is too smart and using a `const` or `let` boolean variable
     // for the `skip` option results in a false positive. Using an options
@@ -6378,15 +6142,11 @@ describe.skip('type tests', () => {
       skip: options.skip,
     });
 
-    expectTypeOf(dynamicQueryRef).toEqualTypeOf<
-      QueryRef<VariablesCaseData, VariablesCaseVariables> | undefined
-    >();
+    expectTypeOf(dynamicQueryRef).toEqualTypeOf<QueryRef<VariablesCaseData, VariablesCaseVariables> | undefined>();
     expectTypeOf(dynamicQueryRef).toMatchTypeOf<
       QueryReference<VariablesCaseData, VariablesCaseVariables> | undefined
     >();
-    expectTypeOf(dynamicQueryRef).not.toEqualTypeOf<
-      QueryRef<VariablesCaseData, VariablesCaseVariables>
-    >();
+    expectTypeOf(dynamicQueryRef).not.toEqualTypeOf<QueryRef<VariablesCaseData, VariablesCaseVariables>>();
   });
 
   it('returns `undefined` when using `skipToken` unconditionally', () => {
@@ -6395,19 +6155,12 @@ describe.skip('type tests', () => {
     const [inferredQueryRef] = useBackgroundQuery(query, skipToken);
 
     expectTypeOf(inferredQueryRef).toEqualTypeOf<undefined>();
-    expectTypeOf(inferredQueryRef).not.toEqualTypeOf<
-      QueryRef<VariablesCaseData, VariablesCaseVariables> | undefined
-    >();
+    expectTypeOf(inferredQueryRef).not.toEqualTypeOf<QueryRef<VariablesCaseData, VariablesCaseVariables> | undefined>();
 
-    const [explicitQueryRef] = useBackgroundQuery<
-      VariablesCaseData,
-      VariablesCaseVariables
-    >(query, skipToken);
+    const [explicitQueryRef] = useBackgroundQuery<VariablesCaseData, VariablesCaseVariables>(query, skipToken);
 
     expectTypeOf(explicitQueryRef).toEqualTypeOf<undefined>();
-    expectTypeOf(explicitQueryRef).not.toEqualTypeOf<
-      QueryRef<VariablesCaseData, VariablesCaseVariables> | undefined
-    >();
+    expectTypeOf(explicitQueryRef).not.toEqualTypeOf<QueryRef<VariablesCaseData, VariablesCaseVariables> | undefined>();
   });
 
   it('returns QueryRef<TData> | undefined when using conditional `skipToken`', () => {
@@ -6416,35 +6169,24 @@ describe.skip('type tests', () => {
       skip: true,
     };
 
-    const [inferredQueryRef] = useBackgroundQuery(
-      query,
-      options.skip ? skipToken : undefined
-    );
+    const [inferredQueryRef] = useBackgroundQuery(query, options.skip ? skipToken : undefined);
 
-    expectTypeOf(inferredQueryRef).toEqualTypeOf<
-      QueryRef<VariablesCaseData, VariablesCaseVariables> | undefined
-    >();
+    expectTypeOf(inferredQueryRef).toEqualTypeOf<QueryRef<VariablesCaseData, VariablesCaseVariables> | undefined>();
     expectTypeOf(inferredQueryRef).toMatchTypeOf<
       QueryReference<VariablesCaseData, VariablesCaseVariables> | undefined
     >();
-    expectTypeOf(inferredQueryRef).not.toEqualTypeOf<
-      QueryRef<VariablesCaseData, VariablesCaseVariables>
-    >();
+    expectTypeOf(inferredQueryRef).not.toEqualTypeOf<QueryRef<VariablesCaseData, VariablesCaseVariables>>();
 
-    const [explicitQueryRef] = useBackgroundQuery<
-      VariablesCaseData,
-      VariablesCaseVariables
-    >(query, options.skip ? skipToken : undefined);
+    const [explicitQueryRef] = useBackgroundQuery<VariablesCaseData, VariablesCaseVariables>(
+      query,
+      options.skip ? skipToken : undefined,
+    );
 
-    expectTypeOf(explicitQueryRef).toEqualTypeOf<
-      QueryRef<VariablesCaseData, VariablesCaseVariables> | undefined
-    >();
+    expectTypeOf(explicitQueryRef).toEqualTypeOf<QueryRef<VariablesCaseData, VariablesCaseVariables> | undefined>();
     expectTypeOf(explicitQueryRef).toMatchTypeOf<
       QueryReference<VariablesCaseData, VariablesCaseVariables> | undefined
     >();
-    expectTypeOf(explicitQueryRef).not.toEqualTypeOf<
-      QueryRef<VariablesCaseData, VariablesCaseVariables>
-    >();
+    expectTypeOf(explicitQueryRef).not.toEqualTypeOf<QueryRef<VariablesCaseData, VariablesCaseVariables>>();
   });
 
   it('returns QueryRef<DeepPartial<TData>> | undefined when using `skipToken` with `returnPartialData`', () => {
@@ -6453,38 +6195,27 @@ describe.skip('type tests', () => {
       skip: true,
     };
 
-    const [inferredQueryRef] = useBackgroundQuery(
-      query,
-      options.skip ? skipToken : { returnPartialData: true }
-    );
+    const [inferredQueryRef] = useBackgroundQuery(query, options.skip ? skipToken : { returnPartialData: true });
 
     expectTypeOf(inferredQueryRef).toEqualTypeOf<
-      | QueryRef<DeepPartial<VariablesCaseData>, VariablesCaseVariables>
-      | undefined
+      QueryRef<DeepPartial<VariablesCaseData>, VariablesCaseVariables> | undefined
     >();
     expectTypeOf(inferredQueryRef).toMatchTypeOf<
-      | QueryReference<DeepPartial<VariablesCaseData>, VariablesCaseVariables>
-      | undefined
+      QueryReference<DeepPartial<VariablesCaseData>, VariablesCaseVariables> | undefined
     >();
-    expectTypeOf(inferredQueryRef).not.toEqualTypeOf<
-      QueryRef<VariablesCaseData, VariablesCaseVariables>
-    >();
+    expectTypeOf(inferredQueryRef).not.toEqualTypeOf<QueryRef<VariablesCaseData, VariablesCaseVariables>>();
 
-    const [explicitQueryRef] = useBackgroundQuery<
-      VariablesCaseData,
-      VariablesCaseVariables
-    >(query, options.skip ? skipToken : { returnPartialData: true });
+    const [explicitQueryRef] = useBackgroundQuery<VariablesCaseData, VariablesCaseVariables>(
+      query,
+      options.skip ? skipToken : { returnPartialData: true },
+    );
 
     expectTypeOf(explicitQueryRef).toEqualTypeOf<
-      | QueryRef<DeepPartial<VariablesCaseData>, VariablesCaseVariables>
-      | undefined
+      QueryRef<DeepPartial<VariablesCaseData>, VariablesCaseVariables> | undefined
     >();
     expectTypeOf(explicitQueryRef).toMatchTypeOf<
-      | QueryReference<DeepPartial<VariablesCaseData>, VariablesCaseVariables>
-      | undefined
+      QueryReference<DeepPartial<VariablesCaseData>, VariablesCaseVariables> | undefined
     >();
-    expectTypeOf(explicitQueryRef).not.toEqualTypeOf<
-      QueryRef<VariablesCaseData, VariablesCaseVariables>
-    >();
+    expectTypeOf(explicitQueryRef).not.toEqualTypeOf<QueryRef<VariablesCaseData, VariablesCaseVariables>>();
   });
 });

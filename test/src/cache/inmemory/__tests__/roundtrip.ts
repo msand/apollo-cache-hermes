@@ -14,7 +14,7 @@ function assertDeeplyFrozen(value: any, stack: any[] = []) {
     expect(Object.isExtensible(value)).toBe(false);
     expect(Object.isFrozen(value)).toBe(true);
     stack.push(value);
-    Object.keys(value).forEach((key) => {
+    Object.keys(value).forEach(key => {
       assertDeeplyFrozen(value[key], stack);
     });
     expect(stack.pop()).toBe(value);
@@ -93,7 +93,7 @@ function storeRoundtrip(query: DocumentNode, result: any, variables = {}) {
     return;
   }
 
-  Object.keys(result).forEach((key) => {
+  Object.keys(result).forEach(key => {
     expect(deletedRootResult[key]).toBe(reconstructedResult[key]);
   });
 }
@@ -112,7 +112,7 @@ describe('roundtrip', () => {
         people_one: {
           name: 'Luke Skywalker',
         },
-      }
+      },
     );
   });
 
@@ -130,7 +130,7 @@ describe('roundtrip', () => {
           [{ value: 1 }, { value: 2 }],
           [{ value: 3 }, { value: 4 }],
         ],
-      }
+      },
     );
   });
 
@@ -145,7 +145,7 @@ describe('roundtrip', () => {
       `,
       {
         list: [null, { value: 1 }],
-      }
+      },
     );
   });
 
@@ -162,7 +162,7 @@ describe('roundtrip', () => {
         hero: {
           name: 'Luke Skywalker',
         },
-      }
+      },
     );
   });
 
@@ -185,7 +185,7 @@ describe('roundtrip', () => {
         vader: {
           name: 'Darth Vader',
         },
-      }
+      },
     );
   });
 
@@ -212,7 +212,7 @@ describe('roundtrip', () => {
       {
         lukeId: '1',
         vaderId: '4',
-      }
+      },
     );
   });
 
@@ -242,7 +242,7 @@ describe('roundtrip', () => {
       `,
       {
         updateClub,
-      }
+      },
     );
 
     // Reading immutable results from the store does not mean the original
@@ -259,7 +259,7 @@ describe('roundtrip', () => {
             fortuneCookie @skip(if: true)
           }
         `,
-        {}
+        {},
       );
     });
 
@@ -270,7 +270,7 @@ describe('roundtrip', () => {
             fortuneCookie @skip(if: false)
           }
         `,
-        { fortuneCookie: 'live long and prosper' }
+        { fortuneCookie: 'live long and prosper' },
       );
     });
   });
@@ -289,7 +289,7 @@ describe('roundtrip', () => {
         `,
         {
           field: null,
-        }
+        },
       );
     });
 
@@ -310,7 +310,7 @@ describe('roundtrip', () => {
             __typename: 'Obj',
             stuff: 'Result',
           },
-        }
+        },
       );
     });
 
@@ -342,7 +342,7 @@ describe('roundtrip', () => {
                 side: 'bright',
               },
             ],
-          }
+          },
         );
       }).toThrow(/Can't find field 'rank' /);
     });
@@ -373,7 +373,7 @@ describe('roundtrip', () => {
                 name: 'Anakin Skywalker',
               },
             ],
-          }
+          },
         );
       });
     });
@@ -412,7 +412,7 @@ describe('roundtrip', () => {
                 model: 'astromech',
               },
             ],
-          }
+          },
         );
       });
     });
@@ -452,7 +452,7 @@ describe('roundtrip', () => {
                 side: 'bright',
               },
             ],
-          }
+          },
         );
       });
     });
@@ -487,7 +487,7 @@ describe('roundtrip', () => {
                 side: 'bright',
               },
             ],
-          }
+          },
         );
       }).toThrow(/Can't find field 'rank' /);
     });
@@ -514,7 +514,7 @@ describe('roundtrip', () => {
             name: 'Luke Skywalker',
             side: 'bright',
           },
-        }
+        },
       );
     });
 
@@ -544,7 +544,7 @@ describe('roundtrip', () => {
             name: 'Luke Skywalker',
             side: 'bright',
           },
-        }
+        },
       );
     });
   });

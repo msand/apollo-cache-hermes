@@ -27,14 +27,14 @@ export import ErrorHandler = ErrorLink.ErrorHandler;
 
 export function onError(errorHandler: ErrorHandler): ApolloLink {
   return new ApolloLink((operation, forward) => {
-    return new Observable((observer) => {
+    return new Observable(observer => {
       let sub: any;
       let retriedSub: any;
       let retriedResult: any;
 
       try {
         sub = forward(operation).subscribe({
-          next: (result) => {
+          next: result => {
             if (result.errors) {
               retriedResult = errorHandler({
                 graphQLErrors: result.errors,
@@ -54,16 +54,12 @@ export function onError(errorHandler: ErrorHandler): ApolloLink {
             }
             observer.next(result);
           },
-          error: (networkError) => {
+          error: networkError => {
             retriedResult = errorHandler({
               operation,
               networkError,
               // Network errors can return GraphQL errors on for example a 403
-              graphQLErrors:
-                (networkError &&
-                  networkError.result &&
-                  networkError.result.errors) ||
-                void 0,
+              graphQLErrors: (networkError && networkError.result && networkError.result.errors) || void 0,
               forward,
             });
             if (retriedResult) {
@@ -104,10 +100,7 @@ export class ErrorLink extends ApolloLink {
     this.link = onError(errorHandler);
   }
 
-  public request(
-    operation: Operation,
-    forward: NextLink
-  ): Observable<FetchResult> | null {
+  public request(operation: Operation, forward: NextLink): Observable<FetchResult> | null {
     return this.link.request(operation, forward);
   }
 }

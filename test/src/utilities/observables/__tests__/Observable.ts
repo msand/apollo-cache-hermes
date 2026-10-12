@@ -9,7 +9,7 @@ describe('Observable', () => {
         },
       });
 
-      const subscriber: Subscriber<number> = (observer) => {
+      const subscriber: Subscriber<number> = observer => {
         observer.next(123);
         observer.complete();
       };
@@ -28,24 +28,19 @@ describe('Observable', () => {
           next: resolve,
           error: reject,
         });
-      }).then((value) => {
+      }).then(value => {
         expect(value).toBe(123);
       });
     }
 
-    function newify(
-      constructor: <T>(sub: Subscriber<T>) => void
-    ): new <T>(sub: Subscriber<T>) => Observable<T> {
+    function newify(constructor: <T>(sub: Subscriber<T>) => void): new <T>(sub: Subscriber<T>) => Observable<T> {
       return constructor as any;
     }
 
     type ObservableWithSub<T> = Observable<T> & { sub?: Subscriber<T> };
 
     it('simulating super(sub) with Observable.call(this, sub)', () => {
-      function SubclassWithSuperCall<T>(
-        this: ObservableWithSub<T>,
-        sub: Subscriber<T>
-      ) {
+      function SubclassWithSuperCall<T>(this: ObservableWithSub<T>, sub: Subscriber<T>) {
         const self = Observable.call(this, sub) || this;
         self.sub = sub;
         return self;
@@ -54,10 +49,7 @@ describe('Observable', () => {
     });
 
     it('simulating super(sub) with Observable.apply(this, arguments)', () => {
-      function SubclassWithSuperApplyArgs<T>(
-        this: ObservableWithSub<T>,
-        _sub: Subscriber<T>
-      ) {
+      function SubclassWithSuperApplyArgs<T>(this: ObservableWithSub<T>, _sub: Subscriber<T>) {
         const self = Observable.apply(this, arguments) || this;
         self.sub = _sub;
         return self;
@@ -66,10 +58,7 @@ describe('Observable', () => {
     });
 
     it('simulating super(sub) with Observable.apply(this, [sub])', () => {
-      function SubclassWithSuperApplyArray<T>(
-        this: ObservableWithSub<T>,
-        ...args: [Subscriber<T>]
-      ) {
+      function SubclassWithSuperApplyArray<T>(this: ObservableWithSub<T>, ...args: [Subscriber<T>]) {
         const self = Observable.apply(this, args) || this;
         self.sub = args[0];
         return self;

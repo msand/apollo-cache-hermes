@@ -11,7 +11,7 @@ import { MutationComponentOptions } from '@apollo/client/react/components';
  * but it no longer receives feature updates or bug fixes.
  */
 export function Mutation<TData = any, TVariables extends OperationVariables = OperationVariables>(
-  props: MutationComponentOptions<TData, TVariables>
+  props: MutationComponentOptions<TData, TVariables>,
 ): ReactTypes.JSX.Element | null {
   const [runMutation, result] = useMutation(props.mutation, props);
   return props.children ? props.children(runMutation, result) : null;
@@ -26,9 +26,7 @@ Mutation.propTypes = {
   variables: PropTypes.object,
   optimisticResponse: PropTypes.oneOfType([PropTypes.object, PropTypes.func]),
   refetchQueries: PropTypes.oneOfType([
-    PropTypes.arrayOf(
-      PropTypes.oneOfType([PropTypes.string, PropTypes.object])
-    ),
+    PropTypes.arrayOf(PropTypes.oneOfType([PropTypes.string, PropTypes.object])),
     PropTypes.func,
   ]),
   awaitRefetchQueries: PropTypes.bool,

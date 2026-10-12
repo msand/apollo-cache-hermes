@@ -20,10 +20,7 @@ export function rewriteURIForGET(chosenURI: string, body: Body) {
   if (body.variables) {
     let serializedVariables;
     try {
-      serializedVariables = serializeFetchParameter(
-        body.variables,
-        'Variables map'
-      );
+      serializedVariables = serializeFetchParameter(body.variables, 'Variables map');
     } catch (parseError) {
       return { parseError };
     }
@@ -32,10 +29,7 @@ export function rewriteURIForGET(chosenURI: string, body: Body) {
   if (body.extensions) {
     let serializedExtensions;
     try {
-      serializedExtensions = serializeFetchParameter(
-        body.extensions,
-        'Extensions map'
-      );
+      serializedExtensions = serializeFetchParameter(body.extensions, 'Extensions map');
     } catch (parseError) {
       return { parseError };
     }
@@ -56,7 +50,6 @@ export function rewriteURIForGET(chosenURI: string, body: Body) {
     preFragment = chosenURI.substr(0, fragmentStart);
   }
   const queryParamsPrefix = preFragment.indexOf('?') === -1 ? '?' : '&';
-  const newURI
-    = preFragment + queryParamsPrefix + queryParams.join('&') + fragment;
+  const newURI = preFragment + queryParamsPrefix + queryParams.join('&') + fragment;
   return { newURI };
 }

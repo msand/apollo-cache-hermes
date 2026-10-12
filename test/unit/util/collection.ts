@@ -4,7 +4,6 @@ import { lazyImmutableDeepSet } from '../../../src/util';
 
 describe(`util.collection`, () => {
   describe('lazyImmutableDeepSet', () => {
-
     it(`constructs a new object if there is no target or original`, () => {
       const updated = lazyImmutableDeepSet(undefined, undefined, ['id'], 1);
       expect(updated).to.deep.eq({ id: 1 });
@@ -134,6 +133,5 @@ describe(`util.collection`, () => {
         },
       });
     });
-
   });
 });

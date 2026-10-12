@@ -1,54 +1,40 @@
 import type { MatcherFunction } from 'expect';
 
 import { WaitForRenderTimeoutError } from '../internal/index';
-import type {
-  NextRenderOptions,
-  Profiler,
-  ProfiledComponent,
-  ProfiledHook,
-} from '../internal/index';
+import type { NextRenderOptions, Profiler, ProfiledComponent, ProfiledHook } from '../internal/index';
 
-export const toRerender: MatcherFunction<[options?: NextRenderOptions]>
-  = async function(actual, options) {
-    const _profiler = actual as
-      | Profiler<any>
-      | ProfiledComponent<any, any>
-      | ProfiledHook<any, any>;
-    const profiler = 'Profiler' in _profiler ? _profiler.Profiler : _profiler;
-    const hint = this.utils.matcherHint('toRerender', 'ProfiledComponent', '');
-    let pass = true;
-    try {
-      await profiler.peekRender({ timeout: 100, ...options });
-    } catch (e) {
-      if (e instanceof WaitForRenderTimeoutError) {
-        pass = false;
-      } else {
-        throw e;
-      }
+export const toRerender: MatcherFunction<[options?: NextRenderOptions]> = async function (actual, options) {
+  const _profiler = actual as Profiler<any> | ProfiledComponent<any, any> | ProfiledHook<any, any>;
+  const profiler = 'Profiler' in _profiler ? _profiler.Profiler : _profiler;
+  const hint = this.utils.matcherHint('toRerender', 'ProfiledComponent', '');
+  let pass = true;
+  try {
+    await profiler.peekRender({ timeout: 100, ...options });
+  } catch (e) {
+    if (e instanceof WaitForRenderTimeoutError) {
+      pass = false;
+    } else {
+      throw e;
     }
+  }
 
-    return {
-      pass,
-      message() {
-        return (
-          `${hint
-          }\n\nExpected component to${pass ? ' not' : ''} rerender, `
-          + `but it did${pass ? '' : ' not'}.`
-        );
-      },
-    };
+  return {
+    pass,
+    message() {
+      return `${hint}\n\nExpected component to${pass ? ' not' : ''} rerender, but it did${pass ? '' : ' not'}.`;
+    },
   };
+};
 
 /** to be thrown to "break" test execution and fail it */
 const failed = {};
 
-export const toRenderExactlyTimes: MatcherFunction<
-  [times: number, options?: NextRenderOptions]
-> = async function(actual, times, optionsPerRender) {
-  const _profiler = actual as
-    | Profiler<any>
-    | ProfiledComponent<any, any>
-    | ProfiledHook<any, any>;
+export const toRenderExactlyTimes: MatcherFunction<[times: number, options?: NextRenderOptions]> = async function (
+  actual,
+  times,
+  optionsPerRender,
+) {
+  const _profiler = actual as Profiler<any> | ProfiledComponent<any, any> | ProfiledHook<any, any>;
   const profiler = 'Profiler' in _profiler ? _profiler.Profiler : _profiler;
   const options = { timeout: 100, ...optionsPerRender };
   const hint = this.utils.matcherHint('toRenderExactlyTimes');
@@ -84,9 +70,8 @@ export const toRenderExactlyTimes: MatcherFunction<
     pass,
     message() {
       return (
-        `${hint
-        } Expected component to${pass ? ' not' : ''} render exactly ${times}.`
-        + ` It rendered ${profiler.totalRenderCount()} times.`
+        `${hint} Expected component to${pass ? ' not' : ''} render exactly ${times}.` +
+        ` It rendered ${profiler.totalRenderCount()} times.`
       );
     },
   };

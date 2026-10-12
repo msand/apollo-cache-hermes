@@ -1,4 +1,3 @@
-
 import * as React from 'rehackt';
 import type { DocumentNode } from 'graphql';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
@@ -6,11 +5,7 @@ import { equal } from '@wry/equality';
 
 import { invariant } from '../../utilities/globals/index';
 import { DocumentType, verifyDocumentType } from '../parser/index';
-import type {
-  NoInfer,
-  SubscriptionHookOptions,
-  SubscriptionResult,
-} from '../types/types';
+import type { NoInfer, SubscriptionHookOptions, SubscriptionResult } from '../types/types';
 import type { OperationVariables } from '../../core/index';
 
 import { useApolloClient } from './useApolloClient';
@@ -99,19 +94,14 @@ import { useApolloClient } from './useApolloClient';
  * @param options - Options to control how the subscription is executed.
  * @returns Query result object
  */
-export function useSubscription<
-  TData = any,
-  TVariables extends OperationVariables = OperationVariables,
->(
+export function useSubscription<TData = any, TVariables extends OperationVariables = OperationVariables>(
   subscription: DocumentNode | TypedDocumentNode<TData, TVariables>,
-  options?: SubscriptionHookOptions<NoInfer<TData>, NoInfer<TVariables>>
+  options?: SubscriptionHookOptions<NoInfer<TData>, NoInfer<TVariables>>,
 ) {
   const hasIssuedDeprecationWarningRef = React.useRef(false);
   const client = useApolloClient(options?.client);
   verifyDocumentType(subscription, DocumentType.Subscription);
-  const [result, setResult] = React.useState<
-    SubscriptionResult<TData, TVariables>
-  >({
+  const [result, setResult] = React.useState<SubscriptionResult<TData, TVariables>>({
     loading: !options?.skip,
     error: void 0,
     data: void 0,
@@ -124,16 +114,16 @@ export function useSubscription<
     if (options?.onSubscriptionData) {
       invariant.warn(
         options.onData
-          ? '\'useSubscription\' supports only the \'onSubscriptionData\' or \'onData\' option, but not both. Only the \'onData\' option will be used.'
-          : '\'onSubscriptionData\' is deprecated and will be removed in a future major version. Please use the \'onData\' option instead.'
+          ? "'useSubscription' supports only the 'onSubscriptionData' or 'onData' option, but not both. Only the 'onData' option will be used."
+          : "'onSubscriptionData' is deprecated and will be removed in a future major version. Please use the 'onData' option instead.",
       );
     }
 
     if (options?.onSubscriptionComplete) {
       invariant.warn(
         options.onComplete
-          ? '\'useSubscription\' supports only the \'onSubscriptionComplete\' or \'onComplete\' option, but not both. Only the \'onComplete\' option will be used.'
-          : '\'onSubscriptionComplete\' is deprecated and will be removed in a future major version. Please use the \'onComplete\' option instead.'
+          ? "'useSubscription' supports only the 'onSubscriptionComplete' or 'onComplete' option, but not both. Only the 'onComplete' option will be used."
+          : "'onSubscriptionComplete' is deprecated and will be removed in a future major version. Please use the 'onComplete' option instead.",
       );
     }
   }
@@ -166,10 +156,7 @@ export function useSubscription<
     }
 
     if (options?.skip) {
-      if (
-        !options?.skip !== !ref.current.options?.skip ||
-        canResetObservableRef.current
-      ) {
+      if (!options?.skip !== !ref.current.options?.skip || canResetObservableRef.current) {
         setResult({
           loading: false,
           data: void 0,
@@ -200,7 +187,7 @@ export function useSubscription<
           variables: options?.variables,
           fetchPolicy: options?.fetchPolicy,
           context: options?.context,
-        })
+        }),
       );
       canResetObservableRef.current = false;
     }

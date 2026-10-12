@@ -16,11 +16,7 @@ describe(`operations.prune`, () => {
               { id: 'a', value: 1 },
               { id: 'b', value: 2 },
             ],
-            [
-              { id: 'c', value: 3 },
-              { id: 'd', value: 4 },
-              null,
-            ],
+            [{ id: 'c', value: 3 }, { id: 'd', value: 4 }, null],
             null,
           ],
         },
@@ -44,18 +40,17 @@ describe(`operations.prune`, () => {
             id
           }
         }
-      }`, { tableName: 'This is table name' }
+      }`,
+      { tableName: 'This is table name' },
     );
     const pruned = prune(cacheContext, snapshot, pruneQuery);
     extractResult = extract(pruned.snapshot, cacheContext);
   });
 
   it(`prunes fields from parameterized 2d reference array correctly`, () => {
-    const parameterizedId = nodeIdForParameterizedValue(
-      QueryRootId,
-      ['rows', 'elements'],
-      { table: 'This is table name' },
-    );
+    const parameterizedId = nodeIdForParameterizedValue(QueryRootId, ['rows', 'elements'], {
+      table: 'This is table name',
+    });
 
     jestExpect(extractResult).toEqual({
       [QueryRootId]: {
@@ -71,40 +66,28 @@ describe(`operations.prune`, () => {
           { id: 'c', path: [1, 0] },
           { id: 'd', path: [1, 1] },
         ],
-        data: [
-          [
-            undefined,
-            undefined,
-          ],
-          [
-            undefined,
-            undefined,
-            null,
-          ],
-          null,
-        ],
+        data: [[undefined, undefined], [undefined, undefined, null], null],
       },
-      'a': {
+      a: {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
         inbound: [{ id: parameterizedId, path: [0, 0] }],
         data: { id: 'a' },
       },
-      'b': {
+      b: {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
         inbound: [{ id: parameterizedId, path: [0, 1] }],
         data: { id: 'b' },
       },
-      'c': {
+      c: {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
         inbound: [{ id: parameterizedId, path: [1, 0] }],
         data: { id: 'c' },
       },
-      'd': {
+      d: {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
         inbound: [{ id: parameterizedId, path: [1, 1] }],
         data: { id: 'd' },
       },
     });
   });
-
 });

@@ -19,7 +19,7 @@ describe('EntityStore', () => {
                   __typename: 'Book',
                   isbn: args!.isbn,
                 },
-                true
+                true,
               ) as Reference;
 
               expect(readField('__typename', ref)).toEqual('Book');
@@ -31,26 +31,22 @@ describe('EntityStore', () => {
             },
 
             books: {
-              merge(
-                existing: Reference[] = [],
-                incoming: any[],
-                { isReference, toReference, readField }
-              ) {
-                incoming.forEach((book) => {
+              merge(existing: Reference[] = [], incoming: any[], { isReference, toReference, readField }) {
+                incoming.forEach(book => {
                   expect(isReference(book)).toBe(false);
                   expect(book.__typename).toBeUndefined();
                 });
 
                 const refs = incoming.map(
                   book =>
-                                        toReference(
-                                          {
-                                            __typename: 'Book',
-                                            title: titlesByISBN.get(book.isbn),
-                                            ...book,
-                                          },
-                                          true
-                                        ) as Reference
+                    toReference(
+                      {
+                        __typename: 'Book',
+                        title: titlesByISBN.get(book.isbn),
+                        ...book,
+                      },
+                      true,
+                    ) as Reference,
                 );
 
                 refs.forEach((ref, i) => {
@@ -74,21 +70,21 @@ describe('EntityStore', () => {
     });
 
     const booksQuery = gql`
-            query {
-                books {
-                    isbn
-                }
-            }
-        `;
+      query {
+        books {
+          isbn
+        }
+      }
+    `;
 
     const bookQuery = gql`
-            query {
-                book(isbn: $isbn) {
-                    isbn
-                    title
-                }
-            }
-        `;
+      query {
+        book(isbn: $isbn) {
+          isbn
+          title
+        }
+      }
+    `;
 
     const titlesByISBN = new Map<string, string>([
       ['9781451673319', 'Fahrenheit 451'],
@@ -121,10 +117,7 @@ describe('EntityStore', () => {
         inbound: [
           {
             id: 'ROOT_QUERY',
-            path: [
-              'books',
-              1,
-            ],
+            path: ['books', 1],
           },
         ],
         type: 0,
@@ -138,35 +131,23 @@ describe('EntityStore', () => {
         inbound: [
           {
             id: 'ROOT_QUERY',
-            path: [
-              'books',
-              0,
-            ],
+            path: ['books', 0],
           },
         ],
         type: 0,
       },
       ROOT_QUERY: {
         data: {
-          books: [
-            undefined,
-            undefined,
-          ],
+          books: [undefined, undefined],
         },
         outbound: [
           {
             id: 'Book:{"isbn":"9781451673319"}',
-            path: [
-              'books',
-              0,
-            ],
+            path: ['books', 0],
           },
           {
             id: 'Book:{"isbn":"1603589082"}',
-            path: [
-              'books',
-              1,
-            ],
+            path: ['books', 1],
           },
         ],
         type: 0,
@@ -193,19 +174,15 @@ describe('EntityStore', () => {
         ...twoBookSnapshot.ROOT_QUERY,
         data: {
           ...twoBookSnapshot.ROOT_QUERY.data,
-          books: [
-            ...twoBookSnapshot.ROOT_QUERY.data.books,
-            undefined,
-          ],
+          books: [...twoBookSnapshot.ROOT_QUERY.data.books, undefined],
         },
-        outbound: [...twoBookSnapshot.ROOT_QUERY.outbound,
+        outbound: [
+          ...twoBookSnapshot.ROOT_QUERY.outbound,
           {
             id: 'Book:{"isbn":"1760641790"}',
-            path: [
-              'books',
-              2,
-            ],
-          }],
+            path: ['books', 2],
+          },
+        ],
       },
       'Book:{"isbn":"1760641790"}': {
         data: {
@@ -216,10 +193,7 @@ describe('EntityStore', () => {
         inbound: [
           {
             id: 'ROOT_QUERY',
-            path: [
-              'books',
-              2,
-            ],
+            path: ['books', 2],
           },
         ],
         type: 0,
@@ -282,12 +256,11 @@ describe('EntityStore', () => {
           'Can\'t find field \'title\' on Book:{"isbn":"031648637X"} object',
           {
             book: {
-              title:
-                                'Can\'t find field \'title\' on Book:{"isbn":"031648637X"} object',
+              title: 'Can\'t find field \'title\' on Book:{"isbn":"031648637X"} object',
             },
           },
           expect.anything(), // query
-          expect.anything() // variables
+          expect.anything(), // variables
         ),
       ],
     });
@@ -314,12 +287,12 @@ describe('EntityStore', () => {
     cache.writeQuery({
       id: cuckoosCallingId,
       query: gql`
-                {
-                    title
-                }
-            `,
+        {
+          title
+        }
+      `,
       data: {
-        title: 'The Cuckoo\'s Calling',
+        title: "The Cuckoo's Calling",
       },
     });
 
@@ -330,7 +303,7 @@ describe('EntityStore', () => {
         data: {
           __typename: 'Book',
           isbn: '031648637X',
-          title: 'The Cuckoo\'s Calling',
+          title: "The Cuckoo's Calling",
         },
         type: 0,
       },
@@ -351,9 +324,7 @@ describe('EntityStore', () => {
           // persisted into the store.
           const refWithoutAuthor = toReference(book);
           expect(isReference(refWithoutAuthor)).toBe(true);
-          expect(
-            readField('author', refWithoutAuthor as Reference)
-          ).toBeUndefined();
+          expect(readField('author', refWithoutAuthor as Reference)).toBeUndefined();
 
           // Update this very Book entity before we modify its title.
           // Passing true for the second argument causes the extra
@@ -367,7 +338,7 @@ describe('EntityStore', () => {
           expect(readField('author')).toBe('J.K. Rowling');
 
           // Typography matters!
-          return title.split('\'').join('’');
+          return title.split("'").join('’');
         },
       },
     });
@@ -396,12 +367,9 @@ describe('EntityStore', () => {
               const rootQueryRef = toReference('ROOT_QUERY');
               const ref = makeReference('ROOT_QUERY');
               expect(rootQueryRef).toEqual(ref);
-              const favoritedBooks = readField<Reference[]>(
-                'favoritedBooks',
-                rootQueryRef
-              );
+              const favoritedBooks = readField<Reference[]>('favoritedBooks', rootQueryRef);
               const isbn = readField('isbn');
-              return favoritedBooks!.some((bookRef) => {
+              return favoritedBooks!.some(bookRef => {
                 return isbn === readField('isbn', bookRef);
               });
             },
@@ -417,7 +385,7 @@ describe('EntityStore', () => {
                   isbn: args!.isbn,
                   title: titlesByISBN.get(args!.isbn),
                 },
-                true
+                true,
               );
 
               return ref;
@@ -429,13 +397,13 @@ describe('EntityStore', () => {
 
     cache.writeQuery({
       query: gql`
-                {
-                    favoritedBooks {
-                        isbn
-                        title
-                    }
-                }
-            `,
+        {
+          favoritedBooks {
+            isbn
+            title
+          }
+        }
+      `,
       data: {
         favoritedBooks: [
           {
@@ -455,14 +423,14 @@ describe('EntityStore', () => {
     ]);
 
     const bookQuery = gql`
-            query {
-                book(isbn: $isbn) {
-                    isbn
-                    title
-                    favorited @client
-                }
-            }
-        `;
+      query {
+        book(isbn: $isbn) {
+          isbn
+          title
+          favorited @client
+        }
+      }
+    `;
 
     const shrillResult = cache.readQuery({
       query: bookQuery,
@@ -520,10 +488,10 @@ describe('EntityStore', () => {
                 isbnsWeHaveRead.push(args!.isbn);
                 return (
                   book ||
-                                    toReference({
-                                      __typename: 'Book',
-                                      isbn: args!.isbn,
-                                    })
+                  toReference({
+                    __typename: 'Book',
+                    isbn: args!.isbn,
+                  })
                 );
               },
             },
@@ -537,16 +505,16 @@ describe('EntityStore', () => {
     });
 
     const query = gql`
-            query Book($isbn: string) {
-                book(isbn: $isbn) {
-                    title
-                    isbn
-                    author {
-                        name
-                    }
-                }
-            }
-        `;
+      query Book($isbn: string) {
+        book(isbn: $isbn) {
+          title
+          isbn
+          author {
+            name
+          }
+        }
+      }
+    `;
 
     const diffs: Cache.DiffResult<any>[] = [];
     cache.watch({
@@ -647,7 +615,7 @@ describe('EntityStore', () => {
           isbn: '1449373321',
         },
         optimistic: true,
-      })
+      }),
     ).toBe(diffs[0].result);
 
     expect(
@@ -657,7 +625,7 @@ describe('EntityStore', () => {
           isbn: '1982103558',
         },
         optimistic: true,
-      })
+      }),
     ).toBe(theEndResult);
 
     // Still no additional reads, because both books are cached.
@@ -671,7 +639,7 @@ describe('EntityStore', () => {
           __typename: 'Book',
           isbn: '1982103558',
         }),
-      })
+      }),
     ).toBe(true);
 
     expect(diffs).toMatchObject([
@@ -692,7 +660,7 @@ describe('EntityStore', () => {
         // Read this query non-optimistically, to test that the read function
         // runs again, adding "1449373321" again to isbnsWeHaveRead.
         optimistic: false,
-      })
+      }),
     ).toBe(diffs[0].result);
 
     /*

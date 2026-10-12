@@ -4,7 +4,6 @@ import { QueryResult, read, write } from '../../../../src/operations';
 import { query, silentConfig } from '../../../helpers';
 
 describe(`operations.read`, () => {
-
   const context = new CacheContext(silentConfig);
   const empty = new GraphSnapshot();
   const shipmentsQuery = query(`{
@@ -29,7 +28,6 @@ describe(`operations.read`, () => {
   }`);
 
   describe(`incomplete payload`, () => {
-
     let snapshot: GraphSnapshot;
     let readResult: QueryResult;
 
@@ -41,10 +39,7 @@ describe(`operations.read`, () => {
             driver: {
               name: 'Bob',
               id: 'Bob-d0',
-              messages: [
-                { details: 'Hello' },
-                { details: 'world' },
-              ],
+              messages: [{ details: 'Hello' }, { details: 'world' }],
               seniority: 10,
             },
             stopEtaSummary: [
@@ -66,9 +61,7 @@ describe(`operations.read`, () => {
             driver: {
               name: 'Joe',
               id: 'Joe-d1',
-              messages: [
-                { details: 'Hello' },
-              ],
+              messages: [{ details: 'Hello' }],
               seniority: 20,
             },
             stopEtaSummary: [
@@ -82,8 +75,7 @@ describe(`operations.read`, () => {
             },
           },
           {
-            driver: {
-            },
+            driver: {},
           },
         ],
       }).snapshot;
@@ -102,10 +94,7 @@ describe(`operations.read`, () => {
             driver: {
               name: 'Bob',
               id: 'Bob-d0',
-              messages: [
-                { details: 'Hello' },
-                { details: 'world' },
-              ],
+              messages: [{ details: 'Hello' }, { details: 'world' }],
               seniority: 10,
             },
             stopEtaSummary: [
@@ -127,9 +116,7 @@ describe(`operations.read`, () => {
             driver: {
               name: 'Joe',
               id: 'Joe-d1',
-              messages: [
-                { details: 'Hello' },
-              ],
+              messages: [{ details: 'Hello' }],
               seniority: 20,
             },
             stopEtaSummary: [
@@ -148,7 +135,5 @@ describe(`operations.read`, () => {
         ],
       });
     });
-
   });
-
 });

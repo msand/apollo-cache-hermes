@@ -2,11 +2,7 @@ import gql from 'graphql-tag';
 
 import { Cache } from '../../core/types/Cache';
 import { MissingFieldError } from '../../core/types/common';
-import {
-  Reference,
-  isReference,
-  TypedDocumentNode,
-} from '../../../core';
+import { Reference, isReference, TypedDocumentNode } from '../../../core';
 import { Hermes } from '../../../../../src';
 
 describe('reading from the store', () => {
@@ -41,14 +37,14 @@ describe('reading from the store', () => {
       cache.readQuery({
         query: bQuery,
         returnPartialData: true,
-      })
+      }),
     ).toEqual({});
 
     expect(
       cache.readQuery({
         query: abQuery,
         returnPartialData: true,
-      })
+      }),
     ).toEqual({ a: 123 });
   });
 
@@ -95,14 +91,14 @@ describe('reading from the store', () => {
       cache.readFragment({
         id,
         fragment: bFragment,
-      })
+      }),
     ).toBe(null);
 
     expect(
       cache.readFragment({
         id,
         fragment: abFragment,
-      })
+      }),
     ).toBe(null);
 
     expect(
@@ -110,7 +106,7 @@ describe('reading from the store', () => {
         id,
         fragment: bFragment,
         returnPartialData: true,
-      })
+      }),
     ).toEqual({
       __typename: 'ABObject',
     });
@@ -120,7 +116,7 @@ describe('reading from the store', () => {
         id,
         fragment: abFragment,
         returnPartialData: true,
-      })
+      }),
     ).toEqual({
       __typename: 'ABObject',
       a: 123,
@@ -180,26 +176,18 @@ describe('reading from the store', () => {
             present: 'here',
           },
           null,
-          2
+          2,
         )}`,
         {
           normal: {
-            missing: `Can't find field 'missing' on object ${JSON.stringify(
-              { present: 'here' },
-              null,
-              2
-            )}`,
+            missing: `Can't find field 'missing' on object ${JSON.stringify({ present: 'here' }, null, 2)}`,
           },
           clientOnly: {
-            missing: `Can't find field 'missing' on object ${JSON.stringify(
-              { present: 'also here' },
-              null,
-              2
-            )}`,
+            missing: `Can't find field 'missing' on object ${JSON.stringify({ present: 'also here' }, null, 2)}`,
           },
         },
         query,
-        {} // variables
+        {}, // variables
       ),
     ]);
   });
@@ -228,7 +216,7 @@ describe('reading from the store', () => {
             null
           }
         `,
-      })
+      }),
     ).toEqual({
       uuid: '8d573b9c-cfcf-4e3e-98dd-14d255af577e',
       null: null,
@@ -245,7 +233,7 @@ describe('reading from the store', () => {
             uuid
           }
         `,
-      })
+      }),
     ).toEqual({
       uuid: '8d573b9c-cfcf-4e3e-98dd-14d255af577e',
       null: null,
@@ -261,7 +249,7 @@ describe('reading from the store', () => {
             whatever
           }
         `,
-      })
+      }),
     ).toBe(null);
 
     expect(cache.extract()).toEqual({});
@@ -276,9 +264,7 @@ describe('reading from the store', () => {
               return existing.map(duck => (canRead(duck) ? duck : null));
             },
             chickens(existing: Reference[] = [], { canRead }) {
-              return existing.map(chicken =>
-                (canRead(chicken) ? chicken : {})
-              );
+              return existing.map(chicken => (canRead(chicken) ? chicken : {}));
             },
             oxen(existing: Reference[] = [], { canRead }) {
               return existing.filter(canRead);
@@ -366,11 +352,7 @@ describe('reading from the store', () => {
       },
       ROOT_QUERY: {
         __typename: 'Query',
-        chickens: [
-          { __ref: 'Chicken:1' },
-          { __ref: 'Chicken:2' },
-          { __ref: 'Chicken:3' },
-        ],
+        chickens: [{ __ref: 'Chicken:1' }, { __ref: 'Chicken:2' }, { __ref: 'Chicken:3' }],
         ducks: [{ __ref: 'Duck:1' }, { __ref: 'Duck:2' }, { __ref: 'Duck:3' }],
         oxen: [{ __ref: 'Ox:1' }, { __ref: 'Ox:2' }],
       },
@@ -407,32 +389,28 @@ describe('reading from the store', () => {
           __typename: 'Chicken',
           id: 2,
         }),
-      })
+      }),
     ).toBe(true);
 
     expect(diffChickens()).toEqual({
       complete: false,
       missing: [
         new MissingFieldError(
-          'Can\'t find field \'id\' on object {}',
+          "Can't find field 'id' on object {}",
           {
             chickens: {
               1: {
-                id: 'Can\'t find field \'id\' on object {}',
-                inCoop: 'Can\'t find field \'inCoop\' on object {}',
+                id: "Can't find field 'id' on object {}",
+                inCoop: "Can't find field 'inCoop' on object {}",
               },
             },
           },
           expect.anything(), // query
-          expect.anything() // variables
+          expect.anything(), // variables
         ),
       ],
       result: {
-        chickens: [
-          { __typename: 'Chicken', id: 1, inCoop: true },
-          {},
-          { __typename: 'Chicken', id: 3, inCoop: false },
-        ],
+        chickens: [{ __typename: 'Chicken', id: 1, inCoop: true }, {}, { __typename: 'Chicken', id: 3, inCoop: false }],
       },
     });
 
@@ -467,7 +445,7 @@ describe('reading from the store', () => {
           __typename: 'Duck',
           id: 3,
         }),
-      })
+      }),
     ).toBe(true);
 
     // Returning null as a placeholder in a list is a way to indicate that
@@ -476,11 +454,7 @@ describe('reading from the store', () => {
     expect(diffDucks()).toEqual({
       complete: true,
       result: {
-        ducks: [
-          { __typename: 'Duck', id: 1, quacking: true },
-          { __typename: 'Duck', id: 2, quacking: false },
-          null,
-        ],
+        ducks: [{ __typename: 'Duck', id: 1, quacking: true }, { __typename: 'Duck', id: 2, quacking: false }, null],
       },
     });
 
@@ -515,7 +489,7 @@ describe('reading from the store', () => {
           __typename: 'Ox',
           id: 1,
         }),
-      })
+      }),
     ).toBe(true);
 
     expect(diffOxen()).toEqual({
@@ -545,12 +519,12 @@ describe('reading from the store', () => {
           fields: {
             ruler(ruler, { canRead, toReference }) {
               // If the throne is empty, promote Apollo!
-              return canRead(ruler) ? ruler : (
-                toReference({
-                  __typename: 'Deity',
-                  name: 'Apollo',
-                })
-              );
+              return canRead(ruler)
+                ? ruler
+                : toReference({
+                    __typename: 'Deity',
+                    name: 'Apollo',
+                  });
             },
           },
         },
@@ -637,9 +611,7 @@ describe('reading from the store', () => {
 
     expect(devour('Son #1')).toBe(true);
 
-    const childrenWithoutSon1 = children.filter(
-      child => child.name !== 'Son #1'
-    );
+    const childrenWithoutSon1 = children.filter(child => child.name !== 'Son #1');
 
     expect(childrenWithoutSon1.length).toBe(children.length - 1);
 
@@ -667,7 +639,7 @@ describe('reading from the store', () => {
         ruler: {
           name: 'Cronus',
           __typename: 'Deity',
-          children: childrenWithoutSon1.filter((child) => {
+          children: childrenWithoutSon1.filter(child => {
             return child.name !== 'Son #2';
           }),
         },
@@ -675,11 +647,7 @@ describe('reading from the store', () => {
       complete: true,
     };
 
-    expect(diffs).toEqual([
-      initialDiff,
-      diffWithoutSon1,
-      diffWithoutDevouredSons,
-    ]);
+    expect(diffs).toEqual([initialDiff, diffWithoutSon1, diffWithoutDevouredSons]);
 
     const childrenOfZeus = [
       'Ares',
@@ -720,28 +688,21 @@ describe('reading from the store', () => {
         ...diffWithoutDevouredSons.result,
         ruler: {
           ...diffWithoutDevouredSons.result.ruler,
-          children: diffWithoutDevouredSons.result.ruler.children.map(
-            (child) => {
-              return child.name === 'Zeus'
-                ? {
+          children: diffWithoutDevouredSons.result.ruler.children.map(child => {
+            return child.name === 'Zeus'
+              ? {
                   ...child,
                   children: childrenOfZeus
-                  // Remove empty child.children arrays.
+                    // Remove empty child.children arrays.
                     .map(({ children, ...child }) => child),
                 }
-                : child;
-            }
-          ),
+              : child;
+          }),
         },
       },
     };
 
-    expect(diffs).toEqual([
-      initialDiff,
-      diffWithoutSon1,
-      diffWithoutDevouredSons,
-      diffWithChildrenOfZeus,
-    ]);
+    expect(diffs).toEqual([initialDiff, diffWithoutSon1, diffWithoutDevouredSons, diffWithChildrenOfZeus]);
 
     // Zeus usurps the throne from Cronus!
     cache.writeQuery({
@@ -840,7 +801,7 @@ describe('reading from the store', () => {
     expect(
       cache.readQuery({
         query: rulerQuery,
-      })
+      }),
     ).toBe(lastDiff.result);
 
     expect(
@@ -849,7 +810,7 @@ describe('reading from the store', () => {
           __typename: 'Deity',
           name: 'Ares',
         }),
-      })
+      }),
     ).toBe(true);
 
     // No new diff generated since we called cancel() above.
@@ -870,7 +831,7 @@ describe('reading from the store', () => {
     // Ares already removed, so no new garbage to collect.
     expect(cache.gc()).toEqual([]);
 
-    const childrenOfZeusWithoutAres = childrenOfZeus.filter((child) => {
+    const childrenOfZeusWithoutAres = childrenOfZeus.filter(child => {
       return child.name !== 'Ares';
     });
 
@@ -883,7 +844,7 @@ describe('reading from the store', () => {
     expect(
       cache.readQuery({
         query: rulerQuery,
-      })
+      }),
     ).toEqual({
       ruler: {
         __typename: 'Deity',
@@ -898,7 +859,7 @@ describe('reading from the store', () => {
           __typename: 'Deity',
           name: 'Zeus',
         }),
-      })
+      }),
     ).toBe(true);
 
     // You didn't think we were going to let Apollo be garbage-collected,
@@ -907,13 +868,10 @@ describe('reading from the store', () => {
       cache.identify({
         __typename: 'Deity',
         name: 'Apollo',
-      })!
+      })!,
     );
 
-    expect(cache.gc().sort()).toEqual([
-      'Deity:{"name":"Artemis"}',
-      'Deity:{"name":"Athena"}',
-    ]);
+    expect(cache.gc().sort()).toEqual(['Deity:{"name":"Artemis"}', 'Deity:{"name":"Athena"}']);
 
     expect(cache.extract()).toEqual({
       __META: {
@@ -930,7 +888,7 @@ describe('reading from the store', () => {
     });
 
     const apolloRulerResult = cache.readQuery<{
-      ruler: Record<string, any>,
+      ruler: Record<string, any>;
     }>({ query: rulerQuery })!;
 
     expect(apolloRulerResult).toEqual({
@@ -967,9 +925,7 @@ describe('reading from the store', () => {
       fields: {
         ruler(value, { toReference }) {
           expect(isReference(value)).toBe(true);
-          expect(value.__ref).toBe(
-            cache.identify(diffWithZeusAsRuler.result.ruler)
-          );
+          expect(value.__ref).toBe(cache.identify(diffWithZeusAsRuler.result.ruler));
           expect(value.__ref).toBe('Deity:{"name":"Zeus"}');
           // Interim ruler Apollo takes over for real.
           return toReference(apolloRulerResult.ruler)!;
@@ -1002,8 +958,8 @@ describe('reading from the store', () => {
         cache.identify({
           __typename: 'Deity',
           name: 'Apollo',
-        })!
-      )
+        })!,
+      ),
     ).toBe(0);
 
     // Since ROOT_QUERY.ruler points to Apollo, nothing needs to be
@@ -1031,7 +987,7 @@ describe('reading from the store', () => {
     });
 
     const aQuery: TypedDocumentNode<{
-      a: string[],
+      a: string[];
     }> = gql`
       query {
         a
@@ -1039,11 +995,11 @@ describe('reading from the store', () => {
     `;
 
     const abQuery: TypedDocumentNode<{
-      a: string[],
+      a: string[];
       b: {
-        c: string,
-        d: string,
-      },
+        c: string;
+        d: string;
+      };
     }> = gql`
       query {
         a
@@ -1056,9 +1012,9 @@ describe('reading from the store', () => {
 
     const bQuery: TypedDocumentNode<{
       b: {
-        c: string,
-        d: string,
-      },
+        c: string;
+        d: string;
+      };
     }> = gql`
       query {
         b {
@@ -1163,8 +1119,8 @@ describe('reading from the store', () => {
     });
 
     const query: TypedDocumentNode<{
-      now: typeof now,
-      abc: typeof abc,
+      now: typeof now;
+      abc: typeof abc;
     }> = gql`
       query {
         now
@@ -1220,7 +1176,7 @@ describe('reading from the store', () => {
 
     function readQuery(canonizeResults: boolean) {
       return cache.readQuery<{
-        count: number,
+        count: number;
       }>({
         query,
         canonizeResults,
@@ -1276,7 +1232,7 @@ describe('reading from the store', () => {
 
     function readFragment(canonizeResults: boolean) {
       return cache.readFragment<{
-        count: number,
+        count: number;
       }>({
         id: 'ROOT_QUERY',
         fragment,

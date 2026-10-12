@@ -35,21 +35,10 @@ export function makeReference(id: string): Reference {
 }
 
 export function isReference(obj: any): obj is Reference {
-  return Boolean(
-    obj && typeof obj === 'object' && typeof obj.__ref === 'string'
-  );
+  return Boolean(obj && typeof obj === 'object' && typeof obj.__ref === 'string');
 }
 
-export type StoreValue =
-  | number
-  | string
-  | string[]
-  | Reference
-  | Reference[]
-  | null
-  | undefined
-  | void
-  | Object;
+export type StoreValue = number | string | string[] | Reference | Reference[] | null | undefined | void | Object;
 
 export interface StoreObject {
   __typename?: string;
@@ -118,34 +107,22 @@ function isNullValue(value: ValueNode): value is NullValueNode {
   return value.kind === 'NullValue';
 }
 
-export function valueToObjectRepresentation(
-  argObj: any,
-  name: NameNode,
-  value: ValueNode,
-  variables?: Object
-) {
+export function valueToObjectRepresentation(argObj: any, name: NameNode, value: ValueNode, variables?: Object) {
   if (isIntValue(value) || isFloatValue(value)) {
     argObj[name.value] = Number(value.value);
   } else if (isBooleanValue(value) || isStringValue(value)) {
     argObj[name.value] = value.value;
   } else if (isObjectValue(value)) {
     const nestedArgObj = {};
-    value.fields.map(obj =>
-      valueToObjectRepresentation(nestedArgObj, obj.name, obj.value, variables)
-    );
+    value.fields.map(obj => valueToObjectRepresentation(nestedArgObj, obj.name, obj.value, variables));
     argObj[name.value] = nestedArgObj;
   } else if (isVariable(value)) {
     const variableValue = (variables || ({} as any))[value.name.value];
     argObj[name.value] = variableValue;
   } else if (isListValue(value)) {
-    argObj[name.value] = value.values.map((listValue) => {
+    argObj[name.value] = value.values.map(listValue => {
       const nestedArgArrayObj = {};
-      valueToObjectRepresentation(
-        nestedArgArrayObj,
-        name,
-        listValue,
-        variables
-      );
+      valueToObjectRepresentation(nestedArgArrayObj, name, listValue, variables);
       return (nestedArgArrayObj as any)[name.value];
     });
   } else if (isEnumValue(value)) {
@@ -154,33 +131,25 @@ export function valueToObjectRepresentation(
     argObj[name.value] = null;
   } else {
     throw newInvariantError(
-      `The inline argument "%s" of kind "%s"`
-        + 'is not supported. Use variables instead of inline arguments to '
-        + 'overcome this limitation.',
+      `The inline argument "%s" of kind "%s"` +
+        'is not supported. Use variables instead of inline arguments to ' +
+        'overcome this limitation.',
       name.value,
-      (value as any).kind
+      (value as any).kind,
     );
   }
 }
 
-export function storeKeyNameFromField(
-  field: FieldNode,
-  variables?: Object
-): string {
+export function storeKeyNameFromField(field: FieldNode, variables?: Object): string {
   let directivesObj: any = null;
   if (field.directives) {
     directivesObj = {};
-    field.directives.forEach((directive) => {
+    field.directives.forEach(directive => {
       directivesObj[directive.name.value] = {};
 
       if (directive.arguments) {
         directive.arguments.forEach(({ name, value }) =>
-          valueToObjectRepresentation(
-            directivesObj[directive.name.value],
-            name,
-            value,
-            variables
-          )
+          valueToObjectRepresentation(directivesObj[directive.name.value], name, value, variables),
         );
       }
     });
@@ -189,9 +158,7 @@ export function storeKeyNameFromField(
   let argObj: any = null;
   if (field.arguments && field.arguments.length) {
     argObj = {};
-    field.arguments.forEach(({ name, value }) =>
-      valueToObjectRepresentation(argObj, name, value, variables)
-    );
+    field.arguments.forEach(({ name, value }) => valueToObjectRepresentation(argObj, name, value, variables));
   }
 
   return getStoreKeyName(field.name.value, argObj, directivesObj);
@@ -199,19 +166,11 @@ export function storeKeyNameFromField(
 
 export type Directives = {
   [directiveName: string]: {
-    [argName: string]: any,
-  },
+    [argName: string]: any;
+  };
 };
 
-const KNOWN_DIRECTIVES: string[] = [
-  'connection',
-  'include',
-  'skip',
-  'client',
-  'rest',
-  'export',
-  'nonreactive',
-];
+const KNOWN_DIRECTIVES: string[] = ['connection', 'include', 'skip', 'client', 'rest', 'export', 'nonreactive'];
 
 // Default stable JSON.stringify implementation used by getStoreKeyName. Can be
 // updated/replaced with something better by calling
@@ -219,35 +178,18 @@ const KNOWN_DIRECTIVES: string[] = [
 let storeKeyNameStringify: (value: any) => string = canonicalStringify;
 
 export const getStoreKeyName = Object.assign(
-  (
-    fieldName: string,
-    args?: Record<string, any> | null,
-    directives?: Directives
-  ): string => {
-    if (
-      args &&
-      directives &&
-      directives['connection'] &&
-      directives['connection']['key']
-    ) {
-      if (
-        directives['connection']['filter'] &&
-        (directives['connection']['filter'] as string[]).length > 0
-      ) {
-        const filterKeys
-          = directives['connection']['filter']
-            ? (directives['connection']['filter'] as string[])
-            : [];
+  (fieldName: string, args?: Record<string, any> | null, directives?: Directives): string => {
+    if (args && directives && directives['connection'] && directives['connection']['key']) {
+      if (directives['connection']['filter'] && (directives['connection']['filter'] as string[]).length > 0) {
+        const filterKeys = directives['connection']['filter'] ? (directives['connection']['filter'] as string[]) : [];
         filterKeys.sort();
 
         const filteredArgs = {} as { [key: string]: any };
-        filterKeys.forEach((key) => {
+        filterKeys.forEach(key => {
           filteredArgs[key] = args[key];
         });
 
-        return `${directives['connection']['key']}(${storeKeyNameStringify(
-          filteredArgs
-        )})`;
+        return `${directives['connection']['key']}(${storeKeyNameStringify(filteredArgs)})`;
       } else {
         return directives['connection']['key'];
       }
@@ -264,12 +206,10 @@ export const getStoreKeyName = Object.assign(
     }
 
     if (directives) {
-      Object.keys(directives).forEach((key) => {
+      Object.keys(directives).forEach(key => {
         if (KNOWN_DIRECTIVES.indexOf(key) !== -1) return;
         if (directives[key] && Object.keys(directives[key]).length) {
-          completeFieldName += `@${key}(${storeKeyNameStringify(
-            directives[key]
-          )})`;
+          completeFieldName += `@${key}(${storeKeyNameStringify(directives[key])})`;
         } else {
           completeFieldName += `@${key}`;
         }
@@ -284,18 +224,16 @@ export const getStoreKeyName = Object.assign(
       storeKeyNameStringify = s;
       return previous;
     },
-  }
+  },
 );
 
 export function argumentsObjectFromField(
   field: FieldNode | DirectiveNode,
-  variables?: Record<string, any>
+  variables?: Record<string, any>,
 ): Object | null {
   if (field.arguments && field.arguments.length) {
     const argObj: Object = {};
-    field.arguments.forEach(({ name, value }) =>
-      valueToObjectRepresentation(argObj, name, value, variables)
-    );
+    field.arguments.forEach(({ name, value }) => valueToObjectRepresentation(argObj, name, value, variables));
     return argObj;
   }
   return null;
@@ -308,7 +246,7 @@ export function resultKeyNameFromField(field: FieldNode): string {
 export function getTypenameFromResult(
   result: Record<string, any>,
   selectionSet: SelectionSetNode,
-  fragmentMap?: FragmentMap
+  fragmentMap?: FragmentMap,
 ): string | undefined {
   let fragments: undefined | Array<InlineFragmentNode | FragmentSpreadNode>;
   for (const selection of selectionSet.selections) {
@@ -330,7 +268,7 @@ export function getTypenameFromResult(
       const typename = getTypenameFromResult(
         result,
         getFragmentFromSelection(selection, fragmentMap)!.selectionSet,
-        fragmentMap
+        fragmentMap,
       );
       if (typeof typename === 'string') {
         return typename;
@@ -343,9 +281,7 @@ export function isField(selection: SelectionNode): selection is FieldNode {
   return selection.kind === 'Field';
 }
 
-export function isInlineFragment(
-  selection: SelectionNode
-): selection is InlineFragmentNode {
+export function isInlineFragment(selection: SelectionNode): selection is InlineFragmentNode {
   return selection.kind === 'InlineFragment';
 }
 

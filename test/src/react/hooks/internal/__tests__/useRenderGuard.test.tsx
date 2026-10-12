@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'rehackt';
 import { render, waitFor } from '@testing-library/react';
 
@@ -20,7 +19,7 @@ it('returns a function that returns `true` if called during render', () => {
   expect(result).toBe(true);
 });
 
-it('returns a function that returns `false` if called after render', async() => {
+it('returns a function that returns `false` if called after render', async () => {
   let result: boolean | typeof UNDEF = UNDEF;
   function TestComponent() {
     const calledDuringRender = useRenderGuard();

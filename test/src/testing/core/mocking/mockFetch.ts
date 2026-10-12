@@ -18,10 +18,7 @@ export interface MockedFetchResponse {
   delay?: number;
 }
 
-export function createMockedIResponse(
-  result: Object,
-  options?: any
-): MockedIResponse {
+export function createMockedIResponse(result: Object, options?: any): MockedIResponse {
   const status = (options && options.status) || 200;
   const statusText = (options && options.statusText) || undefined;
 
@@ -41,7 +38,7 @@ export class MockFetch {
   constructor(...mockedResponses: MockedFetchResponse[]) {
     this.mockedResponsesByKey = {};
 
-    mockedResponses.forEach((mockedResponse) => {
+    mockedResponses.forEach(mockedResponse => {
       this.addMockedResponse(mockedResponse);
     });
   }
@@ -62,9 +59,7 @@ export class MockFetch {
     const key = this.fetchParamsToKey(url, opts);
     const responses = this.mockedResponsesByKey[key];
     if (!responses || responses.length === 0) {
-      throw new Error(
-        `No more mocked fetch responses for the params ${url} and ${opts}`
-      );
+      throw new Error(`No more mocked fetch responses for the params ${url} and ${opts}`);
     }
 
     const { result, delay } = responses.shift()!;
@@ -73,12 +68,12 @@ export class MockFetch {
       throw new Error(`Mocked fetch response should contain a result.`);
     }
 
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       setTimeout(
         () => {
           resolve(result);
         },
-        delay ? delay : 0
+        delay ? delay : 0,
       );
     });
   }
@@ -105,17 +100,11 @@ function sortByKey(obj: any): Object {
       (ret: any, key: string): Object =>
         Object.assign(
           {
-            [key]:
-              (
-                Object.prototype.toString.call(obj[key]).slice(8, -1)
-                === 'Object'
-              )
-                ? sortByKey(obj[key])
-                : obj[key],
+            [key]: Object.prototype.toString.call(obj[key]).slice(8, -1) === 'Object' ? sortByKey(obj[key]) : obj[key],
           },
-          ret
+          ret,
         ),
-      {}
+      {},
     );
 }
 

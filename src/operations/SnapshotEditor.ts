@@ -1,6 +1,11 @@
 import * as equality from '@wry/equality';
 import { makeReference } from '@apollo/client';
-import type { FieldFunctionOptions, FieldPolicy, FieldReadFunction, TypePolicy } from '@apollo/client/cache/inmemory/policies';
+import type {
+  FieldFunctionOptions,
+  FieldPolicy,
+  FieldReadFunction,
+  TypePolicy,
+} from '@apollo/client/cache/inmemory/policies';
 import type { Reference, StoreValue } from '@apollo/client';
 import type { ReadFieldOptions } from '@apollo/client/cache/core/types/common';
 import type { StoreObject } from '@apollo/client/utilities';
@@ -86,7 +91,10 @@ function forEach(parameterized: Map<string, NodeReference[]> | undefined, fn: (n
   }
 }
 
-function getVisibleProxy(value: JsonValue | NestedObject<JsonScalar> | undefined | null, map: { [prop: string]: string } | undefined) {
+function getVisibleProxy(
+  value: JsonValue | NestedObject<JsonScalar> | undefined | null,
+  map: { [prop: string]: string } | undefined,
+) {
   const compatible = value != null && typeof value === 'object';
   if (!compatible) {
     return undefined;
@@ -108,7 +116,6 @@ function getVisibleProxy(value: JsonValue | NestedObject<JsonScalar> | undefined
  * node, while preserving immutability of the parent snapshot.
  */
 export class SnapshotEditor<TSerialized> {
-
   /**
    * Tracks all node snapshots that have changed vs the parent snapshot.
    */
@@ -143,7 +150,11 @@ export class SnapshotEditor<TSerialized> {
    * Merge a GraphQL payload (query/fragment/etc) into the snapshot, rooted at
    * the node identified by `rootId`.
    */
-  mergePayload(query: RawOperation, payload: JsonObject, prune: boolean): { warnings?: string[], ref: NodeId | undefined } {
+  mergePayload(
+    query: RawOperation,
+    payload: JsonObject,
+    prune: boolean,
+  ): { warnings?: string[]; ref: NodeId | undefined } {
     const parsed = this._context.parseOperation(query);
 
     // We collect all warnings associated with this operation to avoid
@@ -155,7 +166,17 @@ export class SnapshotEditor<TSerialized> {
     // once all new nodes have been built (and we can guarantee that we're
     // referencing the correct version).
     const referenceEdits: ReferenceEdit[] = [];
-    const ref = this._mergeSubgraph(referenceEdits, warnings, parsed.rootId, [] /* prefixPath */, [] /* path */, parsed.parsedQuery, payload, prune, parsed.propMap);
+    const ref = this._mergeSubgraph(
+      referenceEdits,
+      warnings,
+      parsed.rootId,
+      [] /* prefixPath */,
+      [] /* path */,
+      parsed.parsedQuery,
+      payload,
+      prune,
+      parsed.propMap,
+    );
 
     // Now that we have new versions of every edited node, we can point all the
     // edited references to the correct nodes.
@@ -205,15 +226,16 @@ export class SnapshotEditor<TSerialized> {
     const previousValue = this._getPreviousValue(containerId, path);
 
     const isRoot = containerId === StaticNodeId.QueryRoot;
-    const typename = isRoot ? 'Query'
+    const typename = isRoot
+      ? 'Query'
       : payload && typeof payload === 'object' && '__typename' in payload
         ? payload.__typename
-        : (previousValue && typeof previousValue === 'object' && '__typename' in previousValue
+        : previousValue && typeof previousValue === 'object' && '__typename' in previousValue
           ? previousValue.__typename
-          : undefined);
+          : undefined;
 
-    const typePolicy: TypePolicy | undefined
-      = typeof typename === 'string' ? this._context.typePolicies?.[typename] : undefined;
+    const typePolicy: TypePolicy | undefined =
+      typeof typename === 'string' ? this._context.typePolicies?.[typename] : undefined;
     if (typeof typePolicy?.merge === 'function') {
       payload = typePolicy.merge(previousValue, payload, {} as any) as JsonObject;
     }
@@ -221,26 +243,47 @@ export class SnapshotEditor<TSerialized> {
     // Recurse into arrays.
     if (Array.isArray(payload) || Array.isArray(previousValue)) {
       if (!isNil(previousValue) && !Array.isArray(previousValue)) {
-        throw new InvalidPayloadError(`Unsupported transition from a non-list to list value`, prefixPath, containerId, path, payload);
+        throw new InvalidPayloadError(
+          `Unsupported transition from a non-list to list value`,
+          prefixPath,
+          containerId,
+          path,
+          payload,
+        );
       }
       if (!isNil(payload) && !Array.isArray(payload)) {
-        throw new InvalidPayloadError(`Unsupported transition from a list to a non-list value`, prefixPath, containerId, path, payload);
+        throw new InvalidPayloadError(
+          `Unsupported transition from a list to a non-list value`,
+          prefixPath,
+          containerId,
+          path,
+          payload,
+        );
       }
 
-      this._mergeArraySubgraph(referenceEdits, warnings, containerId, prefixPath, path, parsed, payload, previousValue, prune, propMap);
+      this._mergeArraySubgraph(
+        referenceEdits,
+        warnings,
+        containerId,
+        prefixPath,
+        path,
+        parsed,
+        payload,
+        previousValue,
+        prune,
+        propMap,
+      );
       return;
     }
 
     const ref = isReference(payload) ? payload.__ref : undefined;
-    const payloadId = ref
-      ?? this._context.entityIdForValue(getVisibleProxy(payload, propMap))
-      ?? (path.length === 0 && !isRoot ? containerId : undefined);
-    const previousId = this._context.entityIdForValue(getVisibleProxy(previousValue, propMap))
-      ?? (
-        path.length === 0 && !isRoot
-          ? containerId
-          : ifString(deepGet(this._pathToId[containerId], path))
-      );
+    const payloadId =
+      ref ??
+      this._context.entityIdForValue(getVisibleProxy(payload, propMap)) ??
+      (path.length === 0 && !isRoot ? containerId : undefined);
+    const previousId =
+      this._context.entityIdForValue(getVisibleProxy(previousValue, propMap)) ??
+      (path.length === 0 && !isRoot ? containerId : ifString(deepGet(this._pathToId[containerId], path)));
 
     // Is this an identity change?
     if (payloadId !== previousId) {
@@ -256,7 +299,13 @@ export class SnapshotEditor<TSerialized> {
       }
       // Double check that our id generator is behaving properly.
       if (payloadId && isNil(payload)) {
-        throw new OperationError(`entityIdForNode emitted an id for a nil payload value`, prefixPath, containerId, path, payload);
+        throw new OperationError(
+          `entityIdForNode emitted an id for a nil payload value`,
+          prefixPath,
+          containerId,
+          path,
+          payload,
+        );
       }
 
       // Fix references. See: orphan node tests on "orphan a subgraph" The new
@@ -280,7 +329,7 @@ export class SnapshotEditor<TSerialized> {
       // Enough to set the reference, no sub selections to traverse in the ref
       if (ref) return;
 
-    // End of the line for a non-reference.
+      // End of the line for a non-reference.
     } else if (isNil(payload)) {
       if (previousValue !== null) {
         this._setValue(containerId, path, null);
@@ -319,7 +368,7 @@ export class SnapshotEditor<TSerialized> {
 
     const readField = (
       fieldNameOrOptions: string | ReadFieldOptions,
-      from: StoreObject | Reference = { __ref: containerId } as Reference
+      from: StoreObject | Reference = { __ref: containerId } as Reference,
     ) => {
       if (!from) {
         return undefined;
@@ -449,8 +498,11 @@ export class SnapshotEditor<TSerialized> {
       // Note that we're careful to fetch the value of our new container; not
       // the outer container.
       const previousFieldValue = this._getPreviousValue(containerIdForField, fieldPath);
-      const fieldPolicy: FieldPolicy<any> | FieldReadFunction<any> | undefined = typePolicy ? typePolicy.fields?.[payloadName] : undefined;
-      const merge = typeof fieldPolicy === 'object' && typeof fieldPolicy?.merge === 'function' ? fieldPolicy?.merge : undefined;
+      const fieldPolicy: FieldPolicy<any> | FieldReadFunction<any> | undefined = typePolicy
+        ? typePolicy.fields?.[payloadName]
+        : undefined;
+      const merge =
+        typeof fieldPolicy === 'object' && typeof fieldPolicy?.merge === 'function' ? fieldPolicy?.merge : undefined;
       if (merge) {
         mergeOptions.args = node.args ?? null;
         mergeOptions.fieldName = payloadName;
@@ -462,12 +514,22 @@ export class SnapshotEditor<TSerialized> {
       // directly written via _setValue.  This allows us to perform minimal
       // edits to the graph.
       if (node.children) {
-        this._mergeSubgraph(referenceEdits, warnings, containerIdForField, fieldPrefixPath, fieldPath, node.children, fieldValue, prune, node.propMap);
+        this._mergeSubgraph(
+          referenceEdits,
+          warnings,
+          containerIdForField,
+          fieldPrefixPath,
+          fieldPath,
+          node.children,
+          fieldValue,
+          prune,
+          node.propMap,
+        );
 
-      // We've hit a leaf field.
-      //
-      // Note that we must perform a _deep_ equality check here, to cover cases
-      // where a leaf value is a complex object.
+        // We've hit a leaf field.
+        //
+        // Note that we must perform a _deep_ equality check here, to cover cases
+        // where a leaf value is a complex object.
       } else if (!isEqual(fieldValue, previousFieldValue)) {
         // We intentionally do not deep copy the nodeValue as Apollo will
         // then perform Object.freeze anyway. So any change in the payload
@@ -522,8 +584,7 @@ export class SnapshotEditor<TSerialized> {
     //
     // So, we resize the array to our desired size before walking.
     if (payloadLength !== previousLength || !previousValue) {
-      const newArray = Array.isArray(previousValue)
-        ? previousValue.slice(0, payloadLength) : new Array(payloadLength);
+      const newArray = Array.isArray(previousValue) ? previousValue.slice(0, payloadLength) : new Array(payloadLength);
       this._setValue(containerId, path, newArray);
 
       // Drop any extraneous references.
@@ -548,7 +609,17 @@ export class SnapshotEditor<TSerialized> {
         }
       }
 
-      this._mergeSubgraph(referenceEdits, warnings, containerId, prefixPath, [...path, i], parsed, childPayload, prune, propMap);
+      this._mergeSubgraph(
+        referenceEdits,
+        warnings,
+        containerId,
+        prefixPath,
+        [...path, i],
+        parsed,
+        childPayload,
+        prune,
+        propMap,
+      );
     }
   }
 
@@ -577,9 +648,11 @@ export class SnapshotEditor<TSerialized> {
     // One editor may delete several nodes (batchEvict, gc, optimistic replay).
     // Edits touching a node this editor already deleted are moot, and would
     // otherwise fail on its missing snapshot.
-    this._mergeReferenceEdits(referenceEdits.filter(({ containerId, prevNodeId }) =>
-      !this._isDeleted(containerId) && !(prevNodeId && this._isDeleted(prevNodeId))
-    ));
+    this._mergeReferenceEdits(
+      referenceEdits.filter(
+        ({ containerId, prevNodeId }) => !this._isDeleted(containerId) && !(prevNodeId && this._isDeleted(prevNodeId)),
+      ),
+    );
     this._newNodes[nodeId] = undefined;
   }
 
@@ -594,10 +667,24 @@ export class SnapshotEditor<TSerialized> {
    * Modify a GraphQL payload (query/fragment/etc) into the snapshot, rooted at
    * the node identified by `rootId`.
    */
-  modify(rootId: NodeId, payload: JsonObject, deleted: Set<string>, seenObjects: Set<object | null>): { warnings?: string[] } {
+  modify(
+    rootId: NodeId,
+    payload: JsonObject,
+    deleted: Set<string>,
+    seenObjects: Set<object | null>,
+  ): { warnings?: string[] } {
     const warnings: string[] = [];
     const referenceEdits: ReferenceEdit[] = [];
-    this._modifySubgraph(referenceEdits, warnings, rootId, [] /* prefixPath */, [] /* path */, payload, deleted, seenObjects);
+    this._modifySubgraph(
+      referenceEdits,
+      warnings,
+      rootId,
+      [] /* prefixPath */,
+      [] /* path */,
+      payload,
+      deleted,
+      seenObjects,
+    );
     this._mergeReferenceEdits(referenceEdits);
     return warnings.length ? { warnings } : {};
   }
@@ -639,18 +726,41 @@ export class SnapshotEditor<TSerialized> {
     // Recurse into arrays.
     if (Array.isArray(payload) || Array.isArray(previousValue)) {
       if (!isNil(previousValue) && !Array.isArray(previousValue)) {
-        throw new InvalidPayloadError(`Unsupported transition from a non-list to list value`, prefixPath, containerId, path, payload);
+        throw new InvalidPayloadError(
+          `Unsupported transition from a non-list to list value`,
+          prefixPath,
+          containerId,
+          path,
+          payload,
+        );
       }
       if (!isNil(payload) && !Array.isArray(payload)) {
-        throw new InvalidPayloadError(`Unsupported transition from a list to a non-list value`, prefixPath, containerId, path, payload);
+        throw new InvalidPayloadError(
+          `Unsupported transition from a list to a non-list value`,
+          prefixPath,
+          containerId,
+          path,
+          payload,
+        );
       }
 
-      this._modifyArraySubgraph(referenceEdits, warnings, containerId, prefixPath, path, payload, previousValue, seenObjects);
+      this._modifyArraySubgraph(
+        referenceEdits,
+        warnings,
+        containerId,
+        prefixPath,
+        path,
+        payload,
+        previousValue,
+        seenObjects,
+      );
       return;
     }
 
     const reference = isReference(payload) ? payload.__ref : null;
-    const payloadId = reference ? reference : this._context.entityIdForValue({ ...previousValue as JsonObject, ...payload });
+    const payloadId = reference
+      ? reference
+      : this._context.entityIdForValue({ ...(previousValue as JsonObject), ...payload });
     const previousId = this._context.entityIdForValue(previousValue);
 
     // Is this an identity change?
@@ -667,7 +777,13 @@ export class SnapshotEditor<TSerialized> {
       }
       // Double check that our id generator is behaving properly.
       if (payloadId && isNil(payload)) {
-        throw new OperationError(`entityIdForNode emitted an id for a nil payload value`, prefixPath, containerId, path, payload);
+        throw new OperationError(
+          `entityIdForNode emitted an id for a nil payload value`,
+          prefixPath,
+          containerId,
+          path,
+          payload,
+        );
       }
 
       // Fix references. See: orphan node tests on "orphan a subgraph" The new
@@ -685,7 +801,7 @@ export class SnapshotEditor<TSerialized> {
       // Nothing more to do here; the reference edit will null out this field.
       if (!payloadId || reference) return;
 
-    // End of the line for a non-reference.
+      // End of the line for a non-reference.
     } else if (isNil(payload)) {
       if (previousValue !== null) {
         this._setValue(containerId, path, null);
@@ -799,12 +915,21 @@ export class SnapshotEditor<TSerialized> {
       // directly written via _setValue.  This allows us to perform minimal
       // edits to the graph.
       if (typeof node === 'object') {
-        this._modifySubgraph(referenceEdits, warnings, containerIdForField, fieldPrefixPath, fieldPath, fieldValue, new Set(), seenObjects);
+        this._modifySubgraph(
+          referenceEdits,
+          warnings,
+          containerIdForField,
+          fieldPrefixPath,
+          fieldPath,
+          fieldValue,
+          new Set(),
+          seenObjects,
+        );
 
-      // We've hit a leaf field.
-      //
-      // Note that we must perform a _deep_ equality check here, to cover cases
-      // where a leaf value is a complex object.
+        // We've hit a leaf field.
+        //
+        // Note that we must perform a _deep_ equality check here, to cover cases
+        // where a leaf value is a complex object.
       } else if (!isEqual(fieldValue, previousFieldValue)) {
         // We intentionally do not deep copy the nodeValue as Apollo will
         // then perform Object.freeze anyway. So any change in the payload
@@ -894,8 +1019,7 @@ export class SnapshotEditor<TSerialized> {
     //
     // So, we resize the array to our desired size before walking.
     if (payloadLength !== previousLength || !previousValue) {
-      const newArray = Array.isArray(previousValue)
-        ? previousValue.slice(0, payloadLength) : new Array(payloadLength);
+      const newArray = Array.isArray(previousValue) ? previousValue.slice(0, payloadLength) : new Array(payloadLength);
       this._setValue(containerId, path, newArray);
 
       // Drop any extraneous references.
@@ -921,7 +1045,16 @@ export class SnapshotEditor<TSerialized> {
       }
 
       if (typeof childPayload === 'object') {
-        this._modifySubgraph(referenceEdits, warnings, containerId, prefixPath, [...path, i], childPayload, new Set(), seenObjects);
+        this._modifySubgraph(
+          referenceEdits,
+          warnings,
+          containerId,
+          prefixPath,
+          [...path, i],
+          childPayload,
+          new Set(),
+          seenObjects,
+        );
       } else {
         this._setValue(containerId, [...path, i], childPayload);
       }
@@ -931,7 +1064,12 @@ export class SnapshotEditor<TSerialized> {
   /**
    *
    */
-  private _removeArrayReferences(referenceEdits: ReferenceEdit[], containerId: NodeId, prefix: PathPart[], afterIndex: number) {
+  private _removeArrayReferences(
+    referenceEdits: ReferenceEdit[],
+    containerId: NodeId,
+    prefix: PathPart[],
+    afterIndex: number,
+  ) {
     const container = this._getNodeSnapshot(containerId);
     if (!container || (!container.outbound && !container.parameterized)) return;
     for (const reference of iterRefs(container.outbound, container.parameterized)) {
@@ -1181,7 +1319,6 @@ export class SnapshotEditor<TSerialized> {
 
     return fieldId;
   }
-
 }
 
 /**

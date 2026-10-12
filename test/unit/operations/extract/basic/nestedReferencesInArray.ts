@@ -6,17 +6,13 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.extract`, () => {
   describe(`nested references in an array`, () => {
-
     let extractResult: Serializable.GraphSnapshot;
     beforeAll(() => {
       const cacheContext = createStrictCacheContext();
       const snapshot = createGraphSnapshot(
         {
           one: {
-            two: [
-              { three: { id: 0 } },
-              { three: { id: 1 } },
-            ],
+            two: [{ three: { id: 0 } }, { three: { id: 1 } }],
           },
         },
         `{ 
@@ -26,7 +22,7 @@ describe(`operations.extract`, () => {
               }
             }
         }`,
-        cacheContext
+        cacheContext,
       );
 
       extractResult = extract(snapshot, cacheContext);
@@ -58,6 +54,5 @@ describe(`operations.extract`, () => {
         },
       });
     });
-
   });
 });

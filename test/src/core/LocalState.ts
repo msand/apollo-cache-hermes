@@ -1,4 +1,3 @@
-
 import type {
   DocumentNode,
   OperationDefinitionNode,
@@ -17,7 +16,7 @@ import { ApolloCache, ApolloClient, FetchResult, StoreObject } from '@apollo/cli
 import { FragmentMap } from '@apollo/client/utilities';
 
 import { invariant } from '../utilities/globals/index';
-import type { } from '../utilities/index';
+import type {} from '../utilities/index';
 import {
   argumentsObjectFromField,
   buildQueryFromSelectionSet,
@@ -42,35 +41,31 @@ export type Resolver = (
   args?: any,
   context?: any,
   info?: {
-    field: FieldNode,
-    fragmentMap: FragmentMap,
-  }
+    field: FieldNode;
+    fragmentMap: FragmentMap;
+  },
 ) => any;
 
 export type VariableMap = { [name: string]: any };
 
-export type FragmentMatcher = (
-  rootValue: any,
-  typeCondition: string,
-  context: any
-) => boolean;
+export type FragmentMatcher = (rootValue: any, typeCondition: string, context: any) => boolean;
 
 export type ExecContext = {
-  fragmentMap: FragmentMap,
-  context: any,
-  variables: VariableMap,
-  fragmentMatcher: FragmentMatcher,
-  defaultOperationType: string,
-  exportedVariables: Record<string, any>,
-  onlyRunForcedResolvers: boolean,
-  selectionsToResolve: Set<SelectionNode>,
+  fragmentMap: FragmentMap;
+  context: any;
+  variables: VariableMap;
+  fragmentMatcher: FragmentMatcher;
+  defaultOperationType: string;
+  exportedVariables: Record<string, any>;
+  onlyRunForcedResolvers: boolean;
+  selectionsToResolve: Set<SelectionNode>;
 };
 
 export type LocalStateOptions<TCacheShape> = {
-  cache: ApolloCache<TCacheShape>,
-  client?: ApolloClient<TCacheShape>,
-  resolvers?: Resolvers | Resolvers[],
-  fragmentMatcher?: FragmentMatcher,
+  cache: ApolloCache<TCacheShape>;
+  client?: ApolloClient<TCacheShape>;
+  resolvers?: Resolvers | Resolvers[];
+  fragmentMatcher?: FragmentMatcher;
 };
 
 export class LocalState<TCacheShape> {
@@ -78,17 +73,9 @@ export class LocalState<TCacheShape> {
   private client?: ApolloClient<TCacheShape>;
   private resolvers?: Resolvers;
   private fragmentMatcher?: FragmentMatcher;
-  private selectionsToResolveCache = new WeakMap<
-    ExecutableDefinitionNode,
-    Set<SelectionNode>
-  >();
+  private selectionsToResolveCache = new WeakMap<ExecutableDefinitionNode, Set<SelectionNode>>();
 
-  constructor({
-    cache,
-    client,
-    resolvers,
-    fragmentMatcher,
-  }: LocalStateOptions<TCacheShape>) {
+  constructor({ cache, client, resolvers, fragmentMatcher }: LocalStateOptions<TCacheShape>) {
     this.cache = cache;
 
     if (client) {
@@ -107,7 +94,7 @@ export class LocalState<TCacheShape> {
   public addResolvers(resolvers: Resolvers | Resolvers[]) {
     this.resolvers = this.resolvers || {};
     if (Array.isArray(resolvers)) {
-      resolvers.forEach((resolverGroup) => {
+      resolvers.forEach(resolverGroup => {
         this.resolvers = mergeDeep(this.resolvers, resolverGroup);
       });
     } else {
@@ -135,11 +122,11 @@ export class LocalState<TCacheShape> {
     variables,
     onlyRunForcedResolvers = false,
   }: {
-    document: DocumentNode | null,
-    remoteResult: FetchResult<TData>,
-    context?: Record<string, any>,
-    variables?: Record<string, any>,
-    onlyRunForcedResolvers?: boolean,
+    document: DocumentNode | null;
+    remoteResult: FetchResult<TData>;
+    context?: Record<string, any>;
+    variables?: Record<string, any>;
+    onlyRunForcedResolvers?: boolean;
   }): Promise<FetchResult<TData>> {
     if (document) {
       return this.resolveDocument(
@@ -148,7 +135,7 @@ export class LocalState<TCacheShape> {
         context,
         variables,
         this.fragmentMatcher,
-        onlyRunForcedResolvers
+        onlyRunForcedResolvers,
       ).then(localResult => ({
         ...remoteResult,
         data: localResult.result,
@@ -200,14 +187,14 @@ export class LocalState<TCacheShape> {
   public async addExportedVariables<TVars extends OperationVariables>(
     document: DocumentNode,
     variables: TVars = {} as TVars,
-    context = {}
+    context = {},
   ): /* returns at least the variables that were passed in */ Promise<TVars> {
     if (document) {
       return this.resolveDocument(
         document,
         this.buildRootValueFromCache(document, variables) || {},
         this.prepareContext(context),
-        variables
+        variables,
       ).then(data => ({
         ...variables,
         ...data.exportedVariables,
@@ -226,10 +213,7 @@ export class LocalState<TCacheShape> {
         enter(node) {
           if (node.name.value === 'client' && node.arguments) {
             forceResolvers = node.arguments.some(
-              arg =>
-                arg.name.value === 'always' &&
-                arg.value.kind === 'BooleanValue' &&
-                arg.value.value === true
+              arg => arg.name.value === 'always' && arg.value.kind === 'BooleanValue' && arg.value.value === true,
             );
             if (forceResolvers) {
               return BREAK;
@@ -242,10 +226,7 @@ export class LocalState<TCacheShape> {
   }
 
   // Query the cache and return matching data.
-  private buildRootValueFromCache(
-    document: DocumentNode,
-    variables?: Record<string, any>
-  ) {
+  private buildRootValueFromCache(document: DocumentNode, variables?: Record<string, any>) {
     return this.cache.diff({
       query: buildQueryFromSelectionSet(document),
       variables,
@@ -260,25 +241,18 @@ export class LocalState<TCacheShape> {
     context: any = {},
     variables: VariableMap = {},
     fragmentMatcher: FragmentMatcher = () => true,
-    onlyRunForcedResolvers: boolean = false
+    onlyRunForcedResolvers: boolean = false,
   ) {
-    const mainDefinition = getMainDefinition(
-      document
-    ) as OperationDefinitionNode;
+    const mainDefinition = getMainDefinition(document) as OperationDefinitionNode;
     const fragments = getFragmentDefinitions(document);
     const fragmentMap = createFragmentMap(fragments);
-    const selectionsToResolve = this.collectSelectionsToResolve(
-      mainDefinition,
-      fragmentMap
-    );
+    const selectionsToResolve = this.collectSelectionsToResolve(mainDefinition, fragmentMap);
 
     const definitionOperation = mainDefinition.operation;
 
-    const defaultOperationType
-      = definitionOperation
-        ? definitionOperation.charAt(0).toUpperCase()
-        + definitionOperation.slice(1)
-        : 'Query';
+    const defaultOperationType = definitionOperation
+      ? definitionOperation.charAt(0).toUpperCase() + definitionOperation.slice(1)
+      : 'Query';
 
     const { cache, client } = this;
     const execContext: ExecContext = {
@@ -297,31 +271,25 @@ export class LocalState<TCacheShape> {
     };
     const isClientFieldDescendant = false;
 
-    return this.resolveSelectionSet(
-      mainDefinition.selectionSet,
-      isClientFieldDescendant,
-      rootValue,
-      execContext
-    ).then(result => ({
-      result,
-      exportedVariables: execContext.exportedVariables,
-    }));
+    return this.resolveSelectionSet(mainDefinition.selectionSet, isClientFieldDescendant, rootValue, execContext).then(
+      result => ({
+        result,
+        exportedVariables: execContext.exportedVariables,
+      }),
+    );
   }
 
   private async resolveSelectionSet<TData>(
     selectionSet: SelectionSetNode,
     isClientFieldDescendant: boolean,
     rootValue: TData,
-    execContext: ExecContext
+    execContext: ExecContext,
   ) {
     const { fragmentMap, context, variables } = execContext;
     const resultsToMerge: TData[] = [rootValue];
 
-    const execute = async(selection: SelectionNode): Promise<void> => {
-      if (
-        !isClientFieldDescendant &&
-        !execContext.selectionsToResolve.has(selection)
-      ) {
+    const execute = async (selection: SelectionNode): Promise<void> => {
+      if (!isClientFieldDescendant && !execContext.selectionsToResolve.has(selection)) {
         // Skip selections without @client directives
         // (still processing if one of the ancestors or one of the child fields has @client directive)
         return;
@@ -332,12 +300,7 @@ export class LocalState<TCacheShape> {
       }
 
       if (isField(selection)) {
-        return this.resolveField(
-          selection,
-          isClientFieldDescendant,
-          rootValue,
-          execContext
-        ).then((fieldResult) => {
+        return this.resolveField(selection, isClientFieldDescendant, rootValue, execContext).then(fieldResult => {
           if (typeof fieldResult !== 'undefined') {
             resultsToMerge.push({
               [resultKeyNameFromField(selection)]: fieldResult,
@@ -359,14 +322,11 @@ export class LocalState<TCacheShape> {
       if (fragment && fragment.typeCondition) {
         const typeCondition = fragment.typeCondition.name.value;
         if (execContext.fragmentMatcher(rootValue, typeCondition, context)) {
-          return this.resolveSelectionSet(
-            fragment.selectionSet,
-            isClientFieldDescendant,
-            rootValue,
-            execContext
-          ).then((fragmentResult) => {
-            resultsToMerge.push(fragmentResult);
-          });
+          return this.resolveSelectionSet(fragment.selectionSet, isClientFieldDescendant, rootValue, execContext).then(
+            fragmentResult => {
+              resultsToMerge.push(fragmentResult);
+            },
+          );
         }
       }
     };
@@ -380,7 +340,7 @@ export class LocalState<TCacheShape> {
     field: FieldNode,
     isClientFieldDescendant: boolean,
     rootValue: any,
-    execContext: ExecContext
+    execContext: ExecContext,
   ): Promise<any> {
     if (!rootValue) {
       return null;
@@ -397,12 +357,8 @@ export class LocalState<TCacheShape> {
     // if we've specifically identified that we only want to run forced
     // resolvers (that is, resolvers for fields marked with
     // `@client(always: true)`), then we'll skip running non-forced resolvers.
-    if (
-      !execContext.onlyRunForcedResolvers ||
-      this.shouldForceResolvers(field)
-    ) {
-      const resolverType
-        = rootValue.__typename || execContext.defaultOperationType;
+    if (!execContext.onlyRunForcedResolvers || this.shouldForceResolvers(field)) {
+      const resolverType = rootValue.__typename || execContext.defaultOperationType;
       const resolverMap = this.resolvers && this.resolvers[resolverType];
       if (resolverMap) {
         const resolve = resolverMap[aliasUsed ? fieldName : aliasedFieldName];
@@ -415,7 +371,7 @@ export class LocalState<TCacheShape> {
               argumentsObjectFromField(field, variables),
               execContext.context,
               { field, fragmentMap: execContext.fragmentMap },
-            ])
+            ]),
           );
         }
       }
@@ -425,9 +381,9 @@ export class LocalState<TCacheShape> {
       // If an @export directive is associated with the current field, store
       // the `as` export variable name and current result for later use.
       if (field.directives) {
-        field.directives.forEach((directive) => {
+        field.directives.forEach(directive => {
           if (directive.name.value === 'export' && directive.arguments) {
-            directive.arguments.forEach((arg) => {
+            directive.arguments.forEach(arg => {
               if (arg.name.value === 'as' && arg.value.kind === 'StringValue') {
                 execContext.exportedVariables[arg.value.value] = result;
               }
@@ -448,16 +404,10 @@ export class LocalState<TCacheShape> {
         return result;
       }
 
-      const isClientField
-        = field.directives?.some(d => d.name.value === 'client') ?? false;
+      const isClientField = field.directives?.some(d => d.name.value === 'client') ?? false;
 
       if (Array.isArray(result)) {
-        return this.resolveSubSelectedArray(
-          field,
-          isClientFieldDescendant || isClientField,
-          result,
-          execContext
-        );
+        return this.resolveSubSelectedArray(field, isClientFieldDescendant || isClientField, result, execContext);
       }
 
       // Returned value is an object, and the query has a sub-selection. Recurse.
@@ -466,7 +416,7 @@ export class LocalState<TCacheShape> {
           field.selectionSet,
           isClientFieldDescendant || isClientField,
           result,
-          execContext
+          execContext,
         );
       }
     });
@@ -476,34 +426,24 @@ export class LocalState<TCacheShape> {
     field: FieldNode,
     isClientFieldDescendant: boolean,
     result: any[],
-    execContext: ExecContext
+    execContext: ExecContext,
   ): any {
     return Promise.all(
-      result.map((item) => {
+      result.map(item => {
         if (item === null) {
           return null;
         }
 
         // This is a nested array, recurse.
         if (Array.isArray(item)) {
-          return this.resolveSubSelectedArray(
-            field,
-            isClientFieldDescendant,
-            item,
-            execContext
-          );
+          return this.resolveSubSelectedArray(field, isClientFieldDescendant, item, execContext);
         }
 
         // This is an object, run the selection set on it.
         if (field.selectionSet) {
-          return this.resolveSelectionSet(
-            field.selectionSet,
-            isClientFieldDescendant,
-            item,
-            execContext
-          );
+          return this.resolveSelectionSet(field.selectionSet, isClientFieldDescendant, item, execContext);
         }
-      })
+      }),
     );
   }
 
@@ -512,16 +452,12 @@ export class LocalState<TCacheShape> {
   // Complexity equals to a single `visit` over the full document.
   private collectSelectionsToResolve(
     mainDefinition: OperationDefinitionNode,
-    fragmentMap: FragmentMap
+    fragmentMap: FragmentMap,
   ): Set<SelectionNode> {
-    const isSingleASTNode = (
-      node: ASTNode | readonly ASTNode[]
-    ): node is ASTNode => !Array.isArray(node);
+    const isSingleASTNode = (node: ASTNode | readonly ASTNode[]): node is ASTNode => !Array.isArray(node);
     const selectionsToResolveCache = this.selectionsToResolveCache;
 
-    function collectByDefinition(
-      definitionNode: ExecutableDefinitionNode
-    ): Set<SelectionNode> {
+    function collectByDefinition(definitionNode: ExecutableDefinitionNode): Set<SelectionNode> {
       if (!selectionsToResolveCache.has(definitionNode)) {
         const matches = new Set<SelectionNode>();
         selectionsToResolveCache.set(definitionNode, matches);
@@ -529,7 +465,7 @@ export class LocalState<TCacheShape> {
         visit(definitionNode, {
           Directive(node: DirectiveNode, _, __, ___, ancestors) {
             if (node.name.value === 'client') {
-              ancestors.forEach((node) => {
+              ancestors.forEach(node => {
                 if (isSingleASTNode(node) && isSelectionNode(node)) {
                   matches.add(node);
                 }
@@ -544,13 +480,13 @@ export class LocalState<TCacheShape> {
             if (fragmentSelections.size > 0) {
               // Fragment for this spread contains @client directive (either directly or transitively)
               // Collect selection nodes on paths from the root down to fields with the @client directive
-              ancestors.forEach((node) => {
+              ancestors.forEach(node => {
                 if (isSingleASTNode(node) && isSelectionNode(node)) {
                   matches.add(node);
                 }
               });
               matches.add(spread);
-              fragmentSelections.forEach((selection) => {
+              fragmentSelections.forEach(selection => {
                 matches.add(selection);
               });
             }
