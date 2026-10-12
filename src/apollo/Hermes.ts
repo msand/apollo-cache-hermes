@@ -124,9 +124,17 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
     }
 
     let updateResult: TUpdateResult;
+    // The transaction rolls back if the update throws; like InMemoryCache,
+    // batch then throws the error.
+    let failure: { error: unknown } | undefined;
 
     const perform = () => {
-      updateResult = update(this);
+      try {
+        updateResult = update(this);
+      } catch (error) {
+        failure ??= { error };
+        throw error;
+      }
     };
 
     ++this._txCount;
@@ -134,11 +142,14 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
       this._queryable.transaction(
         !willWatch,
         null,
-        () => {
+        t => {
           if (typeof optimistic === 'string') {
             // The update is recorded as an optimistic update, and re-run when
             // an optimistic update beneath it is removed.
             this._queryable.transaction(true, optimistic, perform);
+          } else if (optimistic === false) {
+            // Like InMemoryCache, optimistic data is invisible to the update.
+            t.withBaselineReads(perform);
           } else {
             perform();
           }
@@ -151,6 +162,7 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
     } finally {
       --this._txCount;
     }
+    if (failure) throw failure.error;
 
     // Note: if this.txCount > 0, then alreadyDirty.size === 0, so this code
     // takes the else branch and calls this.broadcastWatches(options), which

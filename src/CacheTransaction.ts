@@ -135,9 +135,35 @@ export class CacheTransaction<TSerialized> implements Queryable {
     return read(
       this._context,
       query,
-      this._optimisticChangeId || optimistic ? this._snapshot.optimistic : this._snapshot.baseline,
+      this.readsOptimistic(optimistic) ? this._snapshot.optimistic : this._snapshot.baseline,
       Object.create(null),
     );
+  }
+
+  /** Whether optimistic reads see the optimistic view; see withBaselineReads. */
+  private _optimisticReads = true;
+
+  /**
+   * Whether a read (optimistic or not) made in the transaction sees the
+   * optimistic view.  Like InMemoryCache, an optimistic transaction reads its
+   * own layer either way.
+   */
+  readsOptimistic(optimistic?: boolean): boolean {
+    return !!this._optimisticChangeId || (!!optimistic && this._optimisticReads);
+  }
+
+  /**
+   * Runs a callback in which optimistic reads see the baseline, like
+   * InMemoryCache's batch({ optimistic: false }).
+   */
+  withBaselineReads<T>(callback: () => T): T {
+    const optimisticReads = this._optimisticReads;
+    this._optimisticReads = false;
+    try {
+      return callback();
+    } finally {
+      this._optimisticReads = optimisticReads;
+    }
   }
 
   /**

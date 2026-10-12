@@ -150,7 +150,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     // edits (and an optimistic transaction's layer, even when not optimistic).
     const activeTx = this._transactions[this._transactions.length - 1];
     const current = activeTx ? activeTx.getSnapshot() : this._snapshot;
-    const useOptimistic = optimistic || !!activeTx?.isOptimisticTransaction();
+    const useOptimistic = activeTx ? activeTx.readsOptimistic(optimistic) : optimistic;
     const cacheSnapshot = useOptimistic ? current.optimistic : current.baseline;
     return extract(
       pruneQuery ? prune(this._context, cacheSnapshot, pruneQuery).snapshot : cacheSnapshot,

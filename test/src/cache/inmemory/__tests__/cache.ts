@@ -2015,6 +2015,7 @@ describe('Cache', () => {
         cache.batch({
           optimistic: 'some optimistic ID',
           update(c) {
+            // Hermes: results may contain a superset of the selected fields.
             expect(
               c.readQuery({
                 query: gql`
@@ -2023,7 +2024,7 @@ describe('Cache', () => {
                   }
                 `,
               }),
-            ).toEqual({ __typename: 'Query' });
+            ).toMatchObject({ __typename: 'Query' });
             return expected;
           },
         }),
