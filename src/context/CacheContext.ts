@@ -1,6 +1,7 @@
 import { addTypenameToDocument } from '@apollo/client/utilities';
 import isEqual from '@wry/equality';
 import { TypePolicies } from '@apollo/client';
+import type { FragmentRegistryAPI } from '@apollo/client/cache';
 
 import { ApolloTransaction } from '../apollo/Transaction';
 import { CacheSnapshot } from '../CacheSnapshot';
@@ -65,6 +66,9 @@ export namespace CacheContext {
 
     /** Whether __typename should be injected into nodes in queries. */
     addTypename?: boolean;
+
+    /** Fragments that operations may spread without defining them (like InMemoryCache's option). */
+    fragments?: FragmentRegistryAPI;
 
     /**
      * Given a node, determines a _globally unique_ identifier for it to be used
@@ -197,6 +201,8 @@ export class CacheContext<TSerialized = GraphSnapshot> {
 
   public readonly typePolicies: TypePolicies | undefined;
 
+  public readonly fragments: FragmentRegistryAPI | undefined;
+
   constructor(config: CacheContext.Configuration<TSerialized> = {}) {
     // Infer dev mode from NODE_ENV, by convention.
     const nodeEnv = typeof process !== 'undefined' ? process.env.NODE_ENV : 'development';
@@ -214,6 +220,7 @@ export class CacheContext<TSerialized = GraphSnapshot> {
 
     this.addTypename = config.addTypename ?? true;
     this.typePolicies = config.typePolicies;
+    this.fragments = config.fragments;
   }
 
   /**
@@ -223,16 +230,16 @@ export class CacheContext<TSerialized = GraphSnapshot> {
    * any other method in the cache.
    */
   transformDocument(document: DocumentNode): DocumentNode {
-    if (this.addTypename && !document.hasBeenTransformed) {
-      let transformedDocument = this._transformedDocuments.get(document);
-      if (!transformedDocument) {
-        transformedDocument = addTypenameToDocument(document);
-        transformedDocument.hasBeenTransformed = true;
-        this._transformedDocuments.set(document, transformedDocument);
-      }
-      return transformedDocument;
+    if (document.hasBeenTransformed || (!this.addTypename && !this.fragments)) return document;
+
+    let transformedDocument = this._transformedDocuments.get(document);
+    if (!transformedDocument) {
+      transformedDocument = this.fragments ? this.fragments.transform(document) : document;
+      if (this.addTypename) transformedDocument = addTypenameToDocument(transformedDocument);
+      if (transformedDocument !== document) transformedDocument.hasBeenTransformed = true;
+      this._transformedDocuments.set(document, transformedDocument);
     }
-    return document;
+    return transformedDocument;
   }
 
   /**

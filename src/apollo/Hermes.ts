@@ -1,4 +1,4 @@
-import { Transaction, Cache as CacheInterface } from '@apollo/client';
+import { Transaction, Cache as CacheInterface, makeVar } from '@apollo/client';
 import { Reference, StoreObject } from '@apollo/client/utilities';
 
 import { CacheContext } from '../context';
@@ -20,6 +20,9 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
   /** The underlying Hermes cache. */
   protected _queryable: Cache<TSerialized>;
   public watches = new Set<CacheInterface.WatchOptions>();
+
+  /** Reactive variables bound to this cache, like InMemoryCache#makeVar. */
+  public readonly makeVar = makeVar;
 
   constructor(configuration?: CacheContext.Configuration<TSerialized>) {
     super();
@@ -94,7 +97,7 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
   private _txCount = 0;
 
   public batch<TUpdateResult>(options: CacheInterface.BatchOptions<Hermes<TSerialized>, TUpdateResult>): TUpdateResult {
-    const { update, optimistic = true, onWatchUpdated } = options;
+    const { update, optimistic = true, removeOptimistic, onWatchUpdated } = options;
 
     const optimisticId = typeof optimistic === 'string' ? optimistic : optimistic ? undefined : null;
 
@@ -124,7 +127,16 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
 
     ++this._txCount;
     try {
-      this.performTransaction(() => (updateResult = update(this)), optimisticId, onWatchUpdated, !willWatch);
+      this.performTransaction(
+        () => {
+          // Like InMemoryCache, drop the optimistic layer in the same update that writes the real data.
+          if (typeof removeOptimistic === 'string') this._queryable.rollback(removeOptimistic);
+          updateResult = update(this);
+        },
+        optimisticId,
+        onWatchUpdated,
+        !willWatch,
+      );
     } finally {
       --this._txCount;
     }
@@ -161,8 +173,9 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
     return updateResult!;
   }
 
-  protected broadcastWatches(options?: Pick<BatchOptions<Hermes<TSerialized>>, 'optimistic' | 'onWatchUpdated'>) {
-    this._queryable.broadcastWatches(options);
+  public broadcastWatches(options?: Pick<BatchOptions<Hermes<TSerialized>>, 'optimistic' | 'onWatchUpdated'>) {
+    // Like InMemoryCache, watches are broadcast once the outermost batch completes.
+    if (!this._txCount) this._queryable.broadcastWatches(options);
   }
 
   gc(): string[] {
