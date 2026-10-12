@@ -48,7 +48,12 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
     return this._queryable.extract(optimistic, pruneQuery);
   }
 
-  reset(): Promise<void> {
+  reset(options?: CacheInterface.ResetOptions): Promise<void> {
+    // Like InMemoryCache, discardWatches cancels every watch.
+    if (options?.discardWatches) {
+      this.watches.clear();
+      this._queryable.discardWatches();
+    }
     return this._queryable.reset();
   }
 
@@ -198,7 +203,10 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
 
   public broadcastWatches(options?: Pick<BatchOptions<Hermes<TSerialized>>, 'optimistic' | 'onWatchUpdated'>) {
     // Like InMemoryCache, watches are broadcast once the outermost batch completes.
-    if (!this._txCount) this._queryable.broadcastWatches(options);
+    if (this._txCount) return;
+    // Reactive variables call broadcastWatches() when they change.
+    if (!options) this._queryable.dirtyReactiveReads();
+    this._queryable.broadcastWatches(options);
   }
 
   gc(): string[] {

@@ -1,7 +1,8 @@
 import type { OptimisticDependencyFunction } from 'optimism';
 // eslint-disable-next-line import/no-extraneous-dependencies
-import { dep, Slot } from 'optimism';
+import { dep } from 'optimism';
 import { ApolloCache } from '@apollo/client';
+import { cacheSlot as apolloCacheSlot } from '@apollo/client/cache';
 
 import type { InMemoryCache } from './inMemoryCache';
 
@@ -16,7 +17,10 @@ export type ReactiveListener<T> = (value: T) => any;
 
 // Contextual Slot that acquires its value when custom read functions are
 // called in Policies#readField.
-export const cacheSlot = new Slot<ApolloCache<any>>();
+// Hermes: use @apollo/client's own cacheSlot (rather than a copy), which is
+// the one Hermes sets while running read functions, so that reactive
+// variables made by this vendored copy of Apollo Client attach to Hermes.
+export const cacheSlot = apolloCacheSlot;
 
 const cacheInfoMap = new WeakMap<
   ApolloCache<any>,

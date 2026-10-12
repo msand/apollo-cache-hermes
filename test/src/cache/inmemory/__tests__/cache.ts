@@ -3925,7 +3925,7 @@ describe('ReactiveVar and makeVar', () => {
       d: 2,
     });
 
-    cache.reset(/* { discardWatches: true } */);
+    cache.reset({ discardWatches: true });
     expect(cache['watches'].size).toBe(0);
 
     expect(diffCounts).toEqual({
@@ -3976,7 +3976,7 @@ describe('ReactiveVar and makeVar', () => {
       f: 2,
     });
 
-    cache.reset(/* { discardWatches: true } */);
+    cache.reset({ discardWatches: true });
     expect(cache['watches'].size).toBe(0);
 
     nameVar('Danielle');
@@ -4117,7 +4117,8 @@ describe('ReactiveVar and makeVar', () => {
       name2: 'Jenn',
     });
 
-    expect(watchDiffs).toEqual([
+    // Hermes: diffs also carry Hermes' entityIds/dynamicNodeIds bookkeeping.
+    expect(watchDiffs).toMatchObject([
       {
         complete: true,
         result: {
@@ -4137,7 +4138,7 @@ describe('ReactiveVar and makeVar', () => {
       name2: 'Hugh',
     });
 
-    expect(watchDiffs).toEqual([
+    expect(watchDiffs).toMatchObject([
       {
         complete: true,
         result: {

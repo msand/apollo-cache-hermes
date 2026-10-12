@@ -3171,8 +3171,7 @@ describe('@connection', () => {
       .then(resolve, reject);
   });
 
-  // Hermes: reactive variables read in field policies are not tracked by the cache, so changes are not broadcast.
-  itAsync.skip('should broadcast changes for reactive variables', async (resolve, reject) => {
+  itAsync('should broadcast changes for reactive variables', async (resolve, reject) => {
     const aVar = makeVar(123);
     const bVar = makeVar('asdf');
     const cache: Hermes = new Hermes({
@@ -3351,7 +3350,8 @@ describe('@connection', () => {
     return new Promise(resolve => setTimeout(resolve, time));
   }
 
-  // Hermes: reactive variables read in field policies are not tracked by the cache, so forgetCache is never called.
+  // Hermes: @apollo/client does not export forgetCache/recallCache (nor which
+  // variables a cache read), so Hermes cannot detach itself from reactive variables.
   itAsync.skip('should call forgetCache for reactive vars when stopped', async (resolve, reject) => {
     const aVar = makeVar(123);
     const bVar = makeVar('asdf');

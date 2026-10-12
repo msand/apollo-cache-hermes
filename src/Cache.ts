@@ -1,4 +1,5 @@
 import { Cache as CacheInterface } from '@apollo/client';
+import { cacheSlot } from '@apollo/client/cache';
 import { Reference, StoreObject } from '@apollo/client/utilities';
 import { invariant } from '@apollo/client/utilities/globals';
 
@@ -174,13 +175,10 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     // https://github.com/apollographql/apollo-client/issues/1971#issuecomment-319402170
     // Like InMemoryCache, reads made during a transaction see its pending writes.
     const activeTx = this._transactions[this._transactions.length - 1];
-    if (activeTx) return activeTx.read(query, optimistic);
+    if (activeTx) return this._withCacheSlot(() => activeTx.read(query, optimistic));
     const tempStore: NodeSnapshotMap = Object.create(null);
-    const result = read(
-      this._context,
-      query,
-      optimistic ? this._snapshot.optimistic : this._snapshot.baseline,
-      tempStore,
+    const result = this._withCacheSlot(() =>
+      read(this._context, query, optimistic ? this._snapshot.optimistic : this._snapshot.baseline, tempStore),
     );
     const newKeys = Object.keys(tempStore);
     if (newKeys.length) {
@@ -212,7 +210,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
       };
     }
     const snapshot = options.optimistic ? this._snapshot.optimistic : this._snapshot.baseline;
-    const observer = new QueryObserver(this._context, query, snapshot, options);
+    const observer = this._withCacheSlot(() => new QueryObserver(this._context, query, snapshot, options));
     this._observers.push(observer);
 
     return () => this._removeObserver(observer);
@@ -408,6 +406,13 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     this._setSnapshot(new CacheSnapshot(baseline, optimistic, optimisticQueue), allIds);
   }
 
+  /**
+   * Unregisters every observer.
+   */
+  discardWatches(): void {
+    this._observers = [];
+  }
+
   // Internal
 
   /**
@@ -460,6 +465,28 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
   }
 
   /**
+   * Runs a callback with this cache as the cache of any reactive variables
+   * that read functions read (like InMemoryCache), so that the variables
+   * broadcast their changes to it.
+   */
+  private _withCacheSlot<T>(callback: () => T): T {
+    const cache = this._cacheInstance;
+    return cache ? cacheSlot.withValue(cache, callback) : callback();
+  }
+
+  /**
+   * Called when reactive variables (read by read functions) may have changed:
+   * cached read results are dropped, and the next broadcast re-reads every
+   * watch. Without read functions, there is nothing to do.
+   */
+  public dirtyReactiveReads() {
+    if (!this._context.typePolicies) return;
+    this._snapshot.baseline.readCache.clear();
+    this._snapshot.optimistic.readCache.clear();
+    for (const observer of this._observers) observer.markDirty();
+  }
+
+  /**
    * Makes the next broadcast re-read the given watches.
    */
   public dirtyWatches(watches: Set<CacheInterface.WatchOptions>) {
@@ -500,17 +527,19 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
       baselineFields = mergeFieldMaps(this._changedFields.baseline, dirty);
       optimisticFields = mergeFieldMaps(baselineFields, this._changedFields.optimistic);
     }
-    for (const observer of this._observers) {
-      const graphSnapshot = observer.optimistic ? snapshot.optimistic : snapshot.baseline;
-      observer.consumeChanges(
-        graphSnapshot,
-        editedNodeIds,
-        this._cacheInstance!,
-        onWatchUpdated,
-        fromOptimisticTransaction && observer.optimistic,
-        observer.optimistic ? optimisticFields : baselineFields,
-      );
-    }
+    this._withCacheSlot(() => {
+      for (const observer of this._observers) {
+        const graphSnapshot = observer.optimistic ? snapshot.optimistic : snapshot.baseline;
+        observer.consumeChanges(
+          graphSnapshot,
+          editedNodeIds,
+          this._cacheInstance!,
+          onWatchUpdated,
+          fromOptimisticTransaction && observer.optimistic,
+          observer.optimistic ? optimisticFields : baselineFields,
+        );
+      }
+    });
 
     this._context.dirty.clear();
     this._fieldsUntracked = false;
