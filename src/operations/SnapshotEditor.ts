@@ -1105,6 +1105,13 @@ export class SnapshotEditor<TSerialized> {
       const fieldPath = [...path, key];
       if (value && key in value) {
         this._setValue(containerId, fieldPath, undefined, true, true);
+        // Like InMemoryCache, the field's references go with it (so gc can
+        // collect what they referenced).
+        this._removeReferencesUnder(referenceEdits, containerId, fieldPath);
+      } else if (this._danglingReferenceId(containerId, fieldPath) !== undefined) {
+        // A field holding a dangling reference has no value to remove.
+        this._editedNodeIds.add(containerId);
+        this._dropDanglingReference(containerId, fieldPath);
       } else {
         const keyParts = key.split('❖');
         if (keyParts.length > 1) {
@@ -1238,6 +1245,25 @@ export class SnapshotEditor<TSerialized> {
       } else {
         this._setValue(containerId, [...path, i], childPayload);
       }
+    }
+  }
+
+  /**
+   * Removes the (outbound) references at or below `prefix` of a node, without
+   * writing their values.
+   */
+  private _removeReferencesUnder(referenceEdits: ReferenceEdit[], containerId: NodeId, prefix: PathPart[]) {
+    const outbound = this._getNodeSnapshot(containerId)?.outbound;
+    if (!outbound) return;
+    for (const reference of outbound.values()) {
+      if (!pathBeginsWith(reference.path, prefix)) continue;
+      referenceEdits.push({
+        containerId,
+        path: reference.path,
+        prevNodeId: reference.id,
+        nextNodeId: undefined,
+        noWrite: true,
+      });
     }
   }
 

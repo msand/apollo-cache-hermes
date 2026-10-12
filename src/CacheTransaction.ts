@@ -34,7 +34,7 @@ const { CacheSnapshot } = cacheSnapshot;
 const { ApolloTransaction } = transaction;
 const { cloneNodeSnapshot, EntitySnapshot } = nodes;
 const { read, SnapshotEditor, write } = operations;
-const { addToSet, isObject, isReference } = util;
+const { addToSet, hasOwn, isObject, isReference } = util;
 
 const DELETE: DeleteModifier = Object.create(null);
 const INVALIDATE: InvalidateModifier = Object.create(null);
@@ -330,7 +330,9 @@ export class CacheTransaction<TSerialized> implements Queryable {
       const out = obj.outbound?.get(key);
       if (out) {
         const k = out.id;
-        return [{ d: graphSnapshot.getNodeData(k), k }].concat(nodes);
+        const target = graphSnapshot.getNodeData(k);
+        // Like InMemoryCache, a dangling reference is passed as a Reference.
+        return [target === undefined ? { d: makeRef(k), k: null } : { d: target, k }].concat(nodes);
       }
       if (nodes.length) {
         return nodes;
@@ -476,6 +478,13 @@ export class CacheTransaction<TSerialized> implements Queryable {
 
     const data = node.data ?? {};
     const keys = Object.keys(data);
+    // Fields holding a dangling reference have no data, but are still fields.
+    for (const { id: targetId, path } of node.outbound?.values() ?? []) {
+      const [key] = path;
+      if (path.length === 1 && typeof key === 'string' && !hasOwn.call(data, key) && !graphSnapshot.has(targetId)) {
+        keys.push(key);
+      }
+    }
     const payload: JsonObject = {};
     const deleted = new Set<string>();
 
