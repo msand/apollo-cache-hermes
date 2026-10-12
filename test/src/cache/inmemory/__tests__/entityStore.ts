@@ -329,43 +329,54 @@ describe('EntityStore', () => {
       });
     }, 'ray books');
 
-    const rayMeta = {
-      extraRootIds: ['Author:Ray Bradbury'],
-    };
-
-    expect(cache.extract(true)).toEqual({
-      __META: rayMeta,
+    // Hermes: references are inbound/outbound edges, and extract() has no
+    // __META.extraRootIds (Hermes does not retain written ids). Hermes also
+    // deletes orphaned nodes eagerly: the second write above already removed
+    // the F451 / Ray Bradbury data, so the optimistic layer holds only the
+    // fields it wrote.
+    const georgeOrwellAndRootQuery = {
       ROOT_QUERY: {
-        __typename: 'Query',
-        book: {
-          __ref: 'Book:1980719802',
-        },
+        type: 0,
+        outbound: [{ id: 'Book:1980719802', path: ['book'] }],
+        data: { book: undefined },
       },
-      'Author:Ray Bradbury': {
-        __typename: 'Author',
-        name: 'Ray Bradbury',
-        books: [
-          {
-            __ref: 'Book:9781451673319',
-          },
-        ],
-      },
-      'Book:9781451673319': {
-        __typename: 'Book',
-        title: 'Fahrenheit 451',
-        author: {
-          __ref: 'Author:Ray Bradbury',
+      'Book:1980719802': {
+        type: 0,
+        outbound: [{ id: 'Author:George Orwell', path: ['author'] }],
+        inbound: [{ id: 'ROOT_QUERY', path: ['book'] }],
+        data: {
+          __typename: 'Book',
+          isbn: '1980719802',
+          title: '1984',
+          author: undefined,
         },
       },
       'Author:George Orwell': {
-        __typename: 'Author',
-        name: 'George Orwell',
+        type: 0,
+        inbound: [{ id: 'Book:1980719802', path: ['author'] }],
+        data: {
+          __typename: 'Author',
+          name: 'George Orwell',
+        },
       },
-      'Book:1980719802': {
-        __typename: 'Book',
-        title: '1984',
-        author: {
-          __ref: 'Author:George Orwell',
+    };
+
+    expect(cache.extract(true)).toEqual({
+      ...georgeOrwellAndRootQuery,
+      'Author:Ray Bradbury': {
+        type: 0,
+        outbound: [{ id: 'Book:9781451673319', path: ['books', 0] }],
+        data: {
+          books: [undefined],
+        },
+      },
+      'Book:9781451673319': {
+        type: 0,
+        inbound: [{ id: 'Author:Ray Bradbury', path: ['books', 0] }],
+        data: {
+          __typename: 'Book',
+          isbn: '9781451673319',
+          title: 'Fahrenheit 451',
         },
       },
     });
@@ -376,59 +387,14 @@ describe('EntityStore', () => {
 
     cache.removeOptimistic('ray books');
 
-    expect(cache.extract(true)).toEqual({
-      ROOT_QUERY: {
-        __typename: 'Query',
-        book: {
-          __ref: 'Book:1980719802',
-        },
-      },
-      'Author:Ray Bradbury': {
-        __typename: 'Author',
-        name: 'Ray Bradbury',
-        // Note that the optimistic books field has disappeared, as expected.
-      },
-      'Book:9781451673319': {
-        __typename: 'Book',
-        title: 'Fahrenheit 451',
-        author: {
-          __ref: 'Author:Ray Bradbury',
-        },
-      },
-      'Author:George Orwell': {
-        __typename: 'Author',
-        name: 'George Orwell',
-      },
-      'Book:1980719802': {
-        __typename: 'Book',
-        title: '1984',
-        author: {
-          __ref: 'Author:George Orwell',
-        },
-      },
-    });
+    // Hermes: the optimistic books field has disappeared, and with it the
+    // (already orphaned and deleted) F451 / Ray Bradbury data, so there is
+    // nothing left for gc() to collect.
+    expect(cache.extract(true)).toEqual(georgeOrwellAndRootQuery);
 
-    expect(cache.gc().sort()).toEqual(['Author:Ray Bradbury', 'Book:9781451673319']);
+    expect(cache.gc()).toEqual([]);
 
-    expect(cache.extract(true)).toEqual({
-      ROOT_QUERY: {
-        __typename: 'Query',
-        book: {
-          __ref: 'Book:1980719802',
-        },
-      },
-      'Author:George Orwell': {
-        __typename: 'Author',
-        name: 'George Orwell',
-      },
-      'Book:1980719802': {
-        __typename: 'Book',
-        title: '1984',
-        author: {
-          __ref: 'Author:George Orwell',
-        },
-      },
-    });
+    expect(cache.extract(true)).toEqual(georgeOrwellAndRootQuery);
 
     expect(cache.gc()).toEqual([]);
   });

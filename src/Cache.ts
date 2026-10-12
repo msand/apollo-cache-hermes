@@ -110,11 +110,11 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
         delete snapshot[id];
       }
     });
-    const idsToRemove = Object.keys(snapshot);
+    // Like InMemoryCache, only the baseline (root layer) is collected.
+    const idsToRemove = Object.keys(snapshot).filter(id => this._snapshot.baseline.getNodeSnapshot(id));
 
     if (idsToRemove.length) {
       this.transaction(false, t => {
-        // Like InMemoryCache, only the baseline (root layer) is collected.
         t.batchEvict(idsToRemove, false);
       });
     }
