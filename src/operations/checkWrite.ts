@@ -44,7 +44,7 @@ export function missingKeyFieldError(fieldName: string, object: JsonObject): Inv
 
 /**
  * The first keyField (of a type policy with a keyFields array) that `object`
- * does not provide, if any.
+ * does not provide, if any, when the object cannot be identified otherwise.
  */
 export function missingKeyField<TSerialized>(
   context: CacheContext<TSerialized>,
@@ -57,7 +57,10 @@ export function missingKeyField<TSerialized>(
   if (!Array.isArray(keyFields)) return undefined;
   for (const keyField of keyFields) {
     if (typeof keyField !== 'string') continue;
-    if (storeObject[keyField] === undefined && object[keyField] === undefined) return keyField;
+    if (storeObject[keyField] === undefined && object[keyField] === undefined) {
+      // A custom entityIdForNode/dataIdFromObject may identify it anyway.
+      return context.entityIdForValue({ ...object, ...storeObject }) === undefined ? keyField : undefined;
+    }
   }
   return undefined;
 }
@@ -82,6 +85,8 @@ export function checkWrite<TSerialized>(
   rootTypename: string | undefined,
 ): void {
   const dev = (globalThis as { __DEV__?: boolean }).__DEV__ !== false;
+  // In production, there is only something to check with keyFields policies.
+  if (!dev && !Object.values(context.typePolicies ?? {}).some(policy => Array.isArray(policy.keyFields))) return;
   const allVariables = { ...getDefaultValues(getOperationDefinition(document)), ...variables };
   const fragmentMap: FragmentMap = createFragmentMap(getFragmentDefinitions(document));
   const lookupFragment = (name: string) => fragmentMap[name];
@@ -103,7 +108,18 @@ export function checkWrite<TSerialized>(
     }
   };
 
+  // The fields of each selection set, by the __typename they are flattened for.
+  const flattened = new Map<SelectionSetNode, Map<string | undefined, Map<FieldNode, FieldContext>>>();
+
   function flattenFields(selectionSet: SelectionSetNode, typename: string | undefined) {
+    let byTypename = flattened.get(selectionSet);
+    if (!byTypename) flattened.set(selectionSet, (byTypename = new Map()));
+    let fieldMap = byTypename.get(typename);
+    if (!fieldMap) byTypename.set(typename, (fieldMap = flattenFieldsOnce(selectionSet, typename)));
+    return fieldMap;
+  }
+
+  function flattenFieldsOnce(selectionSet: SelectionSetNode, typename: string | undefined) {
     const fieldMap = new Map<FieldNode, FieldContext>();
     // Like InMemoryCache, each selection set is flattened once per inherited context.
     const visited = new Map<SelectionSetNode, Set<string>>();
