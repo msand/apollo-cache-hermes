@@ -284,7 +284,10 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
       this._transactions.pop();
     }
 
-    const { snapshot, editedNodeIds } = transaction.commit();
+    const { snapshot, editedNodeIds, writtenRootIds } = transaction.commit();
+    // Like InMemoryCache, the ids that data is written to explicitly are
+    // retained, as roots for garbage collection.
+    writtenRootIds.forEach(id => this.retain(id));
     this._setSnapshot(snapshot, editedNodeIds, broadcast, onWatchUpdated);
 
     if (this._transactions.length) {
@@ -320,6 +323,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     const baseline = new GraphSnapshot();
     const optimistic = baseline;
     const optimisticQueue = new OptimisticUpdateQueue();
+    this._rootIds = Object.create(null);
 
     this._setSnapshot(new CacheSnapshot(baseline, optimistic, optimisticQueue), allIds);
   }

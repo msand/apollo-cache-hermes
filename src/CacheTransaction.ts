@@ -70,6 +70,9 @@ export class CacheTransaction<TSerialized> implements Queryable {
   /** All queries written during the transaction. */
   private _writtenQueries = new Set<OperationInstance<TSerialized>>();
 
+  /** The ids non-optimistic writes started at, which the cache retains. */
+  private _writtenRootIds = new Set<NodeId>();
+
   /** The original snapshot before the transaction began. */
   private _parentSnapshot: CacheSnapshotType;
 
@@ -163,6 +166,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
     snapshot: CacheSnapshotType;
     editedNodeIds: Set<NodeId>;
     writtenQueries: Set<OperationInstance<TSerialized>>;
+    writtenRootIds: Set<NodeId>;
   } {
     this._triggerEntityUpdaters();
 
@@ -175,7 +179,12 @@ export class CacheTransaction<TSerialized> implements Queryable {
       );
     }
 
-    return { snapshot, editedNodeIds: this._editedNodeIds, writtenQueries: this._writtenQueries };
+    return {
+      snapshot,
+      editedNodeIds: this._editedNodeIds,
+      writtenQueries: this._writtenQueries,
+      writtenRootIds: this._writtenRootIds,
+    };
   }
 
   markEditedNodeIds(allIds: Iterable<string>) {
@@ -255,6 +264,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
     } = write(this._context, current.baseline, query, payload);
     addToSet(this._editedNodeIds, editedNodeIds);
     addToSet(this._writtenQueries, writtenQueries);
+    this._writtenRootIds.add(query.rootId);
 
     const optimistic = this._buildOptimisticSnapshot(baseline);
 

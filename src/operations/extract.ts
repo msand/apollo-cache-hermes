@@ -86,6 +86,11 @@ function extractSerializableData(
   // outbound reference (e.g referencing ParameterizedValueSnapshot).
   // We can simply skip extraction of such data.
   if (!nodeSnapshot.outbound || !nodeSnapshot.data) {
+    // A node that is a dangling reference (to a deleted entity) is serialized like a reference.
+    const reference = nodeSnapshot.outbound?.get('');
+    if (nodeSnapshot.data === undefined && reference && !graphSnapshot.getNodeSnapshot(reference.id)) {
+      return null;
+    }
     return nodeSnapshot.data;
   }
 
