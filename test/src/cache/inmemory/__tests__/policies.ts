@@ -4622,7 +4622,8 @@ describe('type policies', () => {
         data: stealThisData,
       });
 
-      expect(read()).toEqual({
+      // Hermes: results may contain a superset of the selected fields.
+      expect(read()).toMatchObject({
         book: {
           __typename: 'Book',
           title: 'Steal This Book',
@@ -4630,7 +4631,7 @@ describe('type policies', () => {
         },
       });
 
-      expect(read('0393354326')).toEqual({
+      expect(read('0393354326')).toMatchObject({
         book: {
           __typename: 'Book',
           title: 'Guns, Germs, and Steel',
@@ -4638,28 +4639,45 @@ describe('type policies', () => {
         },
       });
 
-      expect(cache.extract()).toEqual({
-        __META: {
-          extraRootIds: ['Book:{"isbn":"156858217X"}'],
-        },
-        ROOT_QUERY: {
-          __typename: 'Query',
-          'book:{"isbn":"0393354326"}': {
-            __ref: 'Book:{"isbn":"0393354326"}',
-          },
-        },
-        'Book:{"isbn":"0393354326"}': {
+      // Hermes: parameterized fields are separate nodes linked to ROOT_QUERY,
+      // references are inbound/outbound edges, and extract() has no
+      // __META.extraRootIds (Hermes does not serialize retained ids).
+      const fieldId = (isbn: string) => `ROOT_QUERY❖["book"]❖{"isbn":"${isbn}"}`;
+      const bookId = (isbn: string) => `Book:{"isbn":"${isbn}"}`;
+      const fieldNode = (isbn: string) => ({
+        type: 1,
+        data: null,
+        inbound: [{ id: 'ROOT_QUERY', path: ['book'] }],
+        outbound: [{ id: bookId(isbn), path: [] }],
+      });
+      const gunsGermsNode = {
+        type: 0,
+        data: {
           __typename: 'Book',
           isbn: '0393354326',
           author: 'Jared Diamond',
           title: 'Guns, Germs, and Steel',
         },
-        'Book:{"isbn":"156858217X"}': {
+        inbound: [{ id: fieldId('0393354326'), path: [] }],
+      };
+      const stealThisNode = {
+        type: 0,
+        data: {
           __typename: 'Book',
           isbn: '156858217X',
           author: 'Abbie Hoffman',
           title: 'Steal This Book',
         },
+      };
+
+      expect(cache.extract()).toEqual({
+        ROOT_QUERY: {
+          type: 0,
+          parameterized: [{ id: fieldId('0393354326'), path: ['book'] }],
+        },
+        [fieldId('0393354326')]: fieldNode('0393354326'),
+        [bookId('0393354326')]: gunsGermsNode,
+        [bookId('156858217X')]: stealThisNode,
       });
 
       // Nothing removed because stealThisID was retained by writeFragment.
@@ -4669,17 +4687,11 @@ describe('type policies', () => {
 
       expect(cache.extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          'book:{"isbn":"0393354326"}': {
-            __ref: 'Book:{"isbn":"0393354326"}',
-          },
+          type: 0,
+          parameterized: [{ id: fieldId('0393354326'), path: ['book'] }],
         },
-        'Book:{"isbn":"0393354326"}': {
-          __typename: 'Book',
-          isbn: '0393354326',
-          author: 'Jared Diamond',
-          title: 'Guns, Germs, and Steel',
-        },
+        [fieldId('0393354326')]: fieldNode('0393354326'),
+        [bookId('0393354326')]: gunsGermsNode,
       });
 
       cache.writeQuery({
@@ -4692,26 +4704,16 @@ describe('type policies', () => {
 
       expect(cache.extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          'book:{"isbn":"0393354326"}': {
-            __ref: 'Book:{"isbn":"0393354326"}',
-          },
-          'book:{"isbn":"156858217X"}': {
-            __ref: 'Book:{"isbn":"156858217X"}',
-          },
+          type: 0,
+          parameterized: [
+            { id: fieldId('0393354326'), path: ['book'] },
+            { id: fieldId('156858217X'), path: ['book'] },
+          ],
         },
-        'Book:{"isbn":"0393354326"}': {
-          __typename: 'Book',
-          isbn: '0393354326',
-          author: 'Jared Diamond',
-          title: 'Guns, Germs, and Steel',
-        },
-        'Book:{"isbn":"156858217X"}': {
-          __typename: 'Book',
-          isbn: '156858217X',
-          author: 'Abbie Hoffman',
-          title: 'Steal This Book',
-        },
+        [fieldId('0393354326')]: fieldNode('0393354326'),
+        [fieldId('156858217X')]: fieldNode('156858217X'),
+        [bookId('0393354326')]: gunsGermsNode,
+        [bookId('156858217X')]: { ...stealThisNode, inbound: [{ id: fieldId('156858217X'), path: [] }] },
       });
 
       expect(cache.gc()).toEqual([]);
@@ -4726,7 +4728,7 @@ describe('type policies', () => {
 
       expect(cache.extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
+          type: 0,
         },
       });
 
