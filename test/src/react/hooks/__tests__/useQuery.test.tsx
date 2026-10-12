@@ -7089,11 +7089,13 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         query,
         variables: { id: 1 },
         data: {
+          // Hermes: writes keep the unselected fields of the payload too (like
+          // its reads, a superset by design), so model is left out here to
+          // keep car 1 partial for partialQuery.
           car: {
             __typename: 'Car',
             id: 1,
             make: 'Ford',
-            model: 'Pinto',
           },
         },
       });
