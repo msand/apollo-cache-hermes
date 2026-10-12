@@ -1,8 +1,7 @@
-import deepFreeze = require('deep-freeze-strict');
-
 import { NodeSnapshot } from './nodes';
 import { QueryResult, QueryResultWithNodeIds } from './operations/read';
 import { NodeId, OperationInstance } from './schema';
+import { deepFreeze } from './util/freeze';
 
 export type NodeSnapshotMap = { [Key in NodeId]: NodeSnapshot };
 /**
@@ -64,6 +63,12 @@ export class GraphSnapshot {
    * @internal
    */
   freeze(): void {
-    deepFreeze(this._values);
+    // Node snapshots are class instances, so freeze them and their (plain) data explicitly.
+    for (const node of Object.values(this._values)) {
+      if (!node || Object.isFrozen(node)) continue;
+      Object.freeze(node);
+      for (const value of Object.values(node)) deepFreeze(value);
+    }
+    Object.freeze(this._values);
   }
 }

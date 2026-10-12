@@ -50,7 +50,6 @@
     "@testing-library/react": "^16.0.0",
     "@testing-library/user-event": "^14.5.2",
     "@types/chai": "^5.2.3",
-    "@types/deep-freeze-strict": "^1.1.2",
     "@types/jest": "^30.0.0",
     "@types/lodash": "^4.17.6",
     "@types/node": "^22.20.5",
@@ -97,7 +96,6 @@
   },
   "dependencies": {
     "@wry/equality": "^0.5.7",
-    "deep-freeze-strict": "^1.1.1",
     "make-error": "^1.3.6",
     "ts-invariant": "^0.10.3",
     "tslib": "^2.6.3"
