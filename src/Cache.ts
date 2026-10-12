@@ -144,6 +144,9 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
   read(query: RawOperation, optimistic?: boolean): CacheInterface.DiffResult<JsonValue> {
     // TODO: Can we drop non-optimistic reads?
     // https://github.com/apollographql/apollo-client/issues/1971#issuecomment-319402170
+    // Like InMemoryCache, reads made during a transaction see its pending writes.
+    const activeTx = this._transactions[this._transactions.length - 1];
+    if (activeTx) return activeTx.read(query, optimistic);
     const tempStore: NodeSnapshotMap = Object.create(null);
     const result = read(
       this._context,
@@ -238,6 +241,14 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
       callback = changeIdOrCallback as TransactionCallback<TSerialized>;
     } else {
       changeId = changeIdOrCallback as ChangeId;
+    }
+
+    // Like InMemoryCache, a nested non-optimistic batch inside an optimistic
+    // transaction writes into that optimistic layer rather than the baseline.
+    const outerTx = this._transactions[this._transactions.length - 1];
+    if (outerTx && outerTx.isOptimisticTransaction() && changeId == null) {
+      const nestedResult = callback(outerTx);
+      return typeof nestedResult === 'boolean' ? nestedResult : true;
     }
 
     let tracerContext;

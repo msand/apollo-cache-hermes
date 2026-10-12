@@ -1,3 +1,4 @@
+import deepFreeze = require('deep-freeze-strict');
 import { makeReference } from '@apollo/client';
 import type { FieldFunctionOptions } from '@apollo/client/cache/inmemory/policies';
 import type { Reference, StoreValue } from '@apollo/client';
@@ -133,6 +134,8 @@ export function read<TSerialized>(
         tempStore,
       );
       queryResult.dynamicNodeIds = dynamicNodeIds;
+      // Results built here are new objects; freeze them like the snapshot data they come from.
+      if (context.freezeSnapshots) deepFreeze(queryResult.result);
     }
 
     queryResult.entityIds = includeNodeIds ? new Set<NodeId>() : undefined;

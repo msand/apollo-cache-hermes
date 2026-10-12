@@ -23,6 +23,7 @@ import * as operations from './operations';
 import * as schema from './schema';
 import * as nodes from './nodes';
 import * as util from './util';
+import { nodeIdForParameterizedValue } from './operations/SnapshotEditor';
 
 const isEqual = equality.equal;
 const makeRef = makeReference;
@@ -89,11 +90,11 @@ export class CacheTransaction<TSerialized> implements Queryable {
   /**
    * Executes reads against the current values in the transaction.
    */
-  read(query: RawOperation): CacheInterface.DiffResult<JsonValue> {
+  read(query: RawOperation, optimistic?: boolean): CacheInterface.DiffResult<JsonValue> {
     return read(
       this._context,
       query,
-      this._optimisticChangeId ? this._snapshot.optimistic : this._snapshot.baseline,
+      this._optimisticChangeId || optimistic ? this._snapshot.optimistic : this._snapshot.baseline,
       Object.create(null),
     );
   }
@@ -569,6 +570,13 @@ export class CacheTransaction<TSerialized> implements Queryable {
   }
 
   evict(options: CacheInterface.EvictOptions): boolean {
+    // Like InMemoryCache, only a missing id means ROOT_QUERY; other falsy ids match nothing.
+    if ('id' in options && !options.id) return false;
+    // Evicting one argument variant of a field removes just that stored value.
+    if (options.fieldName && options.args) {
+      const nodeId = nodeIdForParameterizedValue(options.id ?? 'ROOT_QUERY', [options.fieldName], options.args);
+      return this.batchEvict([nodeId]);
+    }
     const modifier: Modifier<any> = (_current, details) => {
       return details.DELETE;
     };

@@ -3589,9 +3589,6 @@ describe('Hermes#modify', () => {
         type: 0,
       },
       ROOT_QUERY: {
-        data: {
-          book: null,
-        },
         parameterized: [
           {
             id: 'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
@@ -3636,9 +3633,6 @@ describe('Hermes#modify', () => {
         type: 0,
       },
       ROOT_QUERY: {
-        data: {
-          book: null,
-        },
         parameterized: [
           {
             id: 'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
@@ -3677,9 +3671,6 @@ describe('Hermes#modify', () => {
         type: 0,
       },
       ROOT_QUERY: {
-        data: {
-          book: null,
-        },
         type: 0,
       },
     });
@@ -3688,9 +3679,6 @@ describe('Hermes#modify', () => {
 
     expect(cache.extract()).toEqual({
       ROOT_QUERY: {
-        data: {
-          book: null,
-        },
         type: 0,
       },
     });

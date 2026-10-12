@@ -628,9 +628,11 @@ export class SnapshotEditor<TSerialized> {
     const referenceEdits: ReferenceEdit[] = [];
     const nodeSnapshot = this._getNodeSnapshot(nodeId);
 
+    // A parameterized value is removed from its container without writing a null field value.
+    const noWrite = nodeSnapshot instanceof ParameterizedValueSnapshot ? true : undefined;
     nodeSnapshot?.inbound?.forEach(({ id, path }) => {
       this._editedNodeIds.add(id);
-      referenceEdits.push({ containerId: id, nextNodeId: undefined, prevNodeId: nodeId, path });
+      referenceEdits.push({ containerId: id, nextNodeId: undefined, prevNodeId: nodeId, path, noWrite });
     });
 
     // Outbound targets only lose an inbound reference; their data is unchanged,
