@@ -25,8 +25,8 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
       query.optimistic,
     );
     if (query.returnPartialData === false && !complete) {
-      // TODO: Include more detail with this error.
-      throw new UnsatisfiedCacheError(`diffQuery not satisfied by the cache.`);
+      // Like InMemoryCache, throw the MissingFieldError describing what is missing.
+      throw missing?.[0] ?? new UnsatisfiedCacheError(`diffQuery not satisfied by the cache.`);
     }
 
     // Like InMemoryCache, an empty read is an empty (incomplete) object rather than undefined; and

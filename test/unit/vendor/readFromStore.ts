@@ -237,7 +237,7 @@ describe('reading from the store', () => {
         `,
       }),
     ).toEqual({
-      __typename: 'Query',
+      // Like InMemoryCache, the __typename added to the fragment is not read on ROOT_QUERY.
       uuid: '8d573b9c-cfcf-4e3e-98dd-14d255af577e',
       null: null,
     });
@@ -508,19 +508,6 @@ describe('reading from the store', () => {
       missing: [
         new MissingFieldError(
           "Can't find field 'id' on object {}",
-          {
-            chickens: {
-              1: {
-                id: "Can't find field 'id' on object {}",
-                inCoop: "Can't find field 'inCoop' on object {}",
-              },
-            },
-          },
-          jestExpect.anything(), // query
-          jestExpect.anything(), // variables
-        ),
-        new MissingFieldError(
-          "Can't find field 'inCoop' on object {}",
           {
             chickens: {
               1: {
