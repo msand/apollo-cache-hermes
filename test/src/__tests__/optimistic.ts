@@ -1875,6 +1875,21 @@ describe('optimistic mutation results', () => {
       type Item = ReturnType<typeof makeItem>;
       type Data = { items: Item[] };
 
+      // Hermes: extract() wraps node data, does not store the root nodes'
+      // __typename (so ROOT_MUTATION goes away with its last field), and stores
+      // the addItem(item) field as a parameterized node. Diffs also carry
+      // Hermes' entityIds bookkeeping.
+      const rootQuery = (items: Item[]) => ({ type: 0, data: { items } });
+      const addItemId = 'ROOT_MUTATION❖["addItem"]❖{"item":{"__typename":"Item","text":"mutation 4"}}';
+      const rootMutation = (text: string) => ({
+        ROOT_MUTATION: { type: 0, parameterized: [{ id: addItemId, path: ['addItem'] }] },
+        [addItemId]: {
+          type: 1,
+          inbound: [{ id: 'ROOT_MUTATION', path: ['addItem'] }],
+          data: { __typename: 'Item', text },
+        },
+      });
+
       function append(cache: ApolloCache<any>, item: Item) {
         const data = cache.readQuery<Data>({ query });
         cache.writeQuery({
@@ -1926,15 +1941,13 @@ describe('optimistic mutation results', () => {
 
       expect(cache.extract(false)).toEqual({});
       expect(cache.extract(true)).toEqual({
-        ROOT_QUERY: {
-          __typename: 'Query',
-          items: manualItems,
-        },
+        ROOT_QUERY: rootQuery(manualItems),
       });
 
       expect(optimisticDiffs).toEqual([
         {
           complete: true,
+          entityIds: expect.any(Set),
           fromOptimisticTransaction: true,
           result: {
             items: manualItems,
@@ -1945,6 +1958,7 @@ describe('optimistic mutation results', () => {
       expect(realisticDiffs).toEqual([
         {
           complete: false,
+          entityIds: expect.any(Set),
           missing: [expect.anything()],
           result: {},
         },
@@ -1994,21 +2008,11 @@ describe('optimistic mutation results', () => {
               append(cache, optimisticItem);
 
               const expected = {
-                ROOT_QUERY: {
-                  __typename: 'Query',
-                  items: [manualItem1, manualItem2, optimisticItem],
-                },
-                ROOT_MUTATION: {
-                  __typename: 'Mutation',
-                  // Although ROOT_MUTATION field data gets removed immediately
-                  // after the mutation finishes, it is still temporarily visible
-                  // to the update function.
-
-                  'addItem({"item":{"__typename":"Item","text":"mutation 4"}})': {
-                    __typename: 'Item',
-                    text: 'optimistic 3',
-                  },
-                },
+                ROOT_QUERY: rootQuery([manualItem1, manualItem2, optimisticItem]),
+                // Although ROOT_MUTATION field data gets removed immediately
+                // after the mutation finishes, it is still temporarily visible
+                // to the update function.
+                ...rootMutation('optimistic 3'),
               };
 
               // Since we're in an optimistic update function, reading
@@ -2025,18 +2029,8 @@ describe('optimistic mutation results', () => {
               append(cache, mutationItem);
 
               const expected = {
-                ROOT_QUERY: {
-                  __typename: 'Query',
-                  items: [mutationItem],
-                },
-                ROOT_MUTATION: {
-                  __typename: 'Mutation',
-
-                  'addItem({"item":{"__typename":"Item","text":"mutation 4"}})': {
-                    __typename: 'Item',
-                    text: 'mutation 4',
-                  },
-                },
+                ROOT_QUERY: rootQuery([mutationItem]),
+                ...rootMutation('mutation 4'),
               };
 
               // Since we're in the final (non-optimistic) update function,
@@ -2059,47 +2053,35 @@ describe('optimistic mutation results', () => {
           // Only the final update function ever touched non-optimistic
           // cache data.
           expect(cache.extract(false)).toEqual({
-            ROOT_QUERY: {
-              __typename: 'Query',
-              items: [mutationItem],
-            },
-            ROOT_MUTATION: {
-              __typename: 'Mutation',
-            },
+            ROOT_QUERY: rootQuery([mutationItem]),
           });
 
           // Now that the mutation is finished, reading optimistically from
           // the cache should return the manually added items again.
           expect(cache.extract(true)).toEqual({
-            ROOT_QUERY: {
-              __typename: 'Query',
-              items: [
-                // If we wanted to keep optimistic data as up-to-date as
-                // possible, we could rerun all optimistic transactions
-                // after writing to the root (non-optimistic) layer of the
-                // cache, which would result in mutationItem appearing in
-                // this list along with manualItem1 and manualItem2
-                // (presumably in that order). However, rerunning those
-                // optimistic transactions would trigger additional
-                // broadcasts for optimistic query watches, with
-                // intermediate results that (re)combine optimistic and
-                // non-optimistic data. Since rerendering the UI tends to be
-                // expensive, we should prioritize broadcasting states that
-                // matter most, and in this case that means broadcasting the
-                // initial optimistic state (for perceived performance),
-                // followed by the final, authoritative, non-optimistic
-                // state. Other intermediate states are a distraction, as
-                // they will probably soon be superseded by another (more
-                // authoritative) update. This particular state is visible
-                // only because we haven't rolled back this manual Layer
-                // just yet (see cache.removeOptimistic below).
-                manualItem1,
-                manualItem2,
-              ],
-            },
-            ROOT_MUTATION: {
-              __typename: 'Mutation',
-            },
+            ROOT_QUERY: rootQuery([
+              // If we wanted to keep optimistic data as up-to-date as
+              // possible, we could rerun all optimistic transactions
+              // after writing to the root (non-optimistic) layer of the
+              // cache, which would result in mutationItem appearing in
+              // this list along with manualItem1 and manualItem2
+              // (presumably in that order). However, rerunning those
+              // optimistic transactions would trigger additional
+              // broadcasts for optimistic query watches, with
+              // intermediate results that (re)combine optimistic and
+              // non-optimistic data. Since rerendering the UI tends to be
+              // expensive, we should prioritize broadcasting states that
+              // matter most, and in this case that means broadcasting the
+              // initial optimistic state (for perceived performance),
+              // followed by the final, authoritative, non-optimistic
+              // state. Other intermediate states are a distraction, as
+              // they will probably soon be superseded by another (more
+              // authoritative) update. This particular state is visible
+              // only because we haven't rolled back this manual Layer
+              // just yet (see cache.removeOptimistic below).
+              manualItem1,
+              manualItem2,
+            ]),
           });
 
           cache.removeOptimistic('manual');
@@ -2107,13 +2089,7 @@ describe('optimistic mutation results', () => {
           // After removing the manual optimistic layer, only the
           // non-optimistic data remains.
           expect(cache.extract(true)).toEqual({
-            ROOT_QUERY: {
-              __typename: 'Query',
-              items: [mutationItem],
-            },
-            ROOT_MUTATION: {
-              __typename: 'Mutation',
-            },
+            ROOT_QUERY: rootQuery([mutationItem]),
           });
         })
         .then(() => {
@@ -2122,6 +2098,7 @@ describe('optimistic mutation results', () => {
           expect(optimisticDiffs).toEqual([
             {
               complete: true,
+              entityIds: expect.any(Set),
               fromOptimisticTransaction: true,
               result: {
                 items: manualItems,
@@ -2129,6 +2106,7 @@ describe('optimistic mutation results', () => {
             },
             {
               complete: true,
+              entityIds: expect.any(Set),
               fromOptimisticTransaction: true,
               result: {
                 items: [...manualItems, optimisticItem],
@@ -2136,12 +2114,14 @@ describe('optimistic mutation results', () => {
             },
             {
               complete: true,
+              entityIds: expect.any(Set),
               result: {
                 items: manualItems,
               },
             },
             {
               complete: true,
+              entityIds: expect.any(Set),
               result: {
                 items: [mutationItem],
               },
@@ -2151,11 +2131,13 @@ describe('optimistic mutation results', () => {
           expect(realisticDiffs).toEqual([
             {
               complete: false,
+              entityIds: expect.any(Set),
               missing: [expect.anything()],
               result: {},
             },
             {
               complete: true,
+              entityIds: expect.any(Set),
               result: {
                 items: [mutationItem],
               },

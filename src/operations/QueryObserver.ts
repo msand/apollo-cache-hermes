@@ -100,10 +100,11 @@ export class QueryObserver<TSerialized> {
     this._options.lastDiff = readResult;
     const rootKeys = Object.keys(operation.parsedQuery);
     const lastResult = lastDiff?.result;
-    // Skip empty incomplete results, unless they replace data the watcher has seen (e.g. after
-    // evicting every root field), so Apollo can refetch like it does with InMemoryCache.
+    // Skip empty incomplete results, unless they are the watcher's first result (like
+    // InMemoryCache, which delivers a watch's first diff), or replace data the watcher has seen
+    // (e.g. after evicting every root field), so Apollo can refetch like it does with InMemoryCache.
     const hadRootKeys = !!lastResult && rootKeys.some(key => key in lastResult);
-    if (!readResult.complete && (!result || !rootKeys.some(key => key in result)) && !hadRootKeys) {
+    if (lastDiff && !readResult.complete && (!result || !rootKeys.some(key => key in result)) && !hadRootKeys) {
       return;
     }
     const sameAsBefore = result && lastResult && rootKeys.every(key => isEqual(result[key], lastResult[key]));
