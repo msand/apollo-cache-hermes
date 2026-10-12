@@ -62,10 +62,13 @@ export class QueryObserver<TSerialized> {
     const result = readResult.result;
     this._options.lastDiff = readResult;
     const rootKeys = Object.keys(operation.parsedQuery);
-    if (!readResult.complete && (!result || !rootKeys.some(key => key in result))) {
+    const lastResult = lastDiff?.result;
+    // Skip empty incomplete results, unless they replace data the watcher has seen (e.g. after
+    // evicting every root field), so Apollo can refetch like it does with InMemoryCache.
+    const hadRootKeys = !!lastResult && rootKeys.some(key => key in lastResult);
+    if (!readResult.complete && (!result || !rootKeys.some(key => key in result)) && !hadRootKeys) {
       return;
     }
-    const lastResult = lastDiff?.result;
     const sameAsBefore = result && lastResult && rootKeys.every(key => isEqual(result[key], lastResult[key]));
     const dirtyKeys = this._context.dirty.get(operation.rootId);
     if (sameAsBefore && !(dirtyKeys && rootKeys.some(key => dirtyKeys.has(key)))) {

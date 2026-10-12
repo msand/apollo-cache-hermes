@@ -186,6 +186,9 @@ export class CacheContext<TSerialized = GraphSnapshot> {
   readonly addTypename: boolean;
 
   /** All currently known & processed GraphQL documents. */
+  /** Transformed documents by input; @apollo/client matches documents by identity (e.g. refetchQueries). */
+  private readonly _transformedDocuments = new WeakMap<DocumentNode, DocumentNode>();
+
   private readonly _queryInfoMap = new Map<string, QueryInfo<TSerialized>>();
   /** All currently known & parsed queries, for identity mapping. */
   private readonly _operationMap = new Map<string, OperationInstance<TSerialized>[]>();
@@ -221,8 +224,12 @@ export class CacheContext<TSerialized = GraphSnapshot> {
    */
   transformDocument(document: DocumentNode): DocumentNode {
     if (this.addTypename && !document.hasBeenTransformed) {
-      const transformedDocument = addTypenameToDocument(document);
-      transformedDocument.hasBeenTransformed = true;
+      let transformedDocument = this._transformedDocuments.get(document);
+      if (!transformedDocument) {
+        transformedDocument = addTypenameToDocument(document);
+        transformedDocument.hasBeenTransformed = true;
+        this._transformedDocuments.set(document, transformedDocument);
+      }
       return transformedDocument;
     }
     return document;
@@ -261,6 +268,10 @@ export class CacheContext<TSerialized = GraphSnapshot> {
 
     const info = this._queryInfo(cacheKey, updateRaw);
     const fullVariables = { ...info.variableDefaults, ...updateRaw.variables } as JsonObject;
+    // Like InMemoryCache, treat variables without a value as undefined (e.g. @export variables before they are resolved).
+    for (const name of info.variables) {
+      if (!(name in fullVariables)) fullVariables[name] = undefined as any;
+    }
     const operation = {
       info,
       rootId: updateRaw.rootId,
