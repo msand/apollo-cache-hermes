@@ -6,6 +6,7 @@
 
 # Build Artifacts
 /output/
+/junit.xml
 *.d.ts
 *.js
 !/scripts/*.js
