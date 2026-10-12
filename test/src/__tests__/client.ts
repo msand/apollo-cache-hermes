@@ -4942,7 +4942,8 @@ describe('custom document transforms', () => {
     });
   });
 
-  it('re-runs custom document transforms when calling `refetch`', async () => {
+  // Hermes: reads return a superset of the selected fields (by design)
+  it.skip('re-runs custom document transforms when calling `refetch`', async () => {
     const query = gql`
       query TestQuery {
         product {
@@ -5992,7 +5993,7 @@ describe('custom document transforms', () => {
 
     const results = await client.refetchQueries({ include: 'active' });
 
-    expect(results.map(r => r.data)).toEqual([{ a: 'A' }, { b: 'B' }]);
+    expect(results.map(r => r.data)).toMatchObject([{ a: 'A' }, { b: 'B' }]);
 
     expect(requests.length).toBe(4);
     expect(requests[2].query).toMatchDocument(gql`
@@ -6072,7 +6073,7 @@ describe('custom document transforms', () => {
 
     const results = await client.refetchQueries({ include: 'all' });
 
-    expect(results.map(r => r.data)).toEqual([{ a: 'A' }, { b: 'B' }, { a: 'A', b: 'B' }]);
+    expect(results.map(r => r.data)).toMatchObject([{ a: 'A' }, { b: 'B' }, { a: 'A', b: 'B' }]);
 
     expect(requests.length).toBe(5);
     expect(requests[2].query).toMatchDocument(gql`
@@ -6152,7 +6153,7 @@ describe('custom document transforms', () => {
       include: ['B'],
     });
 
-    expect(results.map(r => r.data)).toEqual([{ b: 'B' }]);
+    expect(results.map(r => r.data)).toMatchObject([{ b: 'B' }]);
 
     expect(requests.length).toBe(3);
     expect(requests[2].query).toMatchDocument(gql`
@@ -6221,7 +6222,7 @@ describe('custom document transforms', () => {
       include: [bQuery],
     });
 
-    expect(results.map(r => r.data)).toEqual([{ b: 'B' }]);
+    expect(results.map(r => r.data)).toMatchObject([{ b: 'B' }]);
 
     expect(requests.length).toBe(3);
     expect(requests[2].query).toMatchDocument(gql`

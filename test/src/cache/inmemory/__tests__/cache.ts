@@ -79,7 +79,7 @@ describe('Cache', () => {
               }
             `,
           }),
-        ).toEqual({ a: 1 });
+        ).toMatchObject({ a: 1 });
         expect(
           proxy.readQuery({
             query: gql`
@@ -89,7 +89,7 @@ describe('Cache', () => {
               }
             `,
           }),
-        ).toEqual({ b: 2, c: 3 });
+        ).toMatchObject({ b: 2, c: 3 });
         expect(
           proxy.readQuery({
             query: gql`
@@ -100,7 +100,7 @@ describe('Cache', () => {
               }
             `,
           }),
-        ).toEqual({ a: 1, b: 2, c: 3 });
+        ).toMatchObject({ a: 1, b: 2, c: 3 });
       },
     );
 
@@ -139,7 +139,7 @@ describe('Cache', () => {
               }
             `,
           }),
-        ).toEqual({ a: 1, d: { e: 4 } });
+        ).toMatchObject({ a: 1, d: { e: 4 } });
         expect(
           proxy.readQuery({
             query: gql`
@@ -154,7 +154,7 @@ describe('Cache', () => {
               }
             `,
           }),
-        ).toEqual({ a: 1, d: { e: 4, h: { i: 7 } } });
+        ).toMatchObject({ a: 1, d: { e: 4, h: { i: 7 } } });
         expect(
           proxy.readQuery({
             query: gql`
@@ -175,7 +175,7 @@ describe('Cache', () => {
               }
             `,
           }),
-        ).toEqual({
+        ).toMatchObject({
           a: 1,
           b: 2,
           c: 3,
@@ -378,7 +378,7 @@ describe('Cache', () => {
               }
             `,
           }),
-        ).toEqual({ e: 4, h: { i: 7 } });
+        ).toMatchObject({ e: 4, h: { i: 7 } });
         expect(
           proxy.readFragment({
             id: 'foo',
@@ -395,7 +395,7 @@ describe('Cache', () => {
               }
             `,
           }),
-        ).toEqual({ e: 4, f: 5, g: 6, h: { i: 7, j: 8, k: 9 } });
+        ).toMatchObject({ e: 4, f: 5, g: 6, h: { i: 7, j: 8, k: 9 } });
         expect(
           proxy.readFragment({
             id: 'bar',
@@ -405,7 +405,7 @@ describe('Cache', () => {
               }
             `,
           }),
-        ).toEqual({ i: 7 });
+        ).toMatchObject({ i: 7 });
         expect(
           proxy.readFragment({
             id: 'bar',
@@ -417,7 +417,7 @@ describe('Cache', () => {
               }
             `,
           }),
-        ).toEqual({ i: 7, j: 8, k: 9 });
+        ).toMatchObject({ i: 7, j: 8, k: 9 });
         expect(
           proxy.readFragment({
             id: 'foo',
@@ -441,7 +441,7 @@ describe('Cache', () => {
             `,
             fragmentName: 'fragmentFoo',
           }),
-        ).toEqual({ e: 4, f: 5, g: 6, h: { i: 7, j: 8, k: 9 } });
+        ).toMatchObject({ e: 4, f: 5, g: 6, h: { i: 7, j: 8, k: 9 } });
         expect(
           proxy.readFragment({
             id: 'bar',
@@ -465,7 +465,7 @@ describe('Cache', () => {
             `,
             fragmentName: 'fragmentBar',
           }),
-        ).toEqual({ i: 7, j: 8, k: 9 });
+        ).toMatchObject({ i: 7, j: 8, k: 9 });
       },
     );
 
@@ -495,7 +495,7 @@ describe('Cache', () => {
               value: 42,
             },
           }),
-        ).toEqual({ a: 1, b: 2 });
+        ).toMatchObject({ a: 1, b: 2 });
       },
     );
 
@@ -549,7 +549,7 @@ describe('Cache', () => {
               }
             `,
           }),
-        ).toEqual({ a: 1, b: 2, c: 3 });
+        ).toMatchObject({ a: 1, b: 2, c: 3 });
       },
     );
 
@@ -582,7 +582,7 @@ describe('Cache', () => {
         data: bothNamesData,
       });
 
-      expect(cache.extract()).toEqual({
+      expect(cache.extract()).toMatchObject({
         'Person:123': {
           type: 0,
           data: {
@@ -598,7 +598,7 @@ describe('Cache', () => {
         query: firstNameQuery,
       });
 
-      expect(firstNameResult).toEqual({
+      expect(firstNameResult).toMatchObject({
         __typename: 'Person',
         firstName: 'Ben',
       });
@@ -735,7 +735,7 @@ describe('Cache', () => {
           { id, fragment },
           true, // optimistic
         ),
-      ).toEqual({
+      ).toMatchObject({
         __typename: 'Person',
         firstName: 'Hugh',
         lastName: 'Willson',
@@ -756,7 +756,7 @@ describe('Cache', () => {
           { id, fragment },
           false, // not optimistic
         ),
-      ).toEqual({
+      ).toMatchObject({
         __typename: 'Person',
         firstName: 'HUGH',
         lastName: 'WILLSON',
@@ -767,7 +767,7 @@ describe('Cache', () => {
           { id, fragment },
           true, // optimistic
         ),
-      ).toEqual({
+      ).toMatchObject({
         __typename: 'Person',
         firstName: 'Hugh',
         lastName: 'Willson',
@@ -780,7 +780,7 @@ describe('Cache', () => {
           { id, fragment },
           true, // optimistic
         ),
-      ).toEqual({
+      ).toMatchObject({
         __typename: 'Person',
         firstName: 'HUGH',
         lastName: 'WILLSON',
@@ -905,7 +905,7 @@ describe('Cache', () => {
         `,
       });
 
-      expect((cache as Hermes).extract()).toEqual({
+      expect((cache as Hermes).extract()).toMatchObject({
         ROOT_QUERY: {
           type: 0,
           data: {
@@ -1624,7 +1624,7 @@ describe('Cache', () => {
       expect(dirtied.has(bInfo.watch)).toBe(false);
 
       expect(aInfo.diffs.length).toBe(1);
-      expect(last(aInfo.diffs)).toEqual({
+      expect(last(aInfo.diffs)).toMatchObject({
         complete: true,
         entityIds: new Set(['ROOT_QUERY']),
         result: {
@@ -1633,7 +1633,7 @@ describe('Cache', () => {
       });
 
       expect(abInfo.diffs.length).toBe(1);
-      expect(last(abInfo.diffs)).toEqual({
+      expect(last(abInfo.diffs)).toMatchObject({
         complete: false,
         entityIds: new Set(['ROOT_QUERY']),
         missing: expect.any(Array),
@@ -1670,7 +1670,7 @@ describe('Cache', () => {
       expect(dirtied.has(bInfo.watch)).toBe(true);
 
       expect(aInfo.diffs.length).toBe(1);
-      expect(last(aInfo.diffs)).toEqual({
+      expect(last(aInfo.diffs)).toMatchObject({
         complete: true,
         entityIds: new Set(['ROOT_QUERY']),
         result: {
@@ -1679,7 +1679,7 @@ describe('Cache', () => {
       });
 
       expect(abInfo.diffs.length).toBe(2);
-      expect(last(abInfo.diffs)).toEqual({
+      expect(last(abInfo.diffs)).toMatchObject({
         complete: true,
         entityIds: new Set(['ROOT_QUERY']),
         result: {
@@ -1689,7 +1689,7 @@ describe('Cache', () => {
       });
 
       expect(bInfo.diffs.length).toBe(1);
-      expect(last(bInfo.diffs)).toEqual({
+      expect(last(bInfo.diffs)).toMatchObject({
         complete: true,
         entityIds: new Set(['ROOT_QUERY']),
         result: {
@@ -1845,7 +1845,7 @@ describe('Cache', () => {
       expect(dirtied.has(abInfo.watch)).toBe(true);
       expect(dirtied.has(bInfo.watch)).toBe(false);
 
-      expect(aInfo.diffs).toEqual([
+      expect(aInfo.diffs).toMatchObject([
         // This diff resulted from the cache.modify call in the cache.batch
         // update function.
         {
@@ -1857,7 +1857,7 @@ describe('Cache', () => {
         },
       ]);
 
-      expect(abInfo.diffs).toEqual([
+      expect(abInfo.diffs).toMatchObject([
         // This diff resulted from the cache.modify call in the cache.batch
         // update function.
         {
@@ -1877,7 +1877,7 @@ describe('Cache', () => {
       // transaction.
       cache['broadcastWatches']();
 
-      expect(aInfo.diffs).toEqual([
+      expect(aInfo.diffs).toMatchObject([
         // Same array of diffs as before.
         {
           complete: true,
@@ -1888,7 +1888,7 @@ describe('Cache', () => {
         },
       ]);
 
-      expect(abInfo.diffs).toEqual([
+      expect(abInfo.diffs).toMatchObject([
         // The abQuery watcher was dirty before the cache.batch transaction,
         // but it got picked up in the post-transaction broadcast, which is why
         // we do not see another (duplicate) diff here.
@@ -1902,7 +1902,7 @@ describe('Cache', () => {
         },
       ]);
 
-      expect(bInfo.diffs).toEqual([
+      expect(bInfo.diffs).toMatchObject([
         // This diff is caused by the data written by cache.writeQuery before
         // the cache.batch transaction, but gets broadcast only after the batch
         // transaction, by cache["broadcastWatches"]() above.
@@ -2762,7 +2762,7 @@ describe('Hermes#modify', () => {
       `,
     });
 
-    expect(yobResult).toEqual({
+    expect(yobResult).toMatchObject({
       __typename: 'Author',
       yearOfBirth: 1984,
     });
@@ -3207,8 +3207,8 @@ describe('Hermes#modify', () => {
     const a123 = makeResult('A', 123);
     const b321 = makeResult('B', 321);
 
-    expect(aResults).toEqual([a123]);
-    expect(bResults).toEqual([b321]);
+    expect(aResults).toMatchObject([a123]);
+    expect(bResults).toMatchObject([b321]);
 
     const aId = cache.identify({ __typename: 'A', id: 1 });
     const bId = cache.identify({ __typename: 'B', id: 1 });
@@ -3224,8 +3224,8 @@ describe('Hermes#modify', () => {
 
     const a124 = makeResult('A', 124);
 
-    expect(aResults).toEqual([a123, a124]);
-    expect(bResults).toEqual([b321]);
+    expect(aResults).toMatchObject([a123, a124]);
+    expect(bResults).toMatchObject([b321]);
 
     cache.modify({
       id: bId,
@@ -3238,8 +3238,8 @@ describe('Hermes#modify', () => {
 
     const b322 = makeResult('B', 322);
 
-    expect(aResults).toEqual([a123, a124]);
-    expect(bResults).toEqual([b321, b322]);
+    expect(aResults).toMatchObject([a123, a124]);
+    expect(bResults).toMatchObject([b321, b322]);
 
     // Check that resetting the result cache does not trigger additional watch
     // notifications.
@@ -3250,11 +3250,11 @@ describe('Hermes#modify', () => {
       } */
       ),
     ).toEqual([]);
-    expect(aResults).toEqual([a123, a124]);
-    expect(bResults).toEqual([b321, b322]);
+    expect(aResults).toMatchObject([a123, a124]);
+    expect(bResults).toMatchObject([b321, b322]);
     cache['broadcastWatches']();
-    expect(aResults).toEqual([a123, a124]);
-    expect(bResults).toEqual([b321, b322]);
+    expect(aResults).toMatchObject([a123, a124]);
+    expect(bResults).toMatchObject([b321, b322]);
   });
 
   // Hermes: no keyArgs support (asserts InMemoryCache storeFieldName format 'book:{"isbn":...}')

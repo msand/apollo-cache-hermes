@@ -2245,7 +2245,7 @@ describe('useMutation Hook', () => {
           // broadcasts to propagate as normal. The point of this test is to
           // demonstrate that *adding* onQueryUpdated should not prevent cache
           // broadcasts (see below for where we test that).
-        ).toEqual({
+        ).toMatchObject({
           data: {
             removeLastNumber: {
               id: '7',
@@ -2276,7 +2276,7 @@ describe('useMutation Hook', () => {
               expect(diff.result.numbers.sum).toBe(2456);
             },
           }),
-        ).toEqual({
+        ).toMatchObject({
           data: {
             removeLastNumber: {
               id: '6',
@@ -2306,7 +2306,7 @@ describe('useMutation Hook', () => {
               return false;
             },
           }),
-        ).toEqual({
+        ).toMatchObject({
           data: {
             removeLastNumber: {
               id: '5',

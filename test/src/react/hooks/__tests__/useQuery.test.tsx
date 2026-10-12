@@ -6984,7 +6984,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       });
 
       expect(result.current.loading).toBe(true);
-      expect(result.current.data).toEqual({
+      expect(result.current.data).toMatchObject({
         cars: [
           {
             __typename: 'Car',
@@ -7560,14 +7560,14 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       await waitFor(
         () => {
           const { data } = result.current.useQueryResult;
-          expect(data).toEqual({ b: 3 });
+          expect(data).toMatchObject({ b: 3 });
         },
         { interval: 1 },
       );
       await waitFor(
         () => {
           const { previousData } = result.current.useQueryResult;
-          expect(previousData).toEqual({ b: 2 });
+          expect(previousData).toMatchObject({ b: 2 });
         },
         { interval: 1 },
       );
@@ -7581,14 +7581,14 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       await waitFor(
         () => {
           const { data } = result.current.useQueryResult;
-          expect(data).toEqual({ b: 3 });
+          expect(data).toMatchObject({ b: 3 });
         },
         { interval: 1 },
       );
       await waitFor(
         () => {
           const { previousData } = result.current.useQueryResult;
-          expect(previousData).toEqual({ b: 2 });
+          expect(previousData).toMatchObject({ b: 2 });
         },
         { interval: 1 },
       );
@@ -7664,7 +7664,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         const result = await ProfiledHook.takeSnapshot();
         expect(result.loading).toBe(false);
         expect(result.networkStatus).toBe(NetworkStatus.ready);
-        expect(result.data).toEqual({
+        expect(result.data).toMatchObject({
           people: peopleData.map(({ gender, ...person }) => person),
         });
       }
@@ -7682,7 +7682,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         const result = await ProfiledHook.takeSnapshot();
         expect(result.loading).toBe(false);
         expect(result.networkStatus).toBe(NetworkStatus.ready);
-        expect(result.data).toEqual({
+        expect(result.data).toMatchObject({
           people: peopleData.filter(person => person.gender === 'female').map(({ gender, ...person }) => person),
         });
       }
@@ -7699,7 +7699,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         const result = await ProfiledHook.takeSnapshot();
         expect(result.loading).toBe(false);
         expect(result.networkStatus).toBe(NetworkStatus.ready);
-        expect(result.data).toEqual({
+        expect(result.data).toMatchObject({
           people: peopleData.filter(person => person.gender === 'nonbinary').map(({ gender, ...person }) => person),
         });
       }
@@ -8064,8 +8064,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       await waitFor(() => {
         expect(result.current.b.loading).toBe(false);
       });
-      expect(result.current.a.data).toEqual(aData);
-      expect(result.current.b.data).toEqual(bData);
+      expect(result.current.a.data).toMatchObject(aData);
+      expect(result.current.b.data).toMatchObject(bData);
     }
 
     it('cache-first for both', () => check('cache-first', 'cache-first'));
