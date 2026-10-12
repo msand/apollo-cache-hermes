@@ -710,7 +710,14 @@ export class CacheTransaction<TSerialized> implements Queryable {
           }
         }
       }
-      if (keys.length !== 0 && keys.length === deleted.size && keys.every(key => deleted.has(key))) {
+      // Deleting the last fields of ROOT_QUERY keeps the node, like the
+      // ROOT_QUERY of InMemoryCache, which keeps its __typename.
+      if (
+        id !== StaticNodeId.QueryRoot &&
+        keys.length !== 0 &&
+        keys.length === deleted.size &&
+        keys.every(key => deleted.has(key))
+      ) {
         allDeleted = true;
         modified = true;
       }

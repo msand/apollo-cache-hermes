@@ -50,7 +50,8 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
 
   readQuery<QueryType, TVariables = any>(
     options: Cache.ReadQueryOptions<QueryType, TVariables>,
-    optimistic?: boolean,
+    // Like ApolloCache, options.optimistic is the default.
+    optimistic = !!options.optimistic,
   ): QueryType | null {
     return this.read({
       query: options.query,
@@ -63,7 +64,7 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
 
   readFragment<FragmentType, TVariables = any>(
     options: Cache.ReadFragmentOptions<FragmentType, TVariables>,
-    optimistic?: boolean,
+    optimistic = !!options.optimistic,
   ): FragmentType | null {
     // TODO: Support nested fragments.
     const rawOperation = buildRawOperationFromFragment(
