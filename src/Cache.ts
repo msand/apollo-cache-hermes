@@ -1,5 +1,6 @@
 import { Cache as CacheInterface } from '@apollo/client';
 import { Reference, StoreObject } from '@apollo/client/utilities';
+import { invariant } from '@apollo/client/utilities/globals';
 
 import { CacheSnapshot } from './CacheSnapshot';
 import { CacheTransaction } from './CacheTransaction';
@@ -14,6 +15,7 @@ import { addToSet, DocumentNode, hasOwn, setsHaveSomeIntersection } from './util
 import { UnsatisfiedCacheError } from './errors';
 import { Hermes } from './apollo';
 import { NodeReference } from './nodes';
+import { isUncaughtWriteError, missingKeyField, missingKeyFieldError } from './operations/checkWrite';
 
 import BatchOptions = CacheInterface.BatchOptions;
 
@@ -111,7 +113,13 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
   }
 
   identify(object: StoreObject | Reference): string | undefined {
-    return this._context.entityIdForValue(object);
+    const id = this._context.entityIdForValue(object);
+    if (id === undefined && (globalThis as { __DEV__?: boolean }).__DEV__ !== false && object) {
+      // Like InMemoryCache, warn about objects missing their keyFields.
+      const keyField = missingKeyField(this._context, object as JsonObject);
+      if (keyField !== undefined) invariant.warn(missingKeyFieldError(keyField, object as JsonObject));
+    }
+    return id;
   }
 
   transformDocument(document: DocumentNode): DocumentNode {
@@ -269,6 +277,8 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
           tracer.transactionEnd('unknown error', tracerContext);
         }
       }
+      // Like InMemoryCache, some write errors (e.g. missing keyFields) reach the caller.
+      if (isUncaughtWriteError(error)) throw error;
       return false;
     } finally {
       this._transactions.pop();

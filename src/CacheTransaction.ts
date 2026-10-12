@@ -24,6 +24,7 @@ import * as schema from './schema';
 import * as nodes from './nodes';
 import * as util from './util';
 import { nodeIdForParameterizedValue } from './operations/SnapshotEditor';
+import { checkWrite } from './operations/checkWrite';
 
 const isEqual = equality.equal;
 const makeRef = makeReference;
@@ -107,11 +108,32 @@ export class CacheTransaction<TSerialized> implements Queryable {
    * baseline state (and any optimistic updates will be replayed over it).
    */
   write(query: RawOperation, payload: JsonObject): Reference | undefined {
+    if (payload && typeof payload === 'object') {
+      checkWrite(
+        this._context,
+        this._context.transformDocument(query.document),
+        query.variables,
+        payload,
+        this._rootTypename(query.rootId),
+      );
+    }
     if (this._optimisticChangeId) {
       return this._writeOptimistic(query, payload);
     } else {
       return this._writeBaseline(query, payload);
     }
+  }
+
+  /**
+   * The __typename of the node a write starts at, when it is known before the
+   * written data is looked at.
+   */
+  private _rootTypename(rootId: NodeId): string | undefined {
+    if (rootId === StaticNodeId.QueryRoot) return 'Query';
+    if (rootId === StaticNodeId.MutationRoot) return 'Mutation';
+    if (rootId === StaticNodeId.SubscriptionRoot) return 'Subscription';
+    const data = this.getCurrentNodeSnapshot(rootId)?.data;
+    return isObject(data) && typeof data.__typename === 'string' ? data.__typename : undefined;
   }
 
   /**
