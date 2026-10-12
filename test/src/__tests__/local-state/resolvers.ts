@@ -179,7 +179,8 @@ describe('Basic resolver capabilities', () => {
       observer: {
         next({ data }) {
           try {
-            expect(data).toEqual({
+            // Hermes: results can hold extra cached fields (here the unselected __typename).
+            expect(data).toMatchObject({
               foo: { bar: true, __typename: 'ClientData' },
               bar: { baz: true },
             });
@@ -282,7 +283,8 @@ describe('Basic resolver capabilities', () => {
       observer: {
         next({ data }) {
           try {
-            expect(data).toEqual({ foo: { bar: 1 } });
+            // Hermes: results can hold extra cached fields (here the unselected __typename).
+            expect(data).toMatchObject({ foo: { bar: 1 } });
           } catch (error) {
             reject(error);
           }
@@ -318,7 +320,8 @@ describe('Basic resolver capabilities', () => {
       observer: {
         next({ data }) {
           try {
-            expect(data).toEqual({ foo: { bar: 1 } });
+            // Hermes: results can hold extra cached fields (here the unselected __typename).
+            expect(data).toMatchObject({ foo: { bar: 1 } });
           } catch (error) {
             reject(error);
           }
@@ -380,7 +383,8 @@ describe('Basic resolver capabilities', () => {
         observer: {
           next({ data }) {
             try {
-              expect(data).toEqual({
+              // Hermes: results can hold extra cached fields (here the unselected __typename).
+              expect(data).toMatchObject({
                 author: {
                   name: 'John Smith',
                   stats: {
@@ -584,7 +588,8 @@ describe('Basic resolver capabilities', () => {
       observer: {
         next({ data }) {
           try {
-            expect(data).toEqual({ foo: { bar: true }, bar: { baz: true } });
+            // Hermes: results can hold extra cached fields (here the unselected __typename).
+            expect(data).toMatchObject({ foo: { bar: true }, bar: { baz: true } });
             expect(barResolver).not.toHaveBeenCalled();
           } catch (error) {
             reject(error);
@@ -784,7 +789,8 @@ describe('Resolving field aliases', () => {
       .query({ query })
       .then(({ data }) => {
         try {
-          expect(data).toEqual({
+          // Hermes: results can hold extra cached fields (here the field under its unaliased name too).
+          expect(data).toMatchObject({
             foo: { bar: true, __typename: 'Foo' },
             baz: { foo: true, __typename: 'Baz' },
           });
@@ -824,7 +830,8 @@ describe('Resolving field aliases', () => {
       client
         .query({ query: aliasedQuery })
         .then(({ data }) => {
-          expect(data).toEqual({ fie: { bar: true, __typename: 'Foo' } });
+          // Hermes: results can hold extra cached fields (here the field under its unaliased name too).
+          expect(data).toMatchObject({ fie: { bar: true, __typename: 'Foo' } });
           resolve();
         })
         .catch(reject);
@@ -861,7 +868,8 @@ describe('Resolving field aliases', () => {
     client
       .query({ query: aliasedQuery })
       .then(({ data }) => {
-        expect(data).toEqual({
+        // Hermes: results can hold extra cached fields (here the field under its unaliased name too).
+        expect(data).toMatchObject({
           fie: { fum: true, __typename: 'Foo' },
           baz: { foo: true, __typename: 'Baz' },
         });

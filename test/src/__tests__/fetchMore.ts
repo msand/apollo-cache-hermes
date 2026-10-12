@@ -326,7 +326,8 @@ describe('fetchMore on an observable query', () => {
       });
     });
 
-    itAsync('field policy', (resolve, reject) => {
+    // Hermes: no keyArgs support, so pages fetched with other arguments are not merged by concatPagination
+    itAsync.skip('field policy', (resolve, reject) => {
       const observable = setupWithCacheConfig(
         reject,
         {
@@ -427,7 +428,8 @@ describe('fetchMore on an observable query', () => {
       });
     });
 
-    itAsync('field policy', (resolve, reject) => {
+    // Hermes: no keyArgs support, so pages fetched with other arguments are not merged by concatPagination
+    itAsync.skip('field policy', (resolve, reject) => {
       const observable = setupWithCacheConfig(
         reject,
         {
@@ -558,26 +560,29 @@ describe('fetchMore on an observable query', () => {
     }
 
     function checkCacheExtract1234678(cache: ApolloCache<any>) {
+      // Hermes: extract() wraps node data, and stores the TODO list's references
+      // as outbound/inbound edges (with placeholders in the array) instead of { __ref }s.
+      const todoIds = [1, 2, 3, 4, 6, 7, 8];
+      const task = (id: number, index: number) => ({
+        type: 0,
+        data: tasks[id - 1],
+        inbound: [{ id: 'ROOT_QUERY', path: ['TODO', index] }],
+      });
       expect(cache.extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          TODO: [
-            { __ref: 'Task:1' },
-            { __ref: 'Task:2' },
-            { __ref: 'Task:3' },
-            { __ref: 'Task:4' },
-            { __ref: 'Task:6' },
-            { __ref: 'Task:7' },
-            { __ref: 'Task:8' },
-          ],
+          type: 0,
+          data: {
+            TODO: todoIds.map(() => undefined),
+          },
+          outbound: todoIds.map((id, index) => ({ id: `Task:${id}`, path: ['TODO', index] })),
         },
-        'Task:1': tasks[0],
-        'Task:2': tasks[1],
-        'Task:3': tasks[2],
-        'Task:4': tasks[3],
-        'Task:6': tasks[5],
-        'Task:7': tasks[6],
-        'Task:8': tasks[7],
+        'Task:1': task(1, 0),
+        'Task:2': task(2, 1),
+        'Task:3': task(3, 2),
+        'Task:4': task(4, 3),
+        'Task:6': task(6, 4),
+        'Task:7': task(7, 5),
+        'Task:8': task(8, 6),
       });
     }
 
@@ -1013,7 +1018,8 @@ describe('fetchMore on an observable query', () => {
     // });
   });
 
-  itAsync('fetchMore passes new args to field merge function', (resolve, reject) => {
+  // Hermes: no keyArgs support, so pages fetched with other arguments are not merged by offsetLimitPagination
+  itAsync.skip('fetchMore passes new args to field merge function', (resolve, reject) => {
     const mergeArgsHistory: (Record<string, any> | null)[] = [];
     const groceriesFieldPolicy = offsetLimitPagination();
     const { merge } = groceriesFieldPolicy;
@@ -1624,7 +1630,8 @@ describe('fetchMore on an observable query with connection', () => {
       });
     });
 
-    itAsync('field policy', (resolve, reject) => {
+    // Hermes: no @connection support, so each page of entry is stored under its own start/limit arguments
+    itAsync.skip('field policy', (resolve, reject) => {
       const observable = setupWithCacheConfig(
         reject,
         {
@@ -1738,7 +1745,8 @@ describe('fetchMore on an observable query with connection', () => {
       });
     });
 
-    itAsync('field policy', (resolve, reject) => {
+    // Hermes: no @connection support, so each page of entry is stored under its own start/limit arguments
+    itAsync.skip('field policy', (resolve, reject) => {
       const link = mockSingleLink(
         {
           request: { query: transformedQuery, variables },

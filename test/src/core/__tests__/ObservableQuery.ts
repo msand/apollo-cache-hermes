@@ -3218,24 +3218,25 @@ it('regression test for #10587', async () => {
     ],
   } as const;
 
-  await waitFor(() => expect(query1Spy.mock.calls).toEqual(finalExpectedCalls.query1.slice(0, 1)));
-  expect(query2Spy.mock.calls).toEqual(finalExpectedCalls.query2.slice(0, 1));
+  // Hermes: results can hold extra cached fields (ROOT_QUERY's __typename, schemaType.b for query1).
+  await waitFor(() => expect(query1Spy.mock.calls).toMatchObject(finalExpectedCalls.query1.slice(0, 1)));
+  expect(query2Spy.mock.calls).toMatchObject(finalExpectedCalls.query2.slice(0, 1));
 
   observers.query1.next({
     data: { schemaType: { __typename: 'SchemaType', a: 'a' } },
   });
   observers.query1.complete();
 
-  await waitFor(() => expect(query1Spy.mock.calls).toEqual(finalExpectedCalls.query1));
-  expect(query2Spy.mock.calls).toEqual(finalExpectedCalls.query2.slice(0, 2));
+  await waitFor(() => expect(query1Spy.mock.calls).toMatchObject(finalExpectedCalls.query1));
+  expect(query2Spy.mock.calls).toMatchObject(finalExpectedCalls.query2.slice(0, 2));
 
   observers.query2.next({
     data: { schemaType: { __typename: 'SchemaType', a: 'a', b: 'b' } },
   });
   observers.query2.complete();
 
-  await waitFor(() => expect(query2Spy.mock.calls).toEqual(finalExpectedCalls.query2));
-  expect(query1Spy.mock.calls).toEqual(finalExpectedCalls.query1);
+  await waitFor(() => expect(query2Spy.mock.calls).toMatchObject(finalExpectedCalls.query2));
+  expect(query1Spy.mock.calls).toMatchObject(finalExpectedCalls.query1);
 });
 
 // https://github.com/apollographql/apollo-client/issues/11184

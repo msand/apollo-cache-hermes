@@ -1,5 +1,14 @@
 import { Subscription } from 'zen-observable-ts';
-import { ApolloClient, gql, Observable, TypedDocumentNode, ObservableQuery, ApolloLink } from '@apollo/client';
+import {
+  ApolloClient,
+  gql,
+  Observable,
+  TypedDocumentNode,
+  ObservableQuery,
+  ApolloLink,
+  DocumentNode,
+} from '@apollo/client';
+import { getMainDefinition } from '@apollo/client/utilities';
 
 import { itAsync } from '../testing';
 import { Hermes } from '../../../src';
@@ -94,6 +103,20 @@ describe('client.refetchQueries', () => {
     return Promise.all([watch(aQuery), watch(bQuery), watch(abQuery)]);
   }
 
+  // Hermes: a root query's result also holds the other cached ROOT_QUERY fields
+  // (Hermes returns cache objects rather than copies trimmed to the selection),
+  // so keep only the fields the query selects before comparing.
+  function selectedFields(query: DocumentNode, data: any) {
+    if (!data || typeof data !== 'object') return data;
+    const selected: Record<string, unknown> = {};
+    getMainDefinition(query).selectionSet.selections.forEach(selection => {
+      if (selection.kind === 'Field' && selection.name.value in data) {
+        selected[selection.name.value] = data[selection.name.value];
+      }
+    });
+    return selected;
+  }
+
   // Not a great way to sort objects, but it will give us stable orderings in
   // these specific tests (especially since the keys are all "a" and/or "b").
   function sortObjects<T extends object[]>(array: T) {
@@ -121,6 +144,7 @@ describe('client.refetchQueries', () => {
       },
 
       onQueryUpdated(obs, diff) {
+        diff = { ...diff, result: selectedFields(obs.query, diff.result) };
         if (obs === aObs) {
           expect(diff.result).toEqual({ a: 'Ayy' });
         } else if (obs === bObs) {
@@ -153,6 +177,7 @@ describe('client.refetchQueries', () => {
       },
 
       onQueryUpdated(obs, diff) {
+        diff = { ...diff, result: selectedFields(obs.query, diff.result) };
         if (obs === aObs) {
           reject('aQuery should not have been updated');
         } else if (obs === bObs) {
@@ -196,6 +221,7 @@ describe('client.refetchQueries', () => {
       include: ['B'],
 
       onQueryUpdated(obs, diff) {
+        diff = { ...diff, result: selectedFields(obs.query, diff.result) };
         if (obs === aObs) {
           expect(diff.result).toEqual({ a: 'Ayy' });
         } else if (obs === bObs) {
@@ -233,6 +259,7 @@ describe('client.refetchQueries', () => {
       include: ['A', 'AB'],
 
       onQueryUpdated(obs, diff) {
+        diff = { ...diff, result: selectedFields(obs.query, diff.result) };
         if (obs === aObs) {
           expect(diff.result).toEqual({ a: 'Ayy' });
         } else if (obs === bObs) {
@@ -277,6 +304,7 @@ describe('client.refetchQueries', () => {
       include: [bQuery, abQuery],
 
       onQueryUpdated(obs, diff) {
+        diff = { ...diff, result: selectedFields(obs.query, diff.result) };
         if (obs === aObs) {
           expect(diff.result).toEqual({ a: 'Ayy' });
         } else if (obs === bObs) {
@@ -314,6 +342,7 @@ describe('client.refetchQueries', () => {
       include: [abQuery, 'AB', aQuery],
 
       onQueryUpdated(obs, diff) {
+        diff = { ...diff, result: selectedFields(obs.query, diff.result) };
         if (obs === aObs) {
           expect(diff.result).toEqual({ a: 'Ayy' });
         } else if (obs === bObs) {
@@ -356,6 +385,7 @@ describe('client.refetchQueries', () => {
       },
 
       onQueryUpdated(obs, diff) {
+        diff = { ...diff, result: selectedFields(obs.query, diff.result) };
         if (obs === aObs) {
           expect(diff.result).toEqual({ a: 'Ayy' });
         } else if (obs === bObs) {
@@ -386,6 +416,7 @@ describe('client.refetchQueries', () => {
       },
 
       onQueryUpdated(obs, diff) {
+        diff = { ...diff, result: selectedFields(obs.query, diff.result) };
         if (obs === aObs) {
           expect(diff.result).toEqual({ a: 'Ayy' });
         } else if (obs === bObs) {
@@ -418,6 +449,7 @@ describe('client.refetchQueries', () => {
       include: 'active',
 
       onQueryUpdated(obs, diff) {
+        diff = { ...diff, result: selectedFields(obs.query, diff.result) };
         if (obs === aObs) {
           expect(diff.result).toEqual({ a: 'A' });
         } else if (obs === bObs) {
@@ -448,6 +480,7 @@ describe('client.refetchQueries', () => {
       include: 'active',
 
       onQueryUpdated(obs, diff) {
+        diff = { ...diff, result: selectedFields(obs.query, diff.result) };
         if (obs === aObs) {
           expect(diff.result).toEqual({ a: 'A' });
         } else if (obs === bObs) {
@@ -496,6 +529,7 @@ describe('client.refetchQueries', () => {
       include: ['A', abQuery],
 
       onQueryUpdated(obs, diff) {
+        diff = { ...diff, result: selectedFields(obs.query, diff.result) };
         if (obs === aObs) {
           expect(diff.complete).toBe(false);
           expect(diff.result).toEqual({});
@@ -522,6 +556,7 @@ describe('client.refetchQueries', () => {
               include: [aQuery, 'B'],
 
               onQueryUpdated(obs, diff) {
+                diff = { ...diff, result: selectedFields(obs.query, diff.result) };
                 if (obs === aObs) {
                   expect(diff.result).toEqual({ a: 'A' });
                 } else if (obs === bObs) {
@@ -592,6 +627,7 @@ describe('client.refetchQueries', () => {
       include: 'active',
 
       onQueryUpdated(obs, diff) {
+        diff = { ...diff, result: selectedFields(obs.query, diff.result) };
         if (obs === aObs) {
           expect(diff.result).toEqual({ a: 'A' });
         } else if (obs === bObs) {
@@ -613,6 +649,7 @@ describe('client.refetchQueries', () => {
       include: 'all',
 
       onQueryUpdated(obs, diff) {
+        diff = { ...diff, result: selectedFields(obs.query, diff.result) };
         if (obs === aObs) {
           expect(diff.result).toEqual({ a: 'A' });
         } else if (obs === bObs) {
@@ -646,19 +683,20 @@ describe('client.refetchQueries', () => {
     const bSpy = jest.spyOn(bObs, 'refetch');
     const abSpy = jest.spyOn(abObs, 'refetch');
 
-    const ayyResults = (
-      await client.refetchQueries({
-        include: ['B'],
-        updateCache(cache) {
-          cache.writeQuery({
-            query: aQuery,
-            data: {
-              a: 'Ayy',
-            },
-          });
-        },
-      })
-    ).map(result => result.data as object);
+    const refetchResult = client.refetchQueries({
+      include: ['B'],
+      updateCache(cache) {
+        cache.writeQuery({
+          query: aQuery,
+          data: {
+            a: 'Ayy',
+          },
+        });
+      },
+    });
+    const ayyResults = (await refetchResult).map(
+      (result, i) => selectedFields(refetchResult.queries[i].query, result.data) as object,
+    );
 
     sortObjects(ayyResults);
 
@@ -688,10 +726,13 @@ describe('client.refetchQueries', () => {
     });
 
     expect(client.cache.extract(true)).toEqual({
+      // Hermes: extract() wraps node data and does not store ROOT_QUERY's __typename.
       ROOT_QUERY: {
-        __typename: 'Query',
-        a: 'A',
-        b: 'B',
+        type: 0,
+        data: {
+          a: 'A',
+          b: 'B',
+        },
       },
     });
 
@@ -712,6 +753,7 @@ describe('client.refetchQueries', () => {
       },
 
       onQueryUpdated(obs, diff) {
+        diff = { ...diff, result: selectedFields(obs.query, diff.result) };
         expect(diff.complete).toBe(true);
 
         // Even though we evicted the Query.a field in the updateCache function,
@@ -736,10 +778,13 @@ describe('client.refetchQueries', () => {
     expect(results).toEqual([{ a: 'A' }, { a: 'A', b: 'B' }]);
 
     expect(client.cache.extract(true)).toEqual({
+      // Hermes: extract() wraps node data and does not store ROOT_QUERY's __typename.
       ROOT_QUERY: {
-        __typename: 'Query',
-        a: 'A',
-        b: 'B',
+        type: 0,
+        data: {
+          a: 'A',
+          b: 'B',
+        },
       },
     });
 
@@ -753,6 +798,7 @@ describe('client.refetchQueries', () => {
     const refetchResult = client.refetchQueries({
       include: ['A', 'B'],
       onQueryUpdated(obs, diff) {
+        diff = { ...diff, result: selectedFields(obs.query, diff.result) };
         if (obs === aObs) {
           expect(diff.result).toEqual({ a: 'A' });
         } else if (obs === bObs) {
@@ -780,10 +826,10 @@ describe('client.refetchQueries', () => {
         .sort(),
     ).toEqual(['A', 'B']);
 
-    const results = (await refetchResult).map(result => {
+    const results = (await refetchResult).map((result, i) => {
       // These results are ApolloQueryResult<any>, as inferred by TypeScript.
       expect(Object.keys(result).sort()).toEqual(['data', 'loading', 'networkStatus']);
-      return result.data;
+      return selectedFields(refetchResult.queries[i].query, result.data);
     });
 
     sortObjects(results);
@@ -808,6 +854,7 @@ describe('client.refetchQueries', () => {
       },
 
       onQueryUpdated(obs, diff) {
+        diff = { ...diff, result: selectedFields(obs.query, diff.result) };
         if (obs === aObs) {
           reject('aQuery should not have been updated');
         } else if (obs === bObs) {
@@ -819,10 +866,13 @@ describe('client.refetchQueries', () => {
         }
 
         expect(client.cache.extract()).toEqual({
+          // Hermes: extract() wraps node data and does not store ROOT_QUERY's __typename.
           ROOT_QUERY: {
-            __typename: 'Query',
-            a: 'A',
-            b: 'Beetlejuice',
+            type: 0,
+            data: {
+              a: 'A',
+              b: 'Beetlejuice',
+            },
           },
         });
 
@@ -844,10 +894,10 @@ describe('client.refetchQueries', () => {
         .sort(),
     ).toEqual(['AB', 'B']);
 
-    const results = (await refetchResult).map(result => {
+    const results = (await refetchResult).map((result, i) => {
       // These results are ApolloQueryResult<any>, as inferred by TypeScript.
       expect(Object.keys(result).sort()).toEqual(['data', 'loading', 'networkStatus']);
-      return result.data;
+      return selectedFields(refetchResult.queries[i].query, result.data);
     });
 
     sortObjects(results);
@@ -860,10 +910,13 @@ describe('client.refetchQueries', () => {
     ]);
 
     expect(client.cache.extract()).toEqual({
+      // Hermes: extract() wraps node data and does not store ROOT_QUERY's __typename.
       ROOT_QUERY: {
-        __typename: 'Query',
-        a: 'A',
-        b: 'B',
+        type: 0,
+        data: {
+          a: 'A',
+          b: 'B',
+        },
       },
     });
 
@@ -877,6 +930,7 @@ describe('client.refetchQueries', () => {
     const refetchResult = client.refetchQueries({
       include: ['A', 'B'],
       onQueryUpdated(obs, diff) {
+        diff = { ...diff, result: selectedFields(obs.query, diff.result) };
         if (obs === aObs) {
           expect(diff.result).toEqual({ a: 'A' });
         } else if (obs === bObs) {
@@ -905,10 +959,10 @@ describe('client.refetchQueries', () => {
         .sort(),
     ).toEqual(['B']);
 
-    const results = (await refetchResult).map(result => {
+    const results = (await refetchResult).map((result, i) => {
       // These results are ApolloQueryResult<any>, as inferred by TypeScript.
       expect(Object.keys(result).sort()).toEqual(['data', 'loading', 'networkStatus']);
-      return result.data;
+      return selectedFields(refetchResult.queries[i].query, result.data);
     });
 
     sortObjects(results);
