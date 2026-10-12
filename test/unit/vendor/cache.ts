@@ -2859,8 +2859,10 @@ describe('Hermes#modify', () => {
       },
       ROOT_QUERY: {
         data: {
-          currentlyReading: null,
+          currentlyReading: undefined,
         },
+        // Like InMemoryCache, a dangling reference to the deleted Book.
+        outbound: [{ id: 'Book:{"isbn":"147670032X"}', path: ['currentlyReading'] }],
         type: 0,
       },
     });
@@ -2884,8 +2886,9 @@ describe('Hermes#modify', () => {
     expect(snapshotWithoutAuthor).toEqual({
       ROOT_QUERY: {
         data: {
-          currentlyReading: null,
+          currentlyReading: undefined,
         },
+        outbound: [{ id: 'Book:{"isbn":"147670032X"}', path: ['currentlyReading'] }],
         type: 0,
       },
     });

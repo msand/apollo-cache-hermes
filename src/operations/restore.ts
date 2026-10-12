@@ -157,7 +157,14 @@ function restoreEntityReferences<TSerialized>(nodesMap: NodeSnapshotMap, cacheCo
 
     for (const { id: referenceId, path } of iterRefs(outbound, parameterized)) {
       const referenceNode = nodesMap[referenceId];
-      if (referenceNode instanceof EntitySnapshot && data === null) {
+      if (!referenceNode) {
+        // A dangling reference (to a deleted entity) has no data.
+        if (!path.length) {
+          nodesMap[nodeId].data = undefined;
+        } else if (Array.isArray(data) || isObject(data)) {
+          set(data, path, undefined);
+        }
+      } else if (referenceNode instanceof EntitySnapshot && data === null) {
         // data is a reference.
         nodesMap[nodeId].data = referenceNode.data;
       } else if (referenceNode instanceof ParameterizedValueSnapshot) {

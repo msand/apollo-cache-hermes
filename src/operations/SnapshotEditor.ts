@@ -306,7 +306,9 @@ export class SnapshotEditor<TSerialized> {
       (path.length === 0 && !isRoot ? containerId : undefined);
     const previousId =
       this._context.entityIdForValue(getVisibleProxy(previousValue, propMap)) ??
-      (path.length === 0 && !isRoot ? containerId : ifString(deepGet(this._pathToId[containerId], path)));
+      (path.length === 0 && !isRoot
+        ? containerId
+        : (ifString(deepGet(this._pathToId[containerId], path)) ?? this._danglingReferenceId(containerId, path)));
 
     // Like InMemoryCache's mergeObjects, merge:true policies merge unidentified
     // objects and entities together.
@@ -378,6 +380,7 @@ export class SnapshotEditor<TSerialized> {
       if (previousValue !== null) {
         this._setValue(containerId, path, null);
       }
+      this._dropDanglingReference(containerId, path);
       return;
     } else if (ref) {
       // An unchanged reference.
@@ -768,7 +771,13 @@ export class SnapshotEditor<TSerialized> {
     const noWrite = nodeSnapshot instanceof ParameterizedValueSnapshot ? true : undefined;
     nodeSnapshot?.inbound?.forEach(({ id, path }) => {
       this._editedNodeIds.add(id);
-      referenceEdits.push({ containerId: id, nextNodeId: undefined, prevNodeId: nodeId, path, noWrite });
+      if (noWrite) {
+        referenceEdits.push({ containerId: id, nextNodeId: undefined, prevNodeId: nodeId, path, noWrite });
+      } else if (!this._isDeleted(id)) {
+        // Like InMemoryCache, referrers keep their (now dangling) reference to
+        // a deleted entity, so reads report it as missing data rather than null.
+        this._setValue(id, path, undefined, true, typeof path[path.length - 1] === 'string');
+      }
     });
 
     // Outbound targets only lose an inbound reference; their data is unchanged,
@@ -949,6 +958,7 @@ export class SnapshotEditor<TSerialized> {
       if (previousValue !== null) {
         this._setValue(containerId, path, null);
       }
+      this._dropDanglingReference(containerId, path);
       return;
     }
 
@@ -1109,6 +1119,24 @@ export class SnapshotEditor<TSerialized> {
     }
   }
 
+  /**
+   * The id of the missing entity referenced at `path` of a node, if that
+   * reference is dangling (its entity was deleted).
+   */
+  private _danglingReferenceId(containerId: NodeId, path: PathPart[]): NodeId | undefined {
+    const reference = this._getNodeSnapshot(containerId)?.outbound?.get(toOutKey(path));
+    return reference && !this._getNodeSnapshot(reference.id) ? reference.id : undefined;
+  }
+
+  /**
+   * Removes a dangling reference at `path` of a node, once a value replaces it.
+   */
+  private _dropDanglingReference(containerId: NodeId, path: PathPart[]) {
+    if (this._danglingReferenceId(containerId, path) !== undefined) {
+      removeOutboundReference(this._ensureNewSnapshot(containerId), path);
+    }
+  }
+
   private _getPreviousValue(containerId: string, path: PathPart[]): JsonValue | undefined {
     const node = this._getNodeSnapshot(containerId);
     const value = deepGet(node?.data, path);
@@ -1253,7 +1281,10 @@ export class SnapshotEditor<TSerialized> {
       }
       const container = this._ensureNewSnapshot(containerId);
 
-      if (prevNodeId) {
+      if (prevNodeId && !this._getNodeSnapshot(prevNodeId)) {
+        // A dangling reference: there is no target to update.
+        removeOutboundReference(container, path);
+      } else if (prevNodeId) {
         const prevTarget = this._ensureNewSnapshot(prevNodeId);
         const parameterized = prevTarget instanceof ParameterizedValueSnapshot;
         if (parameterized) {
@@ -1384,6 +1415,8 @@ export class SnapshotEditor<TSerialized> {
 
   private removeInbound(refs: Iterable<NodeReference>, nodeId: string, queue: string[]) {
     for (const { id, path } of refs) {
+      // Dangling references have no target to update.
+      if (!this._getNodeSnapshot(id)) continue;
       const reference = this._ensureNewSnapshot(id);
       removeInboundReference(reference, nodeId, path);
       if (reference.inbound === undefined) {

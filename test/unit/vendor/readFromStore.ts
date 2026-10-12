@@ -1037,7 +1037,7 @@ describe('reading from the store', () => {
       'Deity:{"name":"Zeus"}': {
         data: {
           __typename: 'Deity',
-          children: [null, undefined, undefined, undefined],
+          children: [undefined, undefined, undefined, undefined],
           name: 'Zeus',
         },
         inbound: [
@@ -1047,6 +1047,11 @@ describe('reading from the store', () => {
           },
         ],
         outbound: [
+          // Like InMemoryCache, a dangling reference to the evicted Ares.
+          {
+            id: 'Deity:{"name":"Ares"}',
+            path: ['children', 0],
+          },
           {
             id: 'Deity:{"name":"Artemis"}',
             path: ['children', 1],
@@ -1124,8 +1129,9 @@ describe('reading from the store', () => {
     jestExpect(cache.extract()).toEqual({
       ROOT_QUERY: {
         data: {
-          ruler: null,
+          ruler: undefined,
         },
+        outbound: [{ id: 'Deity:{"name":"Zeus"}', path: ['ruler'] }],
         type: 0,
       },
       'Deity:{"name":"Apollo"}': {

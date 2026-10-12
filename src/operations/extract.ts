@@ -98,7 +98,12 @@ function extractSerializableData(
     // Only reference to EntitySnapshot is recorded in the data property
     // So we didn't end up set the value to be 'undefined' in the output
     // in every case
-    if (graphSnapshot.getNodeSnapshot(outbound.id) instanceof EntitySnapshot) {
+    // A dangling reference (to a deleted entity) is serialized as a reference, too.
+    const target = graphSnapshot.getNodeSnapshot(outbound.id);
+    if (
+      target instanceof EntitySnapshot ||
+      (!target && nodeSnapshot.outbound.get(outbound.path.join('.')) === outbound)
+    ) {
       // we have to write out 'null' here to differentiate between
       // data doesn't exist and data is a reference.
       //
