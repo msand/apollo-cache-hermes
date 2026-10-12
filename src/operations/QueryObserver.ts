@@ -3,12 +3,15 @@ import isEqual from '@wry/equality';
 
 import { CacheContext } from '../context';
 import { GraphSnapshot } from '../GraphSnapshot';
+import { JsonObject } from '../primitive';
 import { NodeId, RawOperation } from '../schema';
 import { Hermes } from '../apollo';
 
 import { QueryResult, read } from './read';
 
 import WatchOptions = Cache.WatchOptions;
+
+const EMPTY_RESULT: JsonObject = Object.freeze({});
 
 /**
  * Observes a query, triggering a callback when nodes within it have changed.
@@ -103,6 +106,8 @@ export class QueryObserver<TSerialized> {
     const operation = this._context.parseOperation(this._query);
     let readResult = read(this._context, this._query, snapshot, Object.create(null), this._context.strict);
     if (fromOptimisticTransaction) readResult = { ...readResult, fromOptimisticTransaction };
+    // Like InMemoryCache (and Hermes#diff), an empty read is an empty object.
+    if (readResult.result === undefined) readResult = { ...readResult, result: EMPTY_RESULT };
     this._result = readResult;
     const result = readResult.result;
     this._options.lastDiff = readResult;

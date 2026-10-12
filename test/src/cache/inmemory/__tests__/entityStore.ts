@@ -1815,6 +1815,7 @@ describe('EntityStore', () => {
 
     expect(cache.evict({ id: authorId })).toBe(false);
 
+    // Hermes: results may contain a superset of the selected fields.
     const missing = [
       new MissingFieldError(
         'Dangling reference to missing Author:2 object',
@@ -1834,7 +1835,7 @@ describe('EntityStore', () => {
         optimistic: true,
         returnPartialData: true,
       }),
-    ).toEqual({
+    ).toMatchObject({
       complete: false,
       missing,
       result: {
@@ -1857,7 +1858,7 @@ describe('EntityStore', () => {
         optimistic: true,
         returnPartialData: true,
       }),
-    ).toEqual({
+    ).toMatchObject({
       complete: false,
       missing,
       result: {
@@ -1876,7 +1877,7 @@ describe('EntityStore', () => {
         optimistic: true,
         returnPartialData: true,
       }),
-    ).toEqual({
+    ).toMatchObject({
       complete: true,
       result: {
         book: {
