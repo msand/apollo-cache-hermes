@@ -7,6 +7,7 @@ import type {
 } from '@apollo/client/cache/core/types/common';
 import type { Cache as CacheInterface, Reference, StoreObject, StoreValue } from '@apollo/client';
 import { makeReference } from '@apollo/client';
+import { invariant } from '@apollo/client/utilities/globals';
 import * as equality from '@wry/equality';
 
 import type { ChangeId, NodeId, OperationInstance, CacheDelta, RawOperation } from './schema';
@@ -383,6 +384,53 @@ export class CacheTransaction<TSerialized> implements Queryable {
       return tempStore[nodeId] ?? graphSnapshot.getNodeSnapshot(nodeId);
     }
 
+    // Like InMemoryCache's EntityStore#modify, warn (in development) about
+    // values that will not be stored as their author probably intends.
+    const warnAboutModifiedValue = (value: unknown) => {
+      if ((globalThis as { __DEV__?: boolean }).__DEV__ === false) return;
+      const checkReference = (ref: Reference) => {
+        if (getSnapshot(ref.__ref)) return false;
+        invariant.warn(
+          'cache.modify: You are trying to write a Reference that is not part of the store: %o\n' +
+            'Please make sure to set the `mergeIntoStore` parameter to `true` when creating a Reference that is not part of the store yet:\n' +
+            '`toReference(object, true)`',
+          ref,
+        );
+        return true;
+      };
+      if (isReference(value)) {
+        checkReference(value);
+      } else if (Array.isArray(value)) {
+        // Warn about writing "mixed" arrays of Reference and non-Reference objects.
+        let seenReference = false;
+        let someNonReference: unknown;
+        for (const item of value) {
+          if (isReference(item)) {
+            seenReference = true;
+            if (checkReference(item)) break;
+          } else if (typeof item === 'object' && item) {
+            const itemId = this._context.entityIdForValue(item);
+            if (itemId !== undefined) {
+              // Hermes hands modifiers the data of stored entities, rather than references to them.
+              if (getSnapshot(itemId)?.data === item) {
+                seenReference = true;
+              } else {
+                someNonReference = item;
+              }
+            }
+          }
+          if (seenReference && someNonReference !== undefined) {
+            invariant.warn(
+              'cache.modify: Writing an array with a mix of both References and Objects will not result in the Objects being normalized correctly.\n' +
+                'Please convert the object instance %o to a Reference before writing it to the cache by calling `toReference(object, true)`.',
+              someNonReference,
+            );
+            break;
+          }
+        }
+      }
+    };
+
     const ensureNewSnapshot = (nodeId: NodeId): NodeSnapshot => {
       const parent = getSnapshot(nodeId);
 
@@ -467,7 +515,8 @@ export class CacheTransaction<TSerialized> implements Queryable {
             dirty.add(storeFieldName);
             invalidated = true;
           } else if (value !== copyOrCurrent || (!useRef && !isEqual(value, d))) {
-            payload[key] = (isReference(value) ? getSnapshot(value.__ref).data : value) as JsonValue;
+            warnAboutModifiedValue(value);
+            payload[key] = (isReference(value) ? (getSnapshot(value.__ref)?.data ?? value) : value) as JsonValue;
             modified = true;
           }
         }
@@ -506,7 +555,9 @@ export class CacheTransaction<TSerialized> implements Queryable {
             dirty.add(storeFieldName);
             invalidated = true;
           } else if (value !== copyOrCurrent || (!useRef && !isEqual(value, d))) {
-            const nextValue = isReference(value) ? getSnapshot(value.__ref).data : value;
+            warnAboutModifiedValue(value);
+            // A reference to a missing entity is written as such (and dangles).
+            const nextValue = isReference(value) ? (getSnapshot(value.__ref)?.data ?? value) : value;
             if (nextValue !== undefined) {
               payload[key] = nextValue as JsonValue;
             }

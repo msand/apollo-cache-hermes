@@ -3624,17 +3624,29 @@ describe('Hermes#modify', () => {
         id: '42',
       },
     });
+    // Hermes: references are stored as outbound/inbound edges rather than { __ref } objects.
+    const bookNode = (book: Book, index: number) => ({
+      type: 0,
+      data: book,
+      inbound: [{ id: 'User:42', path: ['books', index] }],
+    });
     expect(cache.extract()).toEqual({
-      ROOT_QUERY: { __typename: 'Query', me: { __ref: 'User:42' } },
-      'Book:1': book1,
-      'Book:2': book2,
-      'Book:3': book3,
+      ROOT_QUERY: { type: 0, data: { me: undefined }, outbound: [{ id: 'User:42', path: ['me'] }] },
+      'Book:1': bookNode(book1, 0),
+      'Book:2': bookNode(book2, 1),
+      'Book:3': bookNode(book3, 2),
       // no Book:4
       'User:42': {
-        __typename: 'User',
-        id: '42',
-        // Book:4 here is a dead ref
-        books: [{ __ref: 'Book:1' }, { __ref: 'Book:2' }, { __ref: 'Book:3' }, { __ref: 'Book:4' }],
+        type: 0,
+        data: { __typename: 'User', id: '42', books: [undefined, undefined, undefined, undefined] },
+        inbound: [{ id: 'ROOT_QUERY', path: ['me'] }],
+        outbound: [
+          { id: 'Book:1', path: ['books', 0] },
+          { id: 'Book:2', path: ['books', 1] },
+          { id: 'Book:3', path: ['books', 2] },
+          // Book:4 here is a dead ref
+          { id: 'Book:4', path: ['books', 3] },
+        ],
       },
     });
   });
@@ -3694,12 +3706,13 @@ describe('Hermes#modify', () => {
 
     // reading the cache returns `null`
     expect(cache.readQuery({ query })).toEqual(null);
+    // Hermes: references are stored as outbound/inbound edges rather than { __ref } objects.
     expect(cache.extract()).toEqual({
       // User:43 is a dead ref
-      ROOT_QUERY: { __typename: 'Query', me: { __ref: 'User:43' } },
+      ROOT_QUERY: { type: 0, data: { me: undefined }, outbound: [{ id: 'User:43', path: ['me'] }] },
       'User:42': {
-        __typename: 'User',
-        id: '42',
+        type: 0,
+        data: { __typename: 'User', id: '42' },
       },
       // no User:43
     });

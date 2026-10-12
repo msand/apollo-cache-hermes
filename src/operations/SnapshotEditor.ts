@@ -72,6 +72,8 @@ interface ReferenceEdit {
   nextNodeId: NodeId | undefined;
   /** Whether we know we can skip the write. */
   noWrite?: true;
+  /** Whether the payload was a reference (which may be dangling). */
+  reference?: true;
 }
 
 /**
@@ -364,6 +366,7 @@ export class SnapshotEditor<TSerialized> {
           nextNodeId: payloadId,
           // An unidentified value replacing the entity is written below.
           ...(replacesEntity && { noWrite: true as const }),
+          ...(ref ? { reference: true } : undefined),
         });
       }
       if (replacesEntity) {
@@ -947,6 +950,7 @@ export class SnapshotEditor<TSerialized> {
           path,
           prevNodeId: previousId,
           nextNodeId: payloadId,
+          ...(reference ? { reference: true } : undefined),
         });
       }
 
@@ -1274,8 +1278,12 @@ export class SnapshotEditor<TSerialized> {
   private _mergeReferenceEdits(referenceEdits: ReferenceEdit[]) {
     const orphanedNodeIds: Set<NodeId> = new Set();
 
-    for (const { containerId, path, prevNodeId, nextNodeId, noWrite } of referenceEdits) {
-      if (!noWrite) {
+    for (const { containerId, path, prevNodeId, nextNodeId, noWrite, reference } of referenceEdits) {
+      // Like InMemoryCache, a reference to a missing entity is kept, dangling.
+      const dangling = reference && nextNodeId && !this._getNodeSnapshot(nextNodeId);
+      if (dangling) {
+        this._setValue(containerId, path, undefined, true, typeof path[path.length - 1] === 'string');
+      } else if (!noWrite) {
         const target = nextNodeId ? this._getNodeData(nextNodeId) : null;
         this._setValue(containerId, path, target);
       }
@@ -1298,7 +1306,9 @@ export class SnapshotEditor<TSerialized> {
         }
       }
 
-      if (nextNodeId) {
+      if (dangling) {
+        addOutboundReference(container, nextNodeId, path);
+      } else if (nextNodeId) {
         const nextTarget = this._ensureNewSnapshot(nextNodeId);
         const parameterized = nextTarget instanceof ParameterizedValueSnapshot;
         if (parameterized) {
