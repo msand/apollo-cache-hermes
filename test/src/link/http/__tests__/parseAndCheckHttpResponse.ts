@@ -15,15 +15,15 @@ const query = gql`
 
 describe('parseAndCheckResponse', () => {
   beforeEach(() => {
-    fetchMock.restore();
+    fetchMock.hardReset();
   });
 
   const operations = [createOperation({}, { query })];
 
   itAsync('throws a Server error when response is > 300 with unparsable json', (resolve, reject) => {
     const status = 400;
-    fetchMock.mock('begin:/error', status);
-    fetch('error')
+    fetchMock.mockGlobal().route('begin:http://localhost/error', status);
+    fetch('/error')
       .then(parseAndCheckHttpResponse(operations))
       .then(reject)
       .catch(e => {
@@ -38,8 +38,8 @@ describe('parseAndCheckResponse', () => {
 
   itAsync('throws a ServerParse error when response is 200 with unparsable json', (resolve, reject) => {
     const status = 200;
-    fetchMock.mock('begin:/error', status);
-    fetch('error')
+    fetchMock.mockGlobal().route('begin:http://localhost/error', status);
+    fetch('/error')
       .then(parseAndCheckHttpResponse(operations))
       .then(reject)
       .catch(e => {
@@ -55,11 +55,11 @@ describe('parseAndCheckResponse', () => {
   itAsync('throws a network error with a status code and result', (resolve, reject) => {
     const status = 403;
     const body = { data: 'fail' }; // does not contain data or errors
-    fetchMock.mock('begin:/error', {
+    fetchMock.mockGlobal().route('begin:http://localhost/error', {
       body,
       status,
     });
-    fetch('error')
+    fetch('/error')
       .then(parseAndCheckHttpResponse(operations))
       .then(reject)
       .catch(e => {
@@ -74,8 +74,8 @@ describe('parseAndCheckResponse', () => {
 
   itAsync('throws a server error on incorrect data', (resolve, reject) => {
     const data = { hello: 'world' }; // does not contain data or erros
-    fetchMock.mock('begin:/incorrect', data);
-    fetch('incorrect')
+    fetchMock.mockGlobal().route('begin:http://localhost/incorrect', data);
+    fetch('/incorrect')
       .then(parseAndCheckHttpResponse(operations))
       .then(reject)
       .catch(e => {
@@ -92,10 +92,10 @@ describe('parseAndCheckResponse', () => {
     const errors = ['', `${new Error('hi')}`];
     const data = { data: { hello: 'world' }, errors };
 
-    fetchMock.mock('begin:/data', {
+    fetchMock.mockGlobal().route('begin:http://localhost/data', {
       body: data,
     });
-    fetch('data')
+    fetch('/data')
       .then(parseAndCheckHttpResponse(operations))
       .then(({ data, errors: e }) => {
         expect(data).toEqual({ hello: 'world' });

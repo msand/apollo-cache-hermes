@@ -52,9 +52,9 @@ function renderDefaultTestApp<TData>({ client, queryRef }: { client: ApolloClien
     return <p>Loading</p>;
   }
 
-  function ErrorFallback({ error }: { error: Error }) {
+  function ErrorFallback({ error }: { error: unknown }) {
     useTrackRenders({ name: 'ErrorFallback' });
-    Profiler.mergeSnapshot({ error });
+    Profiler.mergeSnapshot({ error: error as Error });
 
     return null;
   }

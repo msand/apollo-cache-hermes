@@ -2333,7 +2333,7 @@ describe('useMutation Hook', () => {
         }
       `;
 
-      fetchMock.restore();
+      fetchMock.hardReset();
 
       const responseBodies = [
         { data: { items: [{ id: 1 }, { id: 2 }] } },
@@ -2341,9 +2341,9 @@ describe('useMutation Hook', () => {
         { data: { items: [{ id: 1 }, { id: 2 }, { id: 3 }] } },
       ];
 
-      fetchMock.post(
+      fetchMock.mockGlobal().post(
         '/graphql',
-        (url, opts) =>
+        () =>
           new Promise(resolve => {
             resolve({
               body: responseBodies.shift(),

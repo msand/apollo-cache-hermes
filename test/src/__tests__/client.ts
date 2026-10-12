@@ -16,11 +16,11 @@ import {
   DocumentTransform,
   Observable,
   ObservableSubscription,
+  ApolloError,
 } from '@apollo/client';
 
 import { offsetLimitPagination, removeDirectivesFromDocument } from '../utilities';
 import { createFragmentRegistry, makeVar, PossibleTypesMap } from '../cache';
-import { ApolloError } from '../errors';
 import { itAsync, subscribeAndCount, mockSingleLink, MockLink, wait } from '../testing';
 import { spyOnConsole } from '../testing/internal';
 import { Hermes } from '../../../src';
@@ -2716,30 +2716,34 @@ describe('client', () => {
         }
       },
       error(error: Error) {
-        expect(count++).toBe(2);
-        expect(error.message).toBe('This is an error!');
+        try {
+          expect(count++).toBe(2);
+          expect(error.message).toBe('This is an error!');
 
-        subscription.unsubscribe();
+          subscription.unsubscribe();
 
-        const lastError = observable.getLastError();
-        expect(lastError).toBeInstanceOf(ApolloError);
-        expect(lastError!.networkError).toEqual(error);
+          const lastError = observable.getLastError();
+          expect(lastError).toBeInstanceOf(ApolloError);
+          expect(lastError!.networkError).toEqual(error);
 
-        const lastResult = observable.getLastResult();
-        expect(lastResult).toBeTruthy();
-        expect(lastResult!.loading).toBe(false);
-        expect(lastResult!.networkStatus).toBe(8);
+          const lastResult = observable.getLastResult();
+          expect(lastResult).toBeTruthy();
+          expect(lastResult!.loading).toBe(false);
+          expect(lastResult!.networkStatus).toBe(8);
 
-        observable.resetLastResults();
-        subscription = observable.subscribe(observerOptions);
+          observable.resetLastResults();
+          subscription = observable.subscribe(observerOptions);
 
-        // The error arrived, run a refetch to get the third result
-        // which should now contain valid data.
-        setTimeout(() => {
-          observable.refetch().catch(() => {
-            reject('Expected good data on second refetch.');
-          });
-        }, 0);
+          // The error arrived, run a refetch to get the third result
+          // which should now contain valid data.
+          setTimeout(() => {
+            observable.refetch().catch(() => {
+              reject('Expected good data on second refetch.');
+            });
+          }, 0);
+        } catch (e) {
+          reject(e);
+        }
       },
     };
 

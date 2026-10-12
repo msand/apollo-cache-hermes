@@ -1405,70 +1405,78 @@ describe('ObservableQuery', () => {
         let handleCount = 0;
         observable.subscribe({
           error(error) {
-            expect(error).toBe(intentionalNetworkFailure);
+            try {
+              expect(error).toBe(intentionalNetworkFailure);
+            } catch (e) {
+              reject(e);
+            }
           },
 
           next(result) {
-            ++handleCount;
+            try {
+              ++handleCount;
 
-            if (handleCount === 1) {
-              expect(result).toEqual({
-                data: {
-                  counter: 1,
-                },
-                loading: true,
-                networkStatus: NetworkStatus.loading,
-                partial: true,
-              });
-            } else if (handleCount === 2) {
-              expect(result).toEqual({
-                data: {
-                  counter: 2,
-                  name: 'Ben',
-                },
-                loading: false,
-                networkStatus: NetworkStatus.ready,
-              });
+              if (handleCount === 1) {
+                expect(result).toEqual({
+                  data: {
+                    counter: 1,
+                  },
+                  loading: true,
+                  networkStatus: NetworkStatus.loading,
+                  partial: true,
+                });
+              } else if (handleCount === 2) {
+                expect(result).toEqual({
+                  data: {
+                    counter: 2,
+                    name: 'Ben',
+                  },
+                  loading: false,
+                  networkStatus: NetworkStatus.ready,
+                });
 
-              const oldLinkObs = linkObservable;
-              // Make the next network request fail.
-              linkObservable = errorObservable;
+                const oldLinkObs = linkObservable;
+                // Make the next network request fail.
+                linkObservable = errorObservable;
 
-              observable.refetch().then(
-                () => {
-                  reject(new Error('should have gotten an error'));
-                },
+                observable.refetch().then(
+                  () => {
+                    reject(new Error('should have gotten an error'));
+                  },
 
-                error => {
-                  expect(error).toBe(intentionalNetworkFailure);
+                  error => {
+                    expect(error).toBe(intentionalNetworkFailure);
 
-                  // Switch back from errorObservable.
-                  linkObservable = oldLinkObs;
+                    // Switch back from errorObservable.
+                    linkObservable = oldLinkObs;
 
-                  observable.refetch().then(result => {
-                    expect(result).toEqual({
-                      data: {
-                        counter: 5,
-                        name: 'Ben',
-                      },
-                      loading: false,
-                      networkStatus: NetworkStatus.ready,
-                    });
-                    setTimeout(resolve, 50);
-                  }, reject);
-                },
-              );
-            } else if (handleCount === 3) {
-              expect(result).toEqual({
-                data: {
-                  counter: 3,
-                  name: 'Ben',
-                },
-                loading: true,
-                networkStatus: NetworkStatus.refetch,
-              });
-            } else if (handleCount > 3) {
-              reject(new Error('should not get here'));
+                    observable.refetch().then(result => {
+                      expect(result).toEqual({
+                        data: {
+                          counter: 5,
+                          name: 'Ben',
+                        },
+                        loading: false,
+                        networkStatus: NetworkStatus.ready,
+                      });
+                      setTimeout(resolve, 50);
+                    }, reject);
+                  },
+                );
+              } else if (handleCount === 3) {
+                expect(result).toEqual({
+                  data: {
+                    counter: 3,
+                    name: 'Ben',
+                  },
+                  loading: true,
+                  networkStatus: NetworkStatus.refetch,
+                });
+              } else if (handleCount > 3) {
+                reject(new Error('should not get here'));
+              }
+            } catch (e) {
+              reject(e);
             }
           },
         });

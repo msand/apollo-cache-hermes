@@ -7,7 +7,13 @@ function wrap(key?: 'only' | 'skip' | 'todo') {
     (key ? it[key] : it)(
       message,
       function (this: unknown) {
-        return new Promise((resolve, reject) => callback.call(this, resolve, reject));
+        return new Promise((resolve, reject) => {
+          const result = callback.call(this, resolve, reject);
+          // Fail fast when an async callback throws, instead of waiting for the test timeout.
+          if (result && typeof result.then === 'function') {
+            result.then(undefined, reject);
+          }
+        });
       },
       timeout,
     );

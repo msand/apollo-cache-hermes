@@ -216,13 +216,16 @@ describe('@client @export tests', () => {
         },
       });
 
-      return client.query({ query }).then(({ data }: any) => {
-        expect({ ...data }).toMatchObject({
-          currentAuthor: testAuthor,
-          postCount: testPostCount,
-        });
-        resolve();
-      });
+      client
+        .query({ query })
+        .then(({ data }: any) => {
+          expect({ ...data }).toMatchObject({
+            currentAuthor: testAuthor,
+            postCount: testPostCount,
+          });
+          resolve();
+        })
+        .catch(reject);
     });
   });
 
@@ -757,6 +760,7 @@ describe('@client @export tests', () => {
 
         const obs = client.watchQuery({ query });
         obs.subscribe({
+          error: reject,
           next({ data }) {
             if (resultCount === 0) {
               expect({ ...data }).toMatchObject({
@@ -826,6 +830,7 @@ describe('@client @export tests', () => {
 
         const obs = client.watchQuery({ query });
         obs.subscribe({
+          error: reject,
           next(result) {
             if (resultCount === 0) {
               expect(fetchCount).toBe(1);
@@ -900,6 +905,7 @@ describe('@client @export tests', () => {
       let resultCount = 0;
       const obs = client.watchQuery({ query, fetchPolicy: 'cache-first' });
       obs.subscribe({
+        error: reject,
         next(result) {
           if (resultCount === 0) {
             // The initial result is fetched over the network.
@@ -975,6 +981,7 @@ describe('@client @export tests', () => {
     let count = 0;
     const obs = client.watchQuery({ query: doubleWidgetsQuery });
     obs.subscribe({
+      error: reject,
       next({ data }) {
         switch (count) {
           case 0:

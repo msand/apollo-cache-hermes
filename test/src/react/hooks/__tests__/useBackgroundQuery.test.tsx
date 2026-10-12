@@ -4665,7 +4665,7 @@ describe('refetch', () => {
 
     function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
       useTrackRenders();
-      Profiler.mergeSnapshot({ error });
+      Profiler.mergeSnapshot({ error: error as Error });
 
       return <button onClick={resetErrorBoundary}>Retry</button>;
     }
@@ -4792,7 +4792,7 @@ describe('refetch', () => {
 
     function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
       useTrackRenders();
-      Profiler.mergeSnapshot({ error });
+      Profiler.mergeSnapshot({ error: error as Error });
 
       return <button onClick={resetErrorBoundary}>Retry</button>;
     }

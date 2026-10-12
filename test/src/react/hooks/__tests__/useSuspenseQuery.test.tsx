@@ -115,7 +115,7 @@ function renderSuspenseHook<Result, Props>(
                 fallback={<div>Error</div>}
                 onError={error => {
                   renders.errorCount++;
-                  renders.errors.push(error);
+                  renders.errors.push(error as Error);
                 }}
               >
                 <ApolloProvider client={client}>{children}</ApolloProvider>

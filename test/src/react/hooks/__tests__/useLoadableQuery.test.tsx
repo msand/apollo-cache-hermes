@@ -175,7 +175,7 @@ function createDefaultProfiledComponents<
     return null;
   }
 
-  function ErrorFallback({ error }: { error: Error }) {
+  function ErrorFallback({ error }: { error: unknown }) {
     useTrackRenders();
     profiler.mergeSnapshot({ error } as Partial<Snapshot>);
 
@@ -4427,7 +4427,7 @@ it('throws when calling loadQuery on subsequent render', async () => {
   }
 
   const { user } = renderWithMocks(
-    <ReactErrorBoundary onError={e => (error = e)} fallback={<div>Oops</div>}>
+    <ReactErrorBoundary onError={e => (error = e as Error)} fallback={<div>Oops</div>}>
       <App />
     </ReactErrorBoundary>,
     { mocks },

@@ -780,18 +780,21 @@ describe('Resolving field aliases', () => {
       },
     });
 
-    client.query({ query }).then(({ data }) => {
-      try {
-        expect(data).toEqual({
-          foo: { bar: true, __typename: 'Foo' },
-          baz: { foo: true, __typename: 'Baz' },
-        });
-      } catch (e) {
-        reject(e);
-        return;
-      }
-      resolve();
-    }, reject);
+    client
+      .query({ query })
+      .then(({ data }) => {
+        try {
+          expect(data).toEqual({
+            foo: { bar: true, __typename: 'Foo' },
+            baz: { foo: true, __typename: 'Baz' },
+          });
+        } catch (e) {
+          reject(e);
+          return;
+        }
+        resolve();
+      })
+      .catch(reject);
   });
 
   itAsync(
@@ -818,10 +821,13 @@ describe('Resolving field aliases', () => {
         },
       });
 
-      client.query({ query: aliasedQuery }).then(({ data }) => {
-        expect(data).toEqual({ fie: { bar: true, __typename: 'Foo' } });
-        resolve();
-      }, reject);
+      client
+        .query({ query: aliasedQuery })
+        .then(({ data }) => {
+          expect(data).toEqual({ fie: { bar: true, __typename: 'Foo' } });
+          resolve();
+        })
+        .catch(reject);
     },
   );
 
@@ -852,13 +858,16 @@ describe('Resolving field aliases', () => {
       },
     });
 
-    client.query({ query: aliasedQuery }).then(({ data }) => {
-      expect(data).toEqual({
-        fie: { fum: true, __typename: 'Foo' },
-        baz: { foo: true, __typename: 'Baz' },
-      });
-      resolve();
-    }, reject);
+    client
+      .query({ query: aliasedQuery })
+      .then(({ data }) => {
+        expect(data).toEqual({
+          fie: { fum: true, __typename: 'Foo' },
+          baz: { foo: true, __typename: 'Baz' },
+        });
+        resolve();
+      })
+      .catch(reject);
   });
 
   it('should pull initialized values for aliased fields tagged with @client from the cache', () => {

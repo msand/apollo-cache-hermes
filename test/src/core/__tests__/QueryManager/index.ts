@@ -1969,9 +1969,13 @@ describe('QueryManager', () => {
             reject(new Error('Returned a result when it was not supposed to.'));
           })
           .catch(() => {
-            // make that the error thrown doesn't empty the state
-            expect(queryManager.cache.extract().ROOT_QUERY!.author).toEqual(data.author);
-            resolve();
+            try {
+              // make that the error thrown doesn't empty the state
+              expect(queryManager.cache.extract().ROOT_QUERY!.author).toEqual(data.author);
+              resolve();
+            } catch (e) {
+              reject(e);
+            }
           });
       })
       .catch(() => {
@@ -5478,24 +5482,27 @@ describe('QueryManager', () => {
         result => {
           expect(result.data).toEqual(data);
 
-          queryManager.mutate({
-            mutation,
+          queryManager
+            .mutate({
+              mutation,
 
-            update(cache) {
-              cache.evict({ fieldName: 'author' });
-            },
+              update(cache) {
+                cache.evict({ fieldName: 'author' });
+              },
 
-            onQueryUpdated(obsQuery) {
-              expect(obsQuery.options.query).toBe(query);
-              return obsQuery.reobserve({
-                fetchPolicy: 'network-only',
-                context: {
-                  ...obsQuery.options.context,
-                  headers,
-                },
-              });
-            },
-          });
+              onQueryUpdated(obsQuery) {
+                expect(obsQuery.options.query).toBe(query);
+                return obsQuery.reobserve({
+                  fetchPolicy: 'network-only',
+                  context: {
+                    ...obsQuery.options.context,
+                    headers,
+                  },
+                });
+              },
+            })
+            // Fail fast if onQueryUpdated never triggers the refetch.
+            .then(() => setTimeout(() => reject(new Error('onQueryUpdated did not refetch the query')), 500));
         },
 
         result => {

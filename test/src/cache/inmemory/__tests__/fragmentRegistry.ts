@@ -1,8 +1,12 @@
+import { loadErrorMessages } from '@apollo/client/dev';
 import { ApolloClient, ApolloLink, gql, InMemoryCache, NetworkStatus } from '@apollo/client';
 
 import { getFragmentDefinitions, Observable } from '../../../utilities';
 import { createFragmentRegistry } from '../../index';
 import { itAsync, subscribeAndCount } from '../../../testing';
+
+// These tests assert the @apollo/client error text rather than its production placeholder.
+loadErrorMessages();
 
 describe('FragmentRegistry', () => {
   it('can be passed to Hermes', () => {

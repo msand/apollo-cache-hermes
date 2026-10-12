@@ -358,6 +358,8 @@ describe('fetchMore on an observable query', () => {
               // This is the server result
               expect(fetchMoreResult.loading).toBe(false);
               expect(fetchMoreResult.data.entry.comments).toHaveLength(10);
+              // Fail fast if the merged result is never emitted.
+              setTimeout(() => reject(new Error('fetchMore result was not merged into the watched query')), 500);
             })
             .catch(reject);
         } else if (count === 2) {
@@ -459,6 +461,8 @@ describe('fetchMore on an observable query', () => {
             .then(fetchMoreResult => {
               expect(fetchMoreResult.loading).toBe(false);
               expect(fetchMoreResult.data.entry.comments).toHaveLength(10); // this is the server result
+              // Fail fast if the merged result is never emitted.
+              setTimeout(() => reject(new Error('fetchMore result was not merged into the watched query')), 500);
             })
             .catch(reject);
         } else if (count === 2) {
@@ -1013,7 +1017,7 @@ describe('fetchMore on an observable query', () => {
     const mergeArgsHistory: (Record<string, any> | null)[] = [];
     const groceriesFieldPolicy = offsetLimitPagination();
     const { merge } = groceriesFieldPolicy;
-    groceriesFieldPolicy.merge = function merge(existing, incoming, options) {
+    groceriesFieldPolicy.merge = function mergeWithArgsHistory(existing, incoming, options) {
       mergeArgsHistory.push(options.args);
       return (merge as FieldMergeFunction<any>).call(this, existing, incoming, options);
     };
@@ -1148,7 +1152,10 @@ describe('fetchMore on an observable query', () => {
             });
 
             expect(observable.options.fetchPolicy).toBe('cache-first');
-          });
+            // Fail fast if the merged result is never emitted.
+            setTimeout(() => reject(new Error('fetchMore result was not merged into the watched query')), 500);
+          })
+          .catch(reject);
       } else if (count === 2) {
         // This result comes entirely from the cache, without updating the
         // original variables for the ObservableQuery, because the
@@ -1652,7 +1659,10 @@ describe('fetchMore on an observable query with connection', () => {
               // this is the server result
               expect(fetchMoreResult.loading).toBe(false);
               expect(fetchMoreResult.data.entry.comments).toHaveLength(10);
-            });
+              // Fail fast if the merged result is never emitted.
+              setTimeout(() => reject(new Error('fetchMore result was not merged into the watched query')), 500);
+            })
+            .catch(reject);
         } else if (count === 2) {
           const combinedComments = result.data.entry.comments;
           expect(combinedComments).toHaveLength(20);
@@ -1764,25 +1774,29 @@ describe('fetchMore on an observable query with connection', () => {
       let count = 0;
       observable.subscribe({
         next: ({ data, networkStatus }) => {
-          switch (count++) {
-            case 0:
-              expect(networkStatus).toBe(NetworkStatus.ready);
-              expect((data as any).entry.comments.length).toBe(10);
-              observable.fetchMore({
-                variables: { start: 10 },
-              });
-              break;
-            case 1:
-              expect(networkStatus).toBe(NetworkStatus.fetchMore);
-              expect((data as any).entry.comments.length).toBe(10);
-              break;
-            case 2:
-              expect(networkStatus).toBe(NetworkStatus.ready);
-              expect((data as any).entry.comments.length).toBe(20);
-              setTimeout(resolve, 10);
-              break;
-            default:
-              reject(new Error('`next` called too many times'));
+          try {
+            switch (count++) {
+              case 0:
+                expect(networkStatus).toBe(NetworkStatus.ready);
+                expect((data as any).entry.comments.length).toBe(10);
+                observable.fetchMore({
+                  variables: { start: 10 },
+                });
+                break;
+              case 1:
+                expect(networkStatus).toBe(NetworkStatus.fetchMore);
+                expect((data as any).entry.comments.length).toBe(10);
+                break;
+              case 2:
+                expect(networkStatus).toBe(NetworkStatus.ready);
+                expect((data as any).entry.comments.length).toBe(20);
+                setTimeout(resolve, 10);
+                break;
+              default:
+                reject(new Error('`next` called too many times'));
+            }
+          } catch (e) {
+            reject(e);
           }
         },
         error: (error: any) => reject(error),

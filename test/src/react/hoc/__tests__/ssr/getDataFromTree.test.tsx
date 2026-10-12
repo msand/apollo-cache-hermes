@@ -495,7 +495,7 @@ describe('SSR', () => {
       return getDataFromTree(app).then(() => {
         const initialState = cache.extract();
         expect(initialState).toBeTruthy();
-        expect(initialState.ROOT_QUERY!['currentUser({"id":"1"})']).toBeTruthy();
+        expect((initialState as any)['ROOT_QUERY❖["currentUser"]❖{"id":"1"}']).toBeTruthy();
       });
     });
 
@@ -560,10 +560,10 @@ describe('SSR', () => {
         .then(() => {
           const initialState = cache.extract();
           expect(initialState).toBeTruthy();
-          expect(initialState.ROOT_QUERY!['currentUser({"id":"1"})']).toBeTruthy();
+          expect((initialState as any)['ROOT_QUERY❖["currentUser"]❖{"id":"1"}']).toBeTruthy();
           resolve();
         })
-        .catch(console.error);
+        .catch(reject);
     });
 
     it('should correctly initialize an empty state to null', () => {
@@ -667,10 +667,10 @@ describe('SSR', () => {
         .then(() => {
           const initialState = apolloClient.cache.extract();
           expect(initialState).toBeTruthy();
-          expect(initialState.ROOT_QUERY!['currentUser({"id":"1"})']).toBeTruthy();
+          expect((initialState as any)['ROOT_QUERY❖["currentUser"]❖{"id":"1"}']).toBeTruthy();
           resolve();
         })
-        .catch(console.error);
+        .catch(reject);
     });
 
     it("shouldn't run queries if ssr is turned to off", () => {

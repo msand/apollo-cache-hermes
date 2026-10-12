@@ -9,6 +9,13 @@ import { BatchHttpLink } from '../batchHttpLink';
 import { itAsync } from '../../../testing';
 import { FetchResult } from '../../core';
 
+// fetch-mock 12 normalizes recorded options (lowercased method and header names), so
+// assert on the url and the raw options the link actually passed to fetch.
+function lastFetchCall(filter?: string): [string, any] {
+  const call = fetchMock.callHistory.lastCall(filter)!;
+  return [call.url, call.args[1]];
+}
+
 const sampleQuery = gql`
   query SampleQuery {
     stub {
@@ -62,10 +69,10 @@ describe('BatchHttpLink', () => {
     );
 
   beforeEach(() => {
-    fetchMock.restore();
-    fetchMock.post('begin:/batch', makePromise([data, data2]));
-    fetchMock.post('begin:/rofl', makePromise([roflData, roflData]));
-    fetchMock.post('begin:/lawl', makePromise([lawlData, lawlData]));
+    fetchMock.hardReset();
+    fetchMock.mockGlobal().post('begin:http://localhost/batch', makePromise([data, data2]));
+    fetchMock.mockGlobal().post('begin:http://localhost/rofl', makePromise([roflData, roflData]));
+    fetchMock.mockGlobal().post('begin:http://localhost/lawl', makePromise([lawlData, lawlData]));
   });
 
   it('does not need any constructor arguments', () => {
@@ -97,11 +104,11 @@ describe('BatchHttpLink', () => {
 
     const complete = () => {
       try {
-        const calls = fetchMock.calls('begin:/batch');
+        const calls = fetchMock.callHistory.calls('begin:http://localhost/batch');
         expect(calls.length).toBe(1);
         expect(nextCalls).toBe(2);
 
-        const options: any = fetchMock.lastOptions('begin:/batch');
+        const options: any = lastFetchCall('begin:http://localhost/batch')[1];
         expect(options.credentials).toEqual('two');
 
         const { headers } = options;
@@ -209,9 +216,9 @@ describe('BatchHttpLink', () => {
         count++;
         if (count === 4) {
           try {
-            const lawlCalls = fetchMock.calls('begin:/lawl');
+            const lawlCalls = fetchMock.callHistory.calls('begin:http://localhost/lawl');
             expect(lawlCalls.length).toBe(1);
-            const roflCalls = fetchMock.calls('begin:/rofl');
+            const roflCalls = fetchMock.callHistory.calls('begin:http://localhost/rofl');
             expect(roflCalls.length).toBe(1);
             resolve();
           } catch (e) {
@@ -271,14 +278,14 @@ describe('SharedHttpTest', () => {
   let subscriber: any;
 
   beforeEach(() => {
-    fetchMock.restore();
-    fetchMock.post('begin:/data2', makePromise(data2));
-    fetchMock.post('begin:/data', makePromise(data));
-    fetchMock.post('begin:/error', mockError);
-    fetchMock.post('begin:/apollo', makePromise(data));
+    fetchMock.hardReset();
+    fetchMock.mockGlobal().post('begin:http://localhost/data2', makePromise(data2));
+    fetchMock.mockGlobal().post('begin:http://localhost/data', makePromise(data));
+    fetchMock.mockGlobal().post('begin:http://localhost/error', mockError);
+    fetchMock.mockGlobal().post('begin:http://localhost/apollo', makePromise(data));
 
-    fetchMock.get('begin:/data', makePromise(data));
-    fetchMock.get('begin:/data2', makePromise(data2));
+    fetchMock.mockGlobal().get('begin:http://localhost/data', makePromise(data));
+    fetchMock.mockGlobal().get('begin:http://localhost/data2', makePromise(data2));
 
     const next = jest.fn();
     const error = jest.fn();
@@ -293,7 +300,7 @@ describe('SharedHttpTest', () => {
   });
 
   afterEach(() => {
-    fetchMock.restore();
+    fetchMock.hardReset();
     if (subscriptions.size) {
       // Tests within this describe block can add subscriptions to this Set
       // that they want to be canceled/unsubscribed after the test finishes.
@@ -388,7 +395,7 @@ describe('SharedHttpTest', () => {
       variables,
     }).subscribe({
       next: makeCallback(resolve, reject, () => {
-        const [uri, options] = fetchMock.lastCall()!;
+        const [uri, options] = lastFetchCall();
         const { method, body } = options!;
         expect(JSON.parse(body as string)).toEqual([
           {
@@ -403,7 +410,7 @@ describe('SharedHttpTest', () => {
           },
         ]);
         expect(method).toBe('POST');
-        expect(uri).toBe('/data');
+        expect(uri).toBe('http://localhost/data');
       }),
       error: error => reject(error),
     });
@@ -445,7 +452,7 @@ describe('SharedHttpTest', () => {
       error: error => reject(error),
       complete: () => {
         try {
-          const body = convertBatchedBody(fetchMock.lastCall()![1]!.body);
+          const body = convertBatchedBody(lastFetchCall()[1].body);
           expect(body.query).toBe(print(sampleMutation));
           expect(body.variables).toEqual(includeUnusedVariables ? variables : {});
           expect(body.context).not.toBeDefined();
@@ -493,7 +500,7 @@ describe('SharedHttpTest', () => {
       expect(subscriber.error).not.toHaveBeenCalled();
       // only one call because batchHttpLink can handle more than one subscriber
       // without starting a new request
-      expect(fetchMock.calls().length).toBe(1);
+      expect(fetchMock.callHistory.calls().length).toBe(1);
       resolve();
     }, 50);
   });
@@ -561,7 +568,7 @@ describe('SharedHttpTest', () => {
 
     execute(link, { query: sampleQuery, variables }).subscribe(
       makeCallback(resolve, reject, (result: any) => {
-        const headers: Record<string, string> = fetchMock.lastCall()![1]!.headers as Record<string, string>;
+        const headers: Record<string, string> = lastFetchCall()[1].headers as Record<string, string>;
         expect(headers.authorization).toBe('1234');
         expect(headers['content-type']).toBe('application/json');
         expect(headers.accept).toBe('*/*');
@@ -578,7 +585,7 @@ describe('SharedHttpTest', () => {
 
     execute(link, { query: sampleQuery, variables }).subscribe(
       makeCallback(resolve, reject, (result: any) => {
-        const headers: Record<string, string> = fetchMock.lastCall()![1]!.headers as Record<string, string>;
+        const headers: Record<string, string> = lastFetchCall()[1].headers as Record<string, string>;
         expect(headers.authorization).toBe('1234');
         expect(headers['content-type']).toBe('application/json');
         expect(headers.accept).toBe('*/*');
@@ -587,7 +594,7 @@ describe('SharedHttpTest', () => {
   });
 
   it('uses the latest window.fetch function if options.fetch not configured', done => {
-    const httpLink = createHttpLink({ uri: 'data' });
+    const httpLink = createHttpLink({ uri: '/data' });
 
     const fetch = window.fetch;
     expect(typeof fetch).toBe('function');
@@ -653,7 +660,7 @@ describe('SharedHttpTest', () => {
 
     execute(link, { query: sampleQuery, variables }).subscribe(
       makeCallback(resolve, reject, (result: any) => {
-        const headers: Record<string, string> = fetchMock.lastCall()![1]!.headers as Record<string, string>;
+        const headers: Record<string, string> = lastFetchCall()[1].headers as Record<string, string>;
         expect(headers.authorization).toBe('1234');
         expect(headers['content-type']).toBe('application/json');
         expect(headers.accept).toBe('*/*');
@@ -674,7 +681,7 @@ describe('SharedHttpTest', () => {
       context,
     }).subscribe(
       makeCallback(resolve, reject, (result: any) => {
-        const headers: Record<string, string> = fetchMock.lastCall()![1]!.headers as Record<string, string>;
+        const headers: Record<string, string> = lastFetchCall()[1].headers as Record<string, string>;
         expect(headers.authorization).toBe('1234');
         expect(headers['content-type']).toBe('application/json');
         expect(headers.accept).toBe('*/*');
@@ -696,7 +703,7 @@ describe('SharedHttpTest', () => {
 
     execute(link, { query: sampleQuery, variables }).subscribe(
       makeCallback(resolve, reject, (result: any) => {
-        const headers: any = fetchMock.lastCall()![1]!.headers;
+        const headers: any = lastFetchCall()[1].headers;
         expect(headers.AUTHORIZATION).toBe('1234');
         expect(headers['CONTENT-TYPE']).toBe('application/json');
         expect(headers.accept).toBe('*/*');
@@ -723,7 +730,7 @@ describe('SharedHttpTest', () => {
 
     execute(link, { query: sampleQuery, variables }).subscribe(
       makeCallback(resolve, reject, (result: any) => {
-        const headers: any = fetchMock.lastCall()![1]!.headers;
+        const headers: any = lastFetchCall()[1].headers;
         expect(headers.AUTHORIZATION).toBe('1234');
         expect(headers['content-type']).toBe('application/json');
         expect(headers.accept).toBe('*/*');
@@ -745,7 +752,7 @@ describe('SharedHttpTest', () => {
       context,
     }).subscribe(
       makeCallback(resolve, reject, (result: any) => {
-        const headers: any = fetchMock.lastCall()![1]!.headers;
+        const headers: any = lastFetchCall()[1].headers;
         expect(headers.AUTHORIZATION).toBe('1234');
         expect(headers['content-type']).toBe('application/json');
         expect(headers.accept).toBe('*/*');
@@ -765,7 +772,7 @@ describe('SharedHttpTest', () => {
 
     execute(link, { query: sampleQuery, variables }).subscribe(
       makeCallback(resolve, reject, (result: any) => {
-        const creds = fetchMock.lastCall()![1]!.credentials;
+        const creds = lastFetchCall()[1].credentials;
         expect(creds).toBe('same-team-yo');
       }),
     );
@@ -777,7 +784,7 @@ describe('SharedHttpTest', () => {
 
     execute(link, { query: sampleQuery, variables }).subscribe(
       makeCallback(resolve, reject, (result: any) => {
-        const creds = fetchMock.lastCall()![1]!.credentials;
+        const creds = lastFetchCall()[1].credentials;
         expect(creds).toBe('same-team-yo');
       }),
     );
@@ -795,7 +802,7 @@ describe('SharedHttpTest', () => {
 
     execute(link, { query: sampleQuery, variables }).subscribe(
       makeCallback(resolve, reject, (result: any) => {
-        const creds = fetchMock.lastCall()![1]!.credentials;
+        const creds = lastFetchCall()[1].credentials;
         expect(creds).toBe('same-team-yo');
       }),
     );
@@ -813,8 +820,8 @@ describe('SharedHttpTest', () => {
 
     execute(link, { query: sampleQuery, variables }).subscribe(
       makeCallback(resolve, reject, (result: any) => {
-        const uri = fetchMock.lastUrl();
-        expect(uri).toBe('/data');
+        const uri = fetchMock.callHistory.lastCall()?.url;
+        expect(uri).toBe('http://localhost/data');
       }),
     );
   });
@@ -825,8 +832,8 @@ describe('SharedHttpTest', () => {
 
     execute(link, { query: sampleQuery, variables }).subscribe(
       makeCallback(resolve, reject, (result: any) => {
-        const uri = fetchMock.lastUrl();
-        expect(uri).toBe('/data');
+        const uri = fetchMock.callHistory.lastCall()?.url;
+        expect(uri).toBe('http://localhost/data');
       }),
     );
   });
@@ -843,9 +850,9 @@ describe('SharedHttpTest', () => {
 
     execute(link, { query: sampleQuery, variables }).subscribe(
       makeCallback(resolve, reject, (result: any) => {
-        const uri = fetchMock.lastUrl();
+        const uri = fetchMock.callHistory.lastCall()?.url;
 
-        expect(uri).toBe('/apollo');
+        expect(uri).toBe('http://localhost/apollo');
       }),
     );
   });
@@ -866,7 +873,7 @@ describe('SharedHttpTest', () => {
 
     execute(link, { query: sampleQuery, variables }).subscribe(
       makeCallback(resolve, reject, (result: any) => {
-        expect(fetchMock.lastUrl()).toBe('/dataFunc');
+        expect(fetchMock.callHistory.lastCall()?.url).toBe('http://localhost/dataFunc');
       }),
     );
   });
@@ -880,7 +887,7 @@ describe('SharedHttpTest', () => {
 
     execute(link, { query: sampleQuery, variables }).subscribe(
       makeCallback(resolve, reject, (result: any) => {
-        const { someOption, mode, headers } = fetchMock.lastCall()![1]! as any;
+        const { someOption, mode, headers } = lastFetchCall()[1] as any;
         expect(someOption).toBe('foo');
         expect(mode).toBe('no-cors');
         expect(headers['content-type']).toBe('application/json');
@@ -902,7 +909,7 @@ describe('SharedHttpTest', () => {
 
     execute(link, { query: sampleQuery, variables }).subscribe(
       makeCallback(resolve, reject, (result: any) => {
-        const { someOption } = fetchMock.lastCall()![1]! as any;
+        const { someOption } = lastFetchCall()[1] as any;
         expect(someOption).toBe('foo');
         resolve();
       }),
@@ -914,7 +921,7 @@ describe('SharedHttpTest', () => {
       return stripIgnoredCharacters(originalPrint(ast));
     });
 
-    const httpLink = createHttpLink({ uri: 'data', print: customPrinter });
+    const httpLink = createHttpLink({ uri: '/data', print: customPrinter });
 
     execute(httpLink, {
       query: sampleQuery,
@@ -939,7 +946,7 @@ describe('SharedHttpTest', () => {
 
     execute(link, { query: sampleQuery, variables }).subscribe(
       makeCallback(resolve, reject, (result: any) => {
-        const { someOption } = fetchMock.lastCall()![1]! as any;
+        const { someOption } = lastFetchCall()[1] as any;
         expect(someOption).toBe('foo');
       }),
     );
@@ -961,7 +968,7 @@ describe('SharedHttpTest', () => {
 
     execute(link, { query: sampleQuery, variables }).subscribe(
       makeCallback(resolve, reject, (result: any) => {
-        const body = convertBatchedBody(fetchMock.lastCall()![1]!.body);
+        const body = convertBatchedBody(lastFetchCall()[1].body);
 
         expect(body.query).not.toBeDefined();
         expect(body.extensions).toEqual({ persistedQuery: { hash: '1234' } });
@@ -1000,7 +1007,7 @@ describe('SharedHttpTest', () => {
   });
 
   it('removes @client fields from the query before sending it to the server', async () => {
-    fetchMock.mock('https://example.com/graphql', {
+    fetchMock.mockGlobal().route('https://example.com/graphql', {
       status: 200,
       body: JSON.stringify({
         data: {
@@ -1036,7 +1043,7 @@ describe('SharedHttpTest', () => {
       });
     });
 
-    const [, options] = fetchMock.lastCall()!;
+    const [, options] = lastFetchCall();
     const { body } = options!;
 
     expect(JSON.parse(body!.toString())).toEqual([
@@ -1115,7 +1122,7 @@ describe('SharedHttpTest', () => {
       const { fetch } = mockFetch();
       const abortControllers = trackGlobalAbortControllers();
 
-      const link = createHttpLink({ uri: 'data', fetch: fetch as any });
+      const link = createHttpLink({ uri: '/data', fetch: fetch as any });
 
       const sub = execute(link, { query: sampleQuery }).subscribe(failingObserver);
       sub.unsubscribe();
@@ -1129,7 +1136,7 @@ describe('SharedHttpTest', () => {
       const externalAbortController = new AbortController();
 
       const link = createHttpLink({
-        uri: 'data',
+        uri: '/data',
         fetch: fetch as any,
         fetchOptions: { signal: externalAbortController.signal },
       });
@@ -1143,15 +1150,15 @@ describe('SharedHttpTest', () => {
 
     it('aborting the internal signal will not cause an error', async () => {
       try {
-        fetchMock.restore();
-        fetchMock.postOnce('data', async () => '{ "data": { "stub": { "id": "foo" } } }');
+        fetchMock.hardReset();
+        fetchMock.mockGlobal().postOnce('/data', async () => '{ "data": { "stub": { "id": "foo" } } }');
         const abortControllers = trackGlobalAbortControllers();
 
         const link = createHttpLink({ uri: '/data' });
         execute(link, { query: sampleQuery }).subscribe(failingObserver);
         abortControllers[0].abort();
       } finally {
-        fetchMock.restore();
+        fetchMock.hardReset();
       }
     });
 
@@ -1161,7 +1168,7 @@ describe('SharedHttpTest', () => {
       text.mockResolvedValueOnce('{ "data": { "hello": "world" } }');
 
       // (the request is already finished at that point)
-      const link = createHttpLink({ uri: 'data', fetch: fetch as any });
+      const link = createHttpLink({ uri: '/data', fetch: fetch as any });
 
       await new Promise<void>(resolve =>
         execute(link, { query: sampleQuery }).subscribe({
@@ -1178,7 +1185,7 @@ describe('SharedHttpTest', () => {
       const abortControllers = trackGlobalAbortControllers();
       fetch.mockRejectedValueOnce('This is an error!');
       // the request would be closed by the browser in the case of an error anyways
-      const link = createHttpLink({ uri: 'data', fetch: fetch as any });
+      const link = createHttpLink({ uri: '/data', fetch: fetch as any });
 
       await new Promise<void>(resolve =>
         execute(link, { query: sampleQuery }).subscribe({

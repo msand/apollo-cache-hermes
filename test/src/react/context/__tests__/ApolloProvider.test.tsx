@@ -1,3 +1,4 @@
+import { loadErrorMessages } from '@apollo/client/dev';
 import * as React from 'react';
 import { render, screen } from '@testing-library/react';
 import { ApolloClient, ApolloLink, ApolloProvider } from '@apollo/client';
@@ -5,6 +6,9 @@ import { useContext } from 'react';
 
 import { ApolloContextValue, getApolloContext } from '../ApolloContext';
 import { Hermes } from '../../../../../src';
+
+// These tests assert the @apollo/client error text rather than its production placeholder.
+loadErrorMessages();
 
 type ApolloProviderProps = Parameters<typeof ApolloProvider>[0];
 
