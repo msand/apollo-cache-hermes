@@ -444,7 +444,11 @@ export class CacheTransaction<TSerialized> implements Queryable {
       return false;
     }
 
-    const nodeRefToMatch = ({ id }) => ({ d: graphSnapshot.getNodeData(id), k: id });
+    // Modifier functions may write to the cache (in this transaction), so
+    // reads made while they run see the latest data.
+    const currentGraph = () => (optimistic ? this._snapshot.optimistic : this._snapshot.baseline);
+
+    const nodeRefToMatch = ({ id }) => ({ d: currentGraph().getNodeData(id), k: id });
 
     function readFromSnapshot(obj: Readonly<NodeSnapshot>, key: string) {
       const data = obj.data;
@@ -456,7 +460,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
       const out = obj.outbound?.get(key);
       if (out) {
         const k = out.id;
-        const target = graphSnapshot.getNodeData(k);
+        const target = currentGraph().getNodeData(k);
         // Like InMemoryCache, a dangling reference is passed as a Reference.
         return [target === undefined ? { d: makeRef(k), k: null } : { d: target, k }].concat(nodes);
       }
@@ -480,11 +484,11 @@ export class CacheTransaction<TSerialized> implements Queryable {
       }
       const out = obj.outbound?.get(key);
       if (out) {
-        return graphSnapshot.getNodeData(out.id);
+        return currentGraph().getNodeData(out.id);
       }
       const ref = obj.parameterized?.get(key)?.[0];
       if (ref) {
-        return graphSnapshot.getNodeData(ref.id);
+        return currentGraph().getNodeData(ref.id);
       }
       if (id === 'ROOT_QUERY' && key === '__typename') {
         return 'Query';
@@ -508,7 +512,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
 
       if (isReference(from)) {
         const ref = from.__ref;
-        const obj = tempStore[ref] ?? graphSnapshot.getNodeSnapshot(ref);
+        const obj = tempStore[ref] ?? currentGraph().getNodeSnapshot(ref);
         if (!obj) {
           return undefined;
         }
@@ -519,7 +523,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
     };
 
     function getSnapshot(nodeId: string) {
-      return tempStore[nodeId] ?? graphSnapshot.getNodeSnapshot(nodeId);
+      return tempStore[nodeId] ?? currentGraph().getNodeSnapshot(nodeId);
     }
 
     // Like InMemoryCache's EntityStore#modify, warn (in development) about

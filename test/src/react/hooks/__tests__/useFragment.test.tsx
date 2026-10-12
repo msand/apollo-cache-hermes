@@ -883,36 +883,65 @@ describe('useFragment', () => {
       'item 4',
     ]);
 
+    // Hermes: references are inbound/outbound edges, and extract() has no
+    // __META.extraRootIds (Hermes does not retain written ids) and does not
+    // store ROOT_QUERY's __typename.
     expect(cache.extract()).toEqual({
       'Item:1': {
-        __typename: 'Item',
-        id: 1,
+        type: 0,
+        inbound: [{ id: 'ROOT_QUERY', path: ['list', 0] }],
+        data: {
+          __typename: 'Item',
+          id: 1,
+        },
       },
       'Item:2': {
-        __typename: 'Item',
-        id: 2,
-        text: 'Item #2 updated',
+        type: 0,
+        inbound: [{ id: 'ROOT_QUERY', path: ['list', 1] }],
+        data: {
+          __typename: 'Item',
+          id: 2,
+          text: 'Item #2 updated',
+        },
       },
       'Item:3': {
-        __typename: 'Item',
-        id: 3,
+        type: 0,
+        inbound: [{ id: 'ROOT_QUERY', path: ['list', 2] }],
+        data: {
+          __typename: 'Item',
+          id: 3,
+        },
       },
       'Item:4': {
-        __typename: 'Item',
-        id: 4,
-        text: 'Item #4 updated',
+        type: 0,
+        inbound: [{ id: 'ROOT_QUERY', path: ['list', 3] }],
+        data: {
+          __typename: 'Item',
+          id: 4,
+          text: 'Item #4 updated',
+        },
       },
       'Item:5': {
-        __typename: 'Item',
-        id: 5,
+        type: 0,
+        inbound: [{ id: 'ROOT_QUERY', path: ['list', 4] }],
+        data: {
+          __typename: 'Item',
+          id: 5,
+        },
       },
       ROOT_QUERY: {
-        __typename: 'Query',
-        list: [{ __ref: 'Item:1' }, { __ref: 'Item:2' }, { __ref: 'Item:3' }, { __ref: 'Item:4' }, { __ref: 'Item:5' }],
-        extra: 'from ListFragment',
-      },
-      __META: {
-        extraRootIds: ['Item:2', 'Item:3', 'Item:4'],
+        type: 0,
+        outbound: [
+          { id: 'Item:1', path: ['list', 0] },
+          { id: 'Item:2', path: ['list', 1] },
+          { id: 'Item:3', path: ['list', 2] },
+          { id: 'Item:4', path: ['list', 3] },
+          { id: 'Item:5', path: ['list', 4] },
+        ],
+        data: {
+          list: [undefined, undefined, undefined, undefined, undefined],
+          extra: 'from ListFragment',
+        },
       },
     });
   });
