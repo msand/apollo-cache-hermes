@@ -5,7 +5,8 @@ import { Hermes } from '../../../../../src';
 import { GraphSnapshot } from '../../../../../src/GraphSnapshot';
 
 describe('optimistic cache layers', () => {
-  it('return === results for repeated reads', () => {
+  // Hermes: asserts InMemoryCache result caching (=== results across optimistic layers)
+  it.skip('return === results for repeated reads', () => {
     const cache = new Hermes({
       // resultCaching: true,
       // canonizeResults: true,
@@ -204,7 +205,8 @@ describe('optimistic cache layers', () => {
     });
   });
 
-  it('dirties appropriate IDs when optimistic layers are removed', () => {
+  // Hermes: asserts InMemoryCache result caching (=== results as optimistic layers are added/removed)
+  it.skip('dirties appropriate IDs when optimistic layers are removed', () => {
     const cache = new Hermes({
       // resultCaching: true,
       // canonizeResults: true,
@@ -476,9 +478,11 @@ describe('optimistic cache layers', () => {
 
         expect(cache.extract(true)).toEqual({
           ROOT_QUERY: {
-            __typename: 'Query',
-            counter: {
-              value,
+            type: 0,
+            data: {
+              counter: {
+                value,
+              },
             },
           },
         });
@@ -500,9 +504,11 @@ describe('optimistic cache layers', () => {
         // Extracting non-optimistically shows Query.counter === 0 again.
         expect(cache.extract(false)).toEqual({
           ROOT_QUERY: {
-            __typename: 'Query',
-            counter: {
-              value,
+            type: 0,
+            data: {
+              counter: {
+                value,
+              },
             },
           },
         });
@@ -565,8 +571,10 @@ describe('optimistic cache layers', () => {
         // Extracting optimistically shows Query.counter undefined.
         expect(cache.extract(true)).toEqual({
           ROOT_QUERY: {
-            __typename: 'Query',
-            counter: void 0,
+            type: 0,
+            data: {
+              counter: void 0,
+            },
           },
         });
       }

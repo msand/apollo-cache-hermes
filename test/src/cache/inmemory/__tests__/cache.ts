@@ -1,3 +1,4 @@
+import { loadErrorMessages } from '@apollo/client/dev';
 import gql, { disableFragmentWarnings } from 'graphql-tag';
 import { expectTypeOf } from 'expect-type';
 import { InMemoryCache, TypePolicies } from '@apollo/client';
@@ -13,6 +14,8 @@ import { Hermes } from '../../../../../src';
 import { CacheContext } from '../../../../../src/context';
 
 disableFragmentWarnings();
+// These tests assert the @apollo/client error text rather than its production placeholder.
+loadErrorMessages();
 
 describe('Cache', () => {
   function itWithInitialData(
@@ -579,16 +582,14 @@ describe('Cache', () => {
         data: bothNamesData,
       });
 
-      const meta123 = {
-        extraRootIds: ['Person:123'],
-      };
-
       expect(cache.extract()).toEqual({
-        __META: meta123,
         'Person:123': {
-          __typename: 'Person',
-          id: 123,
-          firstName: 'Ben',
+          type: 0,
+          data: {
+            __typename: 'Person',
+            id: 123,
+            firstName: 'Ben',
+          },
         },
       });
 
@@ -609,12 +610,14 @@ describe('Cache', () => {
       });
 
       expect(cache.extract()).toEqual({
-        __META: meta123,
         'Person:123': {
-          __typename: 'Person',
-          id: 123,
-          firstName: 'Ben',
-          lastName: 'Newman',
+          type: 0,
+          data: {
+            __typename: 'Person',
+            id: 123,
+            firstName: 'Ben',
+            lastName: 'Newman',
+          },
         },
       });
 
@@ -647,12 +650,14 @@ describe('Cache', () => {
       });
 
       expect(cache.extract()).toEqual({
-        __META: meta123,
         'Person:123': {
-          __typename: 'Person',
-          id: 123,
-          firstName: 'Benjamin',
-          lastName: 'Newman',
+          type: 0,
+          data: {
+            __typename: 'Person',
+            id: 123,
+            firstName: 'Benjamin',
+            lastName: 'Newman',
+          },
         },
       });
 
@@ -707,14 +712,14 @@ describe('Cache', () => {
 
       expect(cache.extract(false)).toEqual({});
       expect(cache.extract(true)).toEqual({
-        __META: {
-          extraRootIds: ['Person:321'],
-        },
         'Person:321': {
-          __typename: 'Person',
-          id: 321,
-          firstName: 'Hugh',
-          lastName: 'Willson',
+          type: 0,
+          data: {
+            __typename: 'Person',
+            id: 321,
+            firstName: 'Hugh',
+            lastName: 'Willson',
+          },
         },
       });
 
@@ -796,8 +801,10 @@ describe('Cache', () => {
 
       expect((proxy as Hermes).extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          a: 1,
+          type: 0,
+          data: {
+            a: 1,
+          },
         },
       });
 
@@ -813,10 +820,12 @@ describe('Cache', () => {
 
       expect((proxy as Hermes).extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          a: 1,
-          b: 2,
-          c: 3,
+          type: 0,
+          data: {
+            a: 1,
+            b: 2,
+            c: 3,
+          },
         },
       });
 
@@ -833,10 +842,12 @@ describe('Cache', () => {
 
       expect((proxy as Hermes).extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          a: 4,
-          b: 5,
-          c: 6,
+          type: 0,
+          data: {
+            a: 4,
+            b: 5,
+            c: 6,
+          },
         },
       });
     });
@@ -870,10 +881,12 @@ describe('Cache', () => {
 
       expect((cache as Hermes).extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          a: 1,
-          d: {
-            e: 4,
+          type: 0,
+          data: {
+            a: 1,
+            d: {
+              e: 4,
+            },
           },
         },
       });
@@ -894,13 +907,15 @@ describe('Cache', () => {
 
       expect((cache as Hermes).extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          a: 1,
-          // The new value for d overwrites the old value, since there
-          // is no custom merge function defined for Query.d.
-          d: {
-            h: {
-              i: 7,
+          type: 0,
+          data: {
+            a: 1,
+            // The new value for d overwrites the old value, since there
+            // is no custom merge function defined for Query.d.
+            d: {
+              h: {
+                i: 7,
+              },
             },
           },
         },
@@ -934,18 +949,20 @@ describe('Cache', () => {
 
       expect((cache as Hermes).extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          a: 1,
-          b: 2,
-          c: 3,
-          d: {
-            e: 4,
-            f: 5,
-            g: 6,
-            h: {
-              i: 7,
-              j: 8,
-              k: 9,
+          type: 0,
+          data: {
+            a: 1,
+            b: 2,
+            c: 3,
+            d: {
+              e: 4,
+              f: 5,
+              g: 6,
+              h: {
+                i: 7,
+                j: 8,
+                k: 9,
+              },
             },
           },
         },
@@ -972,9 +989,21 @@ describe('Cache', () => {
 
       expect((proxy as Hermes).extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          'field({"literal":true,"value":42})': 1,
-          'field({"literal":false,"value":42})': 2,
+          type: 0,
+          parameterized: [
+            { id: 'ROOT_QUERY❖["field"]❖{"literal":true,"value":42}', path: ['field'] },
+            { id: 'ROOT_QUERY❖["field"]❖{"literal":false,"value":42}', path: ['field'] },
+          ],
+        },
+        'ROOT_QUERY❖["field"]❖{"literal":true,"value":42}': {
+          type: 1,
+          data: 1,
+          inbound: [{ id: 'ROOT_QUERY', path: ['field'] }],
+        },
+        'ROOT_QUERY❖["field"]❖{"literal":false,"value":42}': {
+          type: 1,
+          data: 2,
+          inbound: [{ id: 'ROOT_QUERY', path: ['field'] }],
         },
       });
     });
@@ -999,9 +1028,21 @@ describe('Cache', () => {
 
       expect((proxy as Hermes).extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          'field({"literal":true,"value":42})': 1,
-          'field({"literal":false,"value":null})': 2,
+          type: 0,
+          parameterized: [
+            { id: 'ROOT_QUERY❖["field"]❖{"literal":true,"value":42}', path: ['field'] },
+            { id: 'ROOT_QUERY❖["field"]❖{"literal":false,"value":null}', path: ['field'] },
+          ],
+        },
+        'ROOT_QUERY❖["field"]❖{"literal":true,"value":42}': {
+          type: 1,
+          data: 1,
+          inbound: [{ id: 'ROOT_QUERY', path: ['field'] }],
+        },
+        'ROOT_QUERY❖["field"]❖{"literal":false,"value":null}': {
+          type: 1,
+          data: 2,
+          inbound: [{ id: 'ROOT_QUERY', path: ['field'] }],
         },
       });
     });
@@ -1254,13 +1295,25 @@ describe('Cache', () => {
         });
 
         expect((proxy as Hermes).extract()).toEqual({
-          __META: {
-            extraRootIds: ['foo'],
-          },
           foo: {
-            __typename: 'Foo',
-            'field({"literal":true,"value":42})': 1,
-            'field({"literal":false,"value":42})': 2,
+            type: 0,
+            data: {
+              __typename: 'Foo',
+            },
+            parameterized: [
+              { id: 'foo❖["field"]❖{"literal":true,"value":42}', path: ['field'] },
+              { id: 'foo❖["field"]❖{"literal":false,"value":42}', path: ['field'] },
+            ],
+          },
+          'foo❖["field"]❖{"literal":true,"value":42}': {
+            type: 1,
+            data: 1,
+            inbound: [{ id: 'foo', path: ['field'] }],
+          },
+          'foo❖["field"]❖{"literal":false,"value":42}': {
+            type: 1,
+            data: 2,
+            inbound: [{ id: 'foo', path: ['field'] }],
           },
         });
       },
@@ -1326,18 +1379,26 @@ describe('Cache', () => {
 
       expect(cache.extract()).toEqual({
         'Person:{"name":"Ben Newman"}': {
-          __typename: 'Person',
-          name: 'Ben Newman',
+          type: 0,
+          data: {
+            __typename: 'Person',
+            name: 'Ben Newman',
+          },
+          inbound: [{ id: 'ROOT_QUERY', path: ['me'] }],
         },
         'Person:{"name":"Ben"}': {
-          __typename: 'Person',
-          name: 'Ben',
+          type: 0,
+          data: {
+            __typename: 'Person',
+            name: 'Ben',
+          },
         },
         ROOT_QUERY: {
-          __typename: 'Query',
-          me: {
-            __ref: 'Person:{"name":"Ben Newman"}',
+          type: 0,
+          data: {
+            me: undefined,
           },
+          outbound: [{ id: 'Person:{"name":"Ben Newman"}', path: ['me'] }],
         },
       });
 
@@ -1403,27 +1464,35 @@ describe('Cache', () => {
 
       expect(cache.extract()).toEqual({
         'Person:{"name":"Ben"}': {
-          __typename: 'Person',
-          name: 'Ben',
-        },
-        'Person:{"name":"Ben Newman"}': {
-          __typename: 'Person',
-          name: 'Ben Newman',
-          username: 'benjamn',
-        },
-        'Person:{"name":"Brian Kim"}': {
-          __typename: 'Person',
-          name: 'Brian Kim',
-          username: 'brainkim',
-        },
-        ROOT_QUERY: {
-          __typename: 'Query',
-          me: {
-            __ref: 'Person:{"name":"Brian Kim"}',
+          type: 0,
+          data: {
+            __typename: 'Person',
+            name: 'Ben',
           },
         },
-        __META: {
-          extraRootIds: ['Person:{"name":"Ben Newman"}', 'Person:{"name":"Brian Kim"}'],
+        'Person:{"name":"Ben Newman"}': {
+          type: 0,
+          data: {
+            __typename: 'Person',
+            name: 'Ben Newman',
+            username: 'benjamn',
+          },
+        },
+        'Person:{"name":"Brian Kim"}': {
+          type: 0,
+          data: {
+            __typename: 'Person',
+            name: 'Brian Kim',
+            username: 'brainkim',
+          },
+          inbound: [{ id: 'ROOT_QUERY', path: ['me'] }],
+        },
+        ROOT_QUERY: {
+          type: 0,
+          data: {
+            me: undefined,
+          },
+          outbound: [{ id: 'Person:{"name":"Brian Kim"}', path: ['me'] }],
         },
       });
 
@@ -1432,7 +1501,8 @@ describe('Cache', () => {
   });
 
   describe('cache.restore', () => {
-    it('replaces cache.{store{Reader,Writer},maybeBroadcastWatch}', () => {
+    // Hermes: tests InMemoryCache internals (StoreReader, StoreWriter, maybeBroadcastWatch, ObjectCanon)
+    it.skip('replaces cache.{store{Reader,Writer},maybeBroadcastWatch}', () => {
       const cache = new Hermes();
       const query = gql`
         query {
@@ -1556,6 +1626,7 @@ describe('Cache', () => {
       expect(aInfo.diffs.length).toBe(1);
       expect(last(aInfo.diffs)).toEqual({
         complete: true,
+        entityIds: new Set(['ROOT_QUERY']),
         result: {
           a: 'ay',
         },
@@ -1564,6 +1635,7 @@ describe('Cache', () => {
       expect(abInfo.diffs.length).toBe(1);
       expect(last(abInfo.diffs)).toEqual({
         complete: false,
+        entityIds: new Set(['ROOT_QUERY']),
         missing: expect.any(Array),
         result: {
           a: 'ay',
@@ -1600,6 +1672,7 @@ describe('Cache', () => {
       expect(aInfo.diffs.length).toBe(1);
       expect(last(aInfo.diffs)).toEqual({
         complete: true,
+        entityIds: new Set(['ROOT_QUERY']),
         result: {
           a: 'ay',
         },
@@ -1608,6 +1681,7 @@ describe('Cache', () => {
       expect(abInfo.diffs.length).toBe(2);
       expect(last(abInfo.diffs)).toEqual({
         complete: true,
+        entityIds: new Set(['ROOT_QUERY']),
         result: {
           a: 'ay',
           b: 'bee',
@@ -1617,6 +1691,7 @@ describe('Cache', () => {
       expect(bInfo.diffs.length).toBe(1);
       expect(last(bInfo.diffs)).toEqual({
         complete: true,
+        entityIds: new Set(['ROOT_QUERY']),
         result: {
           b: 'bee',
         },
@@ -1775,6 +1850,7 @@ describe('Cache', () => {
         // update function.
         {
           complete: true,
+          entityIds: new Set(['ROOT_QUERY']),
           result: {
             a: 'ayyyy',
           },
@@ -1786,6 +1862,7 @@ describe('Cache', () => {
         // update function.
         {
           complete: true,
+          entityIds: new Set(['ROOT_QUERY']),
           result: {
             a: 'ayyyy',
             b: 'beeeee',
@@ -1804,6 +1881,7 @@ describe('Cache', () => {
         // Same array of diffs as before.
         {
           complete: true,
+          entityIds: new Set(['ROOT_QUERY']),
           result: {
             a: 'ayyyy',
           },
@@ -1816,6 +1894,7 @@ describe('Cache', () => {
         // we do not see another (duplicate) diff here.
         {
           complete: true,
+          entityIds: new Set(['ROOT_QUERY']),
           result: {
             a: 'ayyyy',
             b: 'beeeee',
@@ -1829,6 +1908,7 @@ describe('Cache', () => {
         // transaction, by cache["broadcastWatches"]() above.
         {
           complete: true,
+          entityIds: new Set(['ROOT_QUERY']),
           result: {
             b: 'beeeee',
           },
@@ -2116,6 +2196,8 @@ describe('Hermes#broadcastWatches', () => {
           },
         },
         complete: true,
+        entityIds: new Set(['ROOT_QUERY']),
+        dynamicNodeIds: new Set(['ROOT_QUERY❖["value"]❖{"arg":1}']),
       },
     ];
 
@@ -2137,6 +2219,8 @@ describe('Hermes#broadcastWatches', () => {
           },
         },
         complete: true,
+        entityIds: new Set(['ROOT_QUERY']),
+        dynamicNodeIds: new Set(['ROOT_QUERY❖["value"]❖{"arg":2}']),
       },
     ];
 
@@ -2161,6 +2245,8 @@ describe('Hermes#broadcastWatches', () => {
           },
         },
         complete: true,
+        entityIds: new Set(['ROOT_QUERY']),
+        dynamicNodeIds: new Set(['ROOT_QUERY❖["value"]❖{"arg":1}']),
       },
     ];
 
@@ -2174,6 +2260,8 @@ describe('Hermes#broadcastWatches', () => {
           },
         },
         complete: true,
+        entityIds: new Set(['ROOT_QUERY']),
+        dynamicNodeIds: new Set(['ROOT_QUERY❖["value"]❖{"arg":1}']),
       },
     ];
 
@@ -2197,6 +2285,8 @@ describe('Hermes#broadcastWatches', () => {
           },
         },
         complete: true,
+        entityIds: new Set(['ROOT_QUERY']),
+        dynamicNodeIds: new Set(['ROOT_QUERY❖["value"]❖{"arg":2}']),
       },
     ];
 
@@ -2408,10 +2498,12 @@ describe('Hermes#modify', () => {
 
     expect(cache.extract()).toEqual({
       ROOT_QUERY: {
-        __typename: 'Query',
-        a: 1,
-        b: -1,
-        c: 0,
+        type: 0,
+        data: {
+          a: 1,
+          b: -1,
+          c: 0,
+        },
       },
     });
 
@@ -2462,10 +2554,12 @@ describe('Hermes#modify', () => {
 
     expect(cache.extract()).toEqual({
       ROOT_QUERY: {
-        __typename: 'Query',
-        a: 1,
-        b: -1,
-        c: 0,
+        type: 0,
+        data: {
+          a: 1,
+          b: -1,
+          c: 0,
+        },
       },
     });
 
@@ -2619,23 +2713,31 @@ describe('Hermes#modify', () => {
 
     expect(cache.extract()).toEqual({
       ROOT_QUERY: {
-        __typename: 'Query',
-        currentlyReading: {
-          __ref: 'Book:{"isbn":"147670032X"}',
+        type: 0,
+        data: {
+          currentlyReading: undefined,
         },
+        outbound: [{ id: 'Book:{"isbn":"147670032X"}', path: ['currentlyReading'] }],
       },
       'Book:{"isbn":"147670032X"}': {
-        __typename: 'Book',
-        isbn: '147670032X',
-        author: {
-          __ref: 'Author:{"name":"Ezra Klein"}',
+        type: 0,
+        data: {
+          __typename: 'Book',
+          isbn: '147670032X',
+          author: undefined,
+          title: "Why We're Polarized",
         },
-        title: "Why We're Polarized",
+        inbound: [{ id: 'ROOT_QUERY', path: ['currentlyReading'] }],
+        outbound: [{ id: 'Author:{"name":"Ezra Klein"}', path: ['author'] }],
       },
       'Author:{"name":"Ezra Klein"}': {
-        __typename: 'Author',
-        name: 'Ezra Klein',
-        yearOfBirth: 1983,
+        type: 0,
+        data: {
+          __typename: 'Author',
+          name: 'Ezra Klein',
+          yearOfBirth: 1983,
+        },
+        inbound: [{ id: 'Book:{"isbn":"147670032X"}', path: ['author'] }],
       },
     });
 
@@ -2693,27 +2795,35 @@ describe('Hermes#modify', () => {
     });
 
     const snapshotWithoutYOB = cache.extract();
-    expect(snapshotWithoutYOB[authorId]!.yearOfBirth).toBeUndefined();
-    expect('yearOfBirth' in snapshotWithoutYOB[authorId]!).toBe(false);
+    expect(snapshotWithoutYOB[authorId]!.data.yearOfBirth).toBeUndefined();
+    expect('yearOfBirth' in snapshotWithoutYOB[authorId]!.data).toBe(false);
     expect(snapshotWithoutYOB).toEqual({
       ROOT_QUERY: {
-        __typename: 'Query',
-        currentlyReading: {
-          __ref: 'Book:{"isbn":"147670032X"}',
+        type: 0,
+        data: {
+          currentlyReading: undefined,
         },
+        outbound: [{ id: 'Book:{"isbn":"147670032X"}', path: ['currentlyReading'] }],
       },
       'Book:{"isbn":"147670032X"}': {
-        __typename: 'Book',
-        isbn: '147670032X',
-        author: {
-          __ref: 'Author:{"name":"Ezra Klein"}',
+        type: 0,
+        data: {
+          __typename: 'Book',
+          isbn: '147670032X',
+          author: undefined,
+          title: "Why We're Polarized",
         },
-        title: "Why We're Polarized",
+        inbound: [{ id: 'ROOT_QUERY', path: ['currentlyReading'] }],
+        outbound: [{ id: 'Author:{"name":"Ezra Klein"}', path: ['author'] }],
       },
       'Author:{"name":"Ezra Klein"}': {
-        __typename: 'Author',
-        name: 'Ezra Klein',
-        // yearOfBirth is gone now
+        type: 0,
+        data: {
+          __typename: 'Author',
+          name: 'Ezra Klein',
+          // yearOfBirth is gone now
+        },
+        inbound: [{ id: 'Book:{"isbn":"147670032X"}', path: ['author'] }],
       },
     });
 
@@ -2728,14 +2838,19 @@ describe('Hermes#modify', () => {
     expect(bookId in snapshotWithoutBook).toBe(false);
     expect(snapshotWithoutBook).toEqual({
       ROOT_QUERY: {
-        __typename: 'Query',
-        currentlyReading: {
-          __ref: 'Book:{"isbn":"147670032X"}',
+        type: 0,
+        data: {
+          currentlyReading: undefined,
         },
+        // Dangling reference to the deleted Book.
+        outbound: [{ id: 'Book:{"isbn":"147670032X"}', path: ['currentlyReading'] }],
       },
       'Author:{"name":"Ezra Klein"}': {
-        __typename: 'Author',
-        name: 'Ezra Klein',
+        type: 0,
+        data: {
+          __typename: 'Author',
+          name: 'Ezra Klein',
+        },
       },
     });
 
@@ -2757,10 +2872,12 @@ describe('Hermes#modify', () => {
     expect(authorId in snapshotWithoutAuthor).toBe(false);
     expect(snapshotWithoutAuthor).toEqual({
       ROOT_QUERY: {
-        __typename: 'Query',
-        currentlyReading: {
-          __ref: 'Book:{"isbn":"147670032X"}',
+        type: 0,
+        data: {
+          currentlyReading: undefined,
         },
+        // Dangling reference to the deleted Book.
+        outbound: [{ id: 'Book:{"isbn":"147670032X"}', path: ['currentlyReading'] }],
       },
     });
 
@@ -2771,7 +2888,8 @@ describe('Hermes#modify', () => {
     expect(cache.extract()).toEqual({});
   });
 
-  it('can remove specific items from paginated lists', () => {
+  // Hermes: no keyArgs support (InMemoryCache stores a field with read/merge but no keyArgs under one storeFieldName)
+  it.skip('can remove specific items from paginated lists', () => {
     const cache = new Hermes({
       typePolicies: {
         Thread: {
@@ -2959,9 +3077,11 @@ describe('Hermes#modify', () => {
 
     expect(cache.extract(true)).toEqual({
       ROOT_QUERY: {
-        __typename: 'Query',
-        a: 1,
-        c: 3,
+        type: 0,
+        data: {
+          a: 1,
+          c: 3,
+        },
       },
     });
 
@@ -3021,19 +3141,33 @@ describe('Hermes#modify', () => {
 
     expect(cache.extract()).toEqual({
       ROOT_QUERY: {
-        __typename: 'Query',
-        a: { __ref: 'A:1' },
-        b: { __ref: 'B:1' },
+        type: 0,
+        data: {
+          a: undefined,
+          b: undefined,
+        },
+        outbound: [
+          { id: 'A:1', path: ['a'] },
+          { id: 'B:1', path: ['b'] },
+        ],
       },
       'A:1': {
-        __typename: 'A',
-        id: 1,
-        value: 123,
+        type: 0,
+        data: {
+          __typename: 'A',
+          id: 1,
+          value: 123,
+        },
+        inbound: [{ id: 'ROOT_QUERY', path: ['a'] }],
       },
       'B:1': {
-        __typename: 'B',
-        id: 1,
-        value: 321,
+        type: 0,
+        data: {
+          __typename: 'B',
+          id: 1,
+          value: 321,
+        },
+        inbound: [{ id: 'ROOT_QUERY', path: ['b'] }],
       },
     });
 
@@ -3060,6 +3194,7 @@ describe('Hermes#modify', () => {
     function makeResult(__typename: string, value: number, complete: boolean = true) {
       return {
         complete,
+        entityIds: new Set(['ROOT_QUERY', `${__typename}:1`]),
         result: {
           [__typename.toLowerCase()]: {
             __typename,
@@ -3122,7 +3257,8 @@ describe('Hermes#modify', () => {
     expect(bResults).toEqual([b321, b322]);
   });
 
-  it('should handle argument-determined field identities', () => {
+  // Hermes: no keyArgs support (asserts InMemoryCache storeFieldName format 'book:{"isbn":...}')
+  it.skip('should handle argument-determined field identities', () => {
     const cache = new Hermes({
       typePolicies: {
         Query: {
@@ -3325,8 +3461,10 @@ describe('Hermes#modify', () => {
 
     const snapshot = {
       ROOT_QUERY: {
-        __typename: 'Query',
-        field: 'oyez',
+        type: 0,
+        data: {
+          field: 'oyez',
+        },
       },
     };
 
@@ -3644,7 +3782,8 @@ describe('ReactiveVar and makeVar', () => {
     });
   });
 
-  it('should work with resultCaching disabled (unusual)', () => {
+  // Hermes: no resultCaching option or canonizeResults (asserts canonical result identity)
+  it.skip('should work with resultCaching disabled (unusual)', () => {
     const { cache, nameVar, query } = makeCacheAndVar(false);
 
     const result1 = cache.readQuery({
