@@ -45,6 +45,11 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
    * (in CacheContext#dirty) are not known.
    */
   private _fieldsUntracked = false;
+  /**
+   * The id of an optimistic update made since the last broadcast; like
+   * InMemoryCache, the broadcast flags optimistic diffs as such.
+   */
+  private _broadcastOptimisticId: ChangeId | undefined;
   /** The fields of watched root nodes changed since the last broadcast. */
   private _changedFields: ChangedFields = { baseline: new Map(), optimistic: new Map() };
   private _editedNodeIds: Set<NodeId> = new Set();
@@ -311,6 +316,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     // Like InMemoryCache, the ids that data is written to explicitly are
     // retained, as roots for garbage collection.
     writtenRootIds.forEach(id => this.retain(id));
+    if (changeId != null) this._broadcastOptimisticId = changeId;
     this._setSnapshot(snapshot, editedNodeIds, broadcast, onWatchUpdated);
 
     if (this._transactions.length) {
@@ -446,7 +452,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
       return;
     }
 
-    this._broadcastWatches(editedNodeIds, onWatchUpdated);
+    this._broadcastWatches(editedNodeIds, onWatchUpdated, this._broadcastOptimisticId);
 
     if (this._context.onChange) {
       this._context.onChange(this._snapshot, editedNodeIds);
@@ -466,7 +472,8 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     // Like InMemoryCache, watches are broadcast once the outermost transaction
     // (e.g. an optimistic update, which may run cache.batch) completes.
     if (this._transactions.length) return;
-    this._broadcastWatches(this._editedNodeIds, options?.onWatchUpdated, options?.optimistic);
+    const optimistic = typeof options?.optimistic === 'string' ? options.optimistic : this._broadcastOptimisticId;
+    this._broadcastWatches(this._editedNodeIds, options?.onWatchUpdated, optimistic);
   }
 
   private _broadcastWatches(
@@ -507,6 +514,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
 
     this._context.dirty.clear();
     this._fieldsUntracked = false;
+    this._broadcastOptimisticId = undefined;
     this._changedFields = { baseline: new Map(), optimistic: new Map() };
 
     if (this._context.tracer.broadcastEnd) {
