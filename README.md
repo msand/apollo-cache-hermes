@@ -42,6 +42,8 @@ const client = new ApolloClient({
 
 By default, the cache will consider all nodes with an `id` field to be _entities_ (e.g. normalized nodes in the graph).
 
+Beyond Apollo's cache API, `cache.batchEvict(ids, broadcast = true)` evicts several entities with one baseline snapshot edit and one broadcast (pending optimistic updates are replayed on top, as after any baseline change). Calling `evict` once per id edits the snapshot once per entity, even inside `batch`, and outside `batch` also broadcasts once per entity. Each entity is removed whole, whereas a single `evict` can leave a stub for a null field that also has a parameterized variant. Ids that are not in the cache are skipped. It returns whether any entity was evicted.
+
 For now, please refer to [the source](https://github.com/convoyinc/apollo-cache-hermes/blob/master/src/context/CacheContext.ts#L57-L117) when looking up configuration values - they're likely to change, and new options to be added.
 
 ## Contributing

@@ -570,4 +570,47 @@ export class CacheTransaction<TSerialized> implements Queryable {
     });
   }
 
+  /**
+   * Evicts several entities with one snapshot edit, where evict() makes one
+   * per entity. Like evict(), it skips ids that are not in the cache.
+   *
+   * Each entity is removed whole. evict() instead keeps the fields it cannot
+   * match to a stored field name, such as a null field that also has a
+   * parameterized variant.
+   *
+   * Returns whether any entity was evicted.
+   */
+  batchEvict(ids: Iterable<NodeId>): boolean {
+    const current = this._snapshot;
+    const graphSnapshot = current.baseline;
+    const evictedIds = new Set<NodeId>();
+    for (const id of ids) {
+      if (graphSnapshot.getNodeSnapshot(id)) {
+        evictedIds.add(id);
+      }
+    }
+    if (!evictedIds.size) {
+      return false;
+    }
+
+    const editor = new SnapshotEditor(this._context, graphSnapshot);
+    for (const id of evictedIds) {
+      editor.delete(id);
+    }
+    // The same commit steps as modify() takes for a non-optimistic evict.
+    const { snapshot, editedNodeIds } = editor.commit();
+    addToSet(this._editedNodeIds, editedNodeIds);
+    const edited = Array.from(editedNodeIds);
+    for (const [key, val] of snapshot.readCache) {
+      if (evictedIds.has(key.rootId) || edited.some(cachedId => val.entityIds?.has(cachedId))) {
+        snapshot.readCache.delete(key);
+      }
+    }
+
+    const optimistic = this._buildOptimisticSnapshot(snapshot);
+    this._snapshot = new CacheSnapshot(snapshot, optimistic, current.optimisticQueue);
+
+    return true;
+  }
+
 }

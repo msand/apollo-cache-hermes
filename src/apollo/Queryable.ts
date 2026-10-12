@@ -4,6 +4,7 @@ import { removeDirectivesFromDocument } from '@apollo/client/utilities';
 import { UnsatisfiedCacheError } from '../errors';
 import { JsonObject } from '../primitive';
 import { Queryable } from '../Queryable';
+import { NodeId } from '../schema';
 import { DocumentNode } from '../util';
 
 import { buildRawOperationFromQuery, buildRawOperationFromFragment } from './util';
@@ -103,5 +104,9 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
 
   evict(options: Cache.EvictOptions): boolean {
     return this._queryable.evict(options);
+  }
+
+  batchEvict(ids: Iterable<NodeId>, broadcast?: boolean): boolean {
+    return this._queryable.batchEvict(ids, broadcast);
   }
 }

@@ -555,25 +555,39 @@ export class SnapshotEditor<TSerialized> {
   delete(nodeId: NodeId) {
     this._editedNodeIds.add(nodeId);
     const referenceEdits: ReferenceEdit[] = [];
-    const nodeSnapshot = this._parent.getNodeSnapshot(nodeId);
+    const nodeSnapshot = this._getNodeSnapshot(nodeId);
 
     nodeSnapshot?.inbound?.forEach(({ id, path }) => {
       this._editedNodeIds.add(id);
       referenceEdits.push({ containerId: id, nextNodeId: undefined, prevNodeId: nodeId, path });
     });
 
+    // Outbound targets only lose an inbound reference; their data is unchanged,
+    // so they are not marked as edited, and their other referrers are not
+    // rebuilt. Targets left without any inbound reference are still marked, as
+    // orphans, by _mergeReferenceEdits.
     nodeSnapshot?.outbound?.forEach(({ id, path }) => {
-      this._editedNodeIds.add(id);
       referenceEdits.push({ containerId: nodeId, nextNodeId: undefined, prevNodeId: id, path });
     });
 
     forEach(nodeSnapshot?.parameterized, ({ id, path }) => {
-      this._editedNodeIds.add(id);
       referenceEdits.push({ containerId: nodeId, nextNodeId: undefined, prevNodeId: id, path });
     });
 
-    this._mergeReferenceEdits(referenceEdits);
+    // One editor may delete several nodes (batchEvict, gc, optimistic replay).
+    // Edits touching a node this editor already deleted are moot, and would
+    // otherwise fail on its missing snapshot.
+    this._mergeReferenceEdits(referenceEdits.filter(({ containerId, prevNodeId }) =>
+      !this._isDeleted(containerId) && !(prevNodeId && this._isDeleted(prevNodeId))
+    ));
     this._newNodes[nodeId] = undefined;
+  }
+
+  /**
+   * Whether this editor has deleted the node.
+   */
+  private _isDeleted(nodeId: NodeId) {
+    return nodeId in this._newNodes && this._newNodes[nodeId] === undefined;
   }
 
   /**
