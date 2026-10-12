@@ -10,8 +10,7 @@ if [[ "${#FILES[@]}" = "0" ]]; then
     find . \
       -not -path "*/node_modules/*" \
       -not -path "./.claude/*" \
-      \( -name "*.ts" -not -name "*.d.ts" \) \
-      -or -name "*.tsx"
+      \( \( -name "*.ts" -not -name "*.d.ts" \) -or -name "*.tsx" \)
   ))
 fi
 

@@ -9,7 +9,7 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['**/node_modules/', 'apollo-client/', 'dist/', 'output/', '**/*.js', '**/*.d.ts'],
+    ignores: ['**/node_modules/', '.claude/', 'apollo-client/', 'dist/', 'output/', '**/*.js', '**/*.d.ts'],
   },
 
   js.configs.recommended,
