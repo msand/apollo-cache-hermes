@@ -1,4 +1,5 @@
 import isEqual from '@wry/equality';
+import type { DirectiveNode, FragmentSpreadNode } from 'graphql';
 
 import { CacheContext } from './context';
 import { ConflictingFieldsError } from './errors';
@@ -22,7 +23,9 @@ export type FieldArguments<TArgTypes = JsonScalar> = NestedObject<TArgTypes>;
  * the cache requires to read/write associated payloads.
  *
  * A parsed query has no notion of fragments, or other such redirections; they
- * are flattened into query nodes when parsed.
+ * are flattened into query nodes when parsed.  Fields that are only selected
+ * through fragments with type conditions (or through @skip/@include directives
+ * that depend on variables) record those as `conditions`.
  */
 export class ParsedQueryNode<TArgTypes = JsonScalar> {
   constructor(
@@ -45,7 +48,35 @@ export class ParsedQueryNode<TArgTypes = JsonScalar> {
     public propMap?: {
       [key: string]: string;
     },
+    /**
+     * The alternative conditions under which the field is selected (any one of
+     * them suffices).  Omitted when the field is selected unconditionally.
+     */
+    public conditions?: readonly SelectionCondition[],
   ) {}
+}
+
+/**
+ * A condition under which a field is selected: the field was selected through
+ * fragments with the given type conditions (which must all match the
+ * containing object's __typename), and through @skip/@include directives that
+ * depend on the given variables (which must all pass).
+ *
+ * Directive conditions are resolved by `expandVariables`; type conditions are
+ * checked against values when reading/writing.
+ */
+export interface SelectionCondition {
+  readonly typeConditions?: readonly string[];
+  readonly directives?: readonly InclusionDirective[];
+}
+
+/**
+ * A @skip(if: $variable) or @include(if: $variable) directive.
+ */
+export interface InclusionDirective {
+  readonly variable: string;
+  /** Whether the field is included when the variable is truthy (@include). */
+  readonly include: boolean;
 }
 
 /**
@@ -126,6 +157,9 @@ function unlessEmpty(propMap: { [p: string]: string }) {
 /**
  * Recursively builds a mapping of field names to ParsedQueryNodes for the given
  * selection set.
+ *
+ * `condition` is the condition under which the selection set is selected (via
+ * fragments with type conditions or conditional @skip/@include directives).
  */
 function _buildNodeMap<TSerialized>(
   variables: Set<string>,
@@ -134,11 +168,25 @@ function _buildNodeMap<TSerialized>(
   propMap: { [p: string]: string },
   selectionSet?: SelectionSetNode,
   path: string[] = [],
+  condition?: SelectionCondition,
 ): ParsedQueryWithVariables | undefined {
   if (!selectionSet) return undefined;
 
   const nodeMap = Object.create(null);
+  // Whether the selection set selects anything (even if only skipped fields).
+  let hasSelections = false;
   for (const selection of selectionSet.selections) {
+    _collectDirectiveVariables(variables, selection);
+
+    // Selections that are statically skipped (e.g. @skip(if: true)) are omitted
+    // entirely; those that depend on variables become conditional.
+    const directives = _inclusionDirectives(selection.directives);
+    if (directives === false) {
+      hasSelections = true;
+      continue;
+    }
+    const selectionCondition = directives ? _extendCondition(condition, undefined, directives) : condition;
+
     if (selection.kind === 'Field') {
       // The name of the field (as defined by the query).
       const name = selection.alias ? selection.alias.value : selection.name.value;
@@ -162,23 +210,39 @@ function _buildNodeMap<TSerialized>(
 
       const hasParameterizedChildren = areChildrenDynamic(children);
 
-      const node = new ParsedQueryNode(children, schemaName, args, hasParameterizedChildren, unlessEmpty(innerPropMap));
+      const node = new ParsedQueryNode(
+        children,
+        schemaName,
+        args,
+        hasParameterizedChildren,
+        unlessEmpty(innerPropMap),
+        selectionCondition ? [selectionCondition] : undefined,
+      );
       nodeMap[name] = _mergeNodes([...path, name], node, nodeMap[name]);
-    } else if (selection.kind === 'FragmentSpread') {
-      const fragment = fragments[selection.name.value];
+      hasSelections = true;
+    } else if (selection.kind === 'FragmentSpread' || selection.kind === 'InlineFragment') {
+      const fragment = selection.kind === 'FragmentSpread' ? fragments[selection.name.value] : selection;
       if (!fragment) {
-        throw new Error(`Expected fragment ${selection.name.value} to be defined`);
+        throw new Error(`Expected fragment ${(selection as FragmentSpreadNode).name.value} to be defined`);
       }
 
-      const fragmentMap = _buildNodeMap(variables, context, fragments, propMap, fragment.selectionSet, path);
+      // Fields of fragments with a type condition only apply to objects whose
+      // __typename matches it.
+      const typeCondition = fragment.typeCondition?.name.value;
+      const fragmentCondition = typeCondition
+        ? _extendCondition(selectionCondition, typeCondition)
+        : selectionCondition;
+      const fragmentMap = _buildNodeMap(
+        variables,
+        context,
+        fragments,
+        propMap,
+        fragment.selectionSet,
+        path,
+        fragmentCondition,
+      );
       if (fragmentMap) {
-        for (const name in fragmentMap) {
-          nodeMap[name] = _mergeNodes([...path, name], fragmentMap[name], nodeMap[name]);
-        }
-      }
-    } else if (selection.kind === 'InlineFragment') {
-      const fragmentMap = _buildNodeMap(variables, context, fragments, propMap, selection.selectionSet, path);
-      if (fragmentMap) {
+        hasSelections = true;
         for (const name in fragmentMap) {
           nodeMap[name] = _mergeNodes([...path, name], fragmentMap[name], nodeMap[name]);
         }
@@ -186,11 +250,59 @@ function _buildNodeMap<TSerialized>(
     } else if (context.tracer.warning) {
       context.tracer.warning(`${(selection as any).kind} selections are not supported; query may misbehave`);
     }
-
-    _collectDirectiveVariables(variables, selection);
   }
 
-  return Object.keys(nodeMap).length ? nodeMap : undefined;
+  return hasSelections ? nodeMap : undefined;
+}
+
+/**
+ * Returns a condition that additionally requires a type condition and/or
+ * directives.
+ */
+function _extendCondition(
+  condition: SelectionCondition | undefined,
+  typeCondition?: string,
+  directives?: InclusionDirective[],
+): SelectionCondition {
+  const extended: { typeConditions?: string[]; directives?: InclusionDirective[] } = {};
+  if (condition?.typeConditions || typeCondition) {
+    extended.typeConditions = [...(condition?.typeConditions ?? []), ...(typeCondition ? [typeCondition] : [])];
+  }
+  if (condition?.directives || directives) {
+    extended.directives = [...(condition?.directives ?? []), ...(directives ?? [])];
+  }
+  return extended;
+}
+
+/**
+ * Evaluates the @skip/@include directives of a selection, as far as possible
+ * without variables.
+ *
+ * Returns false if the selection is statically skipped, the directives that
+ * depend on variables (if any), or undefined if it is always included.
+ */
+function _inclusionDirectives(directives?: readonly DirectiveNode[]): InclusionDirective[] | false | undefined {
+  if (!directives) return undefined;
+
+  let inclusionDirectives: InclusionDirective[] | undefined;
+  for (const directive of directives) {
+    const directiveName = directive.name.value;
+    if (directiveName !== 'skip' && directiveName !== 'include') continue;
+
+    const ifArgument = directive.arguments?.find(argument => argument.name.value === 'if');
+    if (!ifArgument) continue;
+
+    const include = directiveName === 'include';
+    const { value } = ifArgument;
+    if (value.kind === 'Variable') {
+      inclusionDirectives = inclusionDirectives ?? [];
+      inclusionDirectives.push({ variable: value.name.value, include });
+    } else if (value.kind === 'BooleanValue' && value.value !== include) {
+      return false;
+    }
+  }
+
+  return inclusionDirectives;
 }
 
 /**
@@ -203,6 +315,8 @@ export function areChildrenDynamic(children?: ParsedQueryWithVariables) {
     if (child.hasParameterizedChildren) return true;
     if (child.args) return true;
     if (child.schemaName) return true; // Aliases are dynamic at read time.
+    // Directive conditions are resolved per operation (see expandVariables).
+    if (child.conditions?.some(condition => condition.directives)) return true;
   }
   return undefined;
 }
@@ -266,6 +380,17 @@ function _mergeNodes<TArgTypes>(
   if (target.schemaName !== source.schemaName) {
     throw new ConflictingFieldsError(`alias mismatch`, path, [target, source]);
   }
+  // A field is selected if any of its selections apply.
+  if (!target.conditions || !source.conditions) {
+    target.conditions = undefined;
+  } else {
+    // `source` holds the earlier selections (keep them in document order).
+    const sourceConditions = source.conditions;
+    const newConditions = target.conditions.filter(
+      condition => !sourceConditions.some(existing => isEqual(existing, condition)),
+    );
+    target.conditions = [...sourceConditions, ...newConditions];
+  }
   if (!source.children) return target;
 
   if (!target.children) {
@@ -302,13 +427,22 @@ export function _expandVariables(parsed?: ParsedQueryWithVariables, variables?: 
   const newMap: ParsedQuery<JsonScalar> = {};
   for (const key in parsed) {
     const node = parsed[key];
-    if (node.args || node.hasParameterizedChildren) {
+    let conditions = node.conditions;
+    if (conditions?.some(condition => condition.directives)) {
+      const resolved = _resolveDirectives(conditions, variables);
+      // Skipped for these variables.
+      if (resolved === null) continue;
+      conditions = resolved;
+    }
+
+    if (node.args || node.hasParameterizedChildren || conditions !== node.conditions) {
       newMap[key] = new ParsedQueryNode(
         _expandVariables(node.children, variables),
         node.schemaName,
         expandFieldArguments(node.args, variables),
         node.hasParameterizedChildren,
         node.propMap,
+        conditions,
       );
       // No variables to substitute for this subtree.
     } else {
@@ -317,6 +451,25 @@ export function _expandVariables(parsed?: ParsedQueryWithVariables, variables?: 
   }
 
   return newMap;
+}
+
+/**
+ * Evaluates the @skip/@include directives of a field's conditions.
+ *
+ * Returns null if the field is not selected, the remaining type conditions
+ * otherwise (undefined if it is selected unconditionally).
+ */
+function _resolveDirectives(
+  conditions: readonly SelectionCondition[],
+  variables: JsonObject | undefined,
+): readonly SelectionCondition[] | undefined | null {
+  const resolved: SelectionCondition[] = [];
+  for (const { typeConditions, directives } of conditions) {
+    if (directives && !directives.every(({ variable, include }) => !!variables?.[variable] === include)) continue;
+    if (!typeConditions) return undefined;
+    resolved.push({ typeConditions });
+  }
+  return resolved.length ? resolved : null;
 }
 
 /**

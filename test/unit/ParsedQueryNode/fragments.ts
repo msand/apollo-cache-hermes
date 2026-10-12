@@ -9,6 +9,8 @@ import { strictConfig } from '../../helpers';
 
 describe(`parseQuery for queries with fragments`, () => {
   const context = new CacheContext(strictConfig);
+  // Fields of fragments on Foo are only selected for Foo objects.
+  const onFoo = [{ typeConditions: ['Foo'] }];
   function parseOperation(operationString: string) {
     const document = gql(operationString);
     const operation = getOperationOrDie(document);
@@ -30,8 +32,8 @@ describe(`parseQuery for queries with fragments`, () => {
     expect(parseOperation(operation)).to.deep.eq({
       parsedQuery: {
         foo: new ParsedQueryNode({
-          id: new ParsedQueryNode(),
-          name: new ParsedQueryNode(),
+          id: new ParsedQueryNode(undefined, undefined, undefined, undefined, undefined, onFoo),
+          name: new ParsedQueryNode(undefined, undefined, undefined, undefined, undefined, onFoo),
         }),
       },
       variables: new Set(),
@@ -59,8 +61,8 @@ describe(`parseQuery for queries with fragments`, () => {
     expect(parseOperation(operation)).to.deep.eq({
       parsedQuery: {
         foo: new ParsedQueryNode({
-          id: new ParsedQueryNode(),
-          name: new ParsedQueryNode(),
+          id: new ParsedQueryNode(undefined, undefined, undefined, undefined, undefined, onFoo),
+          name: new ParsedQueryNode(undefined, undefined, undefined, undefined, undefined, onFoo),
         }),
       },
       variables: new Set(),
@@ -84,8 +86,13 @@ describe(`parseQuery for queries with fragments`, () => {
     expect(parseOperation(operation)).to.deep.eq({
       parsedQuery: {
         foo: new ParsedQueryNode({
-          id: new ParsedQueryNode(),
-          name: new ParsedQueryNode(),
+          id: new ParsedQueryNode(undefined, undefined, undefined, undefined, undefined, [
+            { typeConditions: ['Foo'] },
+            { typeConditions: ['Bar'] },
+          ]),
+          name: new ParsedQueryNode(undefined, undefined, undefined, undefined, undefined, [
+            { typeConditions: ['Bar'] },
+          ]),
         }),
       },
       variables: new Set(),
@@ -114,6 +121,9 @@ describe(`parseQuery for queries with fragments`, () => {
               },
               undefined,
               { extra: true },
+              undefined,
+              undefined,
+              onFoo,
             ),
           },
           undefined,
@@ -147,6 +157,9 @@ describe(`parseQuery for queries with fragments`, () => {
               },
               undefined,
               { limit: new VariableArgument('count') },
+              undefined,
+              undefined,
+              onFoo,
             ),
           },
           undefined,
@@ -155,6 +168,35 @@ describe(`parseQuery for queries with fragments`, () => {
         ),
       },
       variables: new Set(['count']),
+    });
+  });
+
+  it(`keeps the type conditions of nested fragments`, () => {
+    const operation = `
+      query getThings {
+        foo {
+          id
+          ... on Bar {
+            ...aBaz
+          }
+        }
+      }
+
+      fragment aBaz on Baz {
+        id
+        name
+      }
+    `;
+    expect(parseOperation(operation)).to.deep.eq({
+      parsedQuery: {
+        foo: new ParsedQueryNode({
+          id: new ParsedQueryNode(),
+          name: new ParsedQueryNode(undefined, undefined, undefined, undefined, undefined, [
+            { typeConditions: ['Bar', 'Baz'] },
+          ]),
+        }),
+      },
+      variables: new Set(),
     });
   });
 

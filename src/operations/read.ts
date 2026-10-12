@@ -315,6 +315,8 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
 
     for (const key in parsedMap) {
       const node = parsedMap[key];
+      // Fields of fragments that don't match the type are not selected.
+      if (node.conditions && !context.conditionsMatch(node.conditions, typeName)) continue;
       let child;
       let fieldName = key;
 
@@ -519,8 +521,12 @@ export function _visitSelection<TSerialized>(
   }
   const missingByFieldName = new Map<string, MissingFieldError>();
 
+  // Fields of fragments that don't match the type are not selected.
+  const isSelected = (node: ParsedQueryNode, parent: JsonValue | undefined) =>
+    !node.conditions || context.conditionsMatch(node.conditions, isObject(parent) ? parent.__typename : undefined);
+
   // TODO: Memoize per query, and propagate through cache snapshots.
-  walkOperation(query.info.parsed, result, (value, fields, path) => {
+  walkOperation(query.parsedQuery, result, isSelected, (value, fields, path) => {
     if (value === undefined) {
       complete = false;
     }

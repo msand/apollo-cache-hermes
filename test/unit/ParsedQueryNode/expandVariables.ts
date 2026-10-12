@@ -123,4 +123,27 @@ describe(`ParsedQueryNode.expandVariables`, () => {
       expandVariables(map, { foo: 123 });
     }).to.throw(/\$bar/);
   });
+
+  it(`resolves @skip and @include directives`, () => {
+    const map = makeFieldMap(`
+      query stuff($yes: Boolean, $no: Boolean) {
+        a @include(if: $yes)
+        b @include(if: $no)
+        c @skip(if: $yes)
+        d @skip(if: $no)
+        ... on Query @include(if: $yes) {
+          e
+        }
+        ... on Query @include(if: $no) {
+          f
+        }
+      }
+    `);
+
+    expect(expandVariables(map, { yes: true, no: false })).to.deep.eq({
+      a: new ParsedQueryNode(),
+      d: new ParsedQueryNode(),
+      e: new ParsedQueryNode(undefined, undefined, undefined, undefined, undefined, [{ typeConditions: ['Query'] }]),
+    });
+  });
 });

@@ -233,6 +233,16 @@ export class SnapshotEditor<TSerialized> {
         : previousValue && typeof previousValue === 'object' && '__typename' in previousValue
           ? previousValue.__typename
           : undefined;
+    // The type that fragments' type conditions are matched against (values
+    // nested within the root are not of the Query type).
+    const fragmentTypename =
+      payload && typeof payload === 'object' && '__typename' in payload
+        ? payload.__typename
+        : isRoot && path.length === 0
+          ? 'Query'
+          : previousValue && typeof previousValue === 'object' && '__typename' in previousValue
+            ? previousValue.__typename
+            : undefined;
 
     const typePolicy: TypePolicy | undefined =
       typeof typename === 'string' ? this._context.typePolicies?.[typename] : undefined;
@@ -416,9 +426,16 @@ export class SnapshotEditor<TSerialized> {
     // Finally, we can walk into individual values.
     for (const payloadName in parsed) {
       const node = parsed[payloadName];
+      let fieldValue = deepGet(payload, [payloadName]) as JsonValue | undefined;
+      // Like InMemoryCache, skip fields of fragments that don't match the type.
+      if (
+        node.conditions &&
+        !this._context.conditionsMatch(node.conditions, fragmentTypename, fieldValue !== undefined)
+      ) {
+        continue;
+      }
       // Having a schemaName on the node implies that payloadName is an alias.
       const schemaName = node.schemaName ? node.schemaName : payloadName;
-      let fieldValue = deepGet(payload, [payloadName]) as JsonValue | undefined;
       // Don't trust our inputs.
       if (fieldValue === undefined) {
         // If it was explicitly undefined, that likely indicates a malformed

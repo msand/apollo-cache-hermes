@@ -23,7 +23,12 @@ function assertDeeplyFrozen(value: any, stack: any[] = []) {
 // addTypename is off because StoreWriter/StoreReader use the document as is,
 // and diff with returnPartialData: false mirrors readQueryFromStore.
 function storeRoundtrip(query: DocumentNode, result: any, variables = {}) {
-  const cache = new Hermes({ addTypename: false });
+  const cache = new Hermes({
+    addTypename: false,
+    possibleTypes: {
+      Character: ['Jedi', 'Droid'],
+    },
+  });
 
   cache.writeQuery({ query, data: result, variables });
 
@@ -401,8 +406,7 @@ describe('roundtrip', () => {
       });
     });
 
-    // Hermes: needs possibleTypes (Character: Jedi | Droid) fragment matching
-    it.skip('should work with a fragment on the actual interface or union', () => {
+    it('should work with a fragment on the actual interface or union', () => {
       return withError(() => {
         storeRoundtrip(
           gql`

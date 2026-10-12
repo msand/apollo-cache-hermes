@@ -9,6 +9,8 @@ import { DocumentNode } from '../util';
 
 import { buildRawOperationFromQuery, buildRawOperationFromFragment } from './util';
 
+const EMPTY_RESULT = Object.freeze({});
+
 /**
  * Apollo-specific interface to the cache.
  */
@@ -27,8 +29,9 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
       throw new UnsatisfiedCacheError(`diffQuery not satisfied by the cache.`);
     }
 
-    // Like InMemoryCache, an empty read is an empty (incomplete) object rather than undefined.
-    return { result: (result ?? {}) as unknown as T, complete, missing, fromOptimisticTransaction };
+    // Like InMemoryCache, an empty read is an empty (incomplete) object rather than undefined; and
+    // like its canonized results, the same (frozen) one each time.
+    return { result: (result ?? EMPTY_RESULT) as unknown as T, complete, missing, fromOptimisticTransaction };
   }
 
   read<TData = any, TVariables = any>(query: Cache.ReadOptions<TVariables, TData>): TData | null {

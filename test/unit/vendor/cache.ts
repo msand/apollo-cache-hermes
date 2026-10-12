@@ -1265,7 +1265,7 @@ describe('Cache', () => {
       },
       proxy => {
         const readWriteFragment = gql`
-          fragment aFragment on Query {
+          fragment aFragment on query {
             getSomething {
               id
             }

@@ -1,11 +1,11 @@
 import { addTypenameToDocument } from '@apollo/client/utilities';
 import isEqual from '@wry/equality';
 import { TypePolicies } from '@apollo/client';
-import type { FragmentRegistryAPI } from '@apollo/client/cache';
+import type { FragmentRegistryAPI, PossibleTypesMap } from '@apollo/client/cache';
 
 import { ApolloTransaction } from '../apollo/Transaction';
 import { CacheSnapshot } from '../CacheSnapshot';
-import { areChildrenDynamic, expandVariables } from '../ParsedQueryNode';
+import { areChildrenDynamic, expandVariables, SelectionCondition } from '../ParsedQueryNode';
 import { JsonObject } from '../primitive';
 import { EntityId, NodeId, OperationInstance, RawOperation } from '../schema';
 import { DocumentNode, isObject } from '../util';
@@ -69,6 +69,14 @@ export namespace CacheContext {
 
     /** Fragments that operations may spread without defining them (like InMemoryCache's option). */
     fragments?: FragmentRegistryAPI;
+
+    /**
+     * The subtypes of abstract (interface/union) types, used to match fragment
+     * type conditions against __typename (like InMemoryCache's option).
+     *
+     * Subtypes that are not valid type names are treated as regular expressions.
+     */
+    possibleTypes?: PossibleTypesMap;
 
     /**
      * Given a node, determines a _globally unique_ identifier for it to be used
@@ -203,6 +211,12 @@ export class CacheContext<TSerialized = GraphSnapshot> {
 
   public readonly fragments: FragmentRegistryAPI | undefined;
 
+  /** The (transitive, once matched) supertypes of each type in possibleTypes. */
+  private readonly _supertypeMap = new Map<string, Set<string>>();
+
+  /** possibleTypes subtypes that are regular expressions, by their source. */
+  private readonly _fuzzySubtypes = new Map<string, RegExp>();
+
   constructor(config: CacheContext.Configuration<TSerialized> = {}) {
     // Infer dev mode from NODE_ENV, by convention.
     const nodeEnv = typeof process !== 'undefined' ? process.env.NODE_ENV : 'development';
@@ -221,6 +235,99 @@ export class CacheContext<TSerialized = GraphSnapshot> {
     this.addTypename = config.addTypename ?? true;
     this.typePolicies = config.typePolicies;
     this.fragments = config.fragments;
+    if (config.possibleTypes) {
+      this.addPossibleTypes(config.possibleTypes);
+    }
+  }
+
+  /**
+   * Registers subtypes of abstract types (like InMemoryCache's
+   * policies.addPossibleTypes).
+   */
+  addPossibleTypes(possibleTypes: PossibleTypesMap) {
+    for (const supertype of Object.keys(possibleTypes)) {
+      // Make sure all supertypes have an entry, so that fragmentMatches can
+      // return false immediately for unknown supertypes.
+      this._getSupertypeSet(supertype);
+      for (const subtype of possibleTypes[supertype]) {
+        this._getSupertypeSet(subtype).add(supertype);
+        const match = subtype.match(TypeOrFieldNameRegExp);
+        if (!match || match[0] !== subtype) {
+          this._fuzzySubtypes.set(subtype, new RegExp(subtype));
+        }
+      }
+    }
+  }
+
+  /**
+   * Whether a field selected under `conditions` applies to an object with the
+   * given __typename.
+   *
+   * Like Hermes always has (and unlike InMemoryCache), fields of fragments
+   * apply to objects of unknown type.  When writing, pass `hasValue` (whether
+   * the payload has a value for the field) to also consider fuzzy subtypes.
+   */
+  conditionsMatch(conditions: readonly SelectionCondition[] | undefined, typename: unknown, hasValue?: boolean) {
+    if (!conditions || typeof typename !== 'string') return true;
+    return conditions.some(
+      ({ typeConditions }) =>
+        !typeConditions || typeConditions.every(supertype => this.fragmentMatches(supertype, typename, hasValue)),
+    );
+  }
+
+  /**
+   * Whether a fragment with the type condition `supertype` applies to objects
+   * of type `typename` (mirroring InMemoryCache's policies.fragmentMatches).
+   *
+   * Fuzzy (regular expression) subtypes are only considered when
+   * `checkFuzzySubtypes` is set; positive matches are remembered.
+   */
+  fragmentMatches(supertype: string, typename: string, checkFuzzySubtypes?: boolean): boolean {
+    // Common case: the type condition and __typename are the same.
+    if (typename === supertype) return true;
+    if (!this._supertypeMap.has(supertype)) return false;
+
+    const typenameSupertypeSet = this._getSupertypeSet(typename);
+    const workQueue = [typenameSupertypeSet];
+    const maybeEnqueue = (subtype: string) => {
+      const supertypeSet = this._supertypeMap.get(subtype);
+      if (supertypeSet && supertypeSet.size && workQueue.indexOf(supertypeSet) < 0) {
+        workQueue.push(supertypeSet);
+      }
+    };
+
+    let needToCheckFuzzySubtypes = !!checkFuzzySubtypes && this._fuzzySubtypes.size > 0;
+    // Note that workQueue can grow while we're iterating over it.
+    for (let i = 0; i < workQueue.length; ++i) {
+      const supertypeSet = workQueue[i];
+      if (supertypeSet.has(supertype)) {
+        // Record positive results for faster future lookup.
+        typenameSupertypeSet.add(supertype);
+        return true;
+      }
+      supertypeSet.forEach(maybeEnqueue);
+
+      // Check fuzzy subtypes only after exhausting all non-fuzzy subtypes.
+      if (needToCheckFuzzySubtypes && i === workQueue.length - 1) {
+        needToCheckFuzzySubtypes = false;
+        this._fuzzySubtypes.forEach((regExp, fuzzyString) => {
+          const match = typename.match(regExp);
+          if (match && match[0] === typename) {
+            maybeEnqueue(fuzzyString);
+          }
+        });
+      }
+    }
+
+    return false;
+  }
+
+  private _getSupertypeSet(subtype: string) {
+    let supertypeSet = this._supertypeMap.get(subtype);
+    if (!supertypeSet) {
+      this._supertypeMap.set(subtype, (supertypeSet = new Set()));
+    }
+    return supertypeSet;
   }
 
   /**
@@ -366,6 +473,9 @@ export function defaultEntityIdMapper({ __typename, _id, id = _id }: { __typenam
   }
   return `${__typename}:${numberOrString ? id : JSON.stringify(id)}`;
 }
+
+// Matches valid GraphQL type names (like InMemoryCache's).
+const TypeOrFieldNameRegExp = /^[_a-z][_0-9a-z]*/i;
 
 export function operationCacheKey(document: DocumentNode, fragmentName?: string) {
   if (fragmentName) {
