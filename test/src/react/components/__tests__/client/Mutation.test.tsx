@@ -4,6 +4,7 @@ import { ExecutionResult, GraphQLError } from 'graphql';
 import userEvent from '@testing-library/user-event';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import { ApolloClient, ApolloProvider } from '@apollo/client';
+import { loadErrorMessages } from '@apollo/client/dev';
 import { PropsWithChildren, useState } from 'react';
 import { Mutation, Query } from '@apollo/client/react/components';
 
@@ -11,6 +12,9 @@ import { ApolloError } from '../../../../errors';
 import { DataProxy } from '../../../../cache';
 import { itAsync, MockedProvider, MockLink, mockSingleLink } from '../../../../testing';
 import { Hermes } from '../../../../../../src';
+
+// These tests assert the @apollo/client error text rather than its production placeholder.
+loadErrorMessages();
 
 const mutation = gql`
   mutation createTodo($text: String!) {
@@ -821,7 +825,7 @@ describe('General Mutation testing', () => {
           if (count === 0) {
             createTodo();
             const dataInStore = client.cache.extract(true);
-            expect(dataInStore['Todo:99']).toEqual(optimisticResponse.createTodo);
+            expect(dataInStore['Todo:99'].data).toEqual(optimisticResponse.createTodo);
           } else if (count === 1) {
             expect(result.loading).toEqual(true);
             expect(result.called).toEqual(true);
@@ -871,7 +875,7 @@ describe('General Mutation testing', () => {
           if (count === 0) {
             createTodo({ optimisticResponse });
             const dataInStore = client.cache.extract(true);
-            expect(dataInStore['Todo:99']).toEqual(optimisticResponse.createTodo);
+            expect(dataInStore['Todo:99'].data).toEqual(optimisticResponse.createTodo);
           } else if (count === 2) {
             expect(result.loading).toEqual(false);
             expect(result.called).toEqual(true);

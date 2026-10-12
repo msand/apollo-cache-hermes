@@ -3,6 +3,7 @@ import gql from 'graphql-tag';
 import { DocumentNode } from 'graphql';
 import { render, screen, waitFor } from '@testing-library/react';
 import { ApolloClient, ApolloLink, ApolloProvider } from '@apollo/client';
+import { loadErrorMessages } from '@apollo/client/dev';
 import { Query } from '@apollo/client/react/components';
 
 import { NetworkStatus } from '../../../../core';
@@ -11,6 +12,9 @@ import { itAsync, MockedProvider, mockSingleLink } from '../../../../testing';
 import { QueryResult } from '../../../types/types';
 import { profile } from '../../../../testing/internal';
 import { Hermes } from '../../../../../../src';
+
+// These tests assert the @apollo/client error text rather than its production placeholder.
+loadErrorMessages();
 
 const allPeopleQuery: DocumentNode = gql`
   query people {
@@ -2111,7 +2115,8 @@ describe('Query component', () => {
         <ApolloProvider client={client}>
           <Query query={partialQuery} returnPartialData>
             {({ data }: any) => {
-              expect(data).toEqual({
+              // Hermes: reads may return a superset of the selected fields (see README).
+              expect(data).toMatchObject({
                 cars: [
                   {
                     __typename: 'Car',

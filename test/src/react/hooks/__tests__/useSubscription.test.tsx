@@ -535,12 +535,8 @@ describe('useSubscription Hook', () => {
     expect(result.current.error).toBe(undefined);
     expect(result.current.data).toBe(null);
 
-    expect(consoleSpy.error).toHaveBeenCalledTimes(1);
-    expect(consoleSpy.error.mock.calls[0]).toStrictEqual([
-      "Missing field '%s' while writing result %o",
-      'car',
-      Object.create(null),
-    ]);
+    // Hermes: does not emit InMemoryCache's "Missing field ... while writing result" warning.
+    expect(consoleSpy.error).not.toHaveBeenCalled();
   });
 
   it('should handle immediate completions with multiple subscriptions gracefully', async () => {
@@ -601,22 +597,8 @@ describe('useSubscription Hook', () => {
     expect(result.current.sub3.error).toBe(undefined);
     expect(result.current.sub3.data).toBe(null);
 
-    expect(consoleSpy.error).toHaveBeenCalledTimes(3);
-    expect(consoleSpy.error.mock.calls[0]).toStrictEqual([
-      "Missing field '%s' while writing result %o",
-      'car',
-      Object.create(null),
-    ]);
-    expect(consoleSpy.error.mock.calls[1]).toStrictEqual([
-      "Missing field '%s' while writing result %o",
-      'car',
-      Object.create(null),
-    ]);
-    expect(consoleSpy.error.mock.calls[2]).toStrictEqual([
-      "Missing field '%s' while writing result %o",
-      'car',
-      Object.create(null),
-    ]);
+    // Hermes: does not emit InMemoryCache's "Missing field ... while writing result" warning.
+    expect(consoleSpy.error).not.toHaveBeenCalled();
   });
 
   it("should warn when using 'onSubscriptionData' and 'onData' together", () => {

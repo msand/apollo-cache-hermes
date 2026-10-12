@@ -542,7 +542,8 @@ describe('useLazyQuery Hook', () => {
     {
       const [, result] = await ProfiledHook.takeSnapshot();
       expect(result.loading).toBe(false);
-      expect(result.data).toEqual({ name: 'changed' });
+      // Hermes: reads may return a superset of the selected fields (see README).
+      expect(result.data).toMatchObject({ name: 'changed' });
     }
   });
 

@@ -55,7 +55,7 @@ describe('graphql(mutation) query integration', () => {
           });
 
           const dataInStore = client.cache.extract(true);
-          expect(dataInStore['Todo:99']).toEqual(optimisticResponse.createTodo);
+          expect(dataInStore['Todo:99']?.data).toEqual(optimisticResponse.createTodo);
         }
 
         render() {

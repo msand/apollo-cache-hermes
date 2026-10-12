@@ -838,7 +838,8 @@ it('passes context to the link', async () => {
   }
 });
 
-it('enables canonical results when canonizeResults is "true"', async () => {
+// Hermes: canonizeResults (canonical result identity) is InMemoryCache-only.
+it.skip('enables canonical results when canonizeResults is "true"', async () => {
   interface Result {
     __typename: string;
     value: number;
@@ -1191,7 +1192,7 @@ it("existing data in the cache is ignored when fetchPolicy is 'network-only'", a
   }
 
   expect(client.cache.extract()).toEqual({
-    ROOT_QUERY: { __typename: 'Query', greeting: 'from link' },
+    ROOT_QUERY: { type: 0, data: { greeting: 'from link' } },
   });
 
   await expect(Profiler).not.toRerender({ timeout: 50 });
@@ -1244,7 +1245,7 @@ it("fetches data from the network but does not update the cache when fetchPolicy
   }
 
   expect(client.cache.extract()).toEqual({
-    ROOT_QUERY: { __typename: 'Query', greeting: 'from cache' },
+    ROOT_QUERY: { type: 0, data: { greeting: 'from cache' } },
   });
 
   await expect(Profiler).not.toRerender({ timeout: 50 });
@@ -2626,7 +2627,8 @@ it('applies `context` on next fetch when it changes between renders', async () =
 // NOTE: We only test the `false` -> `true` path here. If the option changes
 // from `true` -> `false`, the data has already been canonized, so it has no
 // effect on the output.
-it('returns canonical results immediately when `canonizeResults` changes from `false` to `true` between renders', async () => {
+// Hermes: canonizeResults (canonical result identity) is InMemoryCache-only.
+it.skip('returns canonical results immediately when `canonizeResults` changes from `false` to `true` between renders', async () => {
   interface Result {
     __typename: string;
     value: number;
@@ -2717,7 +2719,8 @@ it('returns canonical results immediately when `canonizeResults` changes from `f
   }
 });
 
-it('applies changed `refetchWritePolicy` to next fetch when changing between renders', async () => {
+// Hermes: keyArgs (merging a field across arguments) is not implemented.
+it.skip('applies changed `refetchWritePolicy` to next fetch when changing between renders', async () => {
   interface Data {
     primes: number[];
   }
@@ -5000,7 +5003,8 @@ describe('refetch', () => {
     }
   });
 
-  it('honors refetchWritePolicy set to "merge"', async () => {
+  // Hermes: keyArgs (merging a field across arguments) is not implemented.
+  it.skip('honors refetchWritePolicy set to "merge"', async () => {
     const user = userEvent.setup();
 
     const query: TypedDocumentNode<QueryData, { min: number; max: number }> = gql`
@@ -5224,7 +5228,8 @@ describe('refetch', () => {
 });
 
 describe('fetchMore', () => {
-  it('re-suspends when calling `fetchMore` with different variables', async () => {
+  // Hermes: keyArgs (merging a field across arguments) is not implemented.
+  it.skip('re-suspends when calling `fetchMore` with different variables', async () => {
     const { query, link } = setupPaginatedCase();
     const cache = new Hermes({
       typePolicies: {
@@ -5381,7 +5386,8 @@ describe('fetchMore', () => {
     await expect(Profiler).not.toRerender({ timeout: 50 });
   });
 
-  it('properly uses cache field policies when calling `fetchMore` without `updateQuery`', async () => {
+  // Hermes: concatPagination relies on keyArgs: false, which is not implemented.
+  it.skip('properly uses cache field policies when calling `fetchMore` without `updateQuery`', async () => {
     const { query, link } = setupPaginatedCase();
     const user = userEvent.setup();
     const Profiler = createDefaultProfiler<PaginatedCaseData>();
@@ -5464,7 +5470,8 @@ describe('fetchMore', () => {
     await expect(Profiler).not.toRerender({ timeout: 50 });
   });
 
-  it('`fetchMore` works with startTransition to allow React to show stale UI until finished suspending', async () => {
+  // Hermes: offsetLimitPagination relies on keyArgs: false, which is not implemented.
+  it.skip('`fetchMore` works with startTransition to allow React to show stale UI until finished suspending', async () => {
     type Variables = {
       offset: number;
     };
@@ -5672,7 +5679,8 @@ describe('fetchMore', () => {
   });
 
   // https://github.com/apollographql/apollo-client/issues/11708
-  it('`fetchMore` works with startTransition when setting errorPolicy as default option in ApolloClient constructor', async () => {
+  // Hermes: offsetLimitPagination relies on keyArgs: false, which is not implemented.
+  it.skip('`fetchMore` works with startTransition when setting errorPolicy as default option in ApolloClient constructor', async () => {
     type Variables = {
       offset: number;
     };

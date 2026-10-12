@@ -2,7 +2,7 @@ import { from, ObservableInput } from 'rxjs';
 import { take, toArray, map } from 'rxjs/operators';
 import { assign, cloneDeep } from 'lodash';
 import gql from 'graphql-tag';
-import { ApolloClient, makeReference, ApolloLink, ApolloCache, MutationQueryReducersMap } from '@apollo/client';
+import { ApolloClient, ApolloLink, ApolloCache, MutationQueryReducersMap } from '@apollo/client';
 
 import { QueryManager } from '../core/QueryManager';
 import { Cache } from '../cache';
@@ -210,15 +210,15 @@ describe('optimistic mutation results', () => {
           });
 
           const dataInStore = (client.cache as Hermes).extract(true);
-          expect((dataInStore['TodoList5'] as any).todos.length).toBe(4);
-          expect((dataInStore['Todo99'] as any).text).toBe('Optimistically generated');
+          expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(4);
+          expect((dataInStore['Todo99'] as any).data.text).toBe('Optimistically generated');
           await promise;
         } catch (err) {
           expect(err).toBeInstanceOf(Error);
           expect((err as Error).message).toBe('forbidden (test error)');
 
           const dataInStore = (client.cache as Hermes).extract(true);
-          expect((dataInStore['TodoList5'] as any).todos.length).toBe(3);
+          expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(3);
           expect(dataInStore).not.toHaveProperty('Todo99');
         }
 
@@ -270,20 +270,26 @@ describe('optimistic mutation results', () => {
         });
 
         const dataInStore = (client.cache as Hermes).extract(true);
-        expect((dataInStore['TodoList5'] as any).todos.length).toBe(5);
-        expect((dataInStore['Todo99'] as any).text).toBe('Optimistically generated');
-        expect((dataInStore['Todo66'] as any).text).toBe('Optimistically generated 2');
+        expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(5);
+        expect((dataInStore['Todo99'] as any).data.text).toBe('Optimistically generated');
+        expect((dataInStore['Todo66'] as any).data.text).toBe('Optimistically generated 2');
 
         await Promise.all([promise, promise2]);
 
         subscriptionHandle!.unsubscribe();
         {
           const dataInStore = (client.cache as Hermes).extract(true);
-          expect((dataInStore['TodoList5'] as any).todos.length).toBe(4);
+          expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(4);
           expect(dataInStore).not.toHaveProperty('Todo99');
           expect(dataInStore).toHaveProperty('Todo66');
-          expect((dataInStore['TodoList5'] as any).todos).toContainEqual(makeReference('Todo66'));
-          expect((dataInStore['TodoList5'] as any).todos).not.toContainEqual(makeReference('Todo99'));
+          expect((dataInStore['TodoList5'] as any).outbound).toContainEqual({
+            id: 'Todo66',
+            path: ['todos', expect.any(Number)],
+          });
+          expect((dataInStore['TodoList5'] as any).outbound).not.toContainEqual({
+            id: 'Todo99',
+            path: ['todos', expect.any(Number)],
+          });
           resolve();
         }
       });
@@ -292,14 +298,20 @@ describe('optimistic mutation results', () => {
         expect.assertions(34);
         function checkBothMutationsAreApplied(expectedText1: any, expectedText2: any) {
           const dataInStore = (client.cache as Hermes).extract(true);
-          expect((dataInStore['TodoList5'] as any).todos.length).toBe(5);
+          expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(5);
           expect(dataInStore).toHaveProperty('Todo99');
           expect(dataInStore).toHaveProperty('Todo66');
           // <any> can be removed once @types/chai adds deepInclude
-          expect((dataInStore['TodoList5'] as any).todos).toContainEqual(makeReference('Todo66'));
-          expect((dataInStore['TodoList5'] as any).todos).toContainEqual(makeReference('Todo99'));
-          expect((dataInStore['Todo99'] as any).text).toBe(expectedText1);
-          expect((dataInStore['Todo66'] as any).text).toBe(expectedText2);
+          expect((dataInStore['TodoList5'] as any).outbound).toContainEqual({
+            id: 'Todo66',
+            path: ['todos', expect.any(Number)],
+          });
+          expect((dataInStore['TodoList5'] as any).outbound).toContainEqual({
+            id: 'Todo99',
+            path: ['todos', expect.any(Number)],
+          });
+          expect((dataInStore['Todo99'] as any).data.text).toBe(expectedText1);
+          expect((dataInStore['Todo66'] as any).data.text).toBe(expectedText2);
         }
         let subscriptionHandle: Subscription;
         const client = await setup(
@@ -422,8 +434,8 @@ describe('optimistic mutation results', () => {
           });
 
           const dataInStore = (client.cache as Hermes).extract(true);
-          expect((dataInStore['TodoList5'] as any).todos.length).toBe(4);
-          expect((dataInStore['Todo99'] as any).text).toBe('Optimistically generated');
+          expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(4);
+          expect((dataInStore['Todo99'] as any).data.text).toBe('Optimistically generated');
 
           await promise;
         } catch (err) {
@@ -431,7 +443,7 @@ describe('optimistic mutation results', () => {
           expect((err as Error).message).toBe('forbidden (test error)');
 
           const dataInStore = (client.cache as Hermes).extract(true);
-          expect((dataInStore['TodoList5'] as any).todos.length).toBe(3);
+          expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(3);
           expect(dataInStore).not.toHaveProperty('Todo99');
         }
 
@@ -483,20 +495,26 @@ describe('optimistic mutation results', () => {
         });
 
         const dataInStore = (client.cache as Hermes).extract(true);
-        expect((dataInStore['TodoList5'] as any).todos.length).toBe(5);
-        expect((dataInStore['Todo99'] as any).text).toBe('Optimistically generated');
-        expect((dataInStore['Todo66'] as any).text).toBe('Optimistically generated 2');
+        expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(5);
+        expect((dataInStore['Todo99'] as any).data.text).toBe('Optimistically generated');
+        expect((dataInStore['Todo66'] as any).data.text).toBe('Optimistically generated 2');
 
         await Promise.all([promise, promise2]);
 
         subscriptionHandle!.unsubscribe();
         {
           const dataInStore = (client.cache as Hermes).extract(true);
-          expect((dataInStore['TodoList5'] as any).todos.length).toBe(4);
+          expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(4);
           expect(dataInStore).not.toHaveProperty('Todo99');
           expect(dataInStore).toHaveProperty('Todo66');
-          expect((dataInStore['TodoList5'] as any).todos).toContainEqual(makeReference('Todo66'));
-          expect((dataInStore['TodoList5'] as any).todos).not.toContainEqual(makeReference('Todo99'));
+          expect((dataInStore['TodoList5'] as any).outbound).toContainEqual({
+            id: 'Todo66',
+            path: ['todos', expect.any(Number)],
+          });
+          expect((dataInStore['TodoList5'] as any).outbound).not.toContainEqual({
+            id: 'Todo99',
+            path: ['todos', expect.any(Number)],
+          });
           resolve();
         }
       });
@@ -505,13 +523,19 @@ describe('optimistic mutation results', () => {
         expect.assertions(34);
         function checkBothMutationsAreApplied(expectedText1: any, expectedText2: any) {
           const dataInStore = (client.cache as Hermes).extract(true);
-          expect((dataInStore['TodoList5'] as any).todos.length).toBe(5);
+          expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(5);
           expect(dataInStore).toHaveProperty('Todo99');
           expect(dataInStore).toHaveProperty('Todo66');
-          expect((dataInStore['TodoList5'] as any).todos).toContainEqual(makeReference('Todo66'));
-          expect((dataInStore['TodoList5'] as any).todos).toContainEqual(makeReference('Todo99'));
-          expect((dataInStore['Todo99'] as any).text).toBe(expectedText1);
-          expect((dataInStore['Todo66'] as any).text).toBe(expectedText2);
+          expect((dataInStore['TodoList5'] as any).outbound).toContainEqual({
+            id: 'Todo66',
+            path: ['todos', expect.any(Number)],
+          });
+          expect((dataInStore['TodoList5'] as any).outbound).toContainEqual({
+            id: 'Todo99',
+            path: ['todos', expect.any(Number)],
+          });
+          expect((dataInStore['Todo99'] as any).data.text).toBe(expectedText1);
+          expect((dataInStore['Todo66'] as any).data.text).toBe(expectedText2);
         }
         let subscriptionHandle: Subscription;
 
@@ -857,8 +881,8 @@ describe('optimistic mutation results', () => {
       });
 
       const dataInStore = (client.cache as Hermes).extract(true);
-      expect((dataInStore['TodoList5'] as any).todos.length).toEqual(4);
-      expect((dataInStore['Todo99'] as any).text).toEqual('Optimistically generated from variables');
+      expect((dataInStore['TodoList5'] as any).data.todos.length).toEqual(4);
+      expect((dataInStore['Todo99'] as any).data.text).toEqual('Optimistically generated from variables');
 
       await promise;
 
@@ -903,7 +927,7 @@ describe('optimistic mutation results', () => {
           'todos' in initialList &&
           Array.isArray(initialList.todos);
 
-        const initialList = client.cache.extract(true)[id];
+        const initialList = client.cache.extract(true)[id]?.data;
 
         if (!isTodoList(initialList)) {
           reject(new Error('Expected TodoList'));
@@ -945,7 +969,7 @@ describe('optimistic mutation results', () => {
           },
         });
 
-        const list = client.cache.extract(true)[id];
+        const list = client.cache.extract(true)[id]?.data;
 
         if (!isTodoList(list)) {
           reject(new Error('Expected TodoList'));
@@ -1080,8 +1104,8 @@ describe('optimistic mutation results', () => {
       });
 
       const dataInStore = (client.cache as Hermes).extract(true);
-      expect((dataInStore['TodoList5'] as any).todos.length).toEqual(4);
-      expect((dataInStore['Todo99'] as any).text).toEqual('Optimistically generated');
+      expect((dataInStore['TodoList5'] as any).data.todos.length).toEqual(4);
+      expect((dataInStore['Todo99'] as any).data.text).toEqual('Optimistically generated');
 
       await promise;
 
@@ -1144,9 +1168,9 @@ describe('optimistic mutation results', () => {
         })
         .then((res: any) => {
           const currentDataInStore = (client.cache as Hermes).extract(true);
-          expect((currentDataInStore['TodoList5'] as any).todos.length).toEqual(5);
-          expect((currentDataInStore['Todo99'] as any).text).toEqual('This one was created with a mutation.');
-          expect((currentDataInStore['Todo66'] as any).text).toEqual('Optimistically generated 2');
+          expect((currentDataInStore['TodoList5'] as any).data.todos.length).toEqual(5);
+          expect((currentDataInStore['Todo99'] as any).data.text).toEqual('This one was created with a mutation.');
+          expect((currentDataInStore['Todo66'] as any).data.text).toEqual('Optimistically generated 2');
           return res;
         });
 
@@ -1157,9 +1181,9 @@ describe('optimistic mutation results', () => {
       });
 
       const dataInStore = (client.cache as Hermes).extract(true);
-      expect((dataInStore['TodoList5'] as any).todos.length).toEqual(5);
-      expect((dataInStore['Todo99'] as any).text).toEqual('Optimistically generated');
-      expect((dataInStore['Todo66'] as any).text).toEqual('Optimistically generated 2');
+      expect((dataInStore['TodoList5'] as any).data.todos.length).toEqual(5);
+      expect((dataInStore['Todo99'] as any).data.text).toEqual('Optimistically generated');
+      expect((dataInStore['Todo66'] as any).data.text).toEqual('Optimistically generated 2');
 
       await Promise.all([promise, promise2]);
 
@@ -1241,20 +1265,26 @@ describe('optimistic mutation results', () => {
       });
 
       const dataInStore = (client.cache as Hermes).extract(true);
-      expect((dataInStore['TodoList5'] as any).todos.length).toEqual(5);
-      expect((dataInStore['Todo99'] as any).text).toEqual('Optimistically generated');
-      expect((dataInStore['Todo66'] as any).text).toEqual('Optimistically generated 2');
+      expect((dataInStore['TodoList5'] as any).data.todos.length).toEqual(5);
+      expect((dataInStore['Todo99'] as any).data.text).toEqual('Optimistically generated');
+      expect((dataInStore['Todo66'] as any).data.text).toEqual('Optimistically generated 2');
 
       await Promise.all([promise, promise2]);
 
       subscriptionHandle!.unsubscribe();
       {
         const dataInStore = (client.cache as Hermes).extract(true);
-        expect((dataInStore['TodoList5'] as any).todos.length).toEqual(4);
+        expect((dataInStore['TodoList5'] as any).data.todos.length).toEqual(4);
         expect(dataInStore).not.toHaveProperty('Todo99');
         expect(dataInStore).toHaveProperty('Todo66');
-        expect((dataInStore['TodoList5'] as any).todos).toContainEqual(makeReference('Todo66'));
-        expect((dataInStore['TodoList5'] as any).todos).not.toContainEqual(makeReference('Todo99'));
+        expect((dataInStore['TodoList5'] as any).outbound).toContainEqual({
+          id: 'Todo66',
+          path: ['todos', expect.any(Number)],
+        });
+        expect((dataInStore['TodoList5'] as any).outbound).not.toContainEqual({
+          id: 'Todo99',
+          path: ['todos', expect.any(Number)],
+        });
         resolve();
       }
     });
@@ -1469,8 +1499,8 @@ describe('optimistic mutation results', () => {
       });
 
       const dataInStore = (client.cache as Hermes).extract(true);
-      expect((dataInStore['TodoList5'] as any).todos.length).toBe(4);
-      expect((dataInStore['Todo99'] as any).text).toBe('Optimistically generated');
+      expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(4);
+      expect((dataInStore['Todo99'] as any).data.text).toBe('Optimistically generated');
       await promise;
       await client.query({ query }).then((newResult: any) => {
         subscriptionHandle!.unsubscribe();
@@ -1551,9 +1581,9 @@ describe('optimistic mutation results', () => {
         })
         .then((res: any) => {
           const currentDataInStore = (client.cache as Hermes).extract(true);
-          expect((currentDataInStore['TodoList5'] as any).todos.length).toBe(5);
-          expect((currentDataInStore['Todo99'] as any).text).toBe('This one was created with a mutation.');
-          expect((currentDataInStore['Todo66'] as any).text).toBe('Optimistically generated 2');
+          expect((currentDataInStore['TodoList5'] as any).data.todos.length).toBe(5);
+          expect((currentDataInStore['Todo99'] as any).data.text).toBe('This one was created with a mutation.');
+          expect((currentDataInStore['Todo66'] as any).data.text).toBe('Optimistically generated 2');
           return res;
         });
 
@@ -1564,9 +1594,9 @@ describe('optimistic mutation results', () => {
       });
 
       const dataInStore = (client.cache as Hermes).extract(true);
-      expect((dataInStore['TodoList5'] as any).todos.length).toBe(5);
-      expect((dataInStore['Todo99'] as any).text).toBe('Optimistically generated');
-      expect((dataInStore['Todo66'] as any).text).toBe('Optimistically generated 2');
+      expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(5);
+      expect((dataInStore['Todo99'] as any).data.text).toBe('Optimistically generated');
+      expect((dataInStore['Todo66'] as any).data.text).toBe('Optimistically generated 2');
 
       await Promise.all([promise, promise2]);
 
@@ -1668,20 +1698,26 @@ describe('optimistic mutation results', () => {
       });
 
       const dataInStore = (client.cache as Hermes).extract(true);
-      expect((dataInStore['TodoList5'] as any).todos.length).toBe(5);
-      expect((dataInStore['Todo99'] as any).text).toBe('Optimistically generated');
-      expect((dataInStore['Todo66'] as any).text).toBe('Optimistically generated 2');
+      expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(5);
+      expect((dataInStore['Todo99'] as any).data.text).toBe('Optimistically generated');
+      expect((dataInStore['Todo66'] as any).data.text).toBe('Optimistically generated 2');
 
       await Promise.all([promise, promise2]);
 
       subscriptionHandle!.unsubscribe();
       {
         const dataInStore = (client.cache as Hermes).extract(true);
-        expect((dataInStore['TodoList5'] as any).todos.length).toBe(4);
+        expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(4);
         expect(dataInStore).not.toHaveProperty('Todo99');
         expect(dataInStore).toHaveProperty('Todo66');
-        expect((dataInStore['TodoList5'] as any).todos).toContainEqual(makeReference('Todo66'));
-        expect((dataInStore['TodoList5'] as any).todos).not.toContainEqual(makeReference('Todo99'));
+        expect((dataInStore['TodoList5'] as any).outbound).toContainEqual({
+          id: 'Todo66',
+          path: ['todos', expect.any(Number)],
+        });
+        expect((dataInStore['TodoList5'] as any).outbound).not.toContainEqual({
+          id: 'Todo99',
+          path: ['todos', expect.any(Number)],
+        });
         resolve();
       }
     });

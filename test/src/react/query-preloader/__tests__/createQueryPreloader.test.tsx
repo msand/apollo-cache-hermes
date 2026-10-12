@@ -1623,7 +1623,8 @@ it('does not suspend and returns partial data when `returnPartialData` is `true`
   }
 });
 
-it('enables canonical results when canonizeResults is "true"', async () => {
+// Hermes: canonizeResults (canonical result identity) is InMemoryCache-only.
+it.skip('enables canonical results when canonizeResults is "true"', async () => {
   interface Result {
     __typename: string;
     value: number;

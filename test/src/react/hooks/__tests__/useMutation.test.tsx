@@ -481,8 +481,8 @@ describe('useMutation Hook', () => {
         });
 
         expect(fetchResult).toEqual({});
-        expect(consoleSpy.error).toHaveBeenCalledTimes(1);
-        expect(consoleSpy.error.mock.calls[0][0]).toMatch('Missing field');
+        // Hermes: does not emit InMemoryCache's "Missing field ... while writing result" warning.
+        expect(consoleSpy.error).not.toHaveBeenCalled();
       });
 
       it(`should not call onError when errorPolicy is 'ignore'`, async () => {
@@ -1170,10 +1170,13 @@ describe('useMutation Hook', () => {
             // after the mutation write is finished.
             expect(cache.extract()).toEqual({
               ROOT_MUTATION: {
-                __typename: 'Mutation',
-                doSomething: {
-                  __typename: 'MutationPayload',
-                  time: startTime,
+                type: 0,
+                data: {
+                  __typename: 'Mutation',
+                  doSomething: {
+                    __typename: 'MutationPayload',
+                    time: startTime,
+                  },
                 },
               },
             });
@@ -1193,9 +1196,7 @@ describe('useMutation Hook', () => {
             // for the duration of the mutation update, and are removed after
             // the mutation write is finished.
             expect(client.cache.extract()).toEqual({
-              ROOT_MUTATION: {
-                __typename: 'Mutation',
-              },
+              ROOT_MUTATION: { type: 0, data: { __typename: 'Mutation' } },
             });
           },
         );
@@ -1282,10 +1283,13 @@ describe('useMutation Hook', () => {
             expect(timeMergeCount).toBe(1);
             expect(cache.extract()).toEqual({
               ROOT_MUTATION: {
-                __typename: 'Mutation',
-                doSomething: {
-                  __typename: 'MutationPayload',
-                  time: startTime,
+                type: 0,
+                data: {
+                  __typename: 'Mutation',
+                  doSomething: {
+                    __typename: 'MutationPayload',
+                    time: startTime,
+                  },
                 },
               },
             });
@@ -1303,10 +1307,13 @@ describe('useMutation Hook', () => {
             expect(timeMergeCount).toBe(1);
             expect(client.cache.extract()).toEqual({
               ROOT_MUTATION: {
-                __typename: 'Mutation',
-                doSomething: {
-                  __typename: 'MutationPayload',
-                  time: startTime,
+                type: 0,
+                data: {
+                  __typename: 'Mutation',
+                  doSomething: {
+                    __typename: 'MutationPayload',
+                    time: startTime,
+                  },
                 },
               },
             });
@@ -1510,7 +1517,7 @@ describe('useMutation Hook', () => {
 
             // eslint-disable-next-line no-case-declarations
             const dataInStore = client.cache.extract(true);
-            expect(dataInStore['Todo:1']).toEqual(optimisticResponse.createTodo);
+            expect(dataInStore['Todo:1'].data).toEqual(optimisticResponse.createTodo);
 
             break;
           case 1:
@@ -1707,12 +1714,15 @@ describe('useMutation Hook', () => {
         resolveOnUpdate = resolve;
       }).then(onUpdateResult => {
         expect(finishedReobserving).toBe(true);
-        expect(onUpdateResult.diff).toEqual({
-          complete: true,
-          result: {
-            todoCount: 1,
-          },
-        });
+        // Hermes: diffs also carry Hermes' entityIds/dynamicNodeIds bookkeeping.
+        expect(onUpdateResult.diff).toEqual(
+          expect.objectContaining({
+            complete: true,
+            result: {
+              todoCount: 1,
+            },
+          }),
+        );
         expect(onUpdateResult.result).toEqual({
           loading: false,
           networkStatus: NetworkStatus.ready,
