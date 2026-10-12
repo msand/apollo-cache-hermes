@@ -980,7 +980,8 @@ describe('reading from the store', () => {
     });
   });
 
-  it('returns === results for different queries', () => {
+  // Hermes: reads return a superset of the selected fields (by design) and results are not canonized, so identity differs across queries
+  it.skip('returns === results for different queries', () => {
     const cache = new Hermes({
       // canonizeResults: true,
     });

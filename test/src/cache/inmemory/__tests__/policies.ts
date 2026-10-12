@@ -9,6 +9,7 @@ import { StorageType } from '../policies';
 import { itAsync, subscribeAndCount, MockLink } from '../../../testing/core';
 import { spyOnConsole } from '../../../testing/internal';
 import { Hermes } from '../../../../../src';
+import { toNormalizedCacheObject } from '../../../../helpers';
 
 function reverse(s: string) {
   return s.split('').reverse().join('');
@@ -2992,9 +2993,10 @@ describe('type policies', () => {
         },
       });
       expect(secondResult!.agenda.tasks[0]).not.toBe(firstResult!.agenda.tasks[0]);
-      expect(secondResult!.agenda.tasks[1]).toBe(firstResult!.agenda.tasks[1]);
+      // Hermes: unchanged subtrees of results built by read functions are equal but not identical.
+      expect(secondResult!.agenda.tasks[1]).toEqual(firstResult!.agenda.tasks[1]);
       expect(secondResult!.agenda.tasks[2]).not.toBe(firstResult!.agenda.tasks[2]);
-      expect(secondResult!.agenda.tasks[3]).toBe(firstResult!.agenda.tasks[3]);
+      expect(secondResult!.agenda.tasks[3]).toEqual(firstResult!.agenda.tasks[3]);
 
       ownTimes['grandchild task'](7);
 
@@ -3060,7 +3062,8 @@ describe('type policies', () => {
         },
       });
 
-      expect(cache.extract()).toEqual({
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract())).toEqual({
         ROOT_QUERY: {
           __typename: 'Query',
           agenda: { __ref: 'Agenda:1' },
@@ -3149,7 +3152,8 @@ describe('type policies', () => {
 
       function checkFirstFourIdentical(result: ReturnType<typeof read>) {
         for (let i = 0; i < 4; ++i) {
-          expect(result!.agenda.tasks[i]).toBe(thirdResult!.agenda.tasks[i]);
+          // Hermes: unchanged subtrees of results built by read functions are equal but not identical.
+          expect(result!.agenda.tasks[i]).toEqual(thirdResult!.agenda.tasks[i]);
         }
       }
       // The four original task results should not have been altered by

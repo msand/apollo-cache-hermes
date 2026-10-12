@@ -808,7 +808,8 @@ describe('EntityStore', () => {
     expect(cache.gc().sort()).toEqual(['Author:J.K. Rowling', ccId]);
   });
 
-  it('ignores retainment count for ROOT_QUERY', () => {
+  // Hermes: retain() counts are not persisted through extract()/restore() (no __META in Hermes' serialization)
+  it.skip('ignores retainment count for ROOT_QUERY', () => {
     const { cache, query } = newBookAuthorCache();
 
     cache.writeQuery({
@@ -1192,7 +1193,8 @@ describe('EntityStore', () => {
     });
     // The result caching system preserves the referential identity of
     // unchanged nested result objects.
-    expect(partialTedResult.result.authorOfBook).toBe(fullTedResult.authorOfBook);
+    // Hermes: results built by read functions are equal but not identical across reads.
+    expect(partialTedResult.result.authorOfBook).toEqual(fullTedResult.authorOfBook);
 
     const partialJennyResult = cache.diff<any>({
       query,
@@ -1208,7 +1210,8 @@ describe('EntityStore', () => {
     });
     // The result caching system preserves the referential identity of
     // unchanged nested result objects.
-    expect(partialJennyResult.result.authorOfBook).toBe(fullJennyResult.authorOfBook);
+    // Hermes: results built by read functions are equal but not identical across reads.
+    expect(partialJennyResult.result.authorOfBook).toEqual(fullJennyResult.authorOfBook);
 
     const tedWithoutHobby = {
       __typename: 'Author',
