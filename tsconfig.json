@@ -21,6 +21,7 @@
     "pretty": true,
     "jsx": "react",
     "strict": true,
-    "types": ["jest", "node", "./apollo-client/matchers.d.ts"]
-  }
+    "types": ["jest", "node"]
+  },
+  "exclude": ["node_modules", "apollo-client", "dist"]
 }
