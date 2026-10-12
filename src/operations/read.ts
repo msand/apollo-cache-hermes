@@ -359,11 +359,16 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
         }
       }
 
+      const isRef = isReference(child);
+      if (isRef) {
+        child = getSnapshot(child.__ref)?.data;
+      }
+
       // Objects (at any depth) may have fields with read functions.
       const hasPolicy = hasFieldPolicies && node.children && isObjectOrArray(child);
 
       // Have we reached a leaf (either in the query, or in the cache)?
-      if (hasPolicy || _shouldWalkChildren(child, node)) {
+      if (hasPolicy || isRef || _shouldWalkChildren(child, node)) {
         child = _recursivelyWrapValue(child, context);
         const allChildValues = _flattenGraphQLObject(child, nextPath);
 
