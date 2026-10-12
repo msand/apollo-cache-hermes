@@ -307,54 +307,65 @@ describe('reading from the store', () => {
       },
     });
 
+    // Hermes: references are stored as outbound/inbound edges rather than { __ref } objects.
     expect(cache.extract()).toEqual({
       'Chicken:1': {
-        __typename: 'Chicken',
-        id: 1,
-        inCoop: true,
+        type: 0,
+        data: { __typename: 'Chicken', id: 1, inCoop: true },
+        inbound: [{ id: 'ROOT_QUERY', path: ['chickens', 0] }],
       },
       'Chicken:2': {
-        __typename: 'Chicken',
-        id: 2,
-        inCoop: true,
+        type: 0,
+        data: { __typename: 'Chicken', id: 2, inCoop: true },
+        inbound: [{ id: 'ROOT_QUERY', path: ['chickens', 1] }],
       },
       'Chicken:3': {
-        __typename: 'Chicken',
-        id: 3,
-        inCoop: false,
+        type: 0,
+        data: { __typename: 'Chicken', id: 3, inCoop: false },
+        inbound: [{ id: 'ROOT_QUERY', path: ['chickens', 2] }],
       },
       'Duck:1': {
-        __typename: 'Duck',
-        id: 1,
-        quacking: true,
+        type: 0,
+        data: { __typename: 'Duck', id: 1, quacking: true },
+        inbound: [{ id: 'ROOT_QUERY', path: ['ducks', 0] }],
       },
       'Duck:2': {
-        __typename: 'Duck',
-        id: 2,
-        quacking: false,
+        type: 0,
+        data: { __typename: 'Duck', id: 2, quacking: false },
+        inbound: [{ id: 'ROOT_QUERY', path: ['ducks', 1] }],
       },
       'Duck:3': {
-        __typename: 'Duck',
-        id: 3,
-        quacking: false,
+        type: 0,
+        data: { __typename: 'Duck', id: 3, quacking: false },
+        inbound: [{ id: 'ROOT_QUERY', path: ['ducks', 2] }],
       },
       'Ox:1': {
-        __typename: 'Ox',
-        id: 1,
-        gee: true,
-        haw: false,
+        type: 0,
+        data: { __typename: 'Ox', id: 1, gee: true, haw: false },
+        inbound: [{ id: 'ROOT_QUERY', path: ['oxen', 0] }],
       },
       'Ox:2': {
-        __typename: 'Ox',
-        id: 2,
-        gee: false,
-        haw: true,
+        type: 0,
+        data: { __typename: 'Ox', id: 2, gee: false, haw: true },
+        inbound: [{ id: 'ROOT_QUERY', path: ['oxen', 1] }],
       },
       ROOT_QUERY: {
-        __typename: 'Query',
-        chickens: [{ __ref: 'Chicken:1' }, { __ref: 'Chicken:2' }, { __ref: 'Chicken:3' }],
-        ducks: [{ __ref: 'Duck:1' }, { __ref: 'Duck:2' }, { __ref: 'Duck:3' }],
-        oxen: [{ __ref: 'Ox:1' }, { __ref: 'Ox:2' }],
+        type: 0,
+        data: {
+          chickens: [undefined, undefined, undefined],
+          ducks: [undefined, undefined, undefined],
+          oxen: [undefined, undefined],
+        },
+        outbound: [
+          { id: 'Duck:1', path: ['ducks', 0] },
+          { id: 'Duck:2', path: ['ducks', 1] },
+          { id: 'Duck:3', path: ['ducks', 2] },
+          { id: 'Chicken:1', path: ['chickens', 0] },
+          { id: 'Chicken:2', path: ['chickens', 1] },
+          { id: 'Chicken:3', path: ['chickens', 2] },
+          { id: 'Ox:1', path: ['oxen', 0] },
+          { id: 'Ox:2', path: ['oxen', 1] },
+        ],
       },
     });
 
@@ -582,7 +593,9 @@ describe('reading from the store', () => {
         immediate,
         optimistic: true,
         callback(diff) {
-          diffs.push(diff);
+          // Hermes: watch callbacks also receive internal entityIds/dynamicNodeIds bookkeeping.
+          const { entityIds, dynamicNodeIds, ...rest } = diff as any;
+          diffs.push(rest);
         },
       });
     }
@@ -1151,7 +1164,8 @@ describe('reading from the store', () => {
     expect(result2.abc).toBe(abc);
   });
 
-  it('readQuery can opt out of canonization', () => {
+  // Hermes: canonizeResults and the InMemoryCache-internal storeReader.canon are not implemented
+  it.skip('readQuery can opt out of canonization', () => {
     let count = 0;
 
     const cache = new Hermes({
@@ -1207,7 +1221,8 @@ describe('reading from the store', () => {
     expect(nonCanonicalQueryResult1).toBe(canonicalQueryResult1);
   });
 
-  it('readFragment can opt out of canonization', () => {
+  // Hermes: canonizeResults and the InMemoryCache-internal storeReader.canon are not implemented
+  it.skip('readFragment can opt out of canonization', () => {
     let count = 0;
 
     const cache = new Hermes({

@@ -3,7 +3,6 @@ import { GraphQLError, buildSchema } from 'graphql';
 import userEvent from '@testing-library/user-event';
 import { act, screen } from '@testing-library/react';
 import { FallbackProps, ErrorBoundary as ReactErrorBoundary } from 'react-error-boundary';
-import { InvariantError } from 'ts-invariant';
 import { ApolloClient } from '@apollo/client';
 
 import { ApolloError, gql } from '../../../core/index';
@@ -149,7 +148,8 @@ describe('schema proxy', () => {
       ID: () => '1',
       Int: () => 42,
       String: () => 'String',
-      Date: () => new Date('January 1, 2024 01:00:00').toJSON().split('T')[0],
+      // Parse as UTC so the mocked date does not depend on the machine's timezone.
+      Date: () => new Date('2024-01-01T01:00:00Z').toJSON().split('T')[0],
     },
   });
 
@@ -835,7 +835,8 @@ describe('schema proxy', () => {
         ID: () => '1',
         Int: () => 42,
         String: () => 'String',
-        Date: () => new Date('January 1, 2024 01:00:00').toJSON().split('T')[0],
+        // Parse as UTC so the mocked date does not depend on the machine's timezone.
+        Date: () => new Date('2024-01-01T01:00:00Z').toJSON().split('T')[0],
       },
     });
 
@@ -1233,9 +1234,7 @@ describe('schema proxy', () => {
         delay: { min: 3000, max: 1000 },
       });
     }).rejects.toThrow(
-      new InvariantError(
-        'Please configure a minimum delay that is less than the maximum delay. The default minimum delay is 3ms.',
-      ),
+      'Please configure a minimum delay that is less than the maximum delay. The default minimum delay is 3ms.',
     );
   });
 });

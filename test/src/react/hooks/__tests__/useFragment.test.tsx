@@ -5,6 +5,7 @@ import assert from 'assert';
 import { expectTypeOf } from 'expect-type';
 import { SubscriptionObserver } from 'zen-observable-ts';
 import { ApolloClient, ApolloProvider, useFragment, ApolloLink, UseFragmentOptions, StoreObject } from '@apollo/client';
+import { loadErrorMessages } from '@apollo/client/dev';
 
 import { MockedProvider } from '../../../testing';
 import { gql, TypedDocumentNode, Reference, Observable, DocumentNode, FetchResult } from '../../../core';
@@ -12,6 +13,10 @@ import { useQuery } from '../useQuery';
 import { concatPagination } from '../../../utilities';
 import { profile, profileHook, spyOnConsole } from '../../../testing/internal';
 import { Hermes } from '../../../../../src';
+
+// Hermes: useFragment comes from the published @apollo/client package, whose error messages the
+// shared test env does not load.
+loadErrorMessages();
 
 describe('useFragment', () => {
   it('is importable and callable', () => {
@@ -471,25 +476,31 @@ describe('useFragment', () => {
       });
     });
 
+    // Hermes: references are stored as outbound/inbound edges rather than { __ref } objects.
     expect(cache.extract()).toEqual({
       ROOT_QUERY: {
-        __typename: 'Query',
-        list: [{ __ref: 'Item:{"id":1}' }, { __ref: 'Item:{"id":2}' }, { __ref: 'Item:{"id":3}' }],
+        type: 0,
+        data: { list: [undefined, undefined, undefined] },
+        outbound: [
+          { id: 'Item:{"id":1}', path: ['list', 0] },
+          { id: 'Item:{"id":2}', path: ['list', 1] },
+          { id: 'Item:{"id":3}', path: ['list', 2] },
+        ],
       },
       'Item:{"id":1}': {
-        __typename: 'Item',
-        id: 1,
-        text: 'first',
+        type: 0,
+        data: { __typename: 'Item', id: 1, text: 'first' },
+        inbound: [{ id: 'ROOT_QUERY', path: ['list', 0] }],
       },
       'Item:{"id":2}': {
-        __typename: 'Item',
-        id: 2,
-        text: 'second',
+        type: 0,
+        data: { __typename: 'Item', id: 2, text: 'second' },
+        inbound: [{ id: 'ROOT_QUERY', path: ['list', 1] }],
       },
       'Item:{"id":3}': {
-        __typename: 'Item',
-        id: 3,
-        text: 'third',
+        type: 0,
+        data: { __typename: 'Item', id: 3, text: 'third' },
+        inbound: [{ id: 'ROOT_QUERY', path: ['list', 2] }],
       },
     });
 
@@ -558,41 +569,43 @@ describe('useFragment', () => {
       });
     });
 
+    // Hermes: references are stored as outbound/inbound edges rather than { __ref } objects.
     expect(cache.extract()).toEqual({
       ROOT_QUERY: {
-        __typename: 'Query',
-        list: [
-          { __ref: 'Item:{"id":1}' },
-          { __ref: 'Item:{"id":2}' },
-          { __ref: 'Item:{"id":3}' },
-          { __ref: 'Item:{"id":4}' },
-          { __ref: 'Item:{"id":5}' },
+        type: 0,
+        data: { list: [undefined, undefined, undefined, undefined, undefined] },
+        outbound: [
+          { id: 'Item:{"id":1}', path: ['list', 0] },
+          { id: 'Item:{"id":2}', path: ['list', 1] },
+          { id: 'Item:{"id":3}', path: ['list', 2] },
+          { id: 'Item:{"id":4}', path: ['list', 3] },
+          { id: 'Item:{"id":5}', path: ['list', 4] },
         ],
       },
       'Item:{"id":1}': {
-        __typename: 'Item',
-        id: 1,
-        text: 'firstly',
+        type: 0,
+        data: { __typename: 'Item', id: 1, text: 'firstly' },
+        inbound: [{ id: 'ROOT_QUERY', path: ['list', 0] }],
       },
       'Item:{"id":2}': {
-        __typename: 'Item',
-        id: 2,
-        text: 'secondly',
+        type: 0,
+        data: { __typename: 'Item', id: 2, text: 'secondly' },
+        inbound: [{ id: 'ROOT_QUERY', path: ['list', 1] }],
       },
       'Item:{"id":3}': {
-        __typename: 'Item',
-        id: 3,
-        text: 'thirdly',
+        type: 0,
+        data: { __typename: 'Item', id: 3, text: 'thirdly' },
+        inbound: [{ id: 'ROOT_QUERY', path: ['list', 2] }],
       },
       'Item:{"id":4}': {
-        __typename: 'Item',
-        id: 4,
-        text: 'fourth',
+        type: 0,
+        data: { __typename: 'Item', id: 4, text: 'fourth' },
+        inbound: [{ id: 'ROOT_QUERY', path: ['list', 3] }],
       },
       'Item:{"id":5}': {
-        __typename: 'Item',
-        id: 5,
-        text: 'fifth',
+        type: 0,
+        data: { __typename: 'Item', id: 5, text: 'fifth' },
+        inbound: [{ id: 'ROOT_QUERY', path: ['list', 4] }],
       },
     });
 
