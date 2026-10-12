@@ -923,7 +923,9 @@ function addChangedFields(
   }
 
   // References are stored outside of the data; parameterized fields are
-  // separate nodes, which may have changed themselves.
+  // separate nodes, which may have changed themselves (edits to those alone
+  // count as edits to the parameterized nodes, not to this one).
+  if (prevNode?.outbound === nextNode?.outbound && prevNode?.parameterized === nextNode?.parameterized) return;
   const prevRefs = referencesByField(previous, prevNode);
   const nextRefs = referencesByField(next, nextNode);
   for (const key of new Set([...prevRefs.keys(), ...nextRefs.keys()])) {

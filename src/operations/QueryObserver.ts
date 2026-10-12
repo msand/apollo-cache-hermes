@@ -28,11 +28,19 @@ export class QueryObserver<TSerialized> {
   private _dirty = false;
   /** Whether onWatchUpdated cancelled delivering the last computed result. */
   private _cancelled = false;
+  /**
+   * Whether field policies may make the result depend on any field (e.g. a
+   * read function reading other fields), rather than just the selected ones.
+   */
+  private _hasFieldPolicies: boolean;
 
   constructor(context: CacheContext<TSerialized>, query: RawOperation, snapshot: GraphSnapshot, options: WatchOptions) {
     this._context = context;
     this._query = query;
     this._options = options;
+    this._hasFieldPolicies = Object.values(context.typePolicies ?? {}).some(
+      policy => Object.keys(policy?.fields ?? {}).length > 0,
+    );
     if (options.immediate) {
       this._result = read(context, query, snapshot, Object.create(null), context.strict);
       options.lastDiff = this._result;
@@ -136,7 +144,7 @@ export class QueryObserver<TSerialized> {
    *
    * If the fields changed on the root node are known, a root node change only
    * counts if it is to a field we select (like InMemoryCache's field-level
-   * dependency tracking).
+   * dependency tracking), unless field policies may read other fields.
    */
   private _hasUpdate(_changedNodeIds: Set<NodeId>, changedRootFields?: Map<NodeId, Set<string>>): boolean {
     const { complete, entityIds, dynamicNodeIds } = this._result!;
@@ -147,7 +155,14 @@ export class QueryObserver<TSerialized> {
     const { rootId } = this._query;
     for (const nodeId of _changedNodeIds) {
       if (!entityIds.has(nodeId) && !(dynamicNodeIds && dynamicNodeIds.has(nodeId))) continue;
-      if (nodeId === rootId && changedRootFields && !this._selectsAny(changedRootFields.get(rootId))) continue;
+      if (
+        nodeId === rootId &&
+        changedRootFields &&
+        !this._hasFieldPolicies &&
+        !this._selectsAny(changedRootFields.get(rootId))
+      ) {
+        continue;
+      }
       return true;
     }
 

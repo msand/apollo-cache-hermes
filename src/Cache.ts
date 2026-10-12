@@ -43,7 +43,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
   /**
    * Whether the snapshot changed outside of a transaction (restore, reset)
    * since the last broadcast, so the changed fields of the watched root nodes
-   * (in CacheContext#dirty) are not known.
+   * (see _changedFields) are not known.
    */
   private _fieldsUntracked = false;
   /**
