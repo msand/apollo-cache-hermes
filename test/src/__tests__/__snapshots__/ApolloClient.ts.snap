@@ -8,33 +8,54 @@ For more information, please visit: https://go.apollo.dev/c/docs"
 exports[`ApolloClient write then read will not use a default id getter if either _id or id is present when __typename is not also present 1`] = `
 Object {
   "ROOT_QUERY": Object {
-    "__typename": "Query",
-    "a": 1,
-    "b": 2,
-    "bar": Object {
-      "foo": Object {
-        "_id": "barfoo",
-        "k": 12,
-        "l": 13,
-      },
-      "i": 10,
-      "j": 11,
-    },
-    "foo": Object {
+    "data": Object {
+      "a": 1,
+      "b": 2,
       "bar": Object {
-        "__ref": "bar:foobar",
+        "foo": Object {
+          "_id": "barfoo",
+          "k": 12,
+          "l": 13,
+        },
+        "i": 10,
+        "j": 11,
       },
-      "c": 3,
-      "d": 4,
+      "foo": Object {
+        "bar": undefined,
+        "c": 3,
+        "d": 4,
+      },
+      "g": 8,
+      "h": 9,
     },
-    "g": 8,
-    "h": 9,
+    "outbound": Array [
+      Object {
+        "id": "bar:foobar",
+        "path": Array [
+          "foo",
+          "bar",
+        ],
+      },
+    ],
+    "type": 0,
   },
   "bar:foobar": Object {
-    "__typename": "bar",
-    "e": 5,
-    "f": 6,
-    "id": "foobar",
+    "data": Object {
+      "__typename": "bar",
+      "e": 5,
+      "f": 6,
+      "id": "foobar",
+    },
+    "inbound": Array [
+      Object {
+        "id": "ROOT_QUERY",
+        "path": Array [
+          "foo",
+          "bar",
+        ],
+      },
+    ],
+    "type": 0,
   },
 }
 `;

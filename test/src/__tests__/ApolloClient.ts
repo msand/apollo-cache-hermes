@@ -1774,27 +1774,29 @@ describe('ApolloClient', () => {
 
       expect((client.cache as Hermes).extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          a: 1,
-          b: 2,
-          g: 8,
-          h: 9,
-          bar: {
-            i: 10,
-            j: 11,
-            foo: {
-              _id: 'barfoo',
-              k: 12,
-              l: 13,
-            },
-          },
-          foo: {
-            c: 3,
-            d: 4,
+          type: 0,
+          data: {
+            a: 1,
+            b: 2,
+            g: 8,
+            h: 9,
             bar: {
-              id: 'foobar',
-              e: 5,
-              f: 6,
+              i: 10,
+              j: 11,
+              foo: {
+                _id: 'barfoo',
+                k: 12,
+                l: 13,
+              },
+            },
+            foo: {
+              c: 3,
+              d: 4,
+              bar: {
+                id: 'foobar',
+                e: 5,
+                f: 6,
+              },
             },
           },
         },
@@ -1971,16 +1973,18 @@ describe('ApolloClient', () => {
 
       expect((client.cache as Hermes).extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          a: 1,
-          b: 2,
-          foo: {
-            c: 3,
-            d: 4,
-            bar: {
-              id: 'foobar',
-              e: 5,
-              f: 6,
+          type: 0,
+          data: {
+            a: 1,
+            b: 2,
+            foo: {
+              c: 3,
+              d: 4,
+              bar: {
+                id: 'foobar',
+                e: 5,
+                f: 6,
+              },
             },
           },
         },
@@ -2020,16 +2024,18 @@ describe('ApolloClient', () => {
 
       expect((client.cache as Hermes).extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          a: 1,
-          b: 2,
-          foo: {
-            c: 3,
-            d: 4,
-            bar: {
-              _id: 'foobar',
-              e: 5,
-              f: 6,
+          type: 0,
+          data: {
+            a: 1,
+            b: 2,
+            foo: {
+              c: 3,
+              d: 4,
+              bar: {
+                _id: 'foobar',
+                e: 5,
+                f: 6,
+              },
             },
           },
         },

@@ -10,12 +10,17 @@ describe(`context.CacheContext`, () => {
         context = new CacheContext();
       });
 
-      it(`emits the id property from nodes`, () => {
-        expect(context.entityIdForValue({ id: 'hello' })).to.eq('hello');
+      it(`emits the __typename and id of nodes`, () => {
+        expect(context.entityIdForValue({ __typename: 'Foo', id: 'hello' })).to.eq('Foo:hello');
       });
 
       it(`coerces numbers to strings`, () => {
-        expect(context.entityIdForValue({ id: 123 })).to.eq('123');
+        expect(context.entityIdForValue({ __typename: 'Foo', id: 123 })).to.eq('Foo:123');
+      });
+
+      it(`ignores nodes without a __typename, like InMemoryCache`, () => {
+        expect(context.entityIdForValue({ id: 'hello' })).to.eq(undefined);
+        expect(context.entityIdForValue({ _id: 123 })).to.eq(undefined);
       });
 
       it(`treats all other types as undefined`, () => {

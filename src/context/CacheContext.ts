@@ -340,7 +340,8 @@ export function _makeEntityIdMapper(
           if (idType !== 'string' && idType !== 'number') {
             return undefined;
           }
-          return __typename ? `${__typename}:${id}` : `${id}`;
+          // Like InMemoryCache, objects without a __typename are not normalized.
+          return __typename ? `${__typename}:${id}` : undefined;
         });
   return function entityIdForNode(node: JsonObject) {
     if (!isObject(node)) return undefined;
@@ -359,10 +360,11 @@ export function defaultEntityIdMapper({ __typename, _id, id = _id }: { __typenam
   }
   const idType = typeof id;
   const numberOrString = idType === 'number' || idType === 'string';
-  if (typeof __typename === 'string') {
-    return `${__typename}:${numberOrString ? id : JSON.stringify(id)}`;
+  // Like InMemoryCache, objects without a __typename are not normalized.
+  if (typeof __typename !== 'string') {
+    return undefined;
   }
-  return numberOrString ? `${id}` : undefined;
+  return `${__typename}:${numberOrString ? id : JSON.stringify(id)}`;
 }
 
 export function operationCacheKey(document: DocumentNode, fragmentName?: string) {
