@@ -3,7 +3,7 @@ import { Reference, StoreObject } from '@apollo/client/utilities';
 import { invariant } from '@apollo/client/utilities/globals';
 
 import { CacheSnapshot } from './CacheSnapshot';
-import { CacheTransaction } from './CacheTransaction';
+import { ChangedFields, CacheTransaction, TransactionHooks } from './CacheTransaction';
 import { CacheContext } from './context';
 import { GraphSnapshot, NodeSnapshotMap } from './GraphSnapshot';
 import { extract, migrate, MigrationMap, prune, QueryObserver, read, restore } from './operations';
@@ -39,6 +39,14 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
   private _observers: QueryObserver<TSerialized>[] = [];
   private _cacheInstance: Hermes<TSerialized> | undefined;
   private _transactions: CacheTransaction<TSerialized>[] = [];
+  /**
+   * Whether the snapshot changed outside of a transaction (restore, reset)
+   * since the last broadcast, so the changed fields of the watched root nodes
+   * (in CacheContext#dirty) are not known.
+   */
+  private _fieldsUntracked = false;
+  /** The fields of watched root nodes changed since the last broadcast. */
+  private _changedFields: ChangedFields = { baseline: new Map(), optimistic: new Map() };
   private _editedNodeIds: Set<NodeId> = new Set();
 
   constructor(
@@ -133,6 +141,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     if (verifyQuery && !read(this._context, verifyQuery, migrated.baseline, Object.create(null), false).complete) {
       throw new UnsatisfiedCacheError(`Restored cache cannot satisfy the verification query`);
     }
+    this._fieldsUntracked = true;
     this._setSnapshot(migrated, editedNodeIds);
   }
 
@@ -277,7 +286,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
       this._context,
       outerTx ? outerTx.getSnapshot() : this._snapshot,
       changeId,
-      this._replayOptimisticUpdate,
+      this._transactionHooks(),
     );
     this._transactions.push(transaction);
     let result;
@@ -317,6 +326,14 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     return typeof result === 'boolean' ? result : editedNodeIds.size > 0;
   }
 
+  private _transactionHooks(): TransactionHooks {
+    return {
+      replayOptimisticUpdate: this._replayOptimisticUpdate,
+      watchedRootIds: this._observers.length ? new Set(this._observers.map(o => o.rootId)) : undefined,
+      changedFields: this._changedFields,
+    };
+  }
+
   /**
    * Re-runs an optimistic update's callback on top of a snapshot, like
    * InMemoryCache re-adds the layers above a removed one.  Reads and writes
@@ -329,7 +346,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
       tracerContext = tracer.transactionStart();
     }
 
-    const transaction = new CacheTransaction(this._context, snapshot, update.id, this._replayOptimisticUpdate);
+    const transaction = new CacheTransaction(this._context, snapshot, update.id, this._transactionHooks());
     this._transactions.push(transaction);
     try {
       update.callback!(transaction);
@@ -358,6 +375,11 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
    * Roll back a previously enqueued optimistic update.
    */
   rollback(changeId: ChangeId) {
+    // Like InMemoryCache, removing an unknown update changes (and broadcasts)
+    // nothing.
+    const activeTx = this._transactions[this._transactions.length - 1];
+    const { optimisticQueue } = activeTx ? activeTx.getSnapshot() : this._snapshot;
+    if (!optimisticQueue.has(changeId)) return;
     this.transaction(true, t => t.rollback(changeId));
   }
 
@@ -376,6 +398,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     const optimisticQueue = new OptimisticUpdateQueue();
     this._rootIds = Object.create(null);
 
+    this._fieldsUntracked = true;
     this._setSnapshot(new CacheSnapshot(baseline, optimistic, optimisticQueue), allIds);
   }
 
@@ -430,7 +453,19 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     }
   }
 
+  /**
+   * Makes the next broadcast re-read the given watches.
+   */
+  public dirtyWatches(watches: Set<CacheInterface.WatchOptions>) {
+    for (const observer of this._observers) {
+      if (watches.has(observer.options)) observer.markDirty();
+    }
+  }
+
   public broadcastWatches(options?: Pick<BatchOptions<Hermes<TSerialized>>, 'optimistic' | 'onWatchUpdated'>) {
+    // Like InMemoryCache, watches are broadcast once the outermost transaction
+    // (e.g. an optimistic update, which may run cache.batch) completes.
+    if (this._transactions.length) return;
     this._broadcastWatches(this._editedNodeIds, options?.onWatchUpdated, options?.optimistic);
   }
 
@@ -449,6 +484,15 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     // Like InMemoryCache, each watch reads the optimistic or the baseline data,
     // as it asked; broadcasts for an optimistic batch flag optimistic diffs.
     const fromOptimisticTransaction = typeof optimistic === 'string';
+    // Like InMemoryCache, watches of baseline data are not affected by changes
+    // to optimistic data only.  Invalidated fields count as changed for all.
+    let baselineFields: Map<NodeId, Set<string>> | undefined;
+    let optimisticFields: Map<NodeId, Set<string>> | undefined;
+    if (!this._fieldsUntracked) {
+      const { dirty } = this._context;
+      baselineFields = mergeFieldMaps(this._changedFields.baseline, dirty);
+      optimisticFields = mergeFieldMaps(baselineFields, this._changedFields.optimistic);
+    }
     for (const observer of this._observers) {
       const graphSnapshot = observer.optimistic ? snapshot.optimistic : snapshot.baseline;
       observer.consumeChanges(
@@ -457,10 +501,13 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
         this._cacheInstance!,
         onWatchUpdated,
         fromOptimisticTransaction && observer.optimistic,
+        observer.optimistic ? optimisticFields : baselineFields,
       );
     }
 
     this._context.dirty.clear();
+    this._fieldsUntracked = false;
+    this._changedFields = { baseline: new Map(), optimistic: new Map() };
 
     if (this._context.tracer.broadcastEnd) {
       this._context.tracer.broadcastEnd({ snapshot, editedNodeIds }, tracerContext);
@@ -515,4 +562,18 @@ function _copyUnaffectedCachedReads(
 
     nextSnapshot.readCache.set(operation, result);
   }
+}
+
+/**
+ * Combines two maps of the changed fields per node.
+ */
+function mergeFieldMaps(a: Map<NodeId, Set<string>>, b: Map<NodeId, Set<string>>) {
+  const merged = new Map<NodeId, Set<string>>();
+  for (const map of [a, b]) {
+    for (const [id, fields] of map) {
+      const mergedFields = merged.get(id);
+      merged.set(id, mergedFields ? new Set([...mergedFields, ...fields]) : fields);
+    }
+  }
+  return merged;
 }

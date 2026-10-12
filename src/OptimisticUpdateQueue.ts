@@ -64,6 +64,13 @@ export class OptimisticUpdateQueue {
   }
 
   /**
+   * Whether there is an update with the given id.
+   */
+  has(id: ChangeId): boolean {
+    return this._updates.some(u => u.id === id);
+  }
+
+  /**
    * Whether there are any updates to apply.
    */
   hasUpdates(): boolean {

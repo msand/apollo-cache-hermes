@@ -58,6 +58,30 @@ export type OptimisticReplay = (
   update: OptimisticUpdate,
 ) => { snapshot: CacheSnapshotType; editedNodeIds: Set<NodeId> };
 
+/**
+ * Services a transaction gets from the cache that runs it.
+ */
+export interface TransactionHooks {
+  /** Re-runs an optimistic update (see CacheTransaction#rollback). */
+  replayOptimisticUpdate?: OptimisticReplay;
+  /**
+   * Ids of the nodes watched queries are rooted at.  The transaction records
+   * the fields of these nodes that it changes in changedFields, so that (like
+   * InMemoryCache) onWatchUpdated is called for the watches reading them, even
+   * if their result ends up unchanged.
+   */
+  watchedRootIds?: Set<NodeId>;
+  changedFields?: ChangedFields;
+}
+
+/**
+ * The fields changed per node, in the baseline and in the optimistic view.
+ */
+export interface ChangedFields {
+  baseline: Map<NodeId, Set<string>>;
+  optimistic: Map<NodeId, Set<string>>;
+}
+
 type Node<TSerialized> = {
   node: any;
   previous: JsonValue | undefined;
@@ -91,7 +115,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
     private _context: CacheContext<TSerialized>,
     private _snapshot: CacheSnapshotType,
     private _optimisticChangeId?: ChangeId,
-    private _replayOptimisticUpdate?: OptimisticReplay,
+    private _hooks: TransactionHooks = {},
   ) {
     this._parentSnapshot = _snapshot;
   }
@@ -177,8 +201,8 @@ export class CacheTransaction<TSerialized> implements Queryable {
     let snapshot = new CacheSnapshot(current.baseline, optimistic, parts.below);
 
     for (const update of parts.above) {
-      if (update.callback && this._replayOptimisticUpdate) {
-        const replayed = this._replayOptimisticUpdate(snapshot, update);
+      if (update.callback && this._hooks.replayOptimisticUpdate) {
+        const replayed = this._hooks.replayOptimisticUpdate(snapshot, update);
         snapshot = replayed.snapshot;
         addToSet(this._editedNodeIds, replayed.editedNodeIds);
       } else {
@@ -192,7 +216,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
     }
 
     addToSet(this._editedNodeIds, snapshot.optimistic.allNodeIds());
-    this._snapshot = snapshot;
+    this._setCurrentSnapshot(snapshot);
   }
 
   /**
@@ -249,6 +273,21 @@ export class CacheTransaction<TSerialized> implements Queryable {
   getCurrentNodeSnapshot(nodeId: NodeId): NodeSnapshot | undefined {
     const currentSnapshot = this._optimisticChangeId ? this._snapshot.optimistic : this._snapshot.baseline;
     return currentSnapshot.getNodeSnapshot(nodeId);
+  }
+
+  /**
+   * Moves the transaction to a new version of the cache, recording the fields
+   * of watched root nodes that changed (see TransactionHooks#watchedRootIds).
+   */
+  private _setCurrentSnapshot(next: CacheSnapshotType) {
+    const previous = this._snapshot;
+    this._snapshot = next;
+    const { watchedRootIds, changedFields } = this._hooks;
+    if (!watchedRootIds || !changedFields) return;
+    for (const id of watchedRootIds) {
+      addChangedFields(previous.baseline, next.baseline, id, changedFields.baseline);
+      addChangedFields(previous.optimistic, next.optimistic, id, changedFields.optimistic);
+    }
   }
 
   /**
@@ -314,7 +353,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
 
     const optimistic = this._buildOptimisticSnapshot(baseline);
 
-    this._snapshot = new CacheSnapshot(baseline, optimistic, current.optimisticQueue);
+    this._setCurrentSnapshot(new CacheSnapshot(baseline, optimistic, current.optimisticQueue));
 
     return ref;
   }
@@ -347,7 +386,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
     addToSet(this._writtenQueries, writtenQueries);
     addToSet(this._editedNodeIds, editedNodeIds);
 
-    this._snapshot = new CacheSnapshot(this._snapshot.baseline, optimistic, this._snapshot.optimisticQueue);
+    this._setCurrentSnapshot(new CacheSnapshot(this._snapshot.baseline, optimistic, this._snapshot.optimisticQueue));
 
     return ref;
   }
@@ -692,12 +731,12 @@ export class CacheTransaction<TSerialized> implements Queryable {
 
     if (target === 'allLayers') {
       const optimisticQueue = current.optimisticQueue.appendToAll([delta]);
-      this._snapshot = new CacheSnapshot(current.baseline, snapshot, optimisticQueue);
+      this._setCurrentSnapshot(new CacheSnapshot(current.baseline, snapshot, optimisticQueue));
     } else if (optimistic) {
-      this._snapshot = new CacheSnapshot(current.baseline, snapshot, current.optimisticQueue);
+      this._setCurrentSnapshot(new CacheSnapshot(current.baseline, snapshot, current.optimisticQueue));
     } else {
       const optimistic = this._buildOptimisticSnapshot(snapshot);
-      this._snapshot = new CacheSnapshot(snapshot, optimistic, current.optimisticQueue);
+      this._setCurrentSnapshot(new CacheSnapshot(snapshot, optimistic, current.optimisticQueue));
     }
 
     return modified;
@@ -725,7 +764,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
     }
 
     const optimistic = this._buildOptimisticSnapshot(snapshot);
-    this._snapshot = new CacheSnapshot(snapshot, optimistic, current.optimisticQueue);
+    this._setCurrentSnapshot(new CacheSnapshot(snapshot, optimistic, current.optimisticQueue));
   }
 
   evict(options: CacheInterface.EvictOptions): boolean {
@@ -807,7 +846,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
 
     if (target === 'baseline') {
       const optimistic = this._buildOptimisticSnapshot(snapshot);
-      this._snapshot = new CacheSnapshot(snapshot, optimistic, current.optimisticQueue);
+      this._setCurrentSnapshot(new CacheSnapshot(snapshot, optimistic, current.optimisticQueue));
     } else {
       const deltas: CacheDelta[] = Array.from(evictedIds, id => ({ delete: id }));
       let { optimisticQueue } = current;
@@ -816,9 +855,68 @@ export class CacheTransaction<TSerialized> implements Queryable {
       } else {
         optimisticQueue = optimisticQueue.appendToAll(deltas);
       }
-      this._snapshot = new CacheSnapshot(current.baseline, snapshot, optimisticQueue);
+      this._setCurrentSnapshot(new CacheSnapshot(current.baseline, snapshot, optimisticQueue));
     }
 
     return true;
   }
+}
+
+/**
+ * Records the top-level fields of a node that differ between two snapshots.
+ */
+function addChangedFields(
+  previous: GraphSnapshot,
+  next: GraphSnapshot,
+  id: NodeId,
+  changedFields: Map<NodeId, Set<string>>,
+) {
+  if (previous === next) return;
+  const prevNode = previous.getNodeSnapshot(id);
+  const nextNode = next.getNodeSnapshot(id);
+  if (prevNode === nextNode) return;
+
+  let fields = changedFields.get(id);
+  if (!fields) changedFields.set(id, (fields = new Set()));
+
+  const prevData = (isObject(prevNode?.data) ? prevNode!.data : {}) as JsonObject;
+  const nextData = (isObject(nextNode?.data) ? nextNode!.data : {}) as JsonObject;
+  for (const key of new Set([...Object.keys(prevData), ...Object.keys(nextData)])) {
+    if (prevData[key] !== nextData[key] && !isEqual(prevData[key], nextData[key])) fields.add(key);
+  }
+
+  // References are stored outside of the data; parameterized fields are
+  // separate nodes, which may have changed themselves.
+  const prevRefs = referencesByField(previous, prevNode);
+  const nextRefs = referencesByField(next, nextNode);
+  for (const key of new Set([...prevRefs.keys(), ...nextRefs.keys()])) {
+    const prevField = prevRefs.get(key);
+    const nextField = nextRefs.get(key);
+    if (
+      !prevField ||
+      !nextField ||
+      prevField.length !== nextField.length ||
+      prevField.some((value, index) => value !== nextField[index])
+    ) {
+      fields.add(key);
+    }
+  }
+}
+
+function referencesByField(snapshot: GraphSnapshot, node: NodeSnapshot | undefined) {
+  const refs = new Map<string, unknown[]>();
+  const add = (key: unknown, value: unknown) => {
+    const field = String(key);
+    const values = refs.get(field);
+    if (values) values.push(value);
+    else refs.set(field, [value]);
+  };
+  node?.outbound?.forEach(({ id, path }) => add(path[0], id));
+  node?.parameterized?.forEach(list =>
+    list.forEach(({ id, path }) => {
+      add(path[0], id);
+      add(path[0], snapshot.getNodeSnapshot(id));
+    }),
+  );
+  return refs;
 }

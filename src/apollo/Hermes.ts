@@ -172,7 +172,7 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
       // Silently re-dirty any watches that were already dirty before the update
       // was performed, and were not broadcast just now.
       if (alreadyDirty.size) {
-        alreadyDirty.forEach(watch => (watch.lastDiff = undefined));
+        this._queryable.dirtyWatches(alreadyDirty);
       }
     } else {
       // If alreadyDirty is empty or we don't have an onWatchUpdated

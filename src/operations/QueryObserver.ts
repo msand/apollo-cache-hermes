@@ -24,6 +24,10 @@ export class QueryObserver<TSerialized> {
   private _result: QueryResult;
   /** The callback to trigger when observed nodes have changed. */
   private _options: WatchOptions;
+  /** Whether the next broadcast should re-read the query regardless of edits. */
+  private _dirty = false;
+  /** Whether onWatchUpdated cancelled delivering the last computed result. */
+  private _cancelled = false;
 
   constructor(context: CacheContext<TSerialized>, query: RawOperation, snapshot: GraphSnapshot, options: WatchOptions) {
     this._context = context;
@@ -38,6 +42,24 @@ export class QueryObserver<TSerialized> {
         complete: false,
       };
     }
+  }
+
+  /** The watch options this observer was created with. */
+  get options(): WatchOptions {
+    return this._options;
+  }
+
+  /**
+   * Makes the next broadcast re-read the query (and deliver a result that
+   * differs from the last one), like InMemoryCache's maybeBroadcastWatch.dirty.
+   */
+  markDirty(): void {
+    this._dirty = true;
+  }
+
+  /** The id of the node the observed query is rooted at. */
+  get rootId(): NodeId {
+    return this._query.rootId;
   }
 
   /** Whether the observer reads optimistic data. */
@@ -55,9 +77,17 @@ export class QueryObserver<TSerialized> {
     cacheInstance: Hermes<TSerialized>,
     onWatchUpdated?: Cache.BatchOptions<Hermes<TSerialized>>['onWatchUpdated'],
     fromOptimisticTransaction?: boolean,
+    changedRootFields?: Map<NodeId, Set<string>>,
   ): void {
     const lastDiff = this._options.lastDiff;
-    if (lastDiff && !this._hasUpdate(changedNodeIds)) return;
+    // Like InMemoryCache's memoized maybeBroadcastWatch, skip watches whose
+    // last computed result (delivered, or cancelled by onWatchUpdated) is
+    // unaffected by the changes.
+    if ((lastDiff || this._cancelled) && !this._dirty && !this._hasUpdate(changedNodeIds, changedRootFields)) {
+      return;
+    }
+    this._dirty = false;
+    this._cancelled = false;
     // Note that if strict mode is disabled, we _do not_ ask for node ids.
     //
     // This effectively circumvents the logic in _hasUpdate (entityIds will be
@@ -77,14 +107,20 @@ export class QueryObserver<TSerialized> {
       return;
     }
     const sameAsBefore = result && lastResult && rootKeys.every(key => isEqual(result[key], lastResult[key]));
-    const dirtyKeys = this._context.dirty.get(operation.rootId);
+    // Changed (or invalidated) fields call onWatchUpdated even if the result is
+    // unchanged.
+    const dirtyKeys = (changedRootFields ?? this._context.dirty).get(operation.rootId);
     if (sameAsBefore && !(dirtyKeys && rootKeys.some(key => dirtyKeys.has(key)))) {
       return;
     }
     const shouldCancel = onWatchUpdated?.call(cacheInstance, this._options, readResult, lastDiff) === false;
     if (shouldCancel) {
       // Returning false from the onWatchUpdated callback will prevent
-      // calling c.callback(diff) for this watcher.
+      // calling c.callback(diff) for this watcher.  Like InMemoryCache, the
+      // watch keeps its last diff, so a later broadcast still delivers this
+      // result.
+      this._options.lastDiff = lastDiff;
+      this._cancelled = true;
       return;
     }
     if (sameAsBefore) {
@@ -96,18 +132,36 @@ export class QueryObserver<TSerialized> {
   /**
    * Whether there are any changed nodes that overlap with the ones we're
    * observing.
+   *
+   * If the fields changed on the root node are known, a root node change only
+   * counts if it is to a field we select (like InMemoryCache's field-level
+   * dependency tracking).
    */
-  private _hasUpdate(_changedNodeIds: Set<NodeId>): boolean {
+  private _hasUpdate(_changedNodeIds: Set<NodeId>, changedRootFields?: Map<NodeId, Set<string>>): boolean {
     const { complete, entityIds, dynamicNodeIds } = this._result!;
     if (!complete) return true;
     // We can't know if we have no ids to test against. Favor updating.
     if (!entityIds) return true;
 
+    const { rootId } = this._query;
     for (const nodeId of _changedNodeIds) {
-      if (entityIds.has(nodeId)) return true;
-      if (dynamicNodeIds && dynamicNodeIds.has(nodeId)) return true;
+      if (!entityIds.has(nodeId) && !(dynamicNodeIds && dynamicNodeIds.has(nodeId))) continue;
+      if (nodeId === rootId && changedRootFields && !this._selectsAny(changedRootFields.get(rootId))) continue;
+      return true;
     }
 
+    return false;
+  }
+
+  /**
+   * Whether the query selects any of the given fields of its root node.
+   */
+  private _selectsAny(fields: Set<string> | undefined): boolean {
+    if (!fields || !fields.size) return false;
+    const { parsedQuery } = this._context.parseOperation(this._query);
+    for (const key of Object.keys(parsedQuery)) {
+      if (fields.has(key) || fields.has(parsedQuery[key].schemaName!)) return true;
+    }
     return false;
   }
 
