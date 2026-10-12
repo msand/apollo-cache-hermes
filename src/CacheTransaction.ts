@@ -450,6 +450,16 @@ export class CacheTransaction<TSerialized> implements Queryable {
 
     const nodeRefToMatch = ({ id }) => ({ d: currentGraph().getNodeData(id), k: id });
 
+    // Like InMemoryCache, a field with arguments is passed to modifiers as its stored
+    // value, or as a Reference when it holds an entity.
+    const parameterizedFieldValue = (nodeId: string, data: any) => {
+      const outbound = currentGraph().getNodeSnapshot(nodeId)?.outbound;
+      for (const reference of outbound?.values() ?? []) {
+        if (reference.path.length === 0) return makeRef(reference.id);
+      }
+      return data && typeof data === 'object' ? { ...data } : data;
+    };
+
     function readFromSnapshot(obj: Readonly<NodeSnapshot>, key: string) {
       const data = obj.data;
       const datum = data && typeof data === 'object' && key in data ? (data as JsonObject)[key] : undefined;
@@ -644,7 +654,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
           const copyOrCurrent = Array.isArray(d)
             ? Array.prototype.slice.call(d)
             : useRef
-              ? { __ref: k }
+              ? parameterizedFieldValue(k!, d)
               : typeof d === 'object'
                 ? { ...d }
                 : d;
@@ -684,7 +694,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
           const copyOrCurrent = Array.isArray(d)
             ? Array.prototype.slice.call(d)
             : useRef
-              ? { __ref: k }
+              ? parameterizedFieldValue(k!, d)
               : typeof d === 'object'
                 ? { ...d }
                 : d;

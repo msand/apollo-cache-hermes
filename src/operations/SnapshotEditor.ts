@@ -322,6 +322,17 @@ export class SnapshotEditor<TSerialized> {
       }
     }
 
+    // Writing the entity that a dangling reference here points to re-links them.
+    if (
+      payloadId &&
+      payloadId === previousId &&
+      previousValue === undefined &&
+      !ref &&
+      (containerId !== payloadId || path.length !== 0)
+    ) {
+      referenceEdits.push({ containerId, path, prevNodeId: undefined, nextNodeId: payloadId });
+    }
+
     // Is this an identity change?
     if (payloadId !== previousId) {
       // Unless a merge policy replaces (or merges) the value, it is invalid to

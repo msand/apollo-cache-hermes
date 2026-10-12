@@ -17,7 +17,8 @@ const { getInbound, getOutbound, getParameterized, isNumber, isObject, isReferen
  *
  * The parameter 'serializedState' is likely to be result running JSON.stringify
  * on a result of 'extract' method. This function will directly reference object
- * in the serializedState.
+ * in the serializedState, except for the data of nodes with references, which
+ * it copies before patching (so the serializedState itself is never modified).
  *
  * @throws Will throw an error if 'type' in serializedState cannot be mapped to
  *    different sub-class of NodeSnapshot.
@@ -54,7 +55,7 @@ function createGraphSnapshotNodes<TSerialized>(
     switch (type) {
       case Serializable.NodeSnapshotType.EntitySnapshot:
         nodeSnapshot = new EntitySnapshot(
-          data as JsonObject,
+          (outbound || parameterized ? cloneJson(data) : data) as JsonObject,
           getInbound(inbound),
           getOutbound(outbound),
           getParameterized(parameterized),
@@ -62,7 +63,7 @@ function createGraphSnapshotNodes<TSerialized>(
         break;
       case Serializable.NodeSnapshotType.ParameterizedValueSnapshot:
         nodeSnapshot = new ParameterizedValueSnapshot(
-          data as JsonValue,
+          (outbound || parameterized ? cloneJson(data) : data) as JsonValue,
           getInbound(inbound),
           getOutbound(outbound),
           getParameterized(parameterized),
@@ -124,6 +125,24 @@ function createGraphSnapshotNodes<TSerialized>(
   restoreEntityReferences(nodesMap, cacheContext);
 
   return { nodesMap, editedNodeIds };
+}
+
+/**
+ * Deep copies JSON-like data (arrays and plain objects), preserving holes and
+ * undefined values.
+ */
+function cloneJson<T>(value: T): T {
+  if (Array.isArray(value)) {
+    const copy = new Array(value.length);
+    value.forEach((item, index) => (copy[index] = cloneJson(item)));
+    return copy as T;
+  }
+  if (isObject(value)) {
+    const copy: Record<string, unknown> = {};
+    for (const key of Object.keys(value)) copy[key] = cloneJson((value as Record<string, unknown>)[key]);
+    return copy as T;
+  }
+  return value;
 }
 
 function set(data: NestedArray<JsonScalar> | NestedObject<JsonScalar>, path: PathPart[], value: JsonValue | undefined) {
