@@ -1107,27 +1107,32 @@ describe('useFragment', () => {
 
     checkHistory(4);
 
+    // Hermes: references are stored as outbound/inbound edges rather than
+    // { __ref } objects, and Item:5 was deleted as soon as it was orphaned
+    // (rather than in gc()).
     expect(cache.extract()).toEqual({
       'Item:1': {
-        __typename: 'Item',
-        id: 1,
-        text: 'oyez1',
+        type: 0,
+        data: { __typename: 'Item', id: 1, text: 'oyez1' },
+        inbound: [{ id: 'ROOT_QUERY', path: ['list', 0] }],
       },
       'Item:2': {
-        __typename: 'Item',
-        id: 2,
-      },
-      'Item:5': {
-        __typename: 'Item',
-        id: 5,
+        type: 0,
+        data: { __typename: 'Item', id: 2 },
+        inbound: [{ id: 'ROOT_QUERY', path: ['list', 2] }],
       },
       ROOT_QUERY: {
-        __typename: 'Query',
-        list: [{ __ref: 'Item:1' }, { __ref: 'Item:8' }, { __ref: 'Item:2' }],
+        type: 0,
+        data: { list: [undefined, undefined, undefined] },
+        outbound: [
+          { id: 'Item:1', path: ['list', 0] },
+          { id: 'Item:8', path: ['list', 1] },
+          { id: 'Item:2', path: ['list', 2] },
+        ],
       },
     });
 
-    expect(cache.gc().sort()).toEqual(['Item:5']);
+    expect(cache.gc().sort()).toEqual([]);
   });
 
   it('returns new diff when UseFragmentOptions change', async () => {

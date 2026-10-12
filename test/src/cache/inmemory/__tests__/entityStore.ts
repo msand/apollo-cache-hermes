@@ -716,13 +716,9 @@ describe('EntityStore', () => {
         outbound: [{ id: 'Author:J.K. Rowling', path: ['author'] }],
         type: 0,
       },
-      'Author:Robert Galbraith': {
-        data: {
-          __typename: 'Author',
-          name: 'Robert Galbraith',
-        },
-        type: 0,
-      },
+      // Hermes: the optimistic write orphaned Author:Robert Galbraith, and
+      // Hermes deletes orphaned entities right away (rather than in gc()), so
+      // it is only in the non-optimistic snapshot.
       'Author:J.K. Rowling': {
         data: {
           __typename: 'Author',
@@ -731,10 +727,6 @@ describe('EntityStore', () => {
         inbound: [{ id: 'Book:031648637X', path: ['author'] }],
         type: 0,
       },
-    };
-
-    const cuckooMeta = {
-      extraRootIds: ['Book:031648637X'],
     };
 
     expect(cache.extract(true)).toEqual(snapshotWithBothNames);
@@ -751,25 +743,28 @@ describe('EntityStore', () => {
 
     cache.removeOptimistic('real name');
 
-    const robertMeta = {
-      extraRootIds: ['Author:Robert Galbraith'],
+    const rootQueryNode = {
+      data: { book: undefined },
+      outbound: [{ id: 'Book:031648637X', path: ['book'] }],
+      type: 0,
     };
-
-    expect(cache.extract(true)).toEqual({
-      __META: robertMeta,
-      ROOT_QUERY: {
-        __typename: 'Query',
-        book: {
-          __ref: 'Book:031648637X',
-        },
-      },
-      'Book:031648637X': {
+    const bookNode = (authorId: string) => ({
+      data: {
         __typename: 'Book',
-        author: {
-          __ref: 'Author:Robert Galbraith',
-        },
         title: "The Cuckoo's Calling",
+        isbn: '031648637X',
+        author: undefined,
       },
+      inbound: [{ id: 'ROOT_QUERY', path: ['book'] }],
+      outbound: [{ id: authorId, path: ['author'] }],
+      type: 0,
+    });
+
+    // Hermes: no __META.extraRootIds (Hermes does not serialize retained ids).
+    expect(cache.extract(true)).toEqual({
+      ROOT_QUERY: rootQueryNode,
+      // A dangling reference to the evicted Author:Robert Galbraith.
+      'Book:031648637X': bookNode('Author:Robert Galbraith'),
       // The Robert Galbraith Author record is no longer here because
       // cache.evict evicts data from all EntityStore layers.
     });
@@ -786,31 +781,19 @@ describe('EntityStore', () => {
       },
     });
 
-    const cuckooRobertMeta = {
-      ...cuckooMeta,
-      ...robertMeta,
-      extraRootIds: [...cuckooMeta.extraRootIds, ...robertMeta.extraRootIds].sort(),
-    };
-
-    expect(cache.extract(true)).toEqual({
-      __META: cuckooRobertMeta,
-      ROOT_QUERY: {
-        __typename: 'Query',
-        book: {
-          __ref: 'Book:031648637X',
-        },
-      },
-      'Book:031648637X': {
-        __typename: 'Book',
-        author: {
-          __ref: 'Author:J.K. Rowling',
-        },
-        title: "The Cuckoo's Calling",
-      },
-      'Author:J.K. Rowling': {
+    const rowlingNode = (inbound: object[] | undefined) => ({
+      data: {
         __typename: 'Author',
         name: 'J.K. Rowling',
       },
+      ...(inbound ? { inbound } : {}),
+      type: 0,
+    });
+
+    expect(cache.extract(true)).toEqual({
+      ROOT_QUERY: rootQueryNode,
+      'Book:031648637X': bookNode('Author:J.K. Rowling'),
+      'Author:J.K. Rowling': rowlingNode([{ id: 'Book:031648637X', path: ['author'] }]),
     });
 
     expect(cache.retain('Author:Robert Galbraith')).toBe(2);
@@ -847,18 +830,8 @@ describe('EntityStore', () => {
     expect(cache.evict({})).toBe(true);
 
     expect(cache.extract(true)).toEqual({
-      __META: cuckooMeta,
-      'Book:031648637X': {
-        __typename: 'Book',
-        author: {
-          __ref: 'Author:J.K. Rowling',
-        },
-        title: "The Cuckoo's Calling",
-      },
-      'Author:J.K. Rowling': {
-        __typename: 'Author',
-        name: 'J.K. Rowling',
-      },
+      'Book:031648637X': { ...bookNode('Author:J.K. Rowling'), inbound: undefined },
+      'Author:J.K. Rowling': rowlingNode([{ id: 'Book:031648637X', path: ['author'] }]),
     });
 
     const ccId = cache.identify(cuckoosCallingBook)!;

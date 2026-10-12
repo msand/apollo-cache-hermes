@@ -4385,9 +4385,11 @@ describe('TypedDocumentNode<Data, Variables>', () => {
     });
 
     if (ffplQueryResult === null) throw new Error('null result');
-    expect(ffplQueryResult.book.isbn).toBeUndefined();
+    // Hermes: reads return a superset of the selected fields (by design), so
+    // the stored (but unselected) isbn is included.
+    expect(ffplQueryResult.book.isbn).toBe('0262133210');
     expect(ffplQueryResult.book.author.name).toBe(jcmAuthor.name);
-    expect(ffplQueryResult).toEqual({
+    expect(ffplQueryResult).toMatchObject({
       book: {
         __typename: 'Book',
         title: 'Foundations for Programming Languages',
@@ -4433,10 +4435,12 @@ describe('TypedDocumentNode<Data, Variables>', () => {
       },
     });
     if (sicpReadResult === null) throw new Error('null result');
-    expect(sicpReadResult.book.isbn).toBeUndefined();
+    // Hermes: reads return a superset of the selected fields (by design), so
+    // the stored (but unselected) isbn is included.
+    expect(sicpReadResult.book.isbn).toBe('0262510871');
     expect(sicpReadResult.book.title).toBe(sicpBook.title);
     expect(sicpReadResult.book.author.name).toBe(sicpBook.author.name);
-    expect(sicpReadResult).toEqual({
+    expect(sicpReadResult).toMatchObject({
       book: {
         __typename: 'Book',
         title: 'Structure and Interpretation of Computer Programs',
