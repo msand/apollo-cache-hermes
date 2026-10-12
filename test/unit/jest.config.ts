@@ -13,6 +13,8 @@ export const config: Config = {
   rootDir: '../..',
   setupFilesAfterEnv: ['./test/env/unit.js'],
   snapshotResolver: '<rootDir>/test/env/snapshotResolver.js',
+  // The vendored Apollo Client snapshots use the pre-Jest 29 format.
+  snapshotFormat: { escapeString: true, printBasicPrototype: true },
   testMatch: ['<rootDir>/test/unit/**/*.js', '<rootDir>/test/**/*.test.js', '<rootDir>/test/src/**/__tests__/**/*.js'],
   testPathIgnorePatterns: [
     '/node_modules/',
