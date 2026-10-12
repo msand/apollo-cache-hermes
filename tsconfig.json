@@ -23,5 +23,5 @@
     "strict": true,
     "types": ["jest", "node"]
   },
-  "exclude": ["node_modules", "apollo-client", "dist"]
+  "exclude": ["node_modules", "apollo-client", "dist", ".claude"]
 }

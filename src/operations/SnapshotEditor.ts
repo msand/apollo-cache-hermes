@@ -654,6 +654,11 @@ export class SnapshotEditor<TSerialized> {
       ),
     );
     this._newNodes[nodeId] = undefined;
+
+    // Parameterized values only exist as fields of this node, so they go with it.
+    forEach(nodeSnapshot?.parameterized, ({ id }) => {
+      if (!this._isDeleted(id)) this.delete(id);
+    });
   }
 
   /**
@@ -950,7 +955,12 @@ export class SnapshotEditor<TSerialized> {
         this._setValue(containerId, fieldPath, undefined, true, true);
       } else {
         const keyParts = key.split('❖');
-        const keyPath = keyParts.length > 1 ? JSON.parse(keyParts[1]) : [key];
+        if (keyParts.length > 1) {
+          // A field with arguments: remove its stored value too, as InMemoryCache's evict does.
+          this.delete(key);
+          continue;
+        }
+        const keyPath = [key];
         referenceEdits.push({
           containerId,
           path: keyPath,

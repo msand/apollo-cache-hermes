@@ -1,11 +1,11 @@
 import { Transaction, Cache as CacheInterface, makeVar } from '@apollo/client';
-import { Reference, StoreObject } from '@apollo/client/utilities';
+import { isReference, Reference, StoreObject } from '@apollo/client/utilities';
 
 import { CacheContext } from '../context';
 import { Cache, MigrationMap } from '../Cache';
 import { CacheSnapshot } from '../CacheSnapshot';
 import { GraphSnapshot } from '../GraphSnapshot';
-import { NodeId } from '../schema';
+import { NodeId, StaticNodeId } from '../schema';
 
 import { ApolloQueryable } from './Queryable';
 import { ApolloTransaction } from './Transaction';
@@ -30,6 +30,8 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
   }
 
   identify(object: StoreObject | Reference): string | undefined {
+    if (isReference(object)) return object.__ref;
+    if (object?.__typename === 'Query') return StaticNodeId.QueryRoot;
     return this._queryable.identify(object);
   }
 
@@ -81,7 +83,7 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
   }
 
   watch(options: CacheInterface.WatchOptions): () => void {
-    const query = buildRawOperationFromQuery(options.query, options.variables);
+    const query = buildRawOperationFromQuery(options.query, options.variables, options.id);
     this.watches.add(options);
     const unwatch = this._queryable.watch(query, options);
     return () => {

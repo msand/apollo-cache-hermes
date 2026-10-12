@@ -17,7 +17,7 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
   protected abstract _queryable: Queryable;
 
   diff<T>(query: Cache.DiffOptions): Cache.DiffResult<T> {
-    const rawOperation = buildRawOperationFromQuery(query.query, query.variables);
+    const rawOperation = buildRawOperationFromQuery(query.query, query.variables, query.id);
     const { result, complete, missing, fromOptimisticTransaction } = this._queryable.read(
       rawOperation,
       query.optimistic,
@@ -27,7 +27,8 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
       throw new UnsatisfiedCacheError(`diffQuery not satisfied by the cache.`);
     }
 
-    return { result: result as unknown as T, complete, missing, fromOptimisticTransaction };
+    // Like InMemoryCache, an empty read is an empty (incomplete) object rather than undefined.
+    return { result: (result ?? {}) as unknown as T, complete, missing, fromOptimisticTransaction };
   }
 
   read<TData = any, TVariables = any>(query: Cache.ReadOptions<TVariables, TData>): TData | null {
@@ -98,7 +99,7 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
     // TODO: Support nested fragments.
     const rawOperation = buildRawOperationFromFragment(
       options.fragment,
-      options.id!,
+      options.id ?? this.identify(options.data as any)!,
       options.variables as any,
       options.fragmentName,
     );

@@ -271,7 +271,9 @@ export class CacheContext<TSerialized = GraphSnapshot> {
       document: this.transformDocument(raw.document),
     };
 
-    const rootHasReadPolicy = Object.keys(this.typePolicies?.Query?.fields ?? {}).length > 0;
+    const rootHasReadPolicy = Object.values(this.typePolicies ?? {}).some(
+      policy => Object.keys(policy?.fields ?? {}).length > 0,
+    );
 
     const info = this._queryInfo(cacheKey, updateRaw);
     const fullVariables = { ...info.variableDefaults, ...updateRaw.variables } as JsonObject;

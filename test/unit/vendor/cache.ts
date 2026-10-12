@@ -3564,12 +3564,6 @@ describe('Hermes#modify', () => {
           isbn: '0735211280',
           title: 'Spineless',
         },
-        inbound: [
-          {
-            id: 'ROOT_QUERY❖["book"]❖{"isbn":"0735211280"}',
-            path: [],
-          },
-        ],
         type: 0,
       },
       'Book:{"isbn":"147670032X"}': {
@@ -3578,12 +3572,6 @@ describe('Hermes#modify', () => {
           isbn: '147670032X',
           title: "Why We're Polarized",
         },
-        inbound: [
-          {
-            id: 'ROOT_QUERY❖["book"]❖{"isbn":"147670032X"}',
-            path: [],
-          },
-        ],
         type: 0,
       },
       'Book:{"isbn":"1760641790"}': {
@@ -3612,26 +3600,6 @@ describe('Hermes#modify', () => {
         ],
         type: 0,
       },
-      'ROOT_QUERY❖["book"]❖{"isbn":"0735211280"}': {
-        data: null,
-        outbound: [
-          {
-            id: 'Book:{"isbn":"0735211280"}',
-            path: [],
-          },
-        ],
-        type: 1,
-      },
-      'ROOT_QUERY❖["book"]❖{"isbn":"147670032X"}': {
-        data: null,
-        outbound: [
-          {
-            id: 'Book:{"isbn":"147670032X"}',
-            path: [],
-          },
-        ],
-        type: 1,
-      },
       'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}': {
         data: null,
         inbound: [
@@ -3650,12 +3618,7 @@ describe('Hermes#modify', () => {
       },
     });
 
-    expect(cache.gc().sort()).toEqual([
-      'Book:{"isbn":"0735211280"}',
-      'Book:{"isbn":"147670032X"}',
-      'ROOT_QUERY❖["book"]❖{"isbn":"0735211280"}',
-      'ROOT_QUERY❖["book"]❖{"isbn":"147670032X"}',
-    ]);
+    expect(cache.gc().sort()).toEqual(['Book:{"isbn":"0735211280"}', 'Book:{"isbn":"147670032X"}']);
 
     expect(cache.extract()).toEqual({
       'Book:{"isbn":"1760641790"}': {
@@ -3711,12 +3674,6 @@ describe('Hermes#modify', () => {
           isbn: '1760641790',
           title: 'How To Do Nothing',
         },
-        inbound: [
-          {
-            id: 'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
-            path: [],
-          },
-        ],
         type: 0,
       },
       ROOT_QUERY: {
@@ -3725,19 +3682,9 @@ describe('Hermes#modify', () => {
         },
         type: 0,
       },
-      'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}': {
-        data: null,
-        outbound: [
-          {
-            id: 'Book:{"isbn":"1760641790"}',
-            path: [],
-          },
-        ],
-        type: 1,
-      },
     });
 
-    expect(cache.gc()).toEqual(['ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}', 'Book:{"isbn":"1760641790"}']);
+    expect(cache.gc()).toEqual(['Book:{"isbn":"1760641790"}']);
 
     expect(cache.extract()).toEqual({
       ROOT_QUERY: {

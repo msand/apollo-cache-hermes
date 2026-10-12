@@ -16,5 +16,8 @@
 # TypeScript
 !/typings/**/*.d.ts
 
+# Claude Code worktrees
+/.claude/worktrees/
+
 # jetbrains
 .idea/

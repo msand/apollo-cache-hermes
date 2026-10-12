@@ -673,12 +673,6 @@ Object {
       "isbn": "0262510871",
       "title": "Structure and Interpretation of Computer Programs",
     },
-    "inbound": Array [
-      Object {
-        "id": undefined,
-        "path": Array [],
-      },
-    ],
     "outbound": Array [
       Object {
         "id": "Author:{\\"name\\":\\"Harold Abelson\\"}",
@@ -717,16 +711,6 @@ Object {
       },
     ],
     "type": 1,
-  },
-  "undefined": Object {
-    "data": null,
-    "outbound": Array [
-      Object {
-        "id": "Book:{\\"isbn\\":\\"0262510871\\"}",
-        "path": Array [],
-      },
-    ],
-    "type": 0,
   },
 }
 `;

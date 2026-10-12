@@ -11,6 +11,8 @@ export const config: Config = {
   coverageReporters: ['lcovonly', 'text'],
   coveragePathIgnorePatterns: ['<rootDir>/node_modules/', '<rootDir>/test/'],
   rootDir: '../..',
+  // Only crawl the project sources, not nested checkouts such as .claude/worktrees.
+  roots: ['<rootDir>/src', '<rootDir>/test'],
   setupFilesAfterEnv: ['./test/env/unit.js'],
   snapshotResolver: '<rootDir>/test/env/snapshotResolver.js',
   // The vendored Apollo Client snapshots use the pre-Jest 29 format.
