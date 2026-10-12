@@ -15,6 +15,8 @@ import type { CacheSnapshot as CacheSnapshotType } from './CacheSnapshot';
 import type { GraphSnapshot, NodeSnapshotMap } from './GraphSnapshot';
 import type { JsonObject, JsonValue } from './primitive';
 import type { CacheContext } from './context';
+import type { OptimisticUpdate } from './OptimisticUpdateQueue';
+import { applyDeltas } from './OptimisticUpdateQueue';
 import type { Queryable } from './Queryable';
 import type { NodeSnapshot } from './nodes';
 import type { DocumentNode } from './util';
@@ -46,6 +48,15 @@ function isDeleteModifier(value: any): value is DeleteModifier {
 function isInvalidateModifier(value: any): value is InvalidateModifier {
   return value === INVALIDATE;
 }
+
+/**
+ * Re-runs an optimistic update on top of a snapshot (see Cache), returning the
+ * resulting snapshot, with the update re-enqueued.
+ */
+export type OptimisticReplay = (
+  snapshot: CacheSnapshotType,
+  update: OptimisticUpdate,
+) => { snapshot: CacheSnapshotType; editedNodeIds: Set<NodeId> };
 
 type Node<TSerialized> = {
   node: any;
@@ -80,6 +91,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
     private _context: CacheContext<TSerialized>,
     private _snapshot: CacheSnapshotType,
     private _optimisticChangeId?: ChangeId,
+    private _replayOptimisticUpdate?: OptimisticReplay,
   ) {
     this._parentSnapshot = _snapshot;
   }
@@ -141,28 +153,53 @@ export class CacheTransaction<TSerialized> implements Queryable {
   }
 
   /**
-   * Roll back a previously enqueued optimistic update.
+   * Roll back previously enqueued optimistic updates with the given id.
+   *
+   * Like InMemoryCache's removeOptimistic, the updates beneath the removed one
+   * are kept as they are, and the ones above it are re-run on top of the data
+   * beneath them (so they pick up any data written since they last ran).
    */
   rollback(changeId: ChangeId): void {
     const current = this._snapshot;
-
-    const optimisticQueue = current.optimisticQueue.remove(changeId);
-    current.optimisticQueue = optimisticQueue;
-    const optimistic = this._buildOptimisticSnapshot(current.baseline);
+    const parts = current.optimisticQueue.split(changeId);
+    if (!parts) return;
 
     // Invalidate all IDs from the soon-to-be previous optimistic snapshot,
     // since we don't know which IDs were changed by the one we're rolling back.
-    const allIds = new Set(current.optimistic.allNodeIds());
-    addToSet(this._editedNodeIds, allIds);
+    addToSet(this._editedNodeIds, current.optimistic.allNodeIds());
 
-    this._snapshot = new CacheSnapshot(current.baseline, optimistic, optimisticQueue);
+    let optimistic = current.baseline;
+    if (parts.below.hasUpdates()) {
+      const applied = parts.below.apply(this._context, current.baseline);
+      optimistic = applied.snapshot;
+      addToSet(this._editedNodeIds, applied.editedNodeIds);
+    }
+    let snapshot = new CacheSnapshot(current.baseline, optimistic, parts.below);
+
+    for (const update of parts.above) {
+      if (update.callback && this._replayOptimisticUpdate) {
+        const replayed = this._replayOptimisticUpdate(snapshot, update);
+        snapshot = replayed.snapshot;
+        addToSet(this._editedNodeIds, replayed.editedNodeIds);
+      } else {
+        const optimisticQueue = snapshot.optimisticQueue.enqueue(update.id, update.deltas, update.callback);
+        const editor = new SnapshotEditor(this._context, snapshot.optimistic);
+        applyDeltas(editor, update.deltas);
+        const applied = editor.commit();
+        addToSet(this._editedNodeIds, applied.editedNodeIds);
+        snapshot = new CacheSnapshot(snapshot.baseline, applied.snapshot, optimisticQueue);
+      }
+    }
+
+    addToSet(this._editedNodeIds, snapshot.optimistic.allNodeIds());
+    this._snapshot = snapshot;
   }
 
   /**
    * Complete the transaction, returning the new snapshot and the ids of any
    * nodes that were edited.
    */
-  commit(): {
+  commit(callback?: OptimisticUpdate['callback']): {
     snapshot: CacheSnapshotType;
     editedNodeIds: Set<NodeId>;
     writtenQueries: Set<OperationInstance<TSerialized>>;
@@ -172,10 +209,11 @@ export class CacheTransaction<TSerialized> implements Queryable {
 
     let snapshot = this._snapshot;
     if (this._optimisticChangeId) {
+      // The callback is kept so the update can be re-run (see rollback).
       snapshot = new CacheSnapshot(
         snapshot.baseline,
         snapshot.optimistic,
-        snapshot.optimisticQueue.enqueue(this._optimisticChangeId, this._deltas),
+        snapshot.optimisticQueue.enqueue(this._optimisticChangeId, this._deltas, callback),
       );
     }
 
@@ -193,6 +231,14 @@ export class CacheTransaction<TSerialized> implements Queryable {
 
   setSnapshot(snapshot: CacheSnapshotType) {
     this._snapshot = snapshot;
+  }
+
+  /**
+   * The current (uncommitted) version of the cache, as seen by this
+   * transaction.
+   */
+  getSnapshot(): CacheSnapshotType {
+    return this._snapshot;
   }
 
   getPreviousNodeSnapshot(nodeId: NodeId): NodeSnapshot | undefined {
@@ -307,7 +353,22 @@ export class CacheTransaction<TSerialized> implements Queryable {
   }
 
   modify<Entity extends Record<string, unknown>>(options: CacheInterface.ModifyOptions<Entity>): boolean {
-    const graphSnapshot = options.optimistic ? this._snapshot.optimistic : this._snapshot.baseline;
+    // Like InMemoryCache, an optimistic transaction modifies its own layer.
+    return this._modify(options, this._optimisticChangeId ? 'layer' : options.optimistic ? 'optimistic' : 'baseline');
+  }
+
+  /**
+   * Modifies the baseline (and re-applies the optimistic updates over it), the
+   * optimistic view, the optimistic update made by this transaction ('layer'),
+   * or every optimistic update ('allLayers', used by evict so that evicted data
+   * is not resurrected by optimistic updates).
+   */
+  private _modify<Entity extends Record<string, unknown>>(
+    options: CacheInterface.ModifyOptions<Entity>,
+    target: 'baseline' | 'optimistic' | 'layer' | 'allLayers',
+  ): boolean {
+    const optimistic = target !== 'baseline';
+    let graphSnapshot = optimistic ? this._snapshot.optimistic : this._snapshot.baseline;
 
     const id = 'id' in options ? options.id : 'ROOT_QUERY';
     if (!id) {
@@ -593,7 +654,10 @@ export class CacheTransaction<TSerialized> implements Queryable {
       return false;
     }
 
+    // Modifier functions may have written to the cache (in this transaction);
+    // apply the modifications on top of those writes rather than dropping them.
     const current = this._snapshot;
+    graphSnapshot = optimistic ? current.optimistic : current.baseline;
 
     const editor = new SnapshotEditor(this._context, graphSnapshot);
     const empty = new Set<string>();
@@ -604,17 +668,17 @@ export class CacheTransaction<TSerialized> implements Queryable {
         editor.modify(mergeId, mergePayload, empty, seenObjects);
       }
     }
+    let delta: CacheDelta;
     if (allDeleted) {
       editor.delete(id);
-      if (options.optimistic) {
-        this._deltas.push({ delete: id });
-      }
+      delta = { delete: id };
     } else {
       const seenObjects = new Set<object | null>();
       editor.modify(id, payload, deleted, seenObjects);
-      if (options.optimistic) {
-        this._deltas.push({ id, payload, deleted });
-      }
+      delta = { id, payload, deleted };
+    }
+    if (optimistic) {
+      this._deltas.push(delta);
     }
     const newSnapshot = editor.commit();
     const { snapshot, editedNodeIds } = newSnapshot;
@@ -626,7 +690,10 @@ export class CacheTransaction<TSerialized> implements Queryable {
       }
     }
 
-    if (options.optimistic) {
+    if (target === 'allLayers') {
+      const optimisticQueue = current.optimisticQueue.appendToAll([delta]);
+      this._snapshot = new CacheSnapshot(current.baseline, snapshot, optimisticQueue);
+    } else if (optimistic) {
       this._snapshot = new CacheSnapshot(current.baseline, snapshot, current.optimisticQueue);
     } else {
       const optimistic = this._buildOptimisticSnapshot(snapshot);
@@ -672,7 +739,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
     const modifier: Modifier<any> = (_current, details) => {
       return details.DELETE;
     };
-    return this.modify({
+    const modifyOptions: CacheInterface.ModifyOptions = {
       id: options.id ?? 'ROOT_QUERY',
       fields: options.fieldName
         ? {
@@ -680,7 +747,13 @@ export class CacheTransaction<TSerialized> implements Queryable {
           }
         : modifier,
       broadcast: options.broadcast,
-    });
+    };
+    // Like InMemoryCache, an optimistic transaction evicts from its own layer
+    // only; otherwise data is evicted from the baseline and every layer.
+    if (this._optimisticChangeId) return this._modify(modifyOptions, 'layer');
+    const evicted = this._modify(modifyOptions, 'baseline');
+    if (!this._snapshot.optimisticQueue.hasUpdates()) return evicted;
+    return this._modify(modifyOptions, 'allLayers') || evicted;
   }
 
   /**
@@ -691,11 +764,23 @@ export class CacheTransaction<TSerialized> implements Queryable {
    * match to a stored field name, such as a null field that also has a
    * parameterized variant.
    *
+   * Unless fromLayers is false, the entities are also evicted from any
+   * optimistic updates (so they cannot reappear when those are re-applied).
+   *
    * Returns whether any entity was evicted.
    */
-  batchEvict(ids: Iterable<NodeId>): boolean {
+  batchEvict(ids: Iterable<NodeId>, fromLayers = true): boolean {
+    const idList = Array.from(ids);
+    // Like evict(), an optimistic transaction evicts from its own layer only.
+    if (this._optimisticChangeId) return this._batchEvict(idList, 'layer');
+    const evicted = this._batchEvict(idList, 'baseline');
+    if (!fromLayers || !this._snapshot.optimisticQueue.hasUpdates()) return evicted;
+    return this._batchEvict(idList, 'allLayers') || evicted;
+  }
+
+  private _batchEvict(ids: NodeId[], target: 'baseline' | 'layer' | 'allLayers'): boolean {
     const current = this._snapshot;
-    const graphSnapshot = current.baseline;
+    const graphSnapshot = target === 'baseline' ? current.baseline : current.optimistic;
     const evictedIds = new Set<NodeId>();
     for (const id of ids) {
       if (graphSnapshot.getNodeSnapshot(id)) {
@@ -720,8 +805,19 @@ export class CacheTransaction<TSerialized> implements Queryable {
       }
     }
 
-    const optimistic = this._buildOptimisticSnapshot(snapshot);
-    this._snapshot = new CacheSnapshot(snapshot, optimistic, current.optimisticQueue);
+    if (target === 'baseline') {
+      const optimistic = this._buildOptimisticSnapshot(snapshot);
+      this._snapshot = new CacheSnapshot(snapshot, optimistic, current.optimisticQueue);
+    } else {
+      const deltas: CacheDelta[] = Array.from(evictedIds, id => ({ delete: id }));
+      let { optimisticQueue } = current;
+      if (target === 'layer') {
+        this._deltas.push(...deltas);
+      } else {
+        optimisticQueue = optimisticQueue.appendToAll(deltas);
+      }
+      this._snapshot = new CacheSnapshot(current.baseline, snapshot, optimisticQueue);
+    }
 
     return true;
   }

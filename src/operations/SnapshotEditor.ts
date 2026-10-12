@@ -1500,7 +1500,10 @@ export class SnapshotEditor<TSerialized> {
   private _ensureNewSnapshot(id: NodeId): NodeSnapshot {
     let parent;
     if (id in this._newNodes) {
-      return this._newNodes[id]!;
+      const existing = this._newNodes[id];
+      if (existing) return existing;
+      // The node was deleted earlier in this edit (e.g. when replaying
+      // optimistic updates), so it is written anew.
     } else {
       parent = this._parent.getNodeSnapshot(id);
     }

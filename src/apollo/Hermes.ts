@@ -101,8 +101,6 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
   public batch<TUpdateResult>(options: CacheInterface.BatchOptions<Hermes<TSerialized>, TUpdateResult>): TUpdateResult {
     const { update, optimistic = true, removeOptimistic, onWatchUpdated } = options;
 
-    const optimisticId = typeof optimistic === 'string' ? optimistic : optimistic ? undefined : null;
-
     const alreadyDirty = new Set<CacheInterface.WatchOptions>();
 
     const willWatch = onWatchUpdated && !this._txCount;
@@ -127,17 +125,28 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
 
     let updateResult: TUpdateResult;
 
+    const perform = () => {
+      updateResult = update(this);
+    };
+
     ++this._txCount;
     try {
-      this.performTransaction(
-        () => {
-          // Like InMemoryCache, drop the optimistic layer in the same update that writes the real data.
-          if (typeof removeOptimistic === 'string') this._queryable.rollback(removeOptimistic);
-          updateResult = update(this);
-        },
-        optimisticId,
-        onWatchUpdated,
+      this._queryable.transaction(
         !willWatch,
+        null,
+        () => {
+          if (typeof optimistic === 'string') {
+            // The update is recorded as an optimistic update, and re-run when
+            // an optimistic update beneath it is removed.
+            this._queryable.transaction(true, optimistic, perform);
+          } else {
+            perform();
+          }
+          // Like InMemoryCache, drop the optimistic layer after the update
+          // (which typically writes the real data), in the same transaction.
+          if (typeof removeOptimistic === 'string') this._queryable.rollback(removeOptimistic);
+        },
+        onWatchUpdated,
       );
     } finally {
       --this._txCount;

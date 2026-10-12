@@ -40,6 +40,11 @@ export class QueryObserver<TSerialized> {
     }
   }
 
+  /** Whether the observer reads optimistic data. */
+  get optimistic(): boolean {
+    return !!this._options.optimistic;
+  }
+
   /**
    * We expect the cache to tell us whenever there is a new snapshot, and which
    * nodes have changed.
@@ -49,6 +54,7 @@ export class QueryObserver<TSerialized> {
     changedNodeIds: Set<NodeId>,
     cacheInstance: Hermes<TSerialized>,
     onWatchUpdated?: Cache.BatchOptions<Hermes<TSerialized>>['onWatchUpdated'],
+    fromOptimisticTransaction?: boolean,
   ): void {
     const lastDiff = this._options.lastDiff;
     if (lastDiff && !this._hasUpdate(changedNodeIds)) return;
@@ -57,7 +63,8 @@ export class QueryObserver<TSerialized> {
     // This effectively circumvents the logic in _hasUpdate (entityIds will be
     // undefined).
     const operation = this._context.parseOperation(this._query);
-    const readResult = read(this._context, this._query, snapshot, Object.create(null), this._context.strict);
+    let readResult = read(this._context, this._query, snapshot, Object.create(null), this._context.strict);
+    if (fromOptimisticTransaction) readResult = { ...readResult, fromOptimisticTransaction };
     this._result = readResult;
     const result = readResult.result;
     this._options.lastDiff = readResult;

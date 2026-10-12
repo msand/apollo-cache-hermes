@@ -7,7 +7,7 @@ import { CacheTransaction } from './CacheTransaction';
 import { CacheContext } from './context';
 import { GraphSnapshot, NodeSnapshotMap } from './GraphSnapshot';
 import { extract, migrate, MigrationMap, prune, QueryObserver, read, restore } from './operations';
-import { OptimisticUpdateQueue } from './OptimisticUpdateQueue';
+import { OptimisticUpdate, OptimisticUpdateQueue } from './OptimisticUpdateQueue';
 import { JsonObject, JsonValue } from './primitive';
 import { Queryable } from './Queryable';
 import { ChangeId, NodeId, RawOperation, Serializable, StaticNodeId } from './schema';
@@ -106,7 +106,8 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
 
     if (idsToRemove.length) {
       this.transaction(false, t => {
-        t.batchEvict(idsToRemove);
+        // Like InMemoryCache, only the baseline (root layer) is collected.
+        t.batchEvict(idsToRemove, false);
       });
     }
     return idsToRemove;
@@ -136,7 +137,12 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
   }
 
   extract(optimistic: boolean, pruneQuery?: RawOperation): Serializable.GraphSnapshot {
-    const cacheSnapshot = optimistic ? this._snapshot.optimistic : this._snapshot.baseline;
+    // Like InMemoryCache, extracting during a transaction shows its pending
+    // edits (and an optimistic transaction's layer, even when not optimistic).
+    const activeTx = this._transactions[this._transactions.length - 1];
+    const current = activeTx ? activeTx.getSnapshot() : this._snapshot;
+    const useOptimistic = optimistic || !!activeTx?.isOptimisticTransaction();
+    const cacheSnapshot = useOptimistic ? current.optimistic : current.baseline;
     return extract(
       pruneQuery ? prune(this._context, cacheSnapshot, pruneQuery).snapshot : cacheSnapshot,
       this._context,
@@ -187,11 +193,12 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
       options = {
         callback: options,
         immediate: true,
-        optimistic: false,
+        optimistic: true,
         query: query.document,
       };
     }
-    const observer = new QueryObserver(this._context, query, this._snapshot.optimistic, options);
+    const snapshot = options.optimistic ? this._snapshot.optimistic : this._snapshot.baseline;
+    const observer = new QueryObserver(this._context, query, snapshot, options);
     this._observers.push(observer);
 
     return () => this._removeObserver(observer);
@@ -251,10 +258,12 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
       changeId = changeIdOrCallback as ChangeId;
     }
 
-    // Like InMemoryCache, a nested non-optimistic batch inside an optimistic
-    // transaction writes into that optimistic layer rather than the baseline.
+    // A nested non-optimistic transaction is part of the outer one (so its
+    // edits build on the outer transaction's pending edits).  Like
+    // InMemoryCache, inside an optimistic transaction it writes into that
+    // optimistic layer rather than the baseline.
     const outerTx = this._transactions[this._transactions.length - 1];
-    if (outerTx && outerTx.isOptimisticTransaction() && changeId == null) {
+    if (outerTx && changeId == null) {
       const nestedResult = callback(outerTx);
       return typeof nestedResult === 'boolean' ? nestedResult : true;
     }
@@ -264,7 +273,12 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
       tracerContext = tracer.transactionStart();
     }
 
-    const transaction = new CacheTransaction(this._context, this._snapshot, changeId);
+    const transaction = new CacheTransaction(
+      this._context,
+      outerTx ? outerTx.getSnapshot() : this._snapshot,
+      changeId,
+      this._replayOptimisticUpdate,
+    );
     this._transactions.push(transaction);
     let result;
     try {
@@ -284,7 +298,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
       this._transactions.pop();
     }
 
-    const { snapshot, editedNodeIds, writtenRootIds } = transaction.commit();
+    const { snapshot, editedNodeIds, writtenRootIds } = transaction.commit(callback);
     // Like InMemoryCache, the ids that data is written to explicitly are
     // retained, as roots for garbage collection.
     writtenRootIds.forEach(id => this.retain(id));
@@ -302,6 +316,43 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
 
     return typeof result === 'boolean' ? result : editedNodeIds.size > 0;
   }
+
+  /**
+   * Re-runs an optimistic update's callback on top of a snapshot, like
+   * InMemoryCache re-adds the layers above a removed one.  Reads and writes
+   * made through the cache while it runs see the update's own transaction.
+   */
+  private _replayOptimisticUpdate = (snapshot: CacheSnapshot, update: OptimisticUpdate) => {
+    const { tracer } = this._context;
+    let tracerContext;
+    if (tracer.transactionStart) {
+      tracerContext = tracer.transactionStart();
+    }
+
+    const transaction = new CacheTransaction(this._context, snapshot, update.id, this._replayOptimisticUpdate);
+    this._transactions.push(transaction);
+    try {
+      update.callback!(transaction);
+    } catch (error) {
+      if (tracer.transactionEnd) {
+        tracer.transactionEnd(error instanceof Error ? error.toString() : 'unknown error', tracerContext);
+      }
+      // Keep the update (without its edits), so it is retried if re-run again.
+      const optimisticQueue = snapshot.optimisticQueue.enqueue(update.id, [], update.callback);
+      return {
+        snapshot: new CacheSnapshot(snapshot.baseline, snapshot.optimistic, optimisticQueue),
+        editedNodeIds: new Set<NodeId>(),
+      };
+    } finally {
+      this._transactions.pop();
+    }
+
+    const result = transaction.commit(update.callback);
+    if (tracer.transactionEnd) {
+      tracer.transactionEnd(undefined, tracerContext);
+    }
+    return result;
+  };
 
   /**
    * Roll back a previously enqueued optimistic update.
@@ -386,7 +437,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
   private _broadcastWatches(
     editedNodeIds: Set<NodeId>,
     onWatchUpdated?: BatchOptions<Hermes<TSerialized>>['onWatchUpdated'],
-    optimistic: string | boolean | undefined = true,
+    optimistic?: string | boolean,
   ) {
     const snapshot = this._snapshot;
 
@@ -395,9 +446,18 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
       tracerContext = this._context.tracer.broadcastStart({ snapshot, editedNodeIds });
     }
 
-    const graphSnapshot = optimistic ? snapshot.optimistic : snapshot.baseline;
+    // Like InMemoryCache, each watch reads the optimistic or the baseline data,
+    // as it asked; broadcasts for an optimistic batch flag optimistic diffs.
+    const fromOptimisticTransaction = typeof optimistic === 'string';
     for (const observer of this._observers) {
-      observer.consumeChanges(graphSnapshot, editedNodeIds, this._cacheInstance!, onWatchUpdated);
+      const graphSnapshot = observer.optimistic ? snapshot.optimistic : snapshot.baseline;
+      observer.consumeChanges(
+        graphSnapshot,
+        editedNodeIds,
+        this._cacheInstance!,
+        onWatchUpdated,
+        fromOptimisticTransaction && observer.optimistic,
+      );
     }
 
     this._context.dirty.clear();
