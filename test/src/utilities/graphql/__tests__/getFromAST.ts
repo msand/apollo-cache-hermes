@@ -209,7 +209,7 @@ describe('AST utility functions', () => {
     `;
     expect(() => {
       getQueryDefinition(queryWithTypeDefinition);
-    }).toThrowError(
+    }).toThrow(
       'Schema type definitions not allowed in queries. Found: "InputObjectTypeDefinition"'
     );
   });

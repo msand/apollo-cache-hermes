@@ -2010,7 +2010,7 @@ describe('writing to the store', () => {
         result,
         query,
       });
-    }).toThrowError(/No fragment/);
+    }).toThrow(/No fragment/);
   });
 
   it('does not change object references if the value is the same', () => {
@@ -3063,7 +3063,7 @@ describe('writing to the store', () => {
           count: 1,
         },
       });
-    }).toThrowError(/Could not identify object/);
+    }).toThrow(/Could not identify object/);
   });
 
   it('user objects should be able to have { __typename: "Subscription" }', () => {

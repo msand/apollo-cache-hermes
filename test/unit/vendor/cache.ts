@@ -290,7 +290,7 @@ describe('Cache', () => {
               }
             `,
           });
-        }).toThrowError();
+        }).toThrow();
         expect(() => {
           // noinspection GraphQLMemberRedefinition,GraphQLMissingType
           proxy.readFragment({
@@ -301,7 +301,7 @@ describe('Cache', () => {
               }
             `,
           });
-        }).toThrowError();
+        }).toThrow();
       }
     );
 
@@ -322,7 +322,7 @@ describe('Cache', () => {
               }
             `,
           });
-        }).toThrowError();
+        }).toThrow();
         expect(() => {
           proxy.readFragment({
             id: 'x',
@@ -340,7 +340,7 @@ describe('Cache', () => {
               }
             `,
           });
-        }).toThrowError();
+        }).toThrow();
       }
     );
 
@@ -1121,7 +1121,7 @@ describe('Cache', () => {
               }
             `,
           });
-        }).toThrowError();
+        }).toThrow();
         expect(() => {
           proxy.writeFragment({
             data: {},
@@ -1132,7 +1132,7 @@ describe('Cache', () => {
               }
             `,
           });
-        }).toThrowError();
+        }).toThrow();
       }
     );
 
@@ -1154,7 +1154,7 @@ describe('Cache', () => {
               }
             `,
           });
-        }).toThrowError();
+        }).toThrow();
         expect(() => {
           proxy.writeFragment({
             data: {},
@@ -1173,7 +1173,7 @@ describe('Cache', () => {
               }
             `,
           });
-        }).toThrowError();
+        }).toThrow();
       }
     );
 

@@ -1,7 +1,6 @@
 
 import * as React from 'rehackt';
 import type * as ReactTypes from 'react';
-// eslint-disable-next-line import/no-extraneous-dependencies
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { getApolloContext } from '../context/index';

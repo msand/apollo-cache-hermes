@@ -84,12 +84,12 @@ describe('client', () => {
           }
         ` as any
       );
-    }).toThrowError(
+    }).toThrow(
       'query option is required. You must specify your GraphQL document in the query option.'
     );
     expect(() => {
       client.query({ query: '{ a }' } as any);
-    }).toThrowError('You must wrap the query string in a "gql" tag.');
+    }).toThrow('You must wrap the query string in a "gql" tag.');
   });
 
   it('should throw an error if mutation option is missing', async() => {
@@ -1437,8 +1437,8 @@ describe('client', () => {
           client
             .mutate({ mutation, updateQueries, update: updateSpy })
             .then(() => {
-              expect(queryUpdaterSpy).toBeCalled();
-              expect(updateSpy).toBeCalled();
+              expect(queryUpdaterSpy).toHaveBeenCalled();
+              expect(updateSpy).toHaveBeenCalled();
               sub.unsubscribe();
               resolve();
             })
@@ -1773,7 +1773,7 @@ describe('client', () => {
       });
       expect(() => {
         client.query({ query, returnPartialData: true } as QueryOptions);
-      }).toThrowError(/returnPartialData/);
+      }).toThrow(/returnPartialData/);
     });
 
     it('errors when returnPartialData is used on watchQuery', () => {
@@ -1783,7 +1783,7 @@ describe('client', () => {
       });
       expect(() => {
         client.query({ query, returnPartialData: true } as QueryOptions);
-      }).toThrowError(/returnPartialData/);
+      }).toThrow(/returnPartialData/);
     });
   });
 
@@ -3529,15 +3529,15 @@ describe('@connection', () => {
       expect(aResults).toEqual([]);
       expect(bResults).toEqual([]);
 
-      expect(aSpy).not.toBeCalled();
-      expect(bSpy).not.toBeCalled();
+      expect(aSpy).not.toHaveBeenCalled();
+      expect(bSpy).not.toHaveBeenCalled();
 
       subs.forEach(sub => sub.unsubscribe());
 
-      expect(aSpy).toBeCalledTimes(1);
-      expect(aSpy).toBeCalledWith(cache);
-      expect(bSpy).toBeCalledTimes(1);
-      expect(bSpy).toBeCalledWith(cache);
+      expect(aSpy).toHaveBeenCalledTimes(1);
+      expect(aSpy).toHaveBeenCalledWith(cache);
+      expect(bSpy).toHaveBeenCalledTimes(1);
+      expect(bSpy).toHaveBeenCalledWith(cache);
 
       expect(aResults).toEqual([]);
       expect(bResults).toEqual([]);
@@ -3557,10 +3557,10 @@ describe('@connection', () => {
 
       await wait();
 
-      expect(aSpy).toBeCalledTimes(2);
-      expect(aSpy).toBeCalledWith(cache);
-      expect(bSpy).toBeCalledTimes(2);
-      expect(bSpy).toBeCalledWith(cache);
+      expect(aSpy).toHaveBeenCalledTimes(2);
+      expect(aSpy).toHaveBeenCalledWith(cache);
+      expect(bSpy).toHaveBeenCalledTimes(2);
+      expect(bSpy).toHaveBeenCalledWith(cache);
 
       resolve();
     }

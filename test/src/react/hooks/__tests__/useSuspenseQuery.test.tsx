@@ -304,7 +304,7 @@ describe('useSuspenseQuery', () => {
       renderHook(() => useSuspenseQuery(query), {
         wrapper: ({ children }) => <MockedProvider>{children}</MockedProvider>,
       });
-    }).toThrowError(
+    }).toThrow(
       new InvariantError(
         'Running a Query requires a graphql Query, but a Mutation was used instead.'
       )
@@ -323,7 +323,7 @@ describe('useSuspenseQuery', () => {
             <MockedProvider>{children}</MockedProvider>
           ),
         });
-      }).toThrowError(
+      }).toThrow(
         new InvariantError(
           `The fetch policy \`${fetchPolicy}\` is not supported with suspense.`
         )
@@ -356,7 +356,7 @@ describe('useSuspenseQuery', () => {
             <ApolloProvider client={client}>{children}</ApolloProvider>
           ),
         });
-      }).toThrowError(
+      }).toThrow(
         new InvariantError(
           `The fetch policy \`${fetchPolicy}\` is not supported with suspense.`
         )

@@ -55,7 +55,7 @@ describe('<ApolloConsumer /> component', () => {
           <ApolloConsumer>{() => null}</ApolloConsumer>
         </ApolloContext.Provider>
       );
-    }).toThrowError(
+    }).toThrow(
       'Could not find "client" in the context of ApolloConsumer. Wrap the root component in an <ApolloProvider>'
     );
 

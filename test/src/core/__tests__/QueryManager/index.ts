@@ -1870,7 +1870,7 @@ describe('QueryManager', () => {
         // Bamboozle TypeScript into letting us do this
         query: 'string' as any as DocumentNode,
       });
-    }).toThrowError(/wrap the query string in a "gql" tag/);
+    }).toThrow(/wrap the query string in a "gql" tag/);
 
     await expect(
       queryManager.mutate({
@@ -1884,7 +1884,7 @@ describe('QueryManager', () => {
         // Bamboozle TypeScript into letting us do this
         query: 'string' as any as DocumentNode,
       });
-    }).toThrowError(/wrap the query string in a "gql" tag/);
+    }).toThrow(/wrap the query string in a "gql" tag/);
 
     resolve();
   });
@@ -6289,7 +6289,7 @@ describe('QueryManager', () => {
       expect(() => {
         // @ts-ignore
         client.defaultContext = { query: { fetchPolicy: 'cache-only' } };
-      }).toThrowError(/Cannot set property defaultContext/);
+      }).toThrow(/Cannot set property defaultContext/);
     });
 
     it.each([

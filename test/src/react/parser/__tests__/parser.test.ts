@@ -22,7 +22,7 @@ describe('parser', () => {
       }
     `;
 
-    expect(parser.bind(null, query)).toThrowError(/react-apollo only supports/);
+    expect(parser.bind(null, query)).toThrow(/react-apollo only supports/);
   });
 
   it('should error if multiple operations are present', () => {
@@ -40,14 +40,14 @@ describe('parser', () => {
       }
     `;
 
-    expect(parser.bind(null, query)).toThrowError(/react-apollo only supports/);
+    expect(parser.bind(null, query)).toThrow(/react-apollo only supports/);
   });
 
   it('should error if not a DocumentNode', () => {
     const query = `
       query One { user { name } }
     `;
-    expect(parser.bind(null, query as any)).toThrowError(
+    expect(parser.bind(null, query as any)).toThrow(
       /not a valid GraphQL DocumentNode/
     );
   });

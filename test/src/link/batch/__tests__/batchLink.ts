@@ -976,7 +976,7 @@ describe('BatchLink', () => {
         try {
           expect(checkCalls.length).toBe(2);
           checkCalls.forEach(args => expect(args[0]).toBe(0));
-          expect(mock).lastCalledWith(1);
+          expect(mock).toHaveBeenLastCalledWith(1);
           expect(batchHandler.mock.calls.length).toBe(1);
         } catch (e) {
           reject(e);

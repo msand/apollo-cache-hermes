@@ -344,7 +344,7 @@ describe('roundtrip', () => {
             ],
           }
         );
-      }).toThrowError(/Can't find field 'rank' /);
+      }).toThrow(/Can't find field 'rank' /);
     });
 
     it('should resolve fields it can on interface with non matching inline fragments', () => {
@@ -489,7 +489,7 @@ describe('roundtrip', () => {
             ],
           }
         );
-      }).toThrowError(/Can't find field 'rank' /);
+      }).toThrow(/Can't find field 'rank' /);
     });
 
     it('should resolve on @include and @skip with inline fragments', () => {

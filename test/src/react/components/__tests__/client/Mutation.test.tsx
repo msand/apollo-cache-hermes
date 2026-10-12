@@ -1446,7 +1446,7 @@ describe('General Mutation testing', () => {
           <Mutation mutation={query}>{() => null}</Mutation>
         </MockedProvider>
       );
-    }).toThrowError(
+    }).toThrow(
       'Running a Mutation requires a graphql Mutation, but a Query was used '
         + 'instead.'
     );
@@ -1536,7 +1536,7 @@ describe('General Mutation testing', () => {
           <Mutation mutation={subscription}>{() => null}</Mutation>
         </MockedProvider>
       );
-    }).toThrowError(
+    }).toThrow(
       'Running a Mutation requires a graphql Mutation, but a Subscription '
         + 'was used instead.'
     );

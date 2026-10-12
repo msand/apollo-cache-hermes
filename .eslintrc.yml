@@ -10,6 +10,7 @@ parserOptions:
 
 plugins:
   - '@typescript-eslint'
+  - '@stylistic'
   - eslint-comments
   - import
   - jest
@@ -207,7 +208,7 @@ rules:
   # https://github.com/nzakas/eslint-plugin-typescript#supported-rules
 
   '@typescript-eslint/adjacent-overload-signatures': error
-  '@typescript-eslint/member-delimiter-style': [error, {
+  '@stylistic/member-delimiter-style': [error, {
     overrides: {
       typeLiteral: {
         multiline: { delimiter: comma, requireLast: true },
@@ -224,7 +225,7 @@ rules:
   ]
   '@typescript-eslint/consistent-type-assertions': error
   '@typescript-eslint/triple-slash-reference': [error, { path: never, types: never, lib: never }]
-  '@typescript-eslint/type-annotation-spacing': error
+  '@stylistic/type-annotation-spacing': error
 
   # https://github.com/mysticatea/eslint-plugin-eslint-comments#rules
 

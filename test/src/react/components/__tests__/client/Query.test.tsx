@@ -918,7 +918,7 @@ describe('Query component', () => {
             <Query query={mutation}>{() => null}</Query>
           </MockedProvider>
         );
-      }).toThrowError(
+      }).toThrow(
         'Running a Query requires a graphql Query, but a Mutation was used '
           + 'instead.'
       );
@@ -945,7 +945,7 @@ describe('Query component', () => {
             <Query query={subscription}>{() => null}</Query>
           </MockedProvider>
         );
-      }).toThrowError(
+      }).toThrow(
         'Running a Query requires a graphql Query, but a Subscription was '
           + 'used instead.'
       );

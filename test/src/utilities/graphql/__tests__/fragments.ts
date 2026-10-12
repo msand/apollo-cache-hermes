@@ -21,7 +21,7 @@ describe('getFragmentQueryDocument', () => {
           c
         }
       `)
-    ).toThrowError(
+    ).toThrow(
       'Found a query operation. No operations are allowed when using a fragment as a query. Only fragments are allowed.'
     );
     expect(() =>
@@ -32,7 +32,7 @@ describe('getFragmentQueryDocument', () => {
           c
         }
       `)
-    ).toThrowError(
+    ).toThrow(
       'Found a query operation. No operations are allowed when using a fragment as a query. Only fragments are allowed.'
     );
     expect(() =>
@@ -43,7 +43,7 @@ describe('getFragmentQueryDocument', () => {
           c
         }
       `)
-    ).toThrowError(
+    ).toThrow(
       'Found a query operation named \'Named\'. No operations are allowed when using a fragment as a query. Only fragments are allowed.'
     );
     expect(() =>
@@ -54,7 +54,7 @@ describe('getFragmentQueryDocument', () => {
           c
         }
       `)
-    ).toThrowError(
+    ).toThrow(
       'Found a mutation operation named \'Named\'. No operations are allowed when using a fragment as a query. '
         + 'Only fragments are allowed.'
     );
@@ -66,7 +66,7 @@ describe('getFragmentQueryDocument', () => {
           c
         }
       `)
-    ).toThrowError(
+    ).toThrow(
       'Found a subscription operation named \'Named\'. No operations are allowed when using a fragment as a query. '
         + 'Only fragments are allowed.'
     );
@@ -87,7 +87,7 @@ describe('getFragmentQueryDocument', () => {
           f
         }
       `);
-    }).toThrowError(
+    }).toThrow(
       'Found 2 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.'
     );
     expect(() => {
@@ -110,14 +110,14 @@ describe('getFragmentQueryDocument', () => {
           i
         }
       `);
-    }).toThrowError(
+    }).toThrow(
       'Found 3 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.'
     );
     expect(() => {
       getFragmentQueryDocument(gql`
         scalar Foo
       `);
-    }).toThrowError(
+    }).toThrow(
       'Found 0 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.'
     );
   });

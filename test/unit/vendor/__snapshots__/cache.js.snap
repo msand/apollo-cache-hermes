@@ -1,4 +1,4 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
 exports[`Cache writeFragment will write some deeply nested data into the store at any id (1/2) 1`] = `
 {

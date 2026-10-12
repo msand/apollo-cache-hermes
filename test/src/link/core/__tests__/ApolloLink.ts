@@ -496,7 +496,7 @@ describe('ApolloClient', () => {
       const chain = ApolloLink.from([new ApolloLink(stub)]);
       ApolloLink.execute(chain, astOperation);
 
-      expect(stub).toBeCalledWith({
+      expect(stub).toHaveBeenCalledWith({
         query: sampleQuery,
         operationName: 'SampleQuery',
         variables: {},
@@ -1018,7 +1018,7 @@ describe('ApolloClient', () => {
           (operation, forward) => forward(operation)
         );
         split.concat((operation, forward) => forward(operation));
-        expect(warningStub).not.toBeCalled();
+        expect(warningStub).not.toHaveBeenCalled();
       });
 
       it('should warn if attempting to concat to split two terminating links', () => {
@@ -1056,7 +1056,7 @@ describe('ApolloClient', () => {
           (operation, forward) => forward(operation),
           operation => Observable.of({ data }),
         ]);
-        expect(warningStub).not.toBeCalled();
+        expect(warningStub).not.toHaveBeenCalled();
       });
 
       it('should warn if attempting to add link after termination', () => {
@@ -1101,7 +1101,7 @@ describe('ApolloClient', () => {
       it('should not warn if attempting concat a terminating Link at end', () => {
         const link = new ApolloLink((operation, forward) => forward(operation));
         link.concat(operation => Observable.of());
-        expect(warningStub).not.toBeCalled();
+        expect(warningStub).not.toHaveBeenCalled();
       });
     });
 

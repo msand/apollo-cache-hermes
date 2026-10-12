@@ -2323,7 +2323,7 @@ describe('useMutation Hook', () => {
         const observedResults: Array<{ data: TNumbersQuery }> = [];
         subscribeAndCount(
           reject,
-          obsQueryMap.values().next().value,
+          obsQueryMap.values().next().value!,
           (count, result: { data: TNumbersQuery }) => {
             observedResults.push(result);
             expect(observedResults.length).toBe(count);

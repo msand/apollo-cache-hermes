@@ -6213,14 +6213,14 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       await userEvent.click(
         screen.getByRole('button', { name: /refetch queries/i })
       );
-      expect(onCompleted).toBeCalledTimes(1);
+      expect(onCompleted).toHaveBeenCalledTimes(1);
       await screen.findByText('Data: bar');
       await userEvent.click(
         screen.getByRole('button', { name: /update word/i })
       );
-      expect(onCompleted).toBeCalledTimes(1);
+      expect(onCompleted).toHaveBeenCalledTimes(1);
       await screen.findByText('Data: baz');
-      expect(onCompleted).toBeCalledTimes(1);
+      expect(onCompleted).toHaveBeenCalledTimes(1);
     });
 
     it('onCompleted should execute on cache writes after initial query execution with notifyOnNetworkStatusChange: true', async() => {
@@ -6276,20 +6276,20 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       render(<ParentComponent />);
 
       await screen.findByText('Data: foo');
-      expect(onCompleted).toBeCalledTimes(1);
+      expect(onCompleted).toHaveBeenCalledTimes(1);
       await userEvent.click(
         screen.getByRole('button', { name: /refetch queries/i })
       );
       // onCompleted increments when refetch occurs since we're hitting the network...
-      expect(onCompleted).toBeCalledTimes(2);
+      expect(onCompleted).toHaveBeenCalledTimes(2);
       await screen.findByText('Data: bar');
       await userEvent.click(
         screen.getByRole('button', { name: /update word/i })
       );
       // but not on direct cache write, since there's no network request to complete
-      expect(onCompleted).toBeCalledTimes(2);
+      expect(onCompleted).toHaveBeenCalledTimes(2);
       await screen.findByText('Data: baz');
-      expect(onCompleted).toBeCalledTimes(2);
+      expect(onCompleted).toHaveBeenCalledTimes(2);
     });
   });
 

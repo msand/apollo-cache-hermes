@@ -453,7 +453,7 @@ describe('type policies', () => {
           book: theInformationBookData,
         },
       });
-    }).toThrowError(
+    }).toThrow(
       `Missing field 'year' while extracting keyFields from ${stringifyForDisplay(
         theInformationBookData,
         2
@@ -3256,7 +3256,7 @@ describe('type policies', () => {
             }
           `,
         })
-      ).toThrowError('Can\'t find field \'secret\' ');
+      ).toThrow('Can\'t find field \'secret\' ');
 
       expect(secretReadAttempted).toBe(true);
     });

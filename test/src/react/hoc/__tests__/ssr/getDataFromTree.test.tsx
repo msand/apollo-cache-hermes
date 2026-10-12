@@ -2,7 +2,6 @@
 import * as React from 'react';
 // eslint-disable-next-line import/no-extraneous-dependencies
 import * as PropTypes from 'prop-types';
-// eslint-disable-next-line import/no-extraneous-dependencies
 import * as ReactDOM from 'react-dom/server';
 import gql from 'graphql-tag';
 import { DocumentNode } from 'graphql';

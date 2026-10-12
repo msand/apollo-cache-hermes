@@ -673,5 +673,5 @@ it('errors when passing a document that has not been parsed with `gql`', () => {
 
   expect(() => {
     documentTransform.transformDocument(query as unknown as DocumentNode);
-  }).toThrowError(/wrap the query string in a "gql" tag/);
+  }).toThrow(/wrap the query string in a "gql" tag/);
 });

@@ -947,14 +947,10 @@ describe('reading from the store', () => {
       diffWithZeusAsRuler,
     ]);
 
-    jestExpect(cache.gc().sort()).toEqual([] ?? [
-      'Deity:{"name":"Cronus"}',
-      'Deity:{"name":"Demeter"}',
-      'Deity:{"name":"Hades"}',
-      'Deity:{"name":"Hera"}',
-      'Deity:{"name":"Hestia"}',
-      'Deity:{"name":"Poseidon"}',
-    ]);
+    // Upstream InMemoryCache expects:
+    //   'Deity:{"name":"Cronus"}', 'Deity:{"name":"Demeter"}', 'Deity:{"name":"Hades"}',
+    //   'Deity:{"name":"Hera"}', 'Deity:{"name":"Hestia"}', 'Deity:{"name":"Poseidon"}'
+    jestExpect(cache.gc().sort()).toEqual([]);
 
     const snapshotAfterGC = {
       'Deity:{"name":"Apollo"}': {

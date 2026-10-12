@@ -288,7 +288,7 @@ describe('ApolloClient', () => {
             }
           `,
         });
-      }).toThrowError(
+      }).toThrow(
         'Found a query operation. No operations are allowed when using a fragment as a query. Only fragments are allowed.'
       );
       expect(() => {
@@ -300,7 +300,7 @@ describe('ApolloClient', () => {
             }
           `,
         });
-      }).toThrowError(
+      }).toThrow(
         'Found 0 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.'
       );
     });
@@ -324,7 +324,7 @@ describe('ApolloClient', () => {
             }
           `,
         });
-      }).toThrowError(
+      }).toThrow(
         'Found 2 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.'
       );
       expect(() => {
@@ -344,7 +344,7 @@ describe('ApolloClient', () => {
             }
           `,
         });
-      }).toThrowError(
+      }).toThrow(
         'Found 3 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.'
       );
     });
@@ -855,7 +855,7 @@ describe('ApolloClient', () => {
             }
           `,
         });
-      }).toThrowError(
+      }).toThrow(
         'Found a query operation. No operations are allowed when using a fragment as a query. Only fragments are allowed.'
       );
       expect(() => {
@@ -868,7 +868,7 @@ describe('ApolloClient', () => {
             }
           `,
         });
-      }).toThrowError(
+      }).toThrow(
         'Found 0 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.'
       );
     });
@@ -893,7 +893,7 @@ describe('ApolloClient', () => {
             }
           `,
         });
-      }).toThrowError(
+      }).toThrow(
         'Found 2 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.'
       );
       expect(() => {
@@ -914,7 +914,7 @@ describe('ApolloClient', () => {
             }
           `,
         });
-      }).toThrowError(
+      }).toThrow(
         'Found 3 fragments. `fragmentName` must be provided when there is not exactly 1 fragment.'
       );
     });
