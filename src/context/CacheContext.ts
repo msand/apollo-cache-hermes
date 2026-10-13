@@ -268,6 +268,7 @@ export class CacheContext<TSerialized = GraphSnapshot> {
         dataIdFromObject: config.entityIdForNode ?? config.dataIdFromObject,
         possibleTypes: config.possibleTypes,
         typePolicies: config.typePolicies,
+        scalars: !!config.scalars,
       },
       () => this._policiesListeners.forEach(listener => listener()),
     );

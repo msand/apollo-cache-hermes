@@ -541,7 +541,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
    * watch. Without read functions, there is nothing to do.
    */
   public dirtyReactiveReads() {
-    if (!this._context.policies.hasFieldPolicies) return;
+    if (!this._context.policies.hasReadFunctions) return;
     this._dropReadResults();
   }
 

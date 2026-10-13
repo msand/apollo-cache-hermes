@@ -80,8 +80,31 @@ export class Policies {
   /** The __typename of each root object, by its id. */
   readonly rootTypenamesById: Record<RootId, string> = Object.create(null);
 
-  /** Whether any type policy configures fields (directly or through inheritance). */
-  hasFieldPolicies = false;
+  /**
+   * Whether any field policy can make reads differ from the stored data:
+   * read functions, keyArgs that may store fields without arguments under
+   * other keys (keyArgs functions, and `$variable` or `@directive` keys), and
+   * scalar fields (when custom scalars are configured).
+   *
+   * Other field policies (merge functions, and keyArgs that only pick
+   * arguments) only affect writes, so reads of static queries can skip
+   * looking for policies without them.
+   */
+  get hasFieldPolicies(): boolean {
+    return this.hasReadFunctions || this._hasDynamicKeyArgs || (this._scalarsConfigured && this._hasScalarFields);
+  }
+
+  /** Whether any field policy has a read function (which may read reactive variables). */
+  hasReadFunctions = false;
+
+  /** Whether any field policy has keyArgs that may key fields without arguments (see hasFieldPolicies). */
+  private _hasDynamicKeyArgs = false;
+
+  /** Whether any field policy configures a scalar type. */
+  private _hasScalarFields = false;
+
+  /** Whether custom scalars are configured. */
+  private readonly _scalarsConfigured: boolean;
 
   /** Whether any type policy configures keyFields. */
   hasKeyFields = false;
@@ -91,11 +114,14 @@ export class Policies {
       dataIdFromObject?: DataIdFromObject;
       possibleTypes?: PossibleTypesMap;
       typePolicies?: TypePolicies;
+      /** Whether custom scalars are configured (see hasFieldPolicies). */
+      scalars?: boolean;
     } = {},
     /** Called when policies (or possibleTypes) are added to a cache already in use. */
     private readonly _onChange?: () => void,
   ) {
     this._dataIdFromObject = config.dataIdFromObject;
+    this._scalarsConfigured = !!config.scalars;
     this._setRootTypename('Query');
     this._setRootTypename('Mutation');
     this._setRootTypename('Subscription');
@@ -212,13 +238,30 @@ export class Policies {
       if (mutationType) this._setRootTypename('Mutation', typename);
       if (subscriptionType) this._setRootTypename('Subscription', typename);
 
-      if (incoming.fields && Object.keys(incoming.fields).length) this.hasFieldPolicies = true;
+      if (incoming.fields) this._noteFieldPolicies(incoming.fields);
       if (incoming.keyFields !== undefined) this.hasKeyFields = true;
 
       if (hasOwn.call(this._toBeAdded, typename)) {
         this._toBeAdded[typename].push(incoming);
       } else {
         this._toBeAdded[typename] = [incoming];
+      }
+    }
+  }
+
+  /** Notes which kinds of field policies are configured (see hasFieldPolicies). */
+  private _noteFieldPolicies(fields: NonNullable<TypePolicy['fields']>) {
+    for (const fieldName of Object.keys(fields)) {
+      const field = fields[fieldName];
+      if (typeof field === 'function') {
+        this.hasReadFunctions = true;
+        continue;
+      }
+      if (typeof field.read === 'function') this.hasReadFunctions = true;
+      if (field.scalar) this._hasScalarFields = true;
+      const { keyArgs } = field;
+      if (typeof keyArgs === 'function' || (Array.isArray(keyArgs) && specifierKeysContextValues(keyArgs))) {
+        this._hasDynamicKeyArgs = true;
       }
     }
   }
@@ -488,6 +531,13 @@ export class Policies {
 
     return false;
   }
+}
+
+/** Whether a keyArgs specifier has `$variable` or `@directive` keys (which apply to fields without arguments too). */
+function specifierKeysContextValues(specifier: readonly unknown[]): boolean {
+  return specifier.some(key =>
+    Array.isArray(key) ? specifierKeysContextValues(key) : typeof key === 'string' && /^[$@]/.test(key),
+  );
 }
 
 /**
