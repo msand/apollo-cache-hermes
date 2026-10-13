@@ -1,14 +1,24 @@
-import { Cache as CacheInterface } from '@apollo/client';
 import { cacheSlot } from '@apollo/client/cache';
+import type { Cache as CacheInterface } from '@apollo/client/cache';
 import type { FragmentDefinitionNode, InlineFragmentNode } from 'graphql';
-import { Reference, StoreObject } from '@apollo/client/utilities';
-import { invariant } from '@apollo/client/utilities/globals';
+import type { Reference, StoreObject } from '@apollo/client/utilities';
+import { invariant } from '@apollo/client/utilities/invariant';
 
 import { CacheSnapshot } from './CacheSnapshot';
 import { ChangedFields, CacheTransaction, TransactionHooks } from './CacheTransaction';
 import { CacheContext } from './context';
 import { GraphSnapshot, NodeSnapshotMap } from './GraphSnapshot';
-import { extract, migrate, MigrationMap, prune, QueryObserver, read, restore } from './operations';
+import {
+  extract,
+  fragmentMatches,
+  migrate,
+  MigrationMap,
+  prune,
+  QueryObserver,
+  QueryResult,
+  read,
+  restore,
+} from './operations';
 import { OptimisticUpdate, OptimisticUpdateQueue } from './OptimisticUpdateQueue';
 import { JsonObject, JsonValue } from './primitive';
 import { Queryable } from './Queryable';
@@ -18,8 +28,9 @@ import { UnsatisfiedCacheError } from './errors';
 import { Hermes } from './apollo';
 import { NodeReference } from './nodes';
 import { isUncaughtWriteError, missingKeyField, missingKeyFieldError } from './operations/checkWrite';
+import { getReadFunction } from './operations/fieldFunctions';
 
-import BatchOptions = CacheInterface.BatchOptions;
+type BatchOptions<TCache extends CacheInterface.Implementation> = CacheInterface.BatchOptions<TCache>;
 
 export { MigrationMap };
 export type TransactionCallback<TSerialized> = (transaction: CacheTransaction<TSerialized>) => any;
@@ -147,10 +158,12 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
    * __typename, considering possibleTypes (like InMemoryCache#fragmentMatches).
    */
   fragmentMatches(fragment: InlineFragmentNode | FragmentDefinitionNode, typename: string): boolean {
-    if (!fragment.typeCondition) return true;
-    // A fragment with a type condition cannot match an object without __typename.
-    if (!typename) return false;
-    return this._context.fragmentMatches(fragment.typeCondition.name.value, typename);
+    return fragmentMatches(this._context, fragment, typename);
+  }
+
+  /** Whether a read function provides the field (like InMemoryCache#resolvesClientField). */
+  resolvesClientField(typename: string, fieldName: string): boolean {
+    return !!getReadFunction(this._context.typePolicies, typename, fieldName);
   }
 
   /** The fragment registered under `fragmentName` (like InMemoryCache#lookupFragment). */
@@ -187,7 +200,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
    * TODO: Can we drop non-optimistic reads?
    * https://github.com/apollographql/apollo-client/issues/1971#issuecomment-319402170
    */
-  read(query: RawOperation, optimistic?: boolean): CacheInterface.DiffResult<JsonValue> {
+  read(query: RawOperation, optimistic?: boolean): QueryResult {
     // TODO: Can we drop non-optimistic reads?
     // https://github.com/apollographql/apollo-client/issues/1971#issuecomment-319402170
     // Like InMemoryCache, reads made during a transaction see its pending writes.
@@ -276,7 +289,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     broadcast: boolean | undefined,
     changeIdOrCallback: ChangeId | TransactionCallback<TSerialized> | undefined | null,
     callback?: TransactionCallback<TSerialized>,
-    onWatchUpdated?: CacheInterface.BatchOptions<Hermes<TSerialized>>['onWatchUpdated'],
+    onWatchUpdated?: BatchOptions<Hermes<TSerialized>>['onWatchUpdated'],
   ): boolean {
     const { tracer } = this._context;
 
@@ -544,7 +557,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
       baselineFields = mergeFieldMaps(this._changedFields.baseline, dirty);
       optimisticFields = mergeFieldMaps(baselineFields, this._changedFields.optimistic);
     }
-    this._withCacheSlot(() => {
+    const notify = () => {
       for (const observer of this._observers) {
         const graphSnapshot = observer.optimistic ? snapshot.optimistic : snapshot.baseline;
         observer.consumeChanges(
@@ -556,7 +569,9 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
           observer.optimistic ? optimisticFields : baselineFields,
         );
       }
-    });
+    };
+    const cache = this._cacheInstance;
+    this._withCacheSlot(() => (cache ? cache.runBroadcast(notify) : notify()));
 
     this._context.dirty.clear();
     this._fieldsUntracked = false;

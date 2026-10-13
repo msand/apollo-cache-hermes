@@ -1,8 +1,7 @@
 import { addTypenameToDocument, print } from '@apollo/client/utilities';
-import { invariant } from '@apollo/client/utilities/globals';
+import { invariant } from '@apollo/client/utilities/invariant';
 import isEqual from '@wry/equality';
-import { TypePolicies } from '@apollo/client';
-import type { FragmentRegistryAPI, PossibleTypesMap } from '@apollo/client/cache';
+import type { FragmentRegistryAPI, PossibleTypesMap, TypePolicies } from '@apollo/client/cache';
 
 import { ApolloTransaction } from '../apollo/Transaction';
 import { CacheSnapshot } from '../CacheSnapshot';
@@ -55,7 +54,13 @@ export namespace CacheContext {
   export interface Configuration<TSerialized = GraphSnapshot> {
     typePolicies?: TypePolicies;
 
-    /** Whether __typename should be injected into nodes in queries. */
+    /**
+     * Whether __typename should be injected into nodes in queries.
+     *
+     * Defaults to true, matching InMemoryCache in @apollo/client 4, which
+     * always adds __typename (and no longer has this option). Passing false is
+     * still supported for backwards compatibility.
+     */
     addTypename?: boolean;
 
     /** Fragments that operations may spread without defining them (like InMemoryCache's option). */

@@ -1,4 +1,4 @@
-import { getFragmentQueryDocument } from '@apollo/client/utilities';
+import { getFragmentQueryDocument } from '@apollo/client/utilities/internal';
 
 import { JsonObject } from '../primitive';
 import { NodeId, RawOperation, StaticNodeId } from '../schema';
@@ -11,11 +11,13 @@ export function buildRawOperationFromQuery(
   document: DocumentNode,
   variables?: JsonObject,
   rootId?: NodeId,
+  extensions?: Record<string, unknown>,
 ): RawOperation {
   return {
     rootId: rootId || StaticNodeId.QueryRoot,
     document,
     variables,
+    ...(extensions && { extensions }),
   };
 }
 

@@ -1,4 +1,4 @@
-import { Cache, Transaction } from '@apollo/client';
+import type { Cache, Transaction } from '@apollo/client/cache';
 
 import { CacheTransaction } from '../CacheTransaction';
 import { PathPart, JsonValue } from '../primitive';
@@ -19,7 +19,7 @@ function getOriginalFieldArguments(id: NodeId): { [argName: string]: string } | 
 /**
  * Apollo-specific transaction interface.
  */
-export class ApolloTransaction<TSerialized> extends ApolloQueryable<TSerialized> {
+export class ApolloTransaction<TSerialized> extends ApolloQueryable {
   constructor(
     /** The underlying transaction. */
     protected _queryable: CacheTransaction<TSerialized>,
@@ -35,23 +35,23 @@ export class ApolloTransaction<TSerialized> extends ApolloQueryable<TSerialized>
     throw new Error(`removeOptimistic() is not allowed within a transaction`);
   }
 
-  performTransaction(transaction: Transaction<TSerialized>): void {
+  performTransaction(transaction: Transaction): void {
     transaction(this);
   }
 
-  recordOptimisticTransaction(_transaction: Transaction<TSerialized>, _id: string): void {
+  recordOptimisticTransaction(_transaction: Transaction, _id: string): void {
     throw new Error(`recordOptimisticTransaction() is not allowed within a transaction`);
   }
 
-  watch(_query: Cache.WatchOptions): () => void {
+  watch(_query: Cache.WatchOptions<any, any>): () => void {
     throw new Error(`watch() is not allowed within a transaction`);
   }
 
-  restore(): any {
+  restore(): this {
     throw new Error(`restore() is not allowed within a transaction`);
   }
 
-  extract(): any {
+  extract(): never {
     throw new Error(`extract() is not allowed within a transaction`);
   }
 

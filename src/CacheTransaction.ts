@@ -1,14 +1,16 @@
 import type {
-  DeleteModifier,
-  InvalidateModifier,
+  Cache as CacheInterface,
   Modifier,
   ModifierDetails,
   ReadFieldOptions,
-} from '@apollo/client/cache/core/types/common';
-import type { Cache as CacheInterface, Reference, StoreObject, StoreValue } from '@apollo/client';
-import { makeReference } from '@apollo/client';
-import { invariant } from '@apollo/client/utilities/globals';
+  Reference,
+  StoreObject,
+  StoreValue,
+} from '@apollo/client/cache';
+import { makeReference } from '@apollo/client/utilities/internal';
+import { invariant } from '@apollo/client/utilities/invariant';
 import * as equality from '@wry/equality';
+import type { FragmentDefinitionNode, InlineFragmentNode } from 'graphql';
 
 import type { ChangeId, NodeId, OperationInstance, CacheDelta, RawOperation } from './schema';
 import type { CacheSnapshot as CacheSnapshotType } from './CacheSnapshot';
@@ -28,7 +30,7 @@ import * as nodes from './nodes';
 import * as util from './util';
 import { nodeIdForParameterizedValue } from './operations/SnapshotEditor';
 import { checkWrite } from './operations/checkWrite';
-import { storageFieldName } from './operations/fieldFunctions';
+import { getReadFunction, storageFieldName } from './operations/fieldFunctions';
 
 const isEqual = equality.equal;
 const makeRef = makeReference;
@@ -38,6 +40,9 @@ const { ApolloTransaction } = transaction;
 const { cloneNodeSnapshot, EntitySnapshot } = nodes;
 const { read, SnapshotEditor, write } = operations;
 const { addToSet, hasOwn, isObject, isReference } = util;
+
+type DeleteModifier = ModifierDetails['DELETE'];
+type InvalidateModifier = ModifierDetails['INVALIDATE'];
 
 const DELETE: DeleteModifier = Object.create(null);
 const INVALIDATE: InvalidateModifier = Object.create(null);
@@ -129,10 +134,26 @@ export class CacheTransaction<TSerialized> implements Queryable {
     return this._context.transformDocument(document);
   }
 
+  identify(object: StoreObject | Reference): string | undefined {
+    return this._context.entityIdForValue(object);
+  }
+
+  fragmentMatches(fragment: InlineFragmentNode | FragmentDefinitionNode, typename: string): boolean {
+    return operations.fragmentMatches(this._context, fragment, typename);
+  }
+
+  lookupFragment(fragmentName: string): FragmentDefinitionNode | null {
+    return this._context.fragments?.lookup(fragmentName) ?? null;
+  }
+
+  resolvesClientField(typename: string, fieldName: string): boolean {
+    return !!getReadFunction(this._context.typePolicies, typename, fieldName);
+  }
+
   /**
    * Executes reads against the current values in the transaction.
    */
-  read(query: RawOperation, optimistic?: boolean): CacheInterface.DiffResult<JsonValue> {
+  read(query: RawOperation, optimistic?: boolean): operations.QueryResult {
     return read(
       this._context,
       query,

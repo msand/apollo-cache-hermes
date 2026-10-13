@@ -1,7 +1,6 @@
 import * as equality from '@wry/equality';
-import { makeReference } from '@apollo/client';
-import type { TypePolicy } from '@apollo/client/cache/inmemory/policies';
-import type { Reference } from '@apollo/client';
+import { makeReference } from '@apollo/client/utilities/internal';
+import type { Reference, TypePolicy } from '@apollo/client/cache';
 import type { StoreObject } from '@apollo/client/utilities';
 
 import type { CacheContext } from '../context';
@@ -160,6 +159,8 @@ export class SnapshotEditor<TSerialized> {
 
   /** The variables of the operation being merged, for merge functions. */
   private _variables: JsonObject | undefined;
+  /** The extensions of the write being merged, for merge functions. */
+  private _extensions: Record<string, unknown> | undefined;
   private _fieldFunctionsInstance: FieldFunctions<TSerialized> | undefined;
 
   constructor(
@@ -180,6 +181,10 @@ export class SnapshotEditor<TSerialized> {
   ): { warnings?: string[]; ref: NodeId | undefined } {
     const parsed = this._context.parseOperation(query);
     this._variables = parsed.variables;
+    // Like InMemoryCache, merge functions see the write's extensions without
+    // Apollo's internal @stream info (kept under a symbol key).
+    const extensions = query.extensions && Object.entries(query.extensions);
+    this._extensions = extensions?.length ? Object.fromEntries(extensions) : undefined;
     this._fieldFunctionsInstance = undefined;
 
     // We collect all warnings associated with this operation to avoid
@@ -278,10 +283,18 @@ export class SnapshotEditor<TSerialized> {
     // itself does not apply its type's merge function.
     if (typeof typePolicy?.merge === 'function' && mode !== 'replace' && path.length) {
       const fieldName = String([...prefixPath, ...path].filter(part => typeof part === 'string').pop() ?? '');
+      const existing = withReferences(this._getNodeSnapshot(containerId), path, previousValue);
       payload = typePolicy.merge(
-        withReferences(this._getNodeSnapshot(containerId), path, previousValue),
+        existing,
         payload,
-        this._fieldFunctions().options(undefined, fieldName, fieldName, null, [containerId, ...path, fieldName]),
+        this._fieldFunctions().mergeOptions(
+          fieldName,
+          fieldName,
+          null,
+          [containerId, ...path, fieldName],
+          this._extensions,
+          existing,
+        ),
       ) as JsonObject;
     }
 
@@ -545,7 +558,7 @@ export class SnapshotEditor<TSerialized> {
         fieldValue = merge(
           existing,
           incoming,
-          this._fieldFunctions().options(undefined, schemaName, payloadName, args, storageKeys),
+          this._fieldFunctions().mergeOptions(schemaName, payloadName, args, storageKeys, this._extensions, existing),
         ) as JsonValue | undefined;
         fieldMode = 'replace';
 
@@ -1179,7 +1192,7 @@ export class SnapshotEditor<TSerialized> {
         if (out !== undefined) {
           return this._getNodeData(out.id);
         }
-        const key = path.at(0);
+        const key = path[0];
         if (key === undefined) {
           return value;
         }

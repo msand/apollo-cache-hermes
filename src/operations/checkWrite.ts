@@ -1,26 +1,50 @@
-import { invariant, InvariantError } from '@apollo/client/utilities/globals';
+import { invariant, InvariantError } from '@apollo/client/utilities/invariant';
+import { addTypenameToDocument, getMainDefinition, isReference } from '@apollo/client/utilities';
 import {
-  addTypenameToDocument,
   argumentsObjectFromField,
   createFragmentMap,
   getDefaultValues,
   getFragmentDefinitions,
   getFragmentFromSelection,
-  getMainDefinition,
   getOperationDefinition,
   isField,
-  isReference,
   resultKeyNameFromField,
   shouldInclude,
   stringifyForDisplay,
-} from '@apollo/client/utilities';
-import type { FragmentMap } from '@apollo/client/utilities';
+} from '@apollo/client/utilities/internal';
+import type { FragmentMap } from '@apollo/client/utilities/internal';
 import type { FieldNode, FragmentDefinitionNode, InlineFragmentNode, SelectionNode, SelectionSetNode } from 'graphql';
-import { selectionSetMatchesResult } from '@apollo/client/cache/inmemory/helpers';
 
 import type { CacheContext } from '../context';
 import type { JsonObject, JsonValue } from '../primitive';
 import type { DocumentNode } from '../util';
+
+/**
+ * Whether a result has every field a selection set selects (fragments aside),
+ * like InMemoryCache's selectionSetMatchesResult (which @apollo/client 4 no
+ * longer exports).
+ */
+function selectionSetMatchesResult(
+  selectionSet: SelectionSetNode,
+  result: unknown,
+  variables?: Record<string, unknown>,
+): boolean {
+  if (typeof result !== 'object' || result === null) return false;
+  if (Array.isArray(result)) return result.every(item => selectionSetMatchesResult(selectionSet, item, variables));
+  return selectionSet.selections.every(field => {
+    if (isField(field) && shouldInclude(field, variables)) {
+      const key = resultKeyNameFromField(field);
+      return (
+        Object.prototype.hasOwnProperty.call(result, key) &&
+        (!field.selectionSet ||
+          selectionSetMatchesResult(field.selectionSet, (result as Record<string, unknown>)[key], variables))
+      );
+    }
+    // Skipped selections do not count against matching, and fragments are
+    // matched when they are visited.
+    return true;
+  });
+}
 
 /** Errors that must escape the cache transaction they are thrown in. */
 const uncaughtErrors = new WeakSet<object>();

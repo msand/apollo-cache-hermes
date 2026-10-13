@@ -1,6 +1,6 @@
-import { makeReference } from '@apollo/client';
-import type { FieldReadFunction } from '@apollo/client/cache/inmemory/policies';
-import type { Reference, StoreValue } from '@apollo/client';
+import { MissingFieldError } from '@apollo/client/cache';
+import type { Cache, FieldReadFunction, MissingTree, Reference, StoreValue } from '@apollo/client/cache';
+import { makeReference } from '@apollo/client/utilities/internal';
 import type { StoreObject } from '@apollo/client/utilities';
 import { addTypenameToDocument } from '@apollo/client/utilities';
 import type { DocumentNode, SelectionSetNode } from 'graphql';
@@ -24,39 +24,8 @@ const { cloneNodeSnapshot, EntitySnapshot, ParameterizedValueSnapshot } = nodes;
 const { nodeIdForParameterizedValue } = snapshotEditor;
 const { deepGet, isNil, isObject, isReference, lazyImmutableDeepSet, safeStringify } = util;
 
-export type MissingTree =
-  | string
-  | {
-      readonly [key: string]: MissingTree;
-    };
-
-export class MissingFieldError extends Error {
-  constructor(
-    public readonly message: string,
-    public readonly path: MissingTree | Array<string | number>,
-    public readonly query: DocumentNode,
-    public readonly variables?: Record<string, any>,
-  ) {
-    // 'Error' breaks prototype chain here
-    super(message);
-
-    if (Array.isArray(this.path)) {
-      this.missing = this.message;
-      for (let i = this.path.length - 1; i >= 0; --i) {
-        this.missing = { [this.path[i]]: this.missing };
-      }
-    } else {
-      this.missing = this.path;
-    }
-
-    // We're not using `Object.setPrototypeOf` here as it isn't fully supported
-    // on Android (see issue #3236).
-    // eslint-disable-next-line no-proto
-    (this as any).__proto__ = MissingFieldError.prototype;
-  }
-
-  public readonly missing: MissingTree;
-}
+export { MissingFieldError };
+export type { MissingTree };
 
 export interface QueryResult {
   /** The value of the root requested by a query. */
@@ -67,8 +36,22 @@ export interface QueryResult {
   entityIds?: Set<NodeId>;
   /** The ids of nodes overlaid on top of static cache results. */
   dynamicNodeIds?: Set<NodeId>;
-  missing?: MissingFieldError[];
-  fromOptimisticTransaction?: boolean;
+  /** What is missing from an incomplete result. */
+  missing?: MissingFieldError;
+}
+
+/**
+ * The Apollo Client 4 Cache.DiffResult for a read, like InMemoryCache's: an
+ * incomplete result is null unless partial data is requested (the default)
+ * and at least one field was found.
+ */
+export function toDiffResult<TData = unknown>(
+  { result, complete, missing }: QueryResult,
+  returnPartialData = true,
+): Cache.DiffResult<TData> {
+  if (complete) return { result: result as any, complete: true };
+  const keepResult = returnPartialData && !!result && Object.keys(result).length > 0;
+  return { result: keepResult ? (result as any) : null, complete: false, missing };
 }
 
 export interface QueryResultWithNodeIds extends QueryResult {
@@ -123,9 +106,7 @@ export function read<TSerialized>(
       const message = `Dangling reference to missing ${operation.rootId} object`;
       queryResult.result = {};
       queryResult.complete = false;
-      queryResult.missing = [
-        new MissingFieldError(message, message, operation.info.document, operation.variables ?? {}),
-      ];
+      queryResult.missing = new MissingFieldError(message, message, operation.info.document, operation.variables ?? {});
       queryResult.entityIds = includeNodeIds ? new Set([operation.rootId]) : undefined;
     } else {
       const { data, outbound, parameterized } = rootSnapshot ?? {};
@@ -167,7 +148,7 @@ export function read<TSerialized>(
         });
         queryResult.complete = checked.complete;
         if (checked.missing) {
-          queryResult.missing = [checked.missing];
+          queryResult.missing = checked.missing;
         }
         if (checked.result !== queryResult.result) {
           queryResult.result = checked.result;

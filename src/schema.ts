@@ -48,6 +48,8 @@ export interface RawOperation {
    * This is used to skip queryInfo._assertAllVariablesDeclared
    **/
   readonly fromFragmentDocument?: boolean;
+  /** The GraphQL extensions of a write, passed to merge functions. */
+  readonly extensions?: Record<string, unknown>;
 }
 
 /**

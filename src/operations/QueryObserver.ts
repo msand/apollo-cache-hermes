@@ -1,4 +1,4 @@
-import { Cache } from '@apollo/client';
+import type { Cache } from '@apollo/client/cache';
 import isEqual from '@wry/equality';
 
 import { CacheContext } from '../context';
@@ -7,11 +7,9 @@ import { JsonObject } from '../primitive';
 import { NodeId, RawOperation } from '../schema';
 import { Hermes } from '../apollo';
 
-import { QueryResult, read } from './read';
+import { QueryResult, read, toDiffResult } from './read';
 
-import WatchOptions = Cache.WatchOptions;
-
-const EMPTY_RESULT: JsonObject = Object.freeze({});
+type WatchOptions = Cache.WatchOptions;
 
 /**
  * Observes a query, triggering a callback when nodes within it have changed.
@@ -25,6 +23,8 @@ export class QueryObserver<TSerialized> {
   private _query: RawOperation;
   /** The most recent result */
   private _result: QueryResult;
+  /** The most recent result, as the Cache.DiffResult delivered to the callback. */
+  private _diff: Cache.DiffResult<unknown> | undefined;
   /** The callback to trigger when observed nodes have changed. */
   private _options: WatchOptions;
   /** Whether the next broadcast should re-read the query regardless of edits. */
@@ -46,7 +46,8 @@ export class QueryObserver<TSerialized> {
     );
     if (options.immediate) {
       this._result = read(context, query, snapshot, Object.create(null), context.strict);
-      options.lastDiff = this._result;
+      this._diff = toDiffResult(this._result, options.returnPartialData);
+      options.lastDiff = this._diff;
       this._update();
     } else {
       this._result = {
@@ -104,20 +105,22 @@ export class QueryObserver<TSerialized> {
     // This effectively circumvents the logic in _hasUpdate (entityIds will be
     // undefined).
     const operation = this._context.parseOperation(this._query);
-    let readResult = read(this._context, this._query, snapshot, Object.create(null), this._context.strict);
-    if (fromOptimisticTransaction) readResult = { ...readResult, fromOptimisticTransaction };
-    // Like InMemoryCache (and Hermes#diff), an empty read is an empty object.
-    if (readResult.result === undefined) readResult = { ...readResult, result: EMPTY_RESULT };
+    const readResult = read(this._context, this._query, snapshot, Object.create(null), this._context.strict);
     this._result = readResult;
-    const result = readResult.result;
-    this._options.lastDiff = readResult;
+    // Like InMemoryCache (and Hermes#diff), the watch's diff has a null result
+    // when incomplete, unless partial data is requested and some was found.
+    let diff = toDiffResult(readResult, this._options.returnPartialData);
+    if (fromOptimisticTransaction) diff = { ...diff, fromOptimisticTransaction };
+    this._diff = diff;
+    const result = diff.result as JsonObject | null;
+    this._options.lastDiff = diff;
     const rootKeys = Object.keys(operation.parsedQuery);
-    const lastResult = lastDiff?.result;
+    const lastResult = lastDiff?.result as JsonObject | null | undefined;
     // Skip empty incomplete results, unless they are the watcher's first result (like
     // InMemoryCache, which delivers a watch's first diff), or replace data the watcher has seen
     // (e.g. after evicting every root field), so Apollo can refetch like it does with InMemoryCache.
     const hadRootKeys = !!lastResult && rootKeys.some(key => key in lastResult);
-    if (lastDiff && !readResult.complete && (!result || !rootKeys.some(key => key in result)) && !hadRootKeys) {
+    if (lastDiff && !diff.complete && (!result || !rootKeys.some(key => key in result)) && !hadRootKeys) {
       return;
     }
     const sameAsBefore = result && lastResult && rootKeys.every(key => isEqual(result[key], lastResult[key]));
@@ -127,7 +130,7 @@ export class QueryObserver<TSerialized> {
     if (sameAsBefore && !(dirtyKeys && rootKeys.some(key => dirtyKeys.has(key)))) {
       return;
     }
-    const shouldCancel = onWatchUpdated?.call(cacheInstance, this._options, readResult, lastDiff) === false;
+    const shouldCancel = onWatchUpdated?.call(cacheInstance, this._options, diff, lastDiff) === false;
     if (shouldCancel) {
       // Returning false from the onWatchUpdated callback will prevent
       // calling c.callback(diff) for this watcher.  Like InMemoryCache, the
@@ -190,6 +193,6 @@ export class QueryObserver<TSerialized> {
    * Trigger the callback.
    */
   private _update(): void {
-    this._options.callback(this._result);
+    this._options.callback(this._diff!);
   }
 }

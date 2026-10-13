@@ -1,10 +1,17 @@
 import { invariant, InvariantError } from 'ts-invariant';
-import { makeReference } from '@apollo/client';
-import { stringifyForDisplay } from '@apollo/client/utilities';
-import type { FieldFunctionOptions, FieldPolicy, FieldReadFunction } from '@apollo/client/cache/inmemory/policies';
-import type { Reference, StoreValue, TypePolicies } from '@apollo/client';
-import type { ReadFieldOptions } from '@apollo/client/cache/core/types/common';
+import { makeReference, stringifyForDisplay } from '@apollo/client/utilities/internal';
+import type {
+  FieldFunctionOptions,
+  FieldMergeFunctionOptions,
+  FieldPolicy,
+  FieldReadFunction,
+  ReadFieldOptions,
+  Reference,
+  StoreValue,
+  TypePolicies,
+} from '@apollo/client/cache';
 import type { StoreObject } from '@apollo/client/utilities';
+import type { FragmentDefinitionNode, InlineFragmentNode } from 'graphql';
 
 import type { CacheContext } from '../context';
 import type { NodeSnapshot } from '../nodes';
@@ -29,6 +36,21 @@ export function getFieldPolicy(
 ): FieldPolicy<any> | FieldReadFunction<any> | undefined {
   if (!typePolicies || typeof typename !== 'string') return undefined;
   return typePolicies[typename]?.fields?.[fieldName];
+}
+
+/**
+ * Whether a fragment (or inline fragment) applies to objects of the given
+ * __typename, considering possibleTypes (like InMemoryCache#fragmentMatches).
+ */
+export function fragmentMatches(
+  context: CacheContext<any>,
+  fragment: InlineFragmentNode | FragmentDefinitionNode,
+  typename: string,
+): boolean {
+  if (!fragment.typeCondition) return true;
+  // A fragment with a type condition cannot match an object without __typename.
+  if (!typename) return false;
+  return context.fragmentMatches(fragment.typeCondition.name.value, typename);
 }
 
 /**
@@ -265,6 +287,25 @@ export class FieldFunctions<TSerialized> {
       storeFieldName,
       toReference: this.toReference,
       variables: this._variables,
+    };
+  }
+
+  /**
+   * Builds the options for a merge function call; like InMemoryCache, they
+   * include the write's extensions and the existing value.
+   */
+  mergeOptions(
+    fieldName: string,
+    storeFieldName: string,
+    args: JsonObject | null,
+    storageKeys: unknown[],
+    extensions: Record<string, unknown> | undefined,
+    existingData: unknown,
+  ): FieldMergeFunctionOptions {
+    return {
+      ...this.options(undefined, fieldName, storeFieldName, args, storageKeys),
+      extensions,
+      existingData,
     };
   }
 }
