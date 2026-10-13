@@ -3,12 +3,9 @@ import { makeReference, stringifyForDisplay } from '@apollo/client/utilities/int
 import type {
   FieldFunctionOptions,
   FieldMergeFunctionOptions,
-  FieldPolicy,
-  FieldReadFunction,
   ReadFieldOptions,
   Reference,
   StoreValue,
-  TypePolicies,
 } from '@apollo/client/cache';
 import type { StoreObject } from '@apollo/client/utilities';
 import type { FieldNode, FragmentDefinitionNode, InlineFragmentNode } from 'graphql';
@@ -27,18 +24,6 @@ type ObjectOrReference = StoreObject | Reference;
 type ToReference = FieldFunctionOptions['toReference'];
 
 /**
- * Returns the field policy configured for `typename.fieldName`, if any.
- */
-export function getFieldPolicy(
-  typePolicies: TypePolicies | undefined,
-  typename: unknown,
-  fieldName: string,
-): FieldPolicy<any> | FieldReadFunction<any> | undefined {
-  if (!typePolicies || typeof typename !== 'string') return undefined;
-  return typePolicies[typename]?.fields?.[fieldName];
-}
-
-/**
  * Whether a fragment (or inline fragment) applies to objects of the given
  * __typename, considering possibleTypes (like InMemoryCache#fragmentMatches).
  */
@@ -54,11 +39,12 @@ export function fragmentMatches(
 }
 
 /**
- * Returns the read function configured for `typename.fieldName`, if any.
+ * Returns the read function for `typename.fieldName`, if any: the one its
+ * field policy configures, or (for custom scalar fields) the one that parses
+ * its stored value.
  */
-export function getReadFunction(typePolicies: TypePolicies | undefined, typename: unknown, fieldName: string) {
-  const policy = getFieldPolicy(typePolicies, typename, fieldName);
-  return typeof policy === 'function' ? policy : policy?.read;
+export function getReadFunction(context: CacheContext<any>, typename: unknown, fieldName: string) {
+  return context.policies.getReadFunction(typename, fieldName) ?? context.scalars.getParseRead(typename, fieldName);
 }
 
 /**
@@ -129,11 +115,15 @@ export function withReferences(snapshot: Readonly<NodeSnapshot> | undefined, pat
 }
 
 /** The __typename of an entity (as its node holds it), like InMemoryCache's. */
-export function entityTypename(id: NodeId, snapshot: Readonly<NodeSnapshot> | undefined): unknown {
+export function entityTypename(
+  context: CacheContext<any>,
+  id: NodeId,
+  snapshot: Readonly<NodeSnapshot> | undefined,
+): unknown {
   const data = snapshot?.data;
   const typename = data && typeof data === 'object' ? (data as JsonObject).__typename : undefined;
   if (typename !== undefined) return typename;
-  return id === 'ROOT_QUERY' ? 'Query' : id === 'ROOT_MUTATION' ? 'Mutation' : undefined;
+  return context.rootTypename(id);
 }
 
 function isUntypedObject(value: unknown) {
@@ -231,7 +221,7 @@ export class FieldFunctions<TSerialized> {
       const fieldSnapshot = this._getNodeSnapshot(parameterized.id);
       return fieldSnapshot && withReferences(fieldSnapshot, [], fieldSnapshot.data);
     }
-    if (id === 'ROOT_QUERY' && fieldName === '__typename') return 'Query';
+    if (fieldName === '__typename') return this._context.rootTypename(id);
     return undefined;
   }
 
@@ -246,7 +236,7 @@ export class FieldFunctions<TSerialized> {
     typename?: unknown,
     field?: FieldNode | null,
   ) {
-    if (typename === undefined) typename = entityTypename(id, snapshot);
+    if (typename === undefined) typename = entityTypename(this._context, id, snapshot);
     return this._context.storeFieldNames.storeKey(typename, fieldName, args, field, this._variables);
   }
 
@@ -280,7 +270,7 @@ export class FieldFunctions<TSerialized> {
     const args = (options.args as JsonObject | undefined) ?? null;
     const field = options.field ?? null;
     const existing = this.getFieldValue(objectOrRef, fieldName, args, typename, field);
-    const read = getReadFunction(this._context.typePolicies, typename, fieldName);
+    const read = getReadFunction(this._context, typename, fieldName);
     if (!read) return existing;
 
     const storeFieldName = this._context.storeFieldNames.storeFieldName(

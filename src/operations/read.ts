@@ -19,7 +19,7 @@ import * as util from '../util';
 import * as nodes from '../nodes';
 
 import * as snapshotEditor from './SnapshotEditor';
-import { FieldFunctions, withReferences } from './fieldFunctions';
+import { FieldFunctions, getReadFunction, withReferences } from './fieldFunctions';
 
 const makeRef = makeReference;
 const { StaticNodeId } = schema;
@@ -131,7 +131,8 @@ export function read<TSerialized>(
       // Fields whose read function returned a reference to a missing entity.
       const danglingFields: DanglingFields = new WeakMap();
       if (
-        (!operation.isStatic && (data || outbound || parameterized || context.typePolicies)) ||
+        ((!operation.isStatic || context.policies.hasFieldPolicies) &&
+          (data || outbound || parameterized || context.policies.hasFieldPolicies)) ||
         (operation.parsedQuery.__typename &&
           // An empty root (e.g. after writing `{}`) still reads its __typename.
           (data || isRootId(operation.rootId)) &&
@@ -228,8 +229,8 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
   // snapshot, but we should also preemptively stop walking if there are no
   // dynamic values to be overlaid
   const id = query.rootId;
-  const isRoot = id === StaticNodeId.QueryRoot;
-  const rootSnapshot: Readonly<NodeSnapshot> | undefined = (snapshot.getNodeSnapshot(id) ?? isRoot) ? {} : undefined;
+  const rootSnapshot: Readonly<NodeSnapshot> | undefined =
+    (snapshot.getNodeSnapshot(id) ?? isRootId(id)) ? {} : undefined;
   if (isNil(rootSnapshot)) return result;
 
   // TODO: A better approach here might be to walk the outbound references from
@@ -306,7 +307,7 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
     return resolved;
   }
 
-  const hasFieldPolicies = Object.values(context.typePolicies ?? {}).some(policy => policy?.fields);
+  const { hasFieldPolicies } = context.policies;
   const isObjectOrArray = (value: unknown) => value !== null && typeof value === 'object';
 
   // Walk breadth-first, so read functions run in the order of the results.
@@ -314,17 +315,20 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
     const walkNode = queue[q];
     const { value, parsedMap } = walkNode;
     let { containerId, path } = walkNode;
-    const valueId = context.entityIdForValue(value);
+    const valueId = identifyStored(context, value, () => {
+      const reference = getSnapshot(containerId)?.outbound?.get(path.join('.'));
+      return reference && getSnapshot(reference.id) ? reference.id : undefined;
+    });
     if (valueId) {
       containerId = valueId;
       path = [];
     }
 
     let typeName = value.__typename as string;
-    if (!typeName && containerId === StaticNodeId.QueryRoot && path.length === 0) {
-      typeName = 'Query'; // Preserve the default cache's behavior.
+    if (!typeName && path.length === 0) {
+      // Like InMemoryCache, root objects have their root type's __typename.
+      typeName = context.rootTypename(containerId)!;
     }
-    const typePolicies = context.typePolicies?.[typeName]?.fields;
 
     // Read functions are called on a Reference to the entity being walked, or
     // (for unidentified objects) on the stored object itself.
@@ -362,8 +366,7 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
 
       // This is an alias if we have a schemaName declared.
       const fieldName = node.schemaName ? node.schemaName : key;
-      const policy = typePolicies?.[fieldName];
-      const readFn = typeof policy === 'function' ? policy : policy?.read;
+      const readFn = getReadFunction(context, typeName, fieldName);
 
       let nextContainerId = containerId;
       let nextPath = path;
@@ -562,6 +565,23 @@ function _wrapValue<T extends JsonValue, TSerialized>(value: T | undefined, cont
 }
 
 /**
+ * The id of a value read from the cache (or returned by a read function).
+ *
+ * Unlike writes, reads do not call keyFields functions (which, like
+ * InMemoryCache's, expect the written data and its selection set); the id of a
+ * value of such a type is found in the graph instead (with `fallback`).
+ */
+function identifyStored<TSerialized>(
+  context: CacheContext<TSerialized>,
+  value: unknown,
+  fallback?: () => NodeId | undefined,
+): NodeId | undefined {
+  if (!isObject(value)) return undefined;
+  if (context.policies.hasKeyFieldsFunction((value as JsonObject).__typename)) return fallback?.();
+  return context.entityIdForValue(value);
+}
+
+/**
  * Fields (by result object and key) whose value is a reference to a missing
  * entity, as returned by a read function.
  */
@@ -697,8 +717,8 @@ export function _visitSelection<TSerialized>(
     const danglingFieldIds = danglingFields?.get(value);
     // Like the read walk, treat the query root as a Query.
     let typeName = value.__typename;
-    if (!typeName && containerId === StaticNodeId.QueryRoot && containerPath.length === 0) {
-      typeName = 'Query';
+    if (!typeName && containerPath.length === 0) {
+      typeName = context.rootTypename(containerId) ?? typeName;
     }
     for (const key in parsed) {
       const node = parsed[key];
@@ -791,7 +811,7 @@ export function _visitSelection<TSerialized>(
     // Entering an entity makes it the container of the fields below. Values
     // returned by read functions need not be at their stored path, so the
     // stored reference is only a fallback.
-    let entityId = context.entityIdForValue(value);
+    let entityId = identifyStored(context, value);
     if (entityId === undefined && snapshot) {
       const reference = getOutbound(containerId, containerPath);
       if (reference && getNode(reference.id)) entityId = reference.id;

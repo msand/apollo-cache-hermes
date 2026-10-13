@@ -7,6 +7,7 @@ import { invariant } from '@apollo/client/utilities/invariant';
 import { CacheSnapshot } from './CacheSnapshot';
 import { ChangedFields, CacheTransaction, TransactionHooks } from './CacheTransaction';
 import { CacheContext } from './context';
+import type { Policies } from './context/policies';
 import type { ScalarConfig } from './context/scalars';
 import { GraphSnapshot, NodeSnapshotMap } from './GraphSnapshot';
 import {
@@ -29,7 +30,6 @@ import { UnsatisfiedCacheError } from './errors';
 import { Hermes } from './apollo';
 import { NodeReference } from './nodes';
 import { isUncaughtWriteError, missingKeyField, missingKeyFieldError } from './operations/checkWrite';
-import { getReadFunction } from './operations/fieldFunctions';
 
 type BatchOptions<TCache extends CacheInterface.Implementation> = CacheInterface.BatchOptions<TCache>;
 
@@ -76,6 +76,8 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     this._snapshot = new CacheSnapshot(initialGraphSnapshot, initialGraphSnapshot, new OptimisticUpdateQueue());
     this._context = new CacheContext(configuration);
     this._cacheInstance = cacheInstance;
+    // Results read with the previous policies are stale.
+    this._context.onPoliciesChange(() => this._dropReadResults());
   }
 
   // Maps root entity IDs to the number of times they have been retained, minus
@@ -167,10 +169,15 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     return this._context.scalars;
   }
 
+  /** The type policies and possibleTypes (like InMemoryCache's policies). */
+  get policies(): Policies {
+    return this._context.policies;
+  }
+
   /** Whether a read function provides the field (like InMemoryCache#resolvesClientField). */
   resolvesClientField(typename: string, fieldName: string): boolean {
     // Not the read functions that parse custom scalars.
-    return !!this._context.scalars.ownReadFunction(getReadFunction(this._context.typePolicies, typename, fieldName));
+    return !!this._context.policies.getReadFunction(typename, fieldName);
   }
 
   /** The fragment registered under `fragmentName` (like InMemoryCache#lookupFragment). */
@@ -517,7 +524,12 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
    * watch. Without read functions, there is nothing to do.
    */
   public dirtyReactiveReads() {
-    if (!this._context.typePolicies) return;
+    if (!this._context.policies.hasFieldPolicies) return;
+    this._dropReadResults();
+  }
+
+  /** Drops cached read results, and makes the next broadcast re-read every watch. */
+  private _dropReadResults() {
     this._snapshot.baseline.readCache.clear();
     this._snapshot.optimistic.readCache.clear();
     for (const observer of this._observers) observer.markDirty();

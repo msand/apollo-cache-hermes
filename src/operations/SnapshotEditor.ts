@@ -1,13 +1,13 @@
 import * as equality from '@wry/equality';
 import { makeReference } from '@apollo/client/utilities/internal';
-import type { Reference, TypePolicy } from '@apollo/client/cache';
+import type { Reference } from '@apollo/client/cache';
 import type { StoreObject } from '@apollo/client/utilities';
 
 import type { CacheContext } from '../context';
 import { storeFieldNameOf } from '../context/storeFieldNames';
 import type { GraphSnapshot as GraphSnapshotType } from '../GraphSnapshot';
 import type { NodeReference, EntitySnapshot as EntitySnapshotType, NodeSnapshot } from '../nodes';
-import { fieldNodeOf } from '../ParsedQueryNode';
+import { fieldNodeOf, selectionSetOf } from '../ParsedQueryNode';
 import type { ParsedQuery } from '../ParsedQueryNode';
 import type { JsonArray, JsonObject, JsonScalar, JsonValue, NestedObject, Nil, PathPart } from '../primitive';
 import type { NodeId, OperationInstance, RawOperation } from '../schema';
@@ -16,8 +16,9 @@ import * as schema from '../schema';
 import * as errors from '../errors';
 import * as nodes from '../nodes';
 import * as util from '../util';
+import type { FragmentMap } from '../util';
 
-import { FieldFunctions, getFieldPolicy, withReferences } from './fieldFunctions';
+import { FieldFunctions, withReferences } from './fieldFunctions';
 
 // Ensure typescript doesn't emit (0, fn)(...args)
 const isEqual = equality.equal;
@@ -130,6 +131,34 @@ function getPayloadProxy(value: JsonValue | undefined | null, map: { [prop: stri
 }
 
 /**
+ * The fields of a written object by their schema names (rather than the
+ * response keys of its payload), like InMemoryCache's store objects: the
+ * context.storeObject of keyFields functions.
+ */
+function toStoreObject(payload: JsonObject, parsed: ParsedQuery): JsonObject {
+  const storeObject: JsonObject = {};
+  for (const key in parsed) {
+    const value = payload[key];
+    if (value === undefined) continue;
+    const node = parsed[key];
+    const name = node.schemaName ?? key;
+    if (hasOwn.call(storeObject, name)) continue;
+    storeObject[name] = node.children ? toStoreValue(value, node.children) : value;
+  }
+  // Like InMemoryCache, fields in the payload that are not selected count too.
+  for (const key of Object.keys(payload)) {
+    if (!hasOwn.call(parsed, key) && !hasOwn.call(storeObject, key)) storeObject[key] = payload[key];
+  }
+  return storeObject;
+}
+
+function toStoreValue(value: JsonValue, parsed: ParsedQuery): JsonValue {
+  if (Array.isArray(value)) return value.map(item => toStoreValue(item, parsed));
+  if (isObject(value) && !isReference(value)) return toStoreObject(value, parsed);
+  return value;
+}
+
+/**
  * Builds a set of changes to apply on top of an existing `GraphSnapshot`.
  *
  * Performs the minimal set of edits to generate new immutable versions of each
@@ -166,6 +195,8 @@ export class SnapshotEditor<TSerialized> {
   /** Whether the write being merged overwrites existing values (for merge functions). */
   private _overwrite = false;
   private _fieldFunctionsInstance: FieldFunctions<TSerialized> | undefined;
+  /** The fragments of the operation being merged, for keyFields functions. */
+  private _fragmentMap: FragmentMap | undefined;
 
   constructor(
     /** The configuration/context to use when editing snapshots. */
@@ -191,6 +222,7 @@ export class SnapshotEditor<TSerialized> {
     this._extensions = extensions?.length ? Object.fromEntries(extensions) : undefined;
     this._overwrite = !!query.overwrite;
     this._fieldFunctionsInstance = undefined;
+    this._fragmentMap = parsed.info.fragmentMap;
 
     // We collect all warnings associated with this operation to avoid
     // overwhelming the log for particularly nasty payloads.
@@ -262,34 +294,36 @@ export class SnapshotEditor<TSerialized> {
     const previousValue = this._getPreviousValue(containerId, path);
 
     const isRoot = containerId === StaticNodeId.QueryRoot;
+    // Like InMemoryCache, root objects have their root type's __typename.
+    const rootTypename = path.length === 0 ? this._context.rootTypename(containerId) : undefined;
     const typename =
       isRoot && path.length === 0
-        ? 'Query'
+        ? rootTypename
         : payload && typeof payload === 'object' && '__typename' in payload
           ? payload.__typename
           : previousValue && typeof previousValue === 'object' && '__typename' in previousValue
             ? previousValue.__typename
-            : undefined;
+            : rootTypename;
     // The type that fragments' type conditions are matched against (values
     // nested within the root are not of the Query type).
     const fragmentTypename =
       payload && typeof payload === 'object' && '__typename' in payload
         ? payload.__typename
         : isRoot && path.length === 0
-          ? 'Query'
+          ? rootTypename
           : previousValue && typeof previousValue === 'object' && '__typename' in previousValue
             ? previousValue.__typename
-            : undefined;
+            : rootTypename;
 
-    const typePolicy: TypePolicy | undefined =
-      typeof typename === 'string' ? this._context.typePolicies?.[typename] : undefined;
+    const typeMerge =
+      typeof typename === 'string' && typename ? this._context.policies.getTypePolicy(typename).merge : undefined;
     // Values of fields with merge functions (which also apply their type's merge
     // function) have been merged already; like InMemoryCache, writing an entity
     // itself does not apply its type's merge function.
-    if (typeof typePolicy?.merge === 'function' && mode !== 'replace' && path.length) {
+    if (typeof typeMerge === 'function' && mode !== 'replace' && path.length) {
       const fieldName = String([...prefixPath, ...path].filter(part => typeof part === 'string').pop() ?? '');
       const existing = withReferences(this._getNodeSnapshot(containerId), path, previousValue);
-      payload = typePolicy.merge(
+      payload = typeMerge(
         // Like InMemoryCache, overwriting writes call merge functions without existing data.
         this._overwrite ? undefined : existing,
         payload,
@@ -344,12 +378,12 @@ export class SnapshotEditor<TSerialized> {
     const ref = isReference(payload) ? payload.__ref : undefined;
     let payloadId =
       ref ??
-      this._context.entityIdForValue(getPayloadProxy(payload, propMap)) ??
+      this._identifyPayload(payload, parsed, propMap) ??
       // A null value of a parameterized field (whose node is the container) is
       // not the container itself.
       (path.length === 0 && !isRoot && !isNil(payload) ? containerId : undefined);
     const previousId =
-      this._context.entityIdForValue(getVisibleProxy(previousValue, propMap)) ??
+      this._identifyPrevious(previousValue, propMap, containerId, path) ??
       (path.length === 0 && !isRoot
         ? containerId
         : (ifString(deepGet(this._pathToId[containerId], path)) ?? this._danglingReferenceId(containerId, path)));
@@ -568,11 +602,11 @@ export class SnapshotEditor<TSerialized> {
       writtenFields?.add(schemaName);
 
       // Like InMemoryCache, fall back to the merge policy of the child's type.
-      const fieldPolicy = getFieldPolicy(this._context.typePolicies, typename, schemaName);
-      let merge = typeof fieldPolicy === 'object' ? fieldPolicy.merge : undefined;
-      if (merge === undefined && node.children && isObject(fieldValue)) {
-        merge = this._context.typePolicies?.[fieldValue.__typename as string]?.merge;
-      }
+      const merge = this._context.policies.getMergeFunction(
+        typename,
+        schemaName,
+        node.children && isObject(fieldValue) ? fieldValue.__typename : undefined,
+      );
       let fieldMode: MergeMode | undefined = merge === true ? 'merge' : merge === false ? 'replace' : undefined;
       if (typeof merge === 'function') {
         // Like InMemoryCache, merge functions see References in place of
@@ -698,7 +732,7 @@ export class SnapshotEditor<TSerialized> {
     }
     if (!isObject(value) || isReference(value)) return value;
 
-    const entityId = this._context.entityIdForValue(getPayloadProxy(value, propMap));
+    const entityId = this._identifyPayload(value, parsed, propMap);
     if (entityId) {
       this._mergeSubgraph(referenceEdits, warnings, entityId, prefixPath, [], parsed, value, prune, propMap);
       return makeRef(entityId);
@@ -724,6 +758,44 @@ export class SnapshotEditor<TSerialized> {
       }
     }
     return normalized;
+  }
+
+  /**
+   * The id of a written object (with the given selections), like
+   * InMemoryCache's policies.identify: keyFields functions see the object's
+   * fields by their schema names, its selection set, and the fragments of the
+   * operation.
+   */
+  private _identifyPayload(
+    payload: JsonValue | undefined,
+    parsed: ParsedQuery,
+    propMap: { [prop: string]: string } | undefined,
+  ): NodeId | undefined {
+    if (!isObject(payload)) return undefined;
+    return this._context.entityIdForValue(
+      getPayloadProxy(payload, propMap),
+      { selectionSet: selectionSetOf(parsed), fragmentMap: this._fragmentMap },
+      () => toStoreObject(payload, parsed),
+    );
+  }
+
+  /**
+   * The id of the entity previously stored at `path` of a node (whose data is
+   * `previousValue`).  Like InMemoryCache, keyFields functions only identify
+   * written objects, so for their types the id is found in the graph.
+   */
+  private _identifyPrevious(
+    previousValue: JsonValue | undefined,
+    propMap: { [prop: string]: string } | undefined,
+    containerId: NodeId,
+    path: PathPart[],
+  ): NodeId | undefined {
+    if (!isObject(previousValue)) return undefined;
+    if (this._context.policies.hasKeyFieldsFunction(previousValue.__typename)) {
+      const reference = this._getNodeSnapshot(containerId)?.outbound?.get(toOutKey(path));
+      return reference && this._getNodeSnapshot(reference.id) ? reference.id : undefined;
+    }
+    return this._context.entityIdForValue(getVisibleProxy(previousValue, propMap));
   }
 
   /**
@@ -1001,7 +1073,7 @@ export class SnapshotEditor<TSerialized> {
     const payloadId = reference
       ? reference
       : this._context.entityIdForValue({ ...(previousValue as JsonObject), ...payload });
-    const previousId = this._context.entityIdForValue(previousValue);
+    const previousId = this._identifyPrevious(previousValue, undefined, containerId, path);
 
     // Is this an identity change?
     if (payloadId !== previousId) {

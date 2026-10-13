@@ -1,8 +1,10 @@
 import type { OperationVariables } from '@apollo/client';
-import type { FieldPolicy, FieldReadFunction, InputObjectsOption, Scalar, TypePolicies } from '@apollo/client/cache';
+import type { FieldReadFunction, InputObjectsOption, Scalar } from '@apollo/client/cache';
 import { getOperationDefinition, isPlainObject, unwrapScalarType } from '@apollo/client/utilities/internal';
 import { invariant } from '@apollo/client/utilities/invariant';
-import type { DocumentNode, OperationTypeNode, TypeNode } from 'graphql';
+import type { DocumentNode, TypeNode } from 'graphql';
+
+import type { Policies } from './policies';
 
 type AnyScalar = Scalar<any, any>;
 type Coerce = (scalar: AnyScalar, value: unknown) => unknown;
@@ -29,18 +31,17 @@ function scalarTypeFromTypeNode(node: TypeNode): string {
  *
  * Unlike InMemoryCache (which stores parsed values), Hermes stores serialized
  * values (so its snapshots stay JSON): values are serialized when written, and
- * parsed when read (by a read function this adds to each scalar field).
+ * parsed when read (by the read function getParseRead provides for each scalar
+ * field).
  */
 export class ScalarConfig {
-  /** The read functions this adds, by the read function they wrap (if any). */
-  private readonly _wrappedReads = new WeakMap<FieldReadFunction, FieldReadFunction | undefined>();
+  /** The read functions that parse scalar fields, by field coordinate. */
+  private readonly _parseReads = new Map<string, { scalarType: string; read: FieldReadFunction }>();
 
   constructor(
     private readonly _scalars: Record<string, AnyScalar> | undefined,
     private readonly _inputObjects: InputObjectsOption | undefined,
-    private readonly _typePolicies: TypePolicies | undefined,
-    /** Whether `typename` is `supertype` or one of its possibleTypes subtypes. */
-    private readonly _isSubtype: (supertype: string, typename: string) => boolean = (a, b) => a === b,
+    private readonly _policies: Policies,
   ) {}
 
   /** The scalar implementation registered under `name`. */
@@ -54,76 +55,40 @@ export class ScalarConfig {
   }
 
   /**
-   * The scalar type configured for `typename.fieldName`: on the type itself,
-   * or else (like InMemoryCache) on one of its possibleTypes supertypes.
+   * The scalar type configured for `typename.fieldName`, by its own field
+   * policy or one it inherits from a possibleTypes supertype (like
+   * InMemoryCache).
    */
-  getScalarTypeForField(typename: string, fieldName: string): string | undefined {
-    const own = this._fieldScalar(typename, fieldName);
-    if (own) return own;
-    for (const supertype of Object.keys(this._typePolicies ?? {})) {
-      const scalarType = this._fieldScalar(supertype, fieldName);
-      if (scalarType && this._isSubtype(supertype, typename)) return scalarType;
-    }
-    return undefined;
-  }
-
-  private _fieldScalar(typename: string, fieldName: string): string | undefined {
-    const policy = this._typePolicies?.[typename]?.fields?.[fieldName];
-    return typeof policy === 'object' ? policy.scalar : undefined;
+  getScalarTypeForField(typename: unknown, fieldName: string): string | undefined {
+    return this._policies.getScalarTypeForField(typename, fieldName);
   }
 
   /**
-   * The typename of an operation's root type: the type whose policy sets
-   * `queryType`/`mutationType`/`subscriptionType`, or else `Query`/`Mutation`/
-   * `Subscription` (like InMemoryCache#getRootTypename). Apollo Client uses it
-   * to find the scalar fields of root types.
+   * The read function that parses the (stored, serialized) value of a scalar
+   * field, if `typename.fieldName` is one (and custom scalars are configured).
+   *
+   * It parses a stored value once (per field storage), so every read of it
+   * returns the same parsed object, like InMemoryCache's parsed store.
    */
-  getRootTypename(operation: OperationTypeNode): string {
-    const flag = `${operation}Type` as 'queryType' | 'mutationType' | 'subscriptionType';
-    for (const [typename, policy] of Object.entries(this._typePolicies ?? {})) {
-      if (policy?.[flag]) return typename;
+  getParseRead(typename: unknown, fieldName: string): FieldReadFunction | undefined {
+    if (!this._scalars) return undefined;
+    const scalarType = this.getScalarTypeForField(typename, fieldName);
+    if (!scalarType) return undefined;
+    const coordinate = `${typename as string}.${fieldName}`;
+    let entry = this._parseReads.get(coordinate);
+    if (!entry || entry.scalarType !== scalarType) {
+      const read: FieldReadFunction = (existing, options) => {
+        const storage = options?.storage as { [lastParsed]?: { stored: unknown; parsed: unknown } } | undefined;
+        if (storage?.[lastParsed] && storage[lastParsed].stored === existing) {
+          return storage[lastParsed].parsed;
+        }
+        const parsed = this.coerce(existing, toParsed, scalarType, coordinate);
+        if (storage) storage[lastParsed] = { stored: existing, parsed };
+        return parsed;
+      };
+      this._parseReads.set(coordinate, (entry = { scalarType, read }));
     }
-    return operation.charAt(0).toUpperCase() + operation.slice(1);
-  }
-
-  /**
-   * The type policies, with read functions that parse the values of scalar
-   * fields (and then call the field's own read function, if any).
-   */
-  withScalarReads(typePolicies: TypePolicies | undefined): TypePolicies | undefined {
-    if (!this._scalars || !typePolicies) return typePolicies;
-    const result: TypePolicies = {};
-    for (const [typename, typePolicy] of Object.entries(typePolicies)) {
-      let fields = typePolicy?.fields;
-      for (const [fieldName, policy] of Object.entries(fields ?? {})) {
-        if (typeof policy !== 'object' || !policy.scalar) continue;
-        const scalarType = policy.scalar;
-        const coordinate = `${typename}.${fieldName}`;
-        const ownRead = policy.read;
-        const read: FieldReadFunction = (existing, options) => {
-          // Parse a stored value once (per entity field), so every read of it
-          // returns the same parsed object, like InMemoryCache's parsed store.
-          const storage = options?.storage as { [lastParsed]?: { stored: unknown; parsed: unknown } } | undefined;
-          let parsed: unknown;
-          if (storage?.[lastParsed] && storage[lastParsed].stored === existing) {
-            parsed = storage[lastParsed].parsed;
-          } else {
-            parsed = this.coerce(existing, toParsed, scalarType, coordinate);
-            if (storage) storage[lastParsed] = { stored: existing, parsed };
-          }
-          return ownRead ? ownRead(parsed, options) : parsed;
-        };
-        this._wrappedReads.set(read, ownRead);
-        fields = { ...fields, [fieldName]: { ...policy, read } as FieldPolicy };
-      }
-      result[typename] = fields === typePolicy?.fields ? typePolicy : { ...typePolicy, fields };
-    }
-    return result;
-  }
-
-  /** The read function a field was configured with (rather than one this added). */
-  ownReadFunction(read: FieldReadFunction | undefined): FieldReadFunction | undefined {
-    return read && this._wrappedReads.has(read) ? this._wrappedReads.get(read) : read;
+    return entry.read;
   }
 
   /** The value to store for `typename.fieldName`: serialized, if it is a scalar field. */

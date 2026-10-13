@@ -70,8 +70,28 @@ export function fieldNodeOf(node: object): FieldNode | undefined {
 
 /** Records the field node that selects a parsed field (see fieldNodeOf). */
 function _withField<TArgTypes>(node: ParsedQueryNode<TArgTypes>, field: FieldNode | undefined) {
-  if (field) fieldNodes.set(node, field);
+  if (field) {
+    fieldNodes.set(node, field);
+    if (node.children && field.selectionSet) selectionSets.set(node.children, field.selectionSet);
+  }
   return node;
+}
+
+/** The (first) selection set each parsed node map was parsed from. */
+const selectionSets = new WeakMap<object, SelectionSetNode>();
+
+/**
+ * The (first) selection set a parsed node map (the children of a field, or a
+ * parsed operation) was parsed from, for the selectionSet option of keyFields
+ * functions.
+ */
+export function selectionSetOf(parsed: object): SelectionSetNode | undefined {
+  return selectionSets.get(parsed);
+}
+
+/** Records the selection set a parsed operation was parsed from (see selectionSetOf). */
+export function setSelectionSetOf(parsed: object, selectionSet: SelectionSetNode) {
+  selectionSets.set(parsed, selectionSet);
 }
 
 /**

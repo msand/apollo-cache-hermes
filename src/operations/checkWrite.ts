@@ -83,26 +83,18 @@ export function missingKeyFieldError(fieldName: string, object: JsonObject): Inv
 }
 
 /**
- * The first keyField (of a type policy with a keyFields array) that `object`
- * does not provide, if any, when the object cannot be identified otherwise.
+ * The (path of the) first key field that `object` does not provide, if its
+ * type's keyFields (a KeySpecifier array, or a function that returns one)
+ * need one that is missing.
  */
 export function missingKeyField<TSerialized>(
   context: CacheContext<TSerialized>,
   object: JsonObject,
-  storeObject: JsonObject = object,
+  storeObject?: JsonObject,
+  partialContext?: { selectionSet?: SelectionSetNode; fragmentMap?: FragmentMap },
 ): string | undefined {
-  const { __typename } = object;
-  if (typeof __typename !== 'string') return undefined;
-  const keyFields = context.typePolicies?.[__typename]?.keyFields;
-  if (!Array.isArray(keyFields)) return undefined;
-  for (const keyField of keyFields) {
-    if (typeof keyField !== 'string') continue;
-    if (storeObject[keyField] === undefined && object[keyField] === undefined) {
-      // A custom entityIdForNode/dataIdFromObject may identify it anyway.
-      return context.entityIdForValue({ ...object, ...storeObject }) === undefined ? keyField : undefined;
-    }
-  }
-  return undefined;
+  if (typeof object.__typename !== 'string' || !context.policies.hasKeyFields) return undefined;
+  return context.policies.identify(object, { ...partialContext, storeObject })[1];
 }
 
 interface FieldContext {
@@ -127,11 +119,7 @@ export function checkWrite<TSerialized>(
   const dev = (globalThis as { __DEV__?: boolean }).__DEV__ !== false;
   // In production, there is only something to check with keyFields policies (or
   // fuzzy possibleTypes subtypes to infer).
-  if (
-    !dev &&
-    !context.hasFuzzySubtypes &&
-    !Object.values(context.typePolicies ?? {}).some(policy => Array.isArray(policy.keyFields))
-  ) {
+  if (!dev && !context.hasFuzzySubtypes && !context.policies.hasKeyFields) {
     return;
   }
   const allVariables = { ...getDefaultValues(getOperationDefinition(document)), ...variables };
@@ -151,10 +139,9 @@ export function checkWrite<TSerialized>(
         selectionSetMatchesResult(fragment.selectionSet, object, allVariables),
       ));
 
-  const hasReadFunction = (typename: string | undefined, fieldName: string) => {
-    const policy = typename ? context.typePolicies?.[typename]?.fields?.[fieldName] : undefined;
-    return typeof policy === 'function' || typeof policy?.read === 'function';
-  };
+  // Like InMemoryCache, scalar fields have no read functions.
+  const hasReadFunction = (typename: string | undefined, fieldName: string) =>
+    !!context.policies.getReadFunction(typename, fieldName);
 
   // Hermes writes do not fail on @skip/@include variables that are not provided.
   const included = (selection: SelectionNode) => {
@@ -222,12 +209,14 @@ export function checkWrite<TSerialized>(
     return fieldMap;
   }
 
-  function checkValue(value: JsonValue | undefined, selectionSet: SelectionSetNode) {
+  /** Checks a value, returning it with its objects' fields by their schema names. */
+  function checkValue(value: JsonValue | undefined, selectionSet: SelectionSetNode): JsonValue | undefined {
     if (Array.isArray(value)) {
-      for (const item of value) checkValue(item, selectionSet);
+      return value.map(item => checkValue(item, selectionSet)) as JsonValue;
     } else if (value && typeof value === 'object' && !isReference(value)) {
-      checkObject(value as JsonObject, selectionSet, undefined, false);
+      return checkObject(value as JsonObject, selectionSet, undefined, false);
     }
+    return value;
   }
 
   function checkObject(
@@ -235,15 +224,14 @@ export function checkWrite<TSerialized>(
     selectionSet: SelectionSetNode,
     typename: string | undefined,
     isRoot: boolean,
-  ) {
+  ): JsonObject {
     if (typeof object.__typename === 'string') typename = object.__typename;
     // The fields of the object by their schema names (rather than aliases).
     const storeObject: JsonObject = {};
     flattenFields(selectionSet, typename, object).forEach(({ clientOnly, deferred }, field) => {
       const value = object[resultKeyNameFromField(field)];
       if (value !== undefined) {
-        storeObject[field.name.value] = value;
-        if (field.selectionSet) checkValue(value, field.selectionSet);
+        storeObject[field.name.value] = field.selectionSet ? checkValue(value, field.selectionSet)! : value;
       } else if (
         dev &&
         !clientOnly &&
@@ -257,12 +245,13 @@ export function checkWrite<TSerialized>(
     });
 
     // Like InMemoryCache, the written root object has an id already.
-    const keyField = isRoot ? undefined : missingKeyField(context, object, storeObject);
+    const keyField = isRoot ? undefined : missingKeyField(context, object, storeObject, { selectionSet, fragmentMap });
     if (keyField !== undefined) {
       const error = missingKeyFieldError(keyField, object);
       uncaughtErrors.add(error);
       throw error;
     }
+    return storeObject;
   }
 
   checkObject(result, getMainDefinition(document).selectionSet, rootTypename, true);

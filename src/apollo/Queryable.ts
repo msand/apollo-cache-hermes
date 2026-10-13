@@ -12,6 +12,7 @@ import {
 } from '@apollo/client/utilities/internal';
 import { InvariantError } from '@apollo/client/utilities/invariant';
 
+import type { Policies } from '../context/policies';
 import { toDiffResult } from '../operations/read';
 import { JsonObject } from '../primitive';
 import { Queryable } from '../Queryable';
@@ -141,7 +142,10 @@ export abstract class ApolloQueryable extends ApolloCache {
 
   identify(object: StoreObject | Reference): string | undefined {
     if (isReference(object)) return object.__ref;
-    if (object?.__typename === 'Query') return StaticNodeId.QueryRoot;
+    // Like InMemoryCache, objects of the root query type identify ROOT_QUERY.
+    if (object?.__typename && object.__typename === this._queryable.policies.rootTypenamesById.ROOT_QUERY) {
+      return StaticNodeId.QueryRoot;
+    }
     return this._queryable.identify(object);
   }
 
@@ -162,6 +166,14 @@ export abstract class ApolloQueryable extends ApolloCache {
     return this._queryable.resolvesClientField(typename, fieldName);
   }
 
+  /**
+   * The type policies and possibleTypes of the cache, like InMemoryCache's
+   * `policies` (with its addTypePolicies and addPossibleTypes methods).
+   */
+  get policies(): Policies {
+    return this._queryable.policies;
+  }
+
   // Custom scalars (like InMemoryCache's `scalars` option).
 
   getScalar<TKey extends keyof ApolloCache.Scalars>(key: TKey): ApolloCache.GetScalarType<TKey> | undefined {
@@ -173,7 +185,7 @@ export abstract class ApolloQueryable extends ApolloCache {
   }
 
   getRootTypename(operation: OperationTypeNode): string {
-    return this._queryable.scalars.getRootTypename(operation);
+    return this._queryable.policies.getRootTypename(operation);
   }
 
   configuresScalars(): boolean {

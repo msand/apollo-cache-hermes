@@ -1,4 +1,4 @@
-import type { FieldPolicy, FieldReadFunction, KeyArgsFunction, TypePolicies } from '@apollo/client/cache';
+import type { KeyArgsFunction, TypePolicy } from '@apollo/client/cache';
 import { argumentsObjectFromField, DeepMerger, getStoreKeyName } from '@apollo/client/utilities/internal';
 import type { DirectiveNode, FieldNode } from 'graphql';
 
@@ -23,7 +23,16 @@ export function isStoreFieldNameKey(key: string): boolean {
 }
 
 /** Like InMemoryCache's KeySpecifier (which @apollo/client/cache does not export). */
-type KeySpecifier = ReadonlyArray<string | KeySpecifier>;
+export type KeySpecifier = ReadonlyArray<string | KeySpecifier>;
+
+/** Like InMemoryCache's KeyFieldsFunction (which @apollo/client/cache does not export). */
+export type KeyFieldsFunction = Extract<NonNullable<TypePolicy['keyFields']>, (...args: any[]) => any>;
+
+/** Like InMemoryCache's KeyFieldsContext. */
+export type KeyFieldsContext = Parameters<KeyFieldsFunction>[1];
+
+/** The context of a keyFields function, with the key field it found missing (see keyFieldsFnFromSpecifier). */
+export type KeyFieldsContextWithMissing = KeyFieldsContext & { missingKeyField?: string };
 
 const TypeOrFieldNameRegExp = /^[_a-z][_0-9a-z]*/i;
 
@@ -34,36 +43,21 @@ export function fieldNameFromStoreName(storeFieldName: string): string {
 }
 
 /** InMemoryCache's implicit keyArgs: false. */
-const simpleKeyArgsFn: KeyArgsFunction = (_args, context) => context.fieldName;
+export const simpleKeyArgsFn: KeyArgsFunction = (_args, context) => context.fieldName;
+
+/** Finds the keyArgs function of `typename.fieldName` (per its field policy, which may be inherited). */
+export type KeyArgsFunctionLookup = (typename: string, fieldName: string) => KeyArgsFunction | undefined;
 
 /**
  * Computes the storage identity of fields, following their keyArgs policies
  * (and @connection directives) like InMemoryCache's Policies#getStoreFieldName.
  */
 export class StoreFieldNames {
-  /** The keyArgs functions of the configured field policies, by type and field. */
-  private readonly _keyFns = new Map<string, Map<string, KeyArgsFunction>>();
-
-  constructor(typePolicies: TypePolicies | undefined) {
-    for (const [typename, typePolicy] of Object.entries(typePolicies ?? {})) {
-      for (const [fieldName, policy] of Object.entries(typePolicy?.fields ?? {})) {
-        const keyFn = keyFnOfPolicy(policy);
-        if (!keyFn) continue;
-        let fields = this._keyFns.get(typename);
-        if (!fields) this._keyFns.set(typename, (fields = new Map()));
-        fields.set(fieldName, keyFn);
-      }
-    }
-  }
-
-  /** Whether any field has a keyArgs policy (explicit or implicit). */
-  get hasKeyArgs(): boolean {
-    return this._keyFns.size > 0;
-  }
+  constructor(private readonly _keyFn: KeyArgsFunctionLookup) {}
 
   /** Like InMemoryCache's Policies#hasKeyArgs. */
   hasKeyArgsFor(typename: unknown, fieldName: string): boolean {
-    return typeof typename === 'string' && !!this._keyFns.get(typename)?.has(fieldName);
+    return typeof typename === 'string' && !!this._keyFn(typename, fieldName);
   }
 
   /**
@@ -79,7 +73,7 @@ export class StoreFieldNames {
     variables: JsonObject | undefined,
   ): StoreKey {
     const hasArgs = !!args && Object.keys(args).length > 0;
-    const keyFn = typeof typename === 'string' ? this._keyFns.get(typename)?.get(fieldName) : undefined;
+    const keyFn = typeof typename === 'string' ? this._keyFn(typename, fieldName) : undefined;
     if (keyFn) {
       return this._keyArgsStoreKey(keyFn, typename as string, fieldName, hasArgs ? args! : null, field, variables);
     }
@@ -152,35 +146,70 @@ function toStoreKey(fieldName: string, storeFieldName: string): StoreKey {
   return fieldNameFromStoreName(storeFieldName) === fieldName ? storeFieldName : `${fieldName}:${storeFieldName}`;
 }
 
-/** The keyArgs function of a field policy, like InMemoryCache's Policies#setTypePolicies. */
-function keyFnOfPolicy(policy: FieldPolicy<any> | FieldReadFunction<any> | undefined): KeyArgsFunction | undefined {
-  if (!policy || typeof policy === 'function') return undefined;
-  const { keyArgs, read, merge, scalar } = policy;
-  const keyFn =
-    keyArgs === false
-      ? simpleKeyArgsFn
-      : Array.isArray(keyArgs)
-        ? keyArgsFnFromSpecifier(keyArgs)
-        : typeof keyArgs === 'function'
-          ? keyArgs
-          : undefined;
-  // If we have both a read and a merge function, assume keyArgs:false, because
-  // read and merge together can take responsibility for interpreting
-  // arguments in and out. (Scalar fields' read and merge functions are
-  // ignored, like InMemoryCache's.)
-  if (!keyFn && !scalar && typeof read === 'function' && merge !== undefined) {
-    return simpleKeyArgsFn;
-  }
-  return keyFn;
-}
+// The rest is a port of InMemoryCache's key-extractor (for keyArgs and keyFields).
 
-// The rest is a port of InMemoryCache's key-extractor (for keyArgs).
-
-const specifierInfoCache: Record<string, { paths?: string[][]; keyArgsFn?: KeyArgsFunction }> = Object.create(null);
+const specifierInfoCache: Record<
+  string,
+  { paths?: string[][]; keyArgsFn?: KeyArgsFunction; keyFieldsFn?: KeyFieldsFunction }
+> = Object.create(null);
 
 function lookupSpecifierInfo(spec: KeySpecifier) {
   const cacheKey = JSON.stringify(spec);
   return specifierInfoCache[cacheKey] || (specifierInfoCache[cacheKey] = {});
+}
+
+/**
+ * Like InMemoryCache's keyFieldsFnFromSpecifier: the id is made of the
+ * specified (possibly nested) fields of the object, like
+ * `Book:{"title":"…","author":{"name":"…"}}`.
+ *
+ * Unlike InMemoryCache's, a missing key field does not throw: the object is
+ * not identified, and the path of the missing field is reported as the
+ * context's `missingKeyField` (writes throw InMemoryCache's error for it).
+ */
+export function keyFieldsFnFromSpecifier(specifier: KeySpecifier): KeyFieldsFunction {
+  const info = lookupSpecifierInfo(specifier);
+  if (info.keyFieldsFn) return info.keyFieldsFn;
+
+  const keyFieldsFn: KeyFieldsFunction = (object, context) => {
+    const hermesContext = context as KeyFieldsContextWithMissing;
+    const extract = (from: Record<string, any>, key: string) => context.readField(key, from);
+    let missing: string | undefined;
+
+    const keyObject = (context.keyObject = collectSpecifierPaths(specifier, schemaKeyPath => {
+      if (missing !== undefined) return undefined;
+      let extracted = extractKeyPath(context.storeObject, schemaKeyPath, extract);
+
+      if (
+        extracted === undefined &&
+        object !== context.storeObject &&
+        Object.prototype.hasOwnProperty.call(object, schemaKeyPath[0])
+      ) {
+        // Key fields included in the written data are used even if they are
+        // not selected (and so cannot be aliased).
+        extracted = extractKeyPath(object, schemaKeyPath);
+      }
+
+      if (extracted === undefined) missing = schemaKeyPath.join('.');
+      return extracted;
+    }));
+
+    if (missing !== undefined) {
+      hermesContext.missingKeyField = missing;
+      return undefined;
+    }
+    return `${context.typename}:${JSON.stringify(keyObject)}`;
+  };
+  specifierFns.add(keyFieldsFn);
+  return (info.keyFieldsFn = keyFieldsFn);
+}
+
+/** The keyFields functions made from KeySpecifier arrays. */
+const specifierFns = new WeakSet<KeyFieldsFunction>();
+
+/** Whether a keyFields function was made from a KeySpecifier array (rather than configured). */
+export function isKeyFieldsSpecifierFn(fn: KeyFieldsFunction): boolean {
+  return specifierFns.has(fn);
 }
 
 /**
@@ -275,10 +304,14 @@ function getSpecifierPaths(spec: KeySpecifier): string[][] {
   return info.paths;
 }
 
-function extractKeyPath(object: Record<string, any>, path: string[]): any {
+function extractKeyPath(
+  object: Record<string, any>,
+  path: string[],
+  extract: (from: Record<string, any>, key: string) => any = (from, key) => from[key],
+): any {
   return normalize(
     path.reduce(function reducer(obj: any, key: string): any {
-      return Array.isArray(obj) ? obj.map(child => reducer(child, key)) : obj && obj[key];
+      return Array.isArray(obj) ? obj.map(child => reducer(child, key)) : obj && extract(obj, key);
     }, object),
   );
 }

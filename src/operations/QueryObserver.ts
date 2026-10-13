@@ -31,19 +31,11 @@ export class QueryObserver<TSerialized> {
   private _dirty = false;
   /** Whether onWatchUpdated cancelled delivering the last computed result. */
   private _cancelled = false;
-  /**
-   * Whether field policies may make the result depend on any field (e.g. a
-   * read function reading other fields), rather than just the selected ones.
-   */
-  private _hasFieldPolicies: boolean;
 
   constructor(context: CacheContext<TSerialized>, query: RawOperation, snapshot: GraphSnapshot, options: WatchOptions) {
     this._context = context;
     this._query = query;
     this._options = options;
-    this._hasFieldPolicies = Object.values(context.typePolicies ?? {}).some(
-      policy => Object.keys(policy?.fields ?? {}).length > 0,
-    );
     if (options.immediate) {
       this._result = read(context, query, snapshot, Object.create(null), context.strict);
       this._diff = toDiffResult(this._result, options.returnPartialData);
@@ -166,7 +158,9 @@ export class QueryObserver<TSerialized> {
       if (
         nodeId === rootId &&
         changedRootFields &&
-        !this._hasFieldPolicies &&
+        // Field policies may make the result depend on any field (e.g. a
+        // read function reading other fields), rather than just the selected ones.
+        !this._context.policies.hasFieldPolicies &&
         !this._selectsAny(changedRootFields.get(rootId))
       ) {
         continue;

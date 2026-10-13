@@ -1,6 +1,7 @@
 import type { Cache, Reference, StoreObject } from '@apollo/client/cache';
 import type { FragmentDefinitionNode, InlineFragmentNode } from 'graphql';
 
+import type { Policies } from './context/policies';
 import type { ScalarConfig } from './context/scalars';
 import type { QueryResult } from './operations/read';
 import { JsonObject } from './primitive';
@@ -31,6 +32,9 @@ export interface Queryable {
 
   /** Custom scalar support. */
   readonly scalars: ScalarConfig;
+
+  /** The type policies and possibleTypes. */
+  readonly policies: Policies;
 
   /** Whether a read function provides the field. */
   resolvesClientField(typename: string, fieldName: string): boolean;

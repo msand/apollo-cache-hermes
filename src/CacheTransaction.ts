@@ -17,6 +17,7 @@ import type { CacheSnapshot as CacheSnapshotType } from './CacheSnapshot';
 import type { GraphSnapshot, NodeSnapshotMap } from './GraphSnapshot';
 import type { JsonObject, JsonValue } from './primitive';
 import type { CacheContext } from './context';
+import type { Policies } from './context/policies';
 import type { ScalarConfig } from './context/scalars';
 import { fieldNameFromStoreName, isStoreFieldNameKey, storeFieldNameOf } from './context/storeFieldNames';
 import type { OptimisticUpdate } from './OptimisticUpdateQueue';
@@ -32,7 +33,7 @@ import * as nodes from './nodes';
 import * as util from './util';
 import { nodeIdForParameterizedValue, nodeIdForStoreKey } from './operations/SnapshotEditor';
 import { checkWrite, checkWriteDocument } from './operations/checkWrite';
-import { entityTypename, getReadFunction } from './operations/fieldFunctions';
+import { entityTypename } from './operations/fieldFunctions';
 
 const isEqual = equality.equal;
 const makeRef = makeReference;
@@ -179,9 +180,14 @@ export class CacheTransaction<TSerialized> implements Queryable {
     return this._context.scalars;
   }
 
+  /** The type policies and possibleTypes. */
+  get policies(): Policies {
+    return this._context.policies;
+  }
+
   resolvesClientField(typename: string, fieldName: string): boolean {
     // Not the read functions that parse custom scalars.
-    return !!this._context.scalars.ownReadFunction(getReadFunction(this._context.typePolicies, typename, fieldName));
+    return !!this._context.policies.getReadFunction(typename, fieldName);
   }
 
   /**
@@ -252,9 +258,8 @@ export class CacheTransaction<TSerialized> implements Queryable {
    * written data is looked at.
    */
   private _rootTypename(rootId: NodeId): string | undefined {
-    if (rootId === StaticNodeId.QueryRoot) return 'Query';
-    if (rootId === StaticNodeId.MutationRoot) return 'Mutation';
-    if (rootId === StaticNodeId.SubscriptionRoot) return 'Subscription';
+    const rootTypename = this._context.rootTypename(rootId);
+    if (rootTypename) return rootTypename;
     const data = this.getCurrentNodeSnapshot(rootId)?.data;
     return isObject(data) && typeof data.__typename === 'string' ? data.__typename : undefined;
   }
@@ -394,7 +399,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
       let typeName = isObject(either.data) && (either.data.__typename as string | undefined);
       const isRoot = nodeId === StaticNodeId.QueryRoot;
       if (!typeName && isRoot) {
-        typeName = 'Query';
+        typeName = this._context.rootTypename(nodeId)!;
       }
       if (!typeName) continue; // Must have a typename for now.
 
@@ -496,6 +501,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
     if (!id) {
       return false;
     }
+    const rootTypename = this._context.rootTypename(id);
     const node = graphSnapshot.getNodeSnapshot(id);
     if (!node) {
       return false;
@@ -536,8 +542,8 @@ export class CacheTransaction<TSerialized> implements Queryable {
       if (nodes.length) {
         return nodes;
       }
-      if (id === 'ROOT_QUERY' && key === '__typename') {
-        return [{ d: 'Query', k: null }];
+      if (key === '__typename' && rootTypename) {
+        return [{ d: rootTypename, k: null }];
       }
       if (datum === null) {
         return [{ d: null, k: null }];
@@ -559,8 +565,8 @@ export class CacheTransaction<TSerialized> implements Queryable {
       if (ref) {
         return currentGraph().getNodeData(ref.id);
       }
-      if (id === 'ROOT_QUERY' && key === '__typename') {
-        return 'Query';
+      if (key === '__typename' && rootTypename) {
+        return rootTypename;
       }
       return datum;
     }
@@ -905,7 +911,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
       // The variant is identified as the field's keyArgs policy says.
       const id = options.id ?? 'ROOT_QUERY';
       const node = this._snapshot.baseline.getNodeSnapshot(id) ?? this._snapshot.optimistic.getNodeSnapshot(id);
-      const typename = entityTypename(id, node);
+      const typename = entityTypename(this._context, id, node);
       const { storeFieldNames } = this._context;
       const args = options.args as JsonObject;
       if (!storeFieldNames.hasKeyArgsFor(typename, options.fieldName)) {
