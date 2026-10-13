@@ -16,17 +16,6 @@ import { ConsoleTracer } from './ConsoleTracer';
 import { QueryInfo } from './QueryInfo';
 import { Tracer } from './Tracer';
 
-// Augment DocumentNode type with Hermes's properties
-// Because react-apollo can call us without doing transformDocument
-// to be safe, we will always call transformDocument then flag that
-// we have already done so to not repeating the process.
-declare module 'graphql/language/ast' {
-  export interface DocumentNode {
-    /** Indicating that query has already ran transformDocument */
-    hasBeenTransformed?: boolean;
-  }
-}
-
 export namespace CacheContext {
   export type EntityIdForNode = (node: JsonObject) => EntityId | undefined;
   export type EntityIdForValue = (value: any) => EntityId | undefined;
@@ -201,6 +190,15 @@ export class CacheContext<TSerialized = GraphSnapshot> {
   /** All currently known & processed GraphQL documents. */
   /** Transformed documents by input; @apollo/client matches documents by identity (e.g. refetchQueries). */
   private readonly _transformedDocuments = new WeakMap<DocumentNode, DocumentNode>();
+  /**
+   * Documents this context produced, which need no further transformation.
+   * Because react-apollo can call us without doing transformDocument, we always
+   * transform, and skip documents we already transformed. (Tracked by identity
+   * rather than a flag on the document, which copies made by e.g. graphql's
+   * visit() in a custom DocumentTransform would inherit while still needing
+   * fragments from the registry.)
+   */
+  private readonly _transformedOutputs = new WeakSet<DocumentNode>();
 
   private readonly _queryInfoMap = new Map<string, QueryInfo<TSerialized>>();
   /** All currently known & parsed queries, for identity mapping. */
@@ -341,13 +339,14 @@ export class CacheContext<TSerialized = GraphSnapshot> {
    * any other method in the cache.
    */
   transformDocument(document: DocumentNode): DocumentNode {
-    if (document.hasBeenTransformed || (!this.addTypename && !this.fragments)) return document;
+    if (this._transformedOutputs.has(document) || (!this.addTypename && !this.fragments)) return document;
 
     let transformedDocument = this._transformedDocuments.get(document);
     if (!transformedDocument) {
       transformedDocument = this.fragments ? this.fragments.transform(document) : document;
       if (this.addTypename) transformedDocument = addTypenameToDocument(transformedDocument);
-      if (transformedDocument !== document) transformedDocument.hasBeenTransformed = true;
+      // A document the transforms left unchanged is still the caller's own document.
+      if (transformedDocument !== document) this._transformedOutputs.add(transformedDocument);
       this._transformedDocuments.set(document, transformedDocument);
     }
     return transformedDocument;
@@ -365,7 +364,7 @@ export class CacheContext<TSerialized = GraphSnapshot> {
     // is a more reliable cache key…
     // ApolloClient passes documents it already transformed with transformDocument.
     // Their __typename fields are part of the query as the client sees it.
-    const pretransformed = !!raw.document.hasBeenTransformed;
+    const pretransformed = this._transformedOutputs.has(raw.document);
     const cacheKey = `${operationCacheKey(raw.document, raw.fragmentName)}${pretransformed ? '❖transformed' : ''}`;
     let operationInstances = this._operationMap.get(cacheKey);
     if (!operationInstances) {
