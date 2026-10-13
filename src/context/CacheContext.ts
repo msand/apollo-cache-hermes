@@ -1,7 +1,13 @@
 import { addTypenameToDocument, print } from '@apollo/client/utilities';
 import { invariant } from '@apollo/client/utilities/invariant';
 import isEqual from '@wry/equality';
-import type { FragmentRegistryAPI, PossibleTypesMap, TypePolicies } from '@apollo/client/cache';
+import type {
+  FragmentRegistryAPI,
+  InputObjectsOption,
+  PossibleTypesMap,
+  Scalar,
+  TypePolicies,
+} from '@apollo/client/cache';
 
 import { ApolloTransaction } from '../apollo/Transaction';
 import { CacheSnapshot } from '../CacheSnapshot';
@@ -14,6 +20,7 @@ import { FieldStorage } from '../operations/fieldFunctions';
 
 import { ConsoleTracer } from './ConsoleTracer';
 import { QueryInfo } from './QueryInfo';
+import { ScalarConfig } from './scalars';
 import { Tracer } from './Tracer';
 
 export namespace CacheContext {
@@ -53,6 +60,18 @@ export namespace CacheContext {
    */
   export interface Configuration<TSerialized = GraphSnapshot> {
     typePolicies?: TypePolicies;
+
+    /**
+     * Custom scalar implementations, by scalar type name (like InMemoryCache's
+     * option); fields use them through `scalar` field policies.
+     */
+    scalars?: Record<string, Scalar<any, any>>;
+
+    /**
+     * The scalar types of input object fields, for serializing variables (like
+     * InMemoryCache's option).
+     */
+    inputObjects?: InputObjectsOption;
 
     /**
      * Whether __typename should be injected into nodes in queries.
@@ -212,7 +231,11 @@ export class CacheContext<TSerialized = GraphSnapshot> {
 
   public readonly dirty = new Map<NodeId, Set<string>>();
 
+  /** The type policies (with read functions that parse custom scalar fields). */
   public readonly typePolicies: TypePolicies | undefined;
+
+  /** Custom scalar support. */
+  public readonly scalars: ScalarConfig;
 
   public readonly fragments: FragmentRegistryAPI | undefined;
 
@@ -246,7 +269,8 @@ export class CacheContext<TSerialized = GraphSnapshot> {
     this.tracer = config.tracer || new ConsoleTracer(!!config.verbose, config.logger);
 
     this.addTypename = config.addTypename ?? true;
-    this.typePolicies = config.typePolicies;
+    this.scalars = new ScalarConfig(config.scalars, config.inputObjects, config.typePolicies);
+    this.typePolicies = this.scalars.withScalarReads(config.typePolicies);
     this.fragments = config.fragments;
     if (config.possibleTypes) {
       this.addPossibleTypes(config.possibleTypes);
@@ -389,6 +413,9 @@ export class CacheContext<TSerialized = GraphSnapshot> {
     // is a more reliable cache key…
     // ApolloClient passes documents it already transformed with transformDocument.
     // Their __typename fields are part of the query as the client sees it.
+    // Like InMemoryCache, custom scalar variables are serialized.
+    const variables = this.scalars.serializeVariables(raw.document, raw.variables);
+    if (variables !== raw.variables) raw = { ...raw, variables };
     const pretransformed = this._transformedOutputs.has(raw.document);
     const cacheKey = `${operationCacheKey(raw.document, raw.fragmentName)}${pretransformed ? '❖transformed' : ''}`;
     let operationInstances = this._operationMap.get(cacheKey);

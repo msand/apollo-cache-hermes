@@ -1,6 +1,7 @@
 import type { Cache, Reference, StoreObject } from '@apollo/client/cache';
 import type { FragmentDefinitionNode, InlineFragmentNode } from 'graphql';
 
+import type { ScalarConfig } from './context/scalars';
 import type { QueryResult } from './operations/read';
 import { JsonObject } from './primitive';
 import { NodeId, RawOperation } from './schema';
@@ -27,6 +28,9 @@ export interface Queryable {
 
   /** The fragment registered under `fragmentName`, if any. */
   lookupFragment(fragmentName: string): FragmentDefinitionNode | null;
+
+  /** Custom scalar support. */
+  readonly scalars: ScalarConfig;
 
   /** Whether a read function provides the field. */
   resolvesClientField(typename: string, fieldName: string): boolean;

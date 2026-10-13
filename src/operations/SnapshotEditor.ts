@@ -591,6 +591,11 @@ export class SnapshotEditor<TSerialized> {
         fieldMode = 'replace';
       }
 
+      // Custom scalar values are stored serialized (and parsed when read).
+      if (!node.children) {
+        fieldValue = this._context.scalars.serializeField(typename, schemaName, fieldValue) as JsonValue | undefined;
+      }
+
       // For fields with sub selections, we walk into them; only leaf fields are
       // directly written via _setValue.  This allows us to perform minimal
       // edits to the graph.

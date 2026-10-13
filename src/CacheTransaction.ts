@@ -17,6 +17,7 @@ import type { CacheSnapshot as CacheSnapshotType } from './CacheSnapshot';
 import type { GraphSnapshot, NodeSnapshotMap } from './GraphSnapshot';
 import type { JsonObject, JsonValue } from './primitive';
 import type { CacheContext } from './context';
+import type { ScalarConfig } from './context/scalars';
 import type { OptimisticUpdate } from './OptimisticUpdateQueue';
 import { applyDeltas } from './OptimisticUpdateQueue';
 import type { Queryable } from './Queryable';
@@ -146,8 +147,14 @@ export class CacheTransaction<TSerialized> implements Queryable {
     return this._context.fragments?.lookup(fragmentName) ?? null;
   }
 
+  /** Custom scalar support. */
+  get scalars(): ScalarConfig {
+    return this._context.scalars;
+  }
+
   resolvesClientField(typename: string, fieldName: string): boolean {
-    return !!getReadFunction(this._context.typePolicies, typename, fieldName);
+    // Not the read functions that parse custom scalars.
+    return !!this._context.scalars.ownReadFunction(getReadFunction(this._context.typePolicies, typename, fieldName));
   }
 
   /**

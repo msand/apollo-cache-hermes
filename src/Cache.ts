@@ -7,6 +7,7 @@ import { invariant } from '@apollo/client/utilities/invariant';
 import { CacheSnapshot } from './CacheSnapshot';
 import { ChangedFields, CacheTransaction, TransactionHooks } from './CacheTransaction';
 import { CacheContext } from './context';
+import type { ScalarConfig } from './context/scalars';
 import { GraphSnapshot, NodeSnapshotMap } from './GraphSnapshot';
 import {
   extract,
@@ -161,9 +162,15 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     return fragmentMatches(this._context, fragment, typename);
   }
 
+  /** Custom scalar support. */
+  get scalars(): ScalarConfig {
+    return this._context.scalars;
+  }
+
   /** Whether a read function provides the field (like InMemoryCache#resolvesClientField). */
   resolvesClientField(typename: string, fieldName: string): boolean {
-    return !!getReadFunction(this._context.typePolicies, typename, fieldName);
+    // Not the read functions that parse custom scalars.
+    return !!this._context.scalars.ownReadFunction(getReadFunction(this._context.typePolicies, typename, fieldName));
   }
 
   /** The fragment registered under `fragmentName` (like InMemoryCache#lookupFragment). */

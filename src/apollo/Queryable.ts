@@ -1,6 +1,6 @@
-import type { OperationVariables } from '@apollo/client';
+import type { OperationVariables, TypedDocumentNode } from '@apollo/client';
 import { ApolloCache } from '@apollo/client/cache';
-import type { Cache, Reference, StoreObject } from '@apollo/client/cache';
+import type { Cache, Reference, ScalarType, StoreObject } from '@apollo/client/cache';
 import { isReference } from '@apollo/client/utilities';
 import type { FragmentDefinitionNode, InlineFragmentNode } from 'graphql';
 import type { Unmasked } from '@apollo/client/masking';
@@ -135,6 +135,37 @@ export abstract class ApolloQueryable extends ApolloCache {
    */
   resolvesClientField(typename: string, fieldName: string): boolean {
     return this._queryable.resolvesClientField(typename, fieldName);
+  }
+
+  // Custom scalars (like InMemoryCache's `scalars` option).
+
+  getScalar<TKey extends keyof ApolloCache.Scalars>(key: TKey): ApolloCache.GetScalarType<TKey> | undefined {
+    return this._queryable.scalars.getScalar(key as string) as ApolloCache.GetScalarType<TKey> | undefined;
+  }
+
+  getScalarTypeForField(typename: string, fieldName: string): ScalarType | undefined {
+    return this._queryable.scalars.getScalarTypeForField(typename, fieldName) as ScalarType | undefined;
+  }
+
+  configuresScalars(): boolean {
+    return this._queryable.scalars.configuresScalars();
+  }
+
+  serializeVariables<TVariables extends OperationVariables = OperationVariables>(
+    document: DocumentNode | TypedDocumentNode<any, TVariables>,
+    variables: NoInfer<TVariables>,
+  ): TVariables;
+
+  serializeVariables<TVariables extends OperationVariables = OperationVariables>(
+    document: DocumentNode | TypedDocumentNode<any, TVariables>,
+    variables: NoInfer<TVariables> | undefined,
+  ): TVariables | undefined;
+
+  serializeVariables<TVariables extends OperationVariables = OperationVariables>(
+    document: DocumentNode | TypedDocumentNode<any, TVariables>,
+    variables: NoInfer<TVariables> | undefined,
+  ): TVariables | undefined {
+    return this._queryable.scalars.serializeVariables(document, variables);
   }
 
   transformDocument(doc: DocumentNode): DocumentNode {
