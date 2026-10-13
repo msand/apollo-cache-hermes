@@ -336,10 +336,15 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
     const walkNode = queue[q];
     const { value, parsedMap } = walkNode;
     let { containerId, path } = walkNode;
-    const valueId = identifyStored(context, value, () => {
-      const reference = getSnapshot(containerId)?.outbound?.get(path.join('.'));
-      return reference && getSnapshot(reference.id) ? reference.id : undefined;
-    });
+    // The object read from (e.g. a root object, which may have an id field) is
+    // not identified by its data.
+    const valueId =
+      q === 0
+        ? undefined
+        : identifyStored(context, value, () => {
+            const reference = getSnapshot(containerId)?.outbound?.get(path.join('.'));
+            return reference && getSnapshot(reference.id) ? reference.id : undefined;
+          });
     if (valueId) {
       containerId = valueId;
       path = [];
@@ -637,7 +642,7 @@ export type DanglingFields = WeakMap<JsonObject, Map<string, NodeId>>;
  * dangling references.
  */
 export function isRootId(id: NodeId) {
-  return id === StaticNodeId.QueryRoot || id === StaticNodeId.MutationRoot || id === StaticNodeId.SubscriptionRoot;
+  return schema.isRootNodeId(id);
 }
 
 /** Whether a parsed __typename field was selected by the document itself, not added by addTypenameToDocument. */

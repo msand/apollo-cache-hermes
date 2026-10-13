@@ -26,19 +26,10 @@ import { toNormalizedCacheObject } from '../../../../helpers';
 
 import { defaultNormalizedCacheFactory, HermesWriter, writeQueryToStore } from './helpers';
 
-// Hermes: dataIdFromObject is also called for the written root object, whose id
-// (if any) need not be a string, so this does not assert that id is a string.
-const getIdField = ({ id }: any): string | undefined => (typeof id === 'string' ? id : undefined);
-
-/**
- * Hermes: a written root object that dataIdFromObject identifies is stored as
- * that entity, which ROOT_QUERY references; InMemoryCache stores its fields in
- * ROOT_QUERY itself. Converts an expected InMemoryCache store to that shape.
- */
-function rootAsEntity(id: string, store: Record<string, any>) {
-  const { __typename, ...fields } = store.ROOT_QUERY;
-  return { ...store, ROOT_QUERY: { __typename, __ref: id }, [id]: { ...store[id], ...fields } };
-}
+const getIdField = ({ id }: any): string => {
+  invariant(typeof id === 'string', 'id is not a string');
+  return id;
+};
 
 describe('writing to the store', () => {
   const cacheConfig: CacheContext.Configuration = {
@@ -304,23 +295,20 @@ describe('writing to the store', () => {
       dataIdFromObject: getIdField,
     });
 
-    // Hermes: the root result has an id (see rootAsEntity).
     expect(
       writeQueryToStore({
         writer,
         query,
         result: cloneDeep(result),
       }).toObject(),
-    ).toEqual(
-      rootAsEntity('abcd', {
-        ROOT_QUERY: {
-          __typename: 'Query',
-          ...result,
-          nestedObj: makeReference(result.nestedObj.id),
-        },
-        [result.nestedObj.id]: result.nestedObj,
-      }),
-    );
+    ).toEqual({
+      ROOT_QUERY: {
+        __typename: 'Query',
+        ...result,
+        nestedObj: makeReference(result.nestedObj.id),
+      },
+      [result.nestedObj.id]: result.nestedObj,
+    });
   });
 
   it('properly normalizes a nested object without an ID', () => {
@@ -446,23 +434,20 @@ describe('writing to the store', () => {
       dataIdFromObject: getIdField,
     });
 
-    // Hermes: the root result has an id (see rootAsEntity).
     expect(
       writeQueryToStore({
         writer,
         query,
         result: cloneDeep(result),
       }).toObject(),
-    ).toEqual(
-      rootAsEntity('abcd', {
-        ROOT_QUERY: assign({}, assign({}, omit(result, 'nestedArray')), {
-          __typename: 'Query',
-          nestedArray: result.nestedArray.map((obj: any) => makeReference(obj.id)),
-        }),
-        [result.nestedArray[0].id]: result.nestedArray[0],
-        [result.nestedArray[1].id]: result.nestedArray[1],
+    ).toEqual({
+      ROOT_QUERY: assign({}, assign({}, omit(result, 'nestedArray')), {
+        __typename: 'Query',
+        nestedArray: result.nestedArray.map((obj: any) => makeReference(obj.id)),
       }),
-    );
+      [result.nestedArray[0].id]: result.nestedArray[0],
+      [result.nestedArray[1].id]: result.nestedArray[1],
+    });
   });
 
   it('properly normalizes a nested array with IDs and a null', () => {
@@ -501,22 +486,19 @@ describe('writing to the store', () => {
       dataIdFromObject: getIdField,
     });
 
-    // Hermes: the root result has an id (see rootAsEntity).
     expect(
       writeQueryToStore({
         writer,
         query,
         result: cloneDeep(result),
       }).toObject(),
-    ).toEqual(
-      rootAsEntity('abcd', {
-        ROOT_QUERY: assign({}, assign({}, omit(result, 'nestedArray')), {
-          __typename: 'Query',
-          nestedArray: [makeReference(result.nestedArray[0].id), null],
-        }),
-        [result.nestedArray[0].id]: result.nestedArray[0],
+    ).toEqual({
+      ROOT_QUERY: assign({}, assign({}, omit(result, 'nestedArray')), {
+        __typename: 'Query',
+        nestedArray: [makeReference(result.nestedArray[0].id), null],
       }),
-    );
+      [result.nestedArray[0].id]: result.nestedArray[0],
+    });
   });
 
   it('properly normalizes a nested array without IDs', () => {
@@ -640,15 +622,12 @@ describe('writing to the store', () => {
       result: cloneDeep(result),
     });
 
-    // Hermes: the root result has an id (see rootAsEntity).
-    expect(normalized.toObject()).toEqual(
-      rootAsEntity('abcd', {
-        ROOT_QUERY: {
-          __typename: 'Query',
-          ...result,
-        },
-      }),
-    );
+    expect(normalized.toObject()).toEqual({
+      ROOT_QUERY: {
+        __typename: 'Query',
+        ...result,
+      },
+    });
   });
 
   it('properly normalizes an array of non-objects with null', () => {
@@ -920,22 +899,19 @@ describe('writing to the store', () => {
       result: cloneDeep(result),
     });
 
-    // Hermes: the root result has an id (see rootAsEntity).
-    expect(normalized.toObject()).toEqual(
-      rootAsEntity('a', {
-        ROOT_QUERY: {
-          __typename: 'Query',
-          id: 'a',
-          object1: makeReference('aa'),
-          object2: makeReference('aa'),
-        },
-        aa: {
-          id: 'aa',
-          stringField: 'string',
-          numberField: 1,
-        },
-      }),
-    );
+    expect(normalized.toObject()).toEqual({
+      ROOT_QUERY: {
+        __typename: 'Query',
+        id: 'a',
+        object1: makeReference('aa'),
+        object2: makeReference('aa'),
+      },
+      aa: {
+        id: 'aa',
+        stringField: 'string',
+        numberField: 1,
+      },
+    });
   });
 
   it('properly normalizes an object occurring in different graphql array paths twice', () => {
@@ -995,32 +971,29 @@ describe('writing to the store', () => {
       result: cloneDeep(result),
     });
 
-    // Hermes: the root result has an id (see rootAsEntity).
-    expect(normalized.toObject()).toEqual(
-      rootAsEntity('a', {
-        ROOT_QUERY: {
-          __typename: 'Query',
-          id: 'a',
-          array1: [makeReference('aa')],
-          array2: [makeReference('ab')],
-        },
-        aa: {
-          id: 'aa',
-          stringField: 'string',
-          obj: makeReference('aaa'),
-        },
-        ab: {
-          id: 'ab',
-          stringField: 'string2',
-          obj: makeReference('aaa'),
-        },
-        aaa: {
-          id: 'aaa',
-          stringField: 'string',
-          numberField: 1,
-        },
-      }),
-    );
+    expect(normalized.toObject()).toEqual({
+      ROOT_QUERY: {
+        __typename: 'Query',
+        id: 'a',
+        array1: [makeReference('aa')],
+        array2: [makeReference('ab')],
+      },
+      aa: {
+        id: 'aa',
+        stringField: 'string',
+        obj: makeReference('aaa'),
+      },
+      ab: {
+        id: 'ab',
+        stringField: 'string2',
+        obj: makeReference('aaa'),
+      },
+      aaa: {
+        id: 'aaa',
+        stringField: 'string',
+        numberField: 1,
+      },
+    });
   });
 
   it('properly normalizes an object occurring in the same graphql array path twice', () => {
@@ -1073,32 +1046,29 @@ describe('writing to the store', () => {
       result: cloneDeep(result),
     });
 
-    // Hermes: the root result has an id (see rootAsEntity).
-    expect(normalized.toObject()).toEqual(
-      rootAsEntity('a', {
-        ROOT_QUERY: {
-          __typename: 'Query',
-          id: 'a',
-          array1: [makeReference('aa'), makeReference('ab')],
-        },
-        aa: {
-          id: 'aa',
-          stringField: 'string',
-          obj: makeReference('aaa'),
-        },
-        ab: {
-          id: 'ab',
-          stringField: 'string2',
-          obj: makeReference('aaa'),
-        },
-        // Hermes: later occurrences of an entity in a result are written over earlier ones.
-        aaa: {
-          id: 'aaa',
-          stringField: 'should not be written',
-          numberField: 2,
-        },
-      }),
-    );
+    expect(normalized.toObject()).toEqual({
+      ROOT_QUERY: {
+        __typename: 'Query',
+        id: 'a',
+        array1: [makeReference('aa'), makeReference('ab')],
+      },
+      aa: {
+        id: 'aa',
+        stringField: 'string',
+        obj: makeReference('aaa'),
+      },
+      ab: {
+        id: 'ab',
+        stringField: 'string2',
+        obj: makeReference('aaa'),
+      },
+      // Hermes: later occurrences of an entity in a result are written over earlier ones.
+      aaa: {
+        id: 'aaa',
+        stringField: 'should not be written',
+        numberField: 2,
+      },
+    });
   });
 
   it('merges nodes', () => {
@@ -1147,16 +1117,13 @@ describe('writing to the store', () => {
       result: result2,
     });
 
-    // Hermes: the root result has an id (see rootAsEntity).
-    expect(store2.toObject()).toEqual(
-      rootAsEntity('abcd', {
-        ROOT_QUERY: {
-          __typename: 'Query',
-          ...result,
-          ...result2,
-        },
-      }),
-    );
+    expect(store2.toObject()).toEqual({
+      ROOT_QUERY: {
+        __typename: 'Query',
+        ...result,
+        ...result2,
+      },
+    });
   });
 
   it('properly normalizes a nested object that returns null', () => {

@@ -31,6 +31,18 @@ export enum StaticNodeId {
 }
 
 /**
+ * Whether `id` is the id of a root object (ROOT_QUERY, ROOT_MUTATION or
+ * ROOT_SUBSCRIPTION, whatever their types' names).
+ *
+ * Like InMemoryCache, which writes and reads a root object's fields under its
+ * own id, root objects are never identified as entities by their data (even if
+ * they have an id, or their type has keyFields).
+ */
+export function isRootNodeId(id: string): boolean {
+  return id === StaticNodeId.QueryRoot || id === StaticNodeId.MutationRoot || id === StaticNodeId.SubscriptionRoot;
+}
+
+/**
  * All the information needed to describe a complete GraphQL operation that can
  * be made against the cache (read or written).
  */

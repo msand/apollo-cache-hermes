@@ -25,7 +25,7 @@ import { defaultStreamFieldMergeFn, runStreamAwareMerge, streamInfoOf, usesDefau
 // Ensure typescript doesn't emit (0, fn)(...args)
 const isEqual = equality.equal;
 const { GraphSnapshot } = graphSnapshot;
-const { StaticNodeId } = schema;
+const { StaticNodeId, isRootNodeId } = schema;
 const { InvalidPayloadError, OperationError } = errors;
 const { cloneNodeSnapshot, EntitySnapshot, ParameterizedValueSnapshot } = nodes;
 const {
@@ -393,14 +393,16 @@ export class SnapshotEditor<TSerialized> {
     }
 
     const ref = isReference(payload) ? payload.__ref : undefined;
+    // Root objects are never identified by their data (see isRootNodeId).
+    const isRootObject = path.length === 0 && isRootNodeId(containerId);
     let payloadId =
       ref ??
-      this._identifyPayload(payload, parsed, propMap) ??
+      (isRootObject ? undefined : this._identifyPayload(payload, parsed, propMap)) ??
       // A null value of a parameterized field (whose node is the container) is
       // not the container itself.
       (path.length === 0 && !isRoot && !isNil(payload) ? containerId : undefined);
     const previousId =
-      this._identifyPrevious(previousValue, propMap, containerId, path) ??
+      (isRootObject ? undefined : this._identifyPrevious(previousValue, propMap, containerId, path)) ??
       (path.length === 0 && !isRoot
         ? containerId
         : (ifString(deepGet(this._pathToId[containerId], path)) ?? this._danglingReferenceId(containerId, path)));
@@ -1105,10 +1107,14 @@ export class SnapshotEditor<TSerialized> {
     }
 
     const reference = isReference(payload) ? payload.__ref : null;
+    // Root objects are never identified by their data (see isRootNodeId).
+    const isRootObject = path.length === 0 && isRootNodeId(containerId);
     const payloadId = reference
       ? reference
-      : this._context.entityIdForValue({ ...(previousValue as JsonObject), ...payload });
-    const previousId = this._identifyPrevious(previousValue, undefined, containerId, path);
+      : isRootObject
+        ? undefined
+        : this._context.entityIdForValue({ ...(previousValue as JsonObject), ...payload });
+    const previousId = isRootObject ? undefined : this._identifyPrevious(previousValue, undefined, containerId, path);
 
     // Is this an identity change?
     if (payloadId !== previousId) {
