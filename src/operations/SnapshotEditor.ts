@@ -335,19 +335,11 @@ export class SnapshotEditor<TSerialized> {
 
     // Is this an identity change?
     if (payloadId !== previousId) {
-      // Unless a merge policy replaces (or merges) the value, it is invalid to
-      // transition from a *value* with an id to one without.
+      // Like InMemoryCache, an unidentified value may replace an entity (the
+      // reference is dropped and the value embedded in its place)...
       const replacesEntity = !isNil(payload) && !payloadId;
-      if (replacesEntity && !mode) {
-        const message = `Unsupported transition from an entity to a non-entity value. ${ensureIdConstistencyMsg}`;
-        throw new InvalidPayloadError(message, prefixPath, containerId, path, payload);
-      }
-      // The reverse is also invalid.
+      // ...and an entity may replace an unidentified value.
       if (!isNil(previousValue) && !previousId) {
-        if (!mode) {
-          const message = `Unsupported transition from a non-entity value to an entity. ${ensureIdConstistencyMsg}`;
-          throw new InvalidPayloadError(message, prefixPath, containerId, path, payload);
-        }
         // The replaced value may itself contain references.
         this._removeReferencesWithin(referenceEdits, containerId, path);
       }
