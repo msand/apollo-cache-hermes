@@ -277,7 +277,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
 
     let optimistic = current.baseline;
     if (parts.below.hasUpdates()) {
-      const applied = parts.below.apply(this._context, current.baseline);
+      const applied = parts.below.apply(this._context, current.baseline, this._hooks.isRetained);
       optimistic = applied.snapshot;
       addToSet(this._editedNodeIds, applied.editedNodeIds);
     }
@@ -290,7 +290,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
         addToSet(this._editedNodeIds, replayed.editedNodeIds);
       } else {
         const optimisticQueue = snapshot.optimisticQueue.enqueue(update.id, update.deltas, update.callback);
-        const editor = new SnapshotEditor(this._context, snapshot.optimistic);
+        const editor = new SnapshotEditor(this._context, snapshot.optimistic, this._hooks.isRetained);
         applyDeltas(editor, update.deltas);
         const applied = editor.commit();
         addToSet(this._editedNodeIds, applied.editedNodeIds);
@@ -448,7 +448,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
     const { optimisticQueue } = this._snapshot;
     if (!optimisticQueue.hasUpdates()) return baseline;
 
-    const { snapshot, editedNodeIds } = optimisticQueue.apply(this._context, baseline);
+    const { snapshot, editedNodeIds } = optimisticQueue.apply(this._context, baseline, this._hooks.isRetained);
     addToSet(this._editedNodeIds, editedNodeIds);
 
     return snapshot;
@@ -830,7 +830,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
     const current = this._snapshot;
     graphSnapshot = optimistic ? current.optimistic : current.baseline;
 
-    const editor = new SnapshotEditor(this._context, graphSnapshot);
+    const editor = new SnapshotEditor(this._context, graphSnapshot, this._hooks.isRetained);
     const empty = new Set<string>();
     const seenObjects = new Set<object | null>();
     for (const [mergeId, snapshot] of Object.entries(tempStore)) {
@@ -876,7 +876,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
 
   merge(tempStore: NodeSnapshotMap) {
     const current = this._snapshot;
-    const editor = new SnapshotEditor(this._context, current.baseline);
+    const editor = new SnapshotEditor(this._context, current.baseline, this._hooks.isRetained);
     const empty = new Set<string>();
     const seenObjects = new Set<object | null>();
     for (const [id, snapshot] of Object.entries(tempStore)) {
@@ -981,7 +981,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
       return false;
     }
 
-    const editor = new SnapshotEditor(this._context, graphSnapshot);
+    const editor = new SnapshotEditor(this._context, graphSnapshot, this._hooks.isRetained);
     for (const id of evictedIds) {
       editor.delete(id);
     }

@@ -96,6 +96,9 @@ interface ReferenceEdit {
  */
 type MergeMode = 'replace' | 'merge';
 
+/** Whether a node is retained (see the SnapshotEditor constructor). */
+export type IsRetained = (id: NodeId) => boolean;
+
 // https://github.com/nzakas/eslint-plugin-typescript/issues/69
 export type NodeSnapshotMap = { [Key in NodeId]?: NodeSnapshot };
 
@@ -265,9 +268,10 @@ export class SnapshotEditor<TSerialized> {
     /**
      * Whether a node is retained (e.g. by cache.retain, or as the root of a
      * watch), so that it (and what it references) is kept, like root nodes,
-     * when unreachable reference cycles are removed.
+     * when unreachable reference cycles are removed. (Required, so that no
+     * editor of the cache's snapshots leaves it out by accident.)
      */
-    private _isRetained?: (id: NodeId) => boolean,
+    private _isRetained: IsRetained | undefined,
   ) {}
 
   /**

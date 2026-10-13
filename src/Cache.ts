@@ -191,7 +191,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     const { optimistic, optimisticQueue } = this._snapshot;
     if (optimisticQueue.hasUpdates()) {
       addToSet(editedNodeIds, optimistic.allNodeIds());
-      const applied = optimisticQueue.apply(this._context, migrated.baseline);
+      const applied = optimisticQueue.apply(this._context, migrated.baseline, this._transactionHooks().isRetained);
       addToSet(editedNodeIds, applied.editedNodeIds);
       snapshot = new CacheSnapshot(migrated.baseline, applied.snapshot, optimisticQueue);
     }

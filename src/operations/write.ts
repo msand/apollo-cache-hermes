@@ -1,9 +1,9 @@
 import { CacheContext } from '../context';
 import { GraphSnapshot } from '../GraphSnapshot';
 import { JsonObject } from '../primitive';
-import { NodeId, RawOperation } from '../schema';
+import { RawOperation } from '../schema';
 
-import { EditedSnapshot, SnapshotEditor } from './SnapshotEditor';
+import { EditedSnapshot, IsRetained, SnapshotEditor } from './SnapshotEditor';
 
 /**
  * Merges a payload with an existing graph snapshot, generating a new one.
@@ -17,7 +17,7 @@ export function write<TSerialized>(
   raw: RawOperation,
   payload: JsonObject,
   prune: boolean = false,
-  isRetained?: (id: NodeId) => boolean,
+  isRetained?: IsRetained,
 ): EditedSnapshot<TSerialized> {
   let tracerContext;
   if (context.tracer.writeStart) {
