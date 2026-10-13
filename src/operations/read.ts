@@ -224,8 +224,23 @@ class OverlayWalkNode {
     public readonly containerId: NodeId,
     public readonly parsedMap: ParsedQuery,
     public readonly path: PathPart[],
+    /**
+     * For (unidentified) objects within the result of a read function: the
+     * object as the read function returned it (which, unlike stored data, may
+     * hold References at any depth, and fields under their store field names).
+     */
+    public readonly unnormalized?: JsonObject,
   ) {}
 }
+
+/**
+ * The ids of the entities whose data (copies of it) results hold, where they
+ * were found by following References (e.g. those returned by read functions,
+ * which need not be at the entities' stored paths).
+ */
+const resultEntityIds = new WeakMap<object, NodeId>();
+
+const hasOwn = Object.prototype.hasOwnProperty;
 
 /**
  * Walks a parameterized field map, overlaying values at those paths on top of
@@ -312,18 +327,31 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
     (ref, value, valueIsOlder) => mergeIntoEntity(ref.__ref, value, valueIsOlder),
   );
 
+  // The entities whose data References were resolved to (by data).
+  const resolvedIds = new WeakMap<object, NodeId>();
+  const resolveReference = (ref: Reference) => {
+    const data = getSnapshot(ref.__ref)?.data;
+    if (data !== null && typeof data === 'object') resolvedIds.set(data, ref.__ref);
+    return data;
+  };
+  const isDangling = (value: unknown) => isReference(value) && !getSnapshot(value.__ref) && !isRootId(value.__ref);
+
   // Replaces References (returned by read functions) with the data of the
-  // entities they point to.
-  function resolveReferences(value: any): any {
-    if (isReference(value)) return getSnapshot(value.__ref)?.data;
+  // entities they point to.  Like InMemoryCache, lists of objects (with
+  // `dropDangling`) skip References to missing entities.
+  function resolveReferences(value: any, dropDangling = false): any {
+    if (isReference(value)) return resolveReference(value);
     if (!Array.isArray(value)) return value;
     let resolved = value;
     for (let i = 0; i < value.length; i++) {
-      const item = resolveReferences(value[i]);
+      const item = resolveReferences(value[i], dropDangling);
       if (item !== value[i]) {
         if (resolved === value) resolved = [...value];
         resolved[i] = item;
       }
+    }
+    if (dropDangling && resolved !== value && value.some(isDangling)) {
+      resolved = resolved.filter((_item: unknown, i: number) => !isDangling(value[i]));
     }
     return resolved;
   }
@@ -334,17 +362,18 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
   // Walk breadth-first, so read functions run in the order of the results.
   for (let q = 0; q < queue.length; q++) {
     const walkNode = queue[q];
-    const { value, parsedMap } = walkNode;
+    const { value, parsedMap, unnormalized } = walkNode;
     let { containerId, path } = walkNode;
     // The object read from (e.g. a root object, which may have an id field) is
     // not identified by its data.
     const valueId =
       q === 0
         ? undefined
-        : identifyStored(context, value, () => {
+        : (resultEntityIds.get(value) ??
+          identifyStored(context, value, () => {
             const reference = getSnapshot(containerId)?.outbound?.get(path.join('.'));
             return reference && getSnapshot(reference.id) ? reference.id : undefined;
-          });
+          }));
     if (valueId) {
       containerId = valueId;
       path = [];
@@ -359,10 +388,11 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
     // Read functions are called on a Reference to the entity being walked, or
     // (for unidentified objects) on the stored object itself.
     const containerSnapshot = getSnapshot(containerId);
+    // (Objects within read function results are passed as they were returned.)
     const currentObject: StoreObject | Reference =
       path.length === 0 && !(containerSnapshot instanceof ParameterizedValueSnapshot)
         ? makeRef(containerId)
-        : (withReferences(containerSnapshot, path, deepGet(containerSnapshot?.data, path)) ?? value);
+        : (unnormalized ?? withReferences(containerSnapshot, path, deepGet(containerSnapshot?.data, path)) ?? value);
     const callReadFunction = (
       readFn: FieldReadFunction,
       existing: StoreValue,
@@ -377,11 +407,8 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
         existing,
         fieldFunctions.options(currentObject, fieldName, storeFieldName, args, storageKeys, fieldNodeOf(node)),
       );
-      danglingResult =
-        isReference(readResult) && !getSnapshot(readResult.__ref) && !isRootId(readResult.__ref)
-          ? readResult.__ref
-          : undefined;
-      return resolveReferences(readResult);
+      danglingResult = isDangling(readResult) ? (readResult as Reference).__ref : undefined;
+      return resolveReferences(readResult, !!node.children);
     };
 
     for (const key in parsedMap) {
@@ -411,13 +438,25 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
         query.variables,
       );
 
-      if (storeKey !== undefined) {
+      // The field's value within an object returned by a read function: like
+      // InMemoryCache, under its store field name.
+      const storeFieldName =
+        unnormalized && storeKey !== undefined
+          ? storeFieldNameOf(fieldName, storeKey, node.args as JsonObject | undefined)
+          : undefined;
+      const hasUnnormalizedValue = storeFieldName !== undefined && hasOwn.call(unnormalized, storeFieldName);
+      if (hasUnnormalizedValue && !readFn) {
+        nextPath = [...path, storeFieldName];
+        child = unnormalized![storeFieldName];
+      } else if (storeKey !== undefined) {
         let childId = nodeIdForStoreKey(containerId, [...path, fieldName], storeKey);
         let childSnapshot: Readonly<NodeSnapshot> | undefined = getSnapshot(childId);
 
         if (readFn) {
           dynamicNodeIds.add(childId);
-          const existing = childSnapshot && withReferences(childSnapshot, [], childSnapshot.data);
+          const existing = hasUnnormalizedValue
+            ? unnormalized![storeFieldName]
+            : childSnapshot && withReferences(childSnapshot, [], childSnapshot.data);
           child = callReadFunction(readFn, existing, fieldName, node, storeKey);
           if (danglingResult !== undefined) {
             markDangling(value, key, danglingResult);
@@ -454,9 +493,9 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
         nextPath = [];
       } else {
         nextPath = [...path, fieldName];
-        child = value[fieldName];
+        child = unnormalized ? unnormalized[fieldName] : value[fieldName];
         if (readFn) {
-          const existing = withReferences(containerSnapshot, nextPath, child);
+          const existing = unnormalized ? child : withReferences(containerSnapshot, nextPath, child);
           child = callReadFunction(readFn, existing, fieldName, node, storeKey);
           if (danglingResult !== undefined) {
             markDangling(value, key, danglingResult);
@@ -465,14 +504,19 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
         }
       }
 
+      // Whether the value is (within) one returned by a read function.
+      let childUnnormalized = !!readFn || !!unnormalized;
       const isRef = isReference(child);
       if (isRef) {
-        const target = getSnapshot(child.__ref);
-        if (!target && !isRootId(child.__ref)) {
+        if (isDangling(child)) {
           markDangling(value, key, child.__ref);
           continue;
         }
-        child = target?.data;
+        child = resolveReference(child);
+        childUnnormalized = false;
+      } else if (unnormalized && !readFn && node.children && Array.isArray(child)) {
+        // Lists within read function results may hold References too.
+        child = resolveReferences(child, true);
       } else if (child === undefined) {
         const reference = getSnapshot(nextContainerId)?.outbound?.get(nextPath.join('.'));
         if (reference && !getSnapshot(reference.id) && !isRootId(reference.id)) {
@@ -497,14 +541,28 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
 
       // Have we reached a leaf (either in the query, or in the cache)?
       if (hasPolicy || isRef || _shouldWalkChildren(child, node)) {
+        const original = child;
         child = _recursivelyWrapValue(child, context);
         const allChildValues = _flattenGraphQLObject(child, nextPath);
         // Only the child selections of fragments that match the type apply.
         const children = childrenForType(context, node, typeName) ?? {};
+        // (Wrapping copies objects, keeping the structure of lists.)
+        const originals = _flattenGraphQLObject(original as UnknownGraphQLObject, nextPath);
 
         for (let i = 0; i < allChildValues.length; i++) {
           const item = allChildValues[i];
-          queue.push(new OverlayWalkNode(item.value, nextContainerId, children, item.path));
+          const originalItem = originals[i]?.value;
+          const entityId = isObject(originalItem) ? resolvedIds.get(originalItem) : undefined;
+          if (entityId !== undefined) resultEntityIds.set(item.value, entityId);
+          queue.push(
+            new OverlayWalkNode(
+              item.value,
+              nextContainerId,
+              children,
+              item.path,
+              childUnnormalized && entityId === undefined && isObject(originalItem) ? originalItem : undefined,
+            ),
+          );
         }
       }
 
@@ -881,7 +939,7 @@ export function _visitSelection<TSerialized>(
     // Entering an entity makes it the container of the fields below. Values
     // returned by read functions need not be at their stored path, so the
     // stored reference is only a fallback.
-    let entityId = identifyStored(context, value);
+    let entityId = resultEntityIds.get(value) ?? identifyStored(context, value);
     if (entityId === undefined && snapshot) {
       const reference = getOutbound(containerId, containerPath);
       if (reference && getNode(reference.id)) entityId = reference.id;
