@@ -1,5 +1,6 @@
 import { ApolloCache, Cache, Reference, Unmasked, makeReference } from '@apollo/client';
-import { removeDirectivesFromDocument } from '@apollo/client/utilities';
+import { removeDirectivesFromDocument, stringifyForDisplay } from '@apollo/client/utilities';
+import { InvariantError } from '@apollo/client/utilities/globals';
 
 import { UnsatisfiedCacheError } from '../errors';
 import { JsonObject } from '../primitive';
@@ -101,10 +102,15 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
   writeFragment<TData = any, TVariables = any>(
     options: Cache.WriteFragmentOptions<TData, TVariables>,
   ): Reference | undefined {
+    const id = options.id ?? this.identify(options.data as any);
+    // Like InMemoryCache.
+    if (typeof id !== 'string') {
+      throw new InvariantError(`Could not identify object ${stringifyForDisplay(options.data, 2)}`);
+    }
     // TODO: Support nested fragments.
     const rawOperation = buildRawOperationFromFragment(
       options.fragment,
-      options.id ?? this.identify(options.data as any)!,
+      id,
       options.variables as any,
       options.fragmentName,
     );

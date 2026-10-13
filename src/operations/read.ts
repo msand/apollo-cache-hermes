@@ -272,9 +272,10 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
     return newSnapshot;
   };
 
-  const mergeIntoEntity = (entityId: NodeId, value: StoreObject) => {
+  const mergeIntoEntity = (entityId: NodeId, value: StoreObject, valueIsOlder = false) => {
     const nodeSnapshot = ensureNewSnapshot(entityId);
-    nodeSnapshot.data = { ...(nodeSnapshot.data as {}), ...value } as JsonObject;
+    const data = nodeSnapshot.data as {};
+    nodeSnapshot.data = (valueIsOlder ? { ...value, ...data } : { ...data, ...value }) as JsonObject;
   };
 
   const fieldFunctions = new FieldFunctions(
@@ -288,7 +289,7 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
       if (entityId && mergeIntoStore) mergeIntoEntity(entityId, value as StoreObject);
       return entityId ? makeRef(entityId) : undefined;
     },
-    (ref, value) => mergeIntoEntity(ref.__ref, value),
+    (ref, value, valueIsOlder) => mergeIntoEntity(ref.__ref, value, valueIsOlder),
   );
 
   // Replaces References (returned by read functions) with the data of the

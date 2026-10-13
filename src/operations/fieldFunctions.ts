@@ -53,7 +53,7 @@ export function storageFieldName(fieldName: string, args?: JsonObject | null) {
  */
 export function makeMergeObjects(
   getTypename: (value: ObjectOrReference) => unknown,
-  mergeIntoEntity: (ref: Reference, value: StoreObject) => void,
+  mergeIntoEntity: (ref: Reference, value: StoreObject, valueIsOlder?: boolean) => void,
 ) {
   return function mergeObjects<T extends StoreObject | Reference>(existing: T, incoming: T): T {
     if (Array.isArray(existing) || Array.isArray(incoming)) {
@@ -70,7 +70,8 @@ export function makeMergeObjects(
         return existing;
       }
       if (!isReference(existing) && isReference(incoming)) {
-        mergeIntoEntity(incoming, existing as StoreObject);
+        // The entity's own fields take precedence over the existing object's.
+        mergeIntoEntity(incoming, existing as StoreObject, true);
         return incoming;
       }
       if (!isReference(existing) && !isReference(incoming)) {
@@ -159,7 +160,7 @@ export class FieldFunctions<TSerialized> {
     private readonly _getNodeSnapshot: (id: NodeId) => Readonly<NodeSnapshot> | undefined,
     private readonly _variables: JsonObject | undefined,
     readonly toReference: ToReference,
-    mergeIntoEntity: (ref: Reference, value: StoreObject) => void,
+    mergeIntoEntity: (ref: Reference, value: StoreObject, valueIsOlder?: boolean) => void,
   ) {
     this.mergeObjects = makeMergeObjects(value => this.getFieldValue(value, '__typename'), mergeIntoEntity);
   }

@@ -1,4 +1,5 @@
-import { addTypenameToDocument } from '@apollo/client/utilities';
+import { addTypenameToDocument, print } from '@apollo/client/utilities';
+import { invariant } from '@apollo/client/utilities/globals';
 import isEqual from '@wry/equality';
 import { TypePolicies } from '@apollo/client';
 import type { FragmentRegistryAPI, PossibleTypesMap } from '@apollo/client/cache';
@@ -216,6 +217,11 @@ export class CacheContext<TSerialized = GraphSnapshot> {
   /** possibleTypes subtypes that are regular expressions, by their source. */
   private readonly _fuzzySubtypes = new Map<string, RegExp>();
 
+  /** Whether possibleTypes has (fuzzy) regular expression subtypes. */
+  get hasFuzzySubtypes(): boolean {
+    return this._fuzzySubtypes.size > 0;
+  }
+
   /** The options.storage objects of read and merge functions. */
   public readonly fieldStorage = new FieldStorage();
 
@@ -269,7 +275,11 @@ export class CacheContext<TSerialized = GraphSnapshot> {
    * apply to objects of unknown type.  When writing, pass `hasValue` (whether
    * the payload has a value for the field) to also consider fuzzy subtypes.
    */
-  conditionsMatch(conditions: readonly SelectionCondition[] | undefined, typename: unknown, hasValue?: boolean) {
+  conditionsMatch(
+    conditions: readonly SelectionCondition[] | undefined,
+    typename: unknown,
+    hasValue?: boolean | (() => boolean),
+  ) {
     if (!conditions || typeof typename !== 'string') return true;
     return conditions.some(
       ({ typeConditions }) =>
@@ -282,9 +292,11 @@ export class CacheContext<TSerialized = GraphSnapshot> {
    * of type `typename` (mirroring InMemoryCache's policies.fragmentMatches).
    *
    * Fuzzy (regular expression) subtypes are only considered when
-   * `checkFuzzySubtypes` is set; positive matches are remembered.
+   * `checkFuzzySubtypes` is set (or, as a function, returns true, like
+   * InMemoryCache's check that the result has the fragment's fields); positive
+   * matches are remembered.
    */
-  fragmentMatches(supertype: string, typename: string, checkFuzzySubtypes?: boolean): boolean {
+  fragmentMatches(supertype: string, typename: string, checkFuzzySubtypes?: boolean | (() => boolean)): boolean {
     // Common case: the type condition and __typename are the same.
     if (typename === supertype) return true;
     if (!this._supertypeMap.has(supertype)) return false;
@@ -299,10 +311,13 @@ export class CacheContext<TSerialized = GraphSnapshot> {
     };
 
     let needToCheckFuzzySubtypes = !!checkFuzzySubtypes && this._fuzzySubtypes.size > 0;
+    let checkingFuzzySubtypes = false;
     // Note that workQueue can grow while we're iterating over it.
     for (let i = 0; i < workQueue.length; ++i) {
       const supertypeSet = workQueue[i];
       if (supertypeSet.has(supertype)) {
+        // Like InMemoryCache, report subtypes inferred from fuzzy possibleTypes.
+        if (checkingFuzzySubtypes) invariant.warn('Inferring subtype %s of supertype %s', typename, supertype);
         // Record positive results for faster future lookup.
         typenameSupertypeSet.add(supertype);
         return true;
@@ -310,8 +325,13 @@ export class CacheContext<TSerialized = GraphSnapshot> {
       supertypeSet.forEach(maybeEnqueue);
 
       // Check fuzzy subtypes only after exhausting all non-fuzzy subtypes.
-      if (needToCheckFuzzySubtypes && i === workQueue.length - 1) {
+      if (
+        needToCheckFuzzySubtypes &&
+        i === workQueue.length - 1 &&
+        (typeof checkFuzzySubtypes !== 'function' || checkFuzzySubtypes())
+      ) {
         needToCheckFuzzySubtypes = false;
+        checkingFuzzySubtypes = true;
         this._fuzzySubtypes.forEach((regExp, fuzzyString) => {
           const match = typename.match(regExp);
           if (match && match[0] === typename) {
@@ -485,7 +505,16 @@ const TypeOrFieldNameRegExp = /^[_a-z][_0-9a-z]*/i;
 
 export function operationCacheKey(document: DocumentNode, fragmentName?: string) {
   if (fragmentName) {
-    return `${fragmentName}❖${document.loc!.source.body}`;
+    return `${fragmentName}❖${documentSource(document)}`;
   }
-  return document.loc!.source.body;
+  return documentSource(document);
+}
+
+// Documents built without a parser (e.g. by hand) have no location.
+const printedDocuments = new WeakMap<DocumentNode, string>();
+function documentSource(document: DocumentNode): string {
+  if (document.loc) return document.loc.source.body;
+  let printed = printedDocuments.get(document);
+  if (printed === undefined) printedDocuments.set(document, (printed = print(document)));
+  return printed;
 }

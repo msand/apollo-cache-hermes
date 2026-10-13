@@ -116,6 +116,19 @@ function getVisibleProxy(
 }
 
 /**
+ * Like getVisibleProxy, for a payload (keyed by response names): a field that
+ * is selected under an alias is read from that alias, even if the payload
+ * also has a key of the field's name (like InMemoryCache, so that a field
+ * aliased as __typename or id cannot change which entity is written).
+ */
+function getPayloadProxy(value: JsonValue | undefined | null, map: { [prop: string]: string } | undefined) {
+  if (value == null || typeof value !== 'object' || !map) return getVisibleProxy(value, map);
+  return new Proxy(value, {
+    get: (target, p: string) => (hasOwn.call(map, p) ? target[map[p]] : target[p]),
+  });
+}
+
+/**
  * Builds a set of changes to apply on top of an existing `GraphSnapshot`.
  *
  * Performs the minimal set of edits to generate new immutable versions of each
@@ -260,8 +273,16 @@ export class SnapshotEditor<TSerialized> {
 
     const typePolicy: TypePolicy | undefined =
       typeof typename === 'string' ? this._context.typePolicies?.[typename] : undefined;
-    if (typeof typePolicy?.merge === 'function') {
-      payload = typePolicy.merge(previousValue, payload, {} as any) as JsonObject;
+    // Values of fields with merge functions (which also apply their type's merge
+    // function) have been merged already; like InMemoryCache, writing an entity
+    // itself does not apply its type's merge function.
+    if (typeof typePolicy?.merge === 'function' && mode !== 'replace' && path.length) {
+      const fieldName = String([...prefixPath, ...path].filter(part => typeof part === 'string').pop() ?? '');
+      payload = typePolicy.merge(
+        withReferences(this._getNodeSnapshot(containerId), path, previousValue),
+        payload,
+        this._fieldFunctions().options(undefined, fieldName, fieldName, null, [containerId, ...path, fieldName]),
+      ) as JsonObject;
     }
 
     // Recurse into arrays.
@@ -304,7 +325,7 @@ export class SnapshotEditor<TSerialized> {
     const ref = isReference(payload) ? payload.__ref : undefined;
     let payloadId =
       ref ??
-      this._context.entityIdForValue(getVisibleProxy(payload, propMap)) ??
+      this._context.entityIdForValue(getPayloadProxy(payload, propMap)) ??
       (path.length === 0 && !isRoot ? containerId : undefined);
     const previousId =
       this._context.entityIdForValue(getVisibleProxy(previousValue, propMap)) ??
@@ -409,10 +430,8 @@ export class SnapshotEditor<TSerialized> {
       const node = parsed[payloadName];
       let fieldValue = deepGet(payload, [payloadName]) as JsonValue | undefined;
       // Like InMemoryCache, skip fields of fragments that don't match the type.
-      if (
-        node.conditions &&
-        !this._context.conditionsMatch(node.conditions, fragmentTypename, fieldValue !== undefined)
-      ) {
+      // (Fuzzy subtypes were inferred from the whole result by checkWrite.)
+      if (node.conditions && !this._context.conditionsMatch(node.conditions, fragmentTypename)) {
         continue;
       }
       // Having a schemaName on the node implies that payloadName is an alias.
@@ -616,7 +635,7 @@ export class SnapshotEditor<TSerialized> {
     }
     if (!isObject(value) || isReference(value)) return value;
 
-    const entityId = this._context.entityIdForValue(getVisibleProxy(value, propMap));
+    const entityId = this._context.entityIdForValue(getPayloadProxy(value, propMap));
     if (entityId) {
       this._mergeSubgraph(referenceEdits, warnings, entityId, prefixPath, [], parsed, value, prune, propMap);
       return makeRef(entityId);
@@ -684,16 +703,16 @@ export class SnapshotEditor<TSerialized> {
         if (entityId && mergeIntoStore) this._mergeIntoEntity(entityId, value as StoreObject);
         return entityId ? makeRef(entityId) : undefined;
       },
-      (ref, value) => this._mergeIntoEntity(ref.__ref, value),
+      (ref, value, valueIsOlder) => this._mergeIntoEntity(ref.__ref, value, valueIsOlder),
     ));
   }
 
   /**
    * Shallowly merges `value` into the data of an entity (creating it if needed).
    */
-  private _mergeIntoEntity(entityId: NodeId, value: StoreObject) {
-    const data = this._getNodeData(entityId);
-    this._setValue(entityId, [], { ...(isObject(data) ? data : {}), ...value });
+  private _mergeIntoEntity(entityId: NodeId, value: StoreObject, valueIsOlder = false) {
+    const data = isObject(this._getNodeData(entityId)) ? (this._getNodeData(entityId) as JsonObject) : {};
+    this._setValue(entityId, [], valueIsOlder ? { ...value, ...data } : { ...data, ...value });
   }
 
   /**
