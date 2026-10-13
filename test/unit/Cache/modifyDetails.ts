@@ -129,4 +129,68 @@ describe(`cache.modify details`, () => {
       expect(reference).to.deep.eq({ __ref: 'Book:1' });
     });
   }
+
+  describe(`readField of a field stored under arguments`, () => {
+    const query = gql`
+      {
+        feed(type: "news") {
+          id
+        }
+        other
+      }
+    `;
+    const data = { feed: [{ __typename: 'P', id: 1 }], other: 1 };
+
+    for (const [name, Cache] of Object.entries(caches)) {
+      it(`reads the variant the arguments select, in modifiers (${name})`, () => {
+        const cache = new Cache({ typePolicies: { Query: { fields: { feed: { keyArgs: ['type'] } } } } });
+        cache.writeQuery({ query, data });
+        const read: Record<string, unknown> = {};
+        cache.modify({
+          fields: {
+            other(value, { readField }) {
+              read.withoutArgs = readField('feed');
+              // (InMemoryCache's modifiers read options without `from` from nothing.)
+              const from = { __ref: 'ROOT_QUERY' };
+              read.otherArgs = readField({ fieldName: 'feed', args: { type: 'sports' }, from });
+              read.withArgs = (readField({ fieldName: 'feed', args: { type: 'news' }, from }) as unknown[] | undefined)
+                ?.length;
+              return value;
+            },
+          },
+        });
+        expect(read).to.deep.eq({ withoutArgs: undefined, otherArgs: undefined, withArgs: 1 });
+      });
+
+      it(`reads the variant the arguments select, in read functions (${name})`, () => {
+        const read: Record<string, unknown> = {};
+        const cache = new Cache({
+          typePolicies: {
+            Query: {
+              fields: {
+                feed: { keyArgs: ['type'] },
+                probe: {
+                  read(_existing, { readField }) {
+                    read.withoutArgs = readField('feed');
+                    read.withArgs = (readField({ fieldName: 'feed', args: { type: 'news' } }) as unknown[] | undefined)
+                      ?.length;
+                    return 1;
+                  },
+                },
+              },
+            },
+          },
+        });
+        cache.writeQuery({ query, data });
+        cache.readQuery({
+          query: gql`
+            {
+              probe
+            }
+          `,
+        });
+        expect(read).to.deep.eq({ withoutArgs: undefined, withArgs: 1 });
+      });
+    }
+  });
 });

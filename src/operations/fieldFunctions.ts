@@ -210,12 +210,8 @@ export class FieldFunctions<TSerialized> {
     }
     const out = snapshot.outbound?.get(fieldName);
     if (out) return makeReference(out.id);
-    // Fields with arguments read without them resolve to (one of) their values.
-    const parameterized = snapshot.parameterized?.get(fieldName)?.[0];
-    if (parameterized) {
-      const fieldSnapshot = this._getNodeSnapshot(parameterized.id);
-      return fieldSnapshot && withReferences(fieldSnapshot, [], fieldSnapshot.data);
-    }
+    // (Like InMemoryCache, a field stored only under arguments other than
+    // `args` has no value.)
     if (fieldName === '__typename') return this._context.rootTypename(id);
     return undefined;
   }

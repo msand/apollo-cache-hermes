@@ -10,7 +10,7 @@ import type {
 import { makeReference } from '@apollo/client/utilities/internal';
 import { invariant } from '@apollo/client/utilities/invariant';
 import * as equality from '@wry/equality';
-import type { FragmentDefinitionNode, InlineFragmentNode } from 'graphql';
+import type { FieldNode, FragmentDefinitionNode, InlineFragmentNode } from 'graphql';
 
 import type { ChangeId, NodeId, OperationInstance, CacheDelta, RawOperation } from './schema';
 import type { CacheSnapshot as CacheSnapshotType } from './CacheSnapshot';
@@ -545,8 +545,22 @@ export class CacheTransaction<TSerialized> implements Queryable {
       return [];
     }
 
-    function readOneFromSnapshot(obj: Readonly<NodeSnapshot>, key: string) {
+    // Reads the field `key` (with `args`, which select its variant like
+    // InMemoryCache's store field names do) of the node `nodeId`.
+    const readOneFromSnapshot = (
+      nodeId: NodeId,
+      obj: Readonly<NodeSnapshot>,
+      key: string,
+      args: JsonObject | null | undefined,
+      field: FieldNode | null | undefined,
+    ) => {
       const data = obj.data;
+      const typename = storedTypename(this._context.policies, nodeId, data);
+      const storeKey = this._context.storeFieldNames.storeKey(typename, key, args, field, undefined);
+      if (storeKey !== undefined) {
+        const fieldId = nodeIdForStoreKey(nodeId, [key], storeKey);
+        return (tempStore[fieldId] ?? currentGraph().getNodeSnapshot(fieldId))?.data;
+      }
       const datum = data && typeof data === 'object' && key in data ? (data as JsonObject)[key] : undefined;
       if (datum != null) {
         return datum;
@@ -555,15 +569,11 @@ export class CacheTransaction<TSerialized> implements Queryable {
       if (out) {
         return currentGraph().getNodeData(out.id);
       }
-      const ref = obj.parameterized?.get(key)?.[0];
-      if (ref) {
-        return currentGraph().getNodeData(ref.id);
-      }
-      if (key === '__typename' && rootTypename) {
-        return rootTypename;
+      if (key === '__typename') {
+        return datum ?? typename;
       }
       return datum;
-    }
+    };
 
     const tempStore: NodeSnapshotMap = Object.create(null);
 
@@ -571,11 +581,18 @@ export class CacheTransaction<TSerialized> implements Queryable {
       fieldNameOrOptions: string | ReadFieldOptions,
       from: StoreObject | Reference = (tempStore[id]?.data ?? node.data) as StoreObject,
     ) => {
+      let args: JsonObject | null | undefined;
+      let field: FieldNode | null | undefined;
+      let fieldName: string | undefined;
       if (typeof fieldNameOrOptions === 'object') {
         from = fieldNameOrOptions.from ?? from;
-        fieldNameOrOptions = fieldNameOrOptions.fieldName;
+        args = fieldNameOrOptions.args as JsonObject | undefined;
+        field = fieldNameOrOptions.field;
+        fieldName = field?.name.value ?? fieldNameOrOptions.fieldName;
+      } else {
+        fieldName = fieldNameOrOptions;
       }
-      if (!from) {
+      if (!from || !fieldName) {
         return undefined;
       }
 
@@ -585,9 +602,9 @@ export class CacheTransaction<TSerialized> implements Queryable {
         if (!obj) {
           return undefined;
         }
-        return readOneFromSnapshot(obj, fieldNameOrOptions);
+        return readOneFromSnapshot(ref, obj, fieldName, args, field);
       } else {
-        return from[fieldNameOrOptions];
+        return from[fieldName];
       }
     };
 
