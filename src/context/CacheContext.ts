@@ -515,10 +515,11 @@ export function operationCacheKey(document: DocumentNode, fragmentName?: string)
   return documentSource(document);
 }
 
-// Documents built without a parser (e.g. by hand) have no location.
+// Documents are keyed by their printed form, not by loc.source.body: documents built by visit()
+// (document transforms, directive removal) keep the original document's loc, so its source body
+// would make a transformed document share the original's parsed operation.
 const printedDocuments = new WeakMap<DocumentNode, string>();
 function documentSource(document: DocumentNode): string {
-  if (document.loc) return document.loc.source.body;
   let printed = printedDocuments.get(document);
   if (printed === undefined) printedDocuments.set(document, (printed = print(document)));
   return printed;
