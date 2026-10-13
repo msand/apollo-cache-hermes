@@ -3,11 +3,12 @@ import * as React from 'react';
 import gql from 'graphql-tag';
 import { DocumentNode } from 'graphql';
 import { ApolloClient, ApolloProvider } from '@apollo/client';
+import { TypedDocumentNode } from '@apollo/client/core';
+import { getApolloContext, ApolloContextValue } from '@apollo/client/react/context';
+import { getDataFromTree } from '@apollo/client/react/ssr';
+import { itAsync, mockSingleLink } from '@apollo/client/testing';
+import { Query } from '@apollo/client/react/components/Query';
 
-import { getApolloContext, ApolloContextValue } from '../../../context';
-import { getDataFromTree } from '../../../ssr';
-import { itAsync, mockSingleLink } from '../../../../testing';
-import { Query } from '../../Query';
 import { Hermes } from '../../../../../../src';
 
 describe('SSR', () => {
@@ -31,7 +32,7 @@ describe('SSR', () => {
     });
 
     it('should run through all of the queries (also defined via Query component) that want SSR', () => {
-      const query = gql`
+      const query: TypedDocumentNode<Data> = gql`
         {
           currentUser {
             firstName
@@ -57,9 +58,7 @@ describe('SSR', () => {
 
       const WrappedElement = () => (
         <Query query={query}>
-          {({ data, loading }: { data: Data; loading: boolean }) => (
-            <div>{loading || !data ? 'loading' : data.currentUser!.firstName}</div>
-          )}
+          {({ data, loading }) => <div>{loading || !data ? 'loading' : data.currentUser!.firstName}</div>}
         </Query>
       );
 

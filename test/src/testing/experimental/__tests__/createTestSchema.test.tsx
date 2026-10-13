@@ -4,15 +4,19 @@ import userEvent from '@testing-library/user-event';
 import { act, screen } from '@testing-library/react';
 import { FallbackProps, ErrorBoundary as ReactErrorBoundary } from 'react-error-boundary';
 import { ApolloClient } from '@apollo/client';
+import { ApolloError, gql } from '@apollo/client/core';
+import type { TypedDocumentNode } from '@apollo/client/core';
+import { spyOnConsole, createClientWrapper } from '@apollo/client/testing/internal';
+import { createTestSchema } from '@apollo/client/testing/experimental/createTestSchema';
+import type { UseSuspenseQueryResult } from '@apollo/client/react';
+import { useMutation, useSuspenseQuery } from '@apollo/client/react';
+import { createSchemaFetch } from '@apollo/client/testing/experimental/createSchemaFetch';
+import { InvariantError } from 'ts-invariant';
+import { RenderStream, createRenderStream, disableActEnvironment } from '@testing-library/react-render-stream';
 
-import { ApolloError, gql } from '../../../core/index';
-import type { TypedDocumentNode } from '../../../core/index';
-import { Profiler, createProfiler, renderWithClient, spyOnConsole } from '../../internal/index';
-import { createTestSchema } from '../createTestSchema';
-import type { UseSuspenseQueryResult } from '../../../react/index';
-import { useMutation, useSuspenseQuery } from '../../../react/index';
-import { createSchemaFetch } from '../createSchemaFetch';
 import { Hermes } from '../../../../../src';
+
+const IS_REACT_19 = React.version.startsWith('19');
 
 const typeDefs = /* GraphQL */ `
   type User {
@@ -77,7 +81,7 @@ const schemaWithTypeDefs = buildSchema(typeDefs);
 const uri = 'https://localhost:3000/graphql';
 
 function createDefaultProfiler<TData = unknown>() {
-  return createProfiler({
+  return createRenderStream({
     initialSnapshot: {
       result: null as UseSuspenseQueryResult<TData> | null,
     },
@@ -85,7 +89,7 @@ function createDefaultProfiler<TData = unknown>() {
 }
 
 function createErrorProfiler<TData = unknown>() {
-  return createProfiler({
+  return createRenderStream({
     initialSnapshot: {
       error: null as Error | null,
       result: null as UseSuspenseQueryResult<TData> | null,
@@ -93,9 +97,9 @@ function createErrorProfiler<TData = unknown>() {
   });
 }
 
-function createTrackedErrorComponents<Snapshot extends { error: Error | null }>(Profiler: Profiler<Snapshot>) {
+function createTrackedErrorComponents<Snapshot extends { error: Error | null }>(renderStream: RenderStream<Snapshot>) {
   function ErrorFallback({ error }: FallbackProps) {
-    Profiler.mergeSnapshot({ error } as Partial<Snapshot>);
+    renderStream.mergeSnapshot({ error } as Partial<Snapshot>);
 
     return <div>Error</div>;
   }
@@ -154,7 +158,8 @@ describe('schema proxy', () => {
   });
 
   it('mocks scalars and resolvers', async () => {
-    const Profiler = createDefaultProfiler<ViewerQueryData>();
+    using _disabledAct = disableActEnvironment();
+    const renderStream = createDefaultProfiler<ViewerQueryData>();
 
     using _fetch = createSchemaFetch(schema).mockGlobal();
 
@@ -193,23 +198,22 @@ describe('schema proxy', () => {
     const Child = () => {
       const result = useSuspenseQuery(query);
 
-      Profiler.mergeSnapshot({
+      renderStream.mergeSnapshot({
         result,
       });
 
       return <div>Hello</div>;
     };
 
-    renderWithClient(<App />, {
-      client,
-      wrapper: Profiler,
+    renderStream.render(<App />, {
+      wrapper: createClientWrapper(client),
     });
 
     // initial suspended render
-    await Profiler.takeRender();
+    await renderStream.takeRender();
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result?.data).toEqual({
         viewer: {
@@ -242,7 +246,8 @@ describe('schema proxy', () => {
       },
     });
 
-    const Profiler = createDefaultProfiler<ViewerQueryData>();
+    using _disabledAct = disableActEnvironment();
+    const renderStream = createDefaultProfiler<ViewerQueryData>();
 
     using _fetch = createSchemaFetch(forkedSchema).mockGlobal();
 
@@ -281,23 +286,22 @@ describe('schema proxy', () => {
     const Child = () => {
       const result = useSuspenseQuery(query);
 
-      Profiler.mergeSnapshot({
+      renderStream.mergeSnapshot({
         result,
       } as Partial<{}>);
 
       return <div>Hello</div>;
     };
 
-    renderWithClient(<App />, {
-      client,
-      wrapper: Profiler,
+    renderStream.render(<App />, {
+      wrapper: createClientWrapper(client),
     });
 
     // initial suspended render
-    await Profiler.takeRender();
+    await renderStream.takeRender();
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result?.data).toEqual({
         viewer: {
@@ -320,7 +324,8 @@ describe('schema proxy', () => {
   });
 
   it('schema.fork does not pollute the original schema', async () => {
-    const Profiler = createDefaultProfiler<ViewerQueryData>();
+    using _disabledAct = disableActEnvironment();
+    const renderStream = createDefaultProfiler<ViewerQueryData>();
 
     schema.fork({
       resolvers: {
@@ -372,23 +377,22 @@ describe('schema proxy', () => {
     const Child = () => {
       const result = useSuspenseQuery(query);
 
-      Profiler.mergeSnapshot({
+      renderStream.mergeSnapshot({
         result,
       } as Partial<{}>);
 
       return <div>Hello</div>;
     };
 
-    renderWithClient(<App />, {
-      client,
-      wrapper: Profiler,
+    renderStream.render(<App />, {
+      wrapper: createClientWrapper(client),
     });
 
     // initial suspended render
-    await Profiler.takeRender();
+    await renderStream.takeRender();
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result?.data).toEqual({
         viewer: {
@@ -423,7 +427,8 @@ describe('schema proxy', () => {
       },
     });
 
-    const Profiler = createDefaultProfiler<ViewerQueryData>();
+    using _disabledAct = disableActEnvironment();
+    const renderStream = createDefaultProfiler<ViewerQueryData>();
 
     using _fetch = createSchemaFetch(forkedSchema).mockGlobal();
 
@@ -462,23 +467,22 @@ describe('schema proxy', () => {
     const Child = () => {
       const result = useSuspenseQuery(query);
 
-      Profiler.mergeSnapshot({
+      renderStream.mergeSnapshot({
         result,
       } as Partial<{}>);
 
       return <div>Hello</div>;
     };
 
-    renderWithClient(<App />, {
-      client,
-      wrapper: Profiler,
+    renderStream.render(<App />, {
+      wrapper: createClientWrapper(client),
     });
 
     // initial suspended render
-    await Profiler.takeRender();
+    await renderStream.takeRender();
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result?.data).toEqual({
         viewer: {
@@ -540,7 +544,8 @@ describe('schema proxy', () => {
       },
     });
 
-    const Profiler = createDefaultProfiler<ViewerQueryData>();
+    using _disabledAct = disableActEnvironment();
+    const renderStream = createDefaultProfiler<ViewerQueryData>();
 
     using _fetch = createSchemaFetch(forkedSchema).mockGlobal();
 
@@ -574,7 +579,7 @@ describe('schema proxy', () => {
       const result = useSuspenseQuery(query);
       const [changeViewerName] = useMutation(mutation);
 
-      Profiler.mergeSnapshot({
+      renderStream.mergeSnapshot({
         result,
       } as Partial<{}>);
 
@@ -588,16 +593,15 @@ describe('schema proxy', () => {
 
     const user = userEvent.setup();
 
-    renderWithClient(<App />, {
-      client,
-      wrapper: Profiler,
+    renderStream.render(<App />, {
+      wrapper: createClientWrapper(client),
     });
 
     // initial suspended render
-    await Profiler.takeRender();
+    await renderStream.takeRender();
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result?.data).toEqual({
         viewer: {
@@ -616,12 +620,12 @@ describe('schema proxy', () => {
       });
     }
 
-    await act(() => user.click(screen.getByText('Change name')));
+    await user.click(screen.getByText('Change name'));
 
     // initial suspended render
-    await Profiler.takeRender();
+    await renderStream.takeRender();
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result?.data).toEqual({
         viewer: {
@@ -676,9 +680,10 @@ describe('schema proxy', () => {
       },
     });
 
-    const Profiler = createErrorProfiler<ViewerQueryData>();
+    using _disabledAct = disableActEnvironment();
+    const renderStream = createErrorProfiler<ViewerQueryData>();
 
-    const { ErrorBoundary } = createTrackedErrorComponents(Profiler);
+    const { ErrorBoundary } = createTrackedErrorComponents(renderStream);
 
     using _fetch = createSchemaFetch(forkedSchema).mockGlobal();
 
@@ -704,27 +709,26 @@ describe('schema proxy', () => {
     const Child = () => {
       const result = useSuspenseQuery(query);
 
-      Profiler.mergeSnapshot({
+      renderStream.mergeSnapshot({
         result,
       } as Partial<{}>);
 
       return <div>Hello</div>;
     };
 
-    renderWithClient(<App />, {
-      client,
-      wrapper: Profiler,
+    renderStream.render(<App />, {
+      wrapper: createClientWrapper(client),
     });
 
     // initial suspended render
-    await Profiler.takeRender();
+    await renderStream.takeRender();
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.error).toEqual(
         new ApolloError({
-          graphQLErrors: [new GraphQLError('Could not resolve type')],
+          graphQLErrors: [{ message: 'Could not resolve type', path: ['viewer', 'book'] }],
         }),
       );
     }
@@ -750,9 +754,10 @@ describe('schema proxy', () => {
     // invalid schema
     const forkedSchema = { foo: 'bar' };
 
-    const Profiler = createErrorProfiler<ViewerQueryData>();
+    using _disabledAct = disableActEnvironment();
+    const renderStream = createErrorProfiler<ViewerQueryData>();
 
-    const { ErrorBoundary } = createTrackedErrorComponents(Profiler);
+    const { ErrorBoundary } = createTrackedErrorComponents(renderStream);
 
     // @ts-expect-error - we're intentionally passing an invalid schema
     using _fetch = createSchemaFetch(forkedSchema).mockGlobal();
@@ -779,27 +784,26 @@ describe('schema proxy', () => {
     const Child = () => {
       const result = useSuspenseQuery(query);
 
-      Profiler.mergeSnapshot({
+      renderStream.mergeSnapshot({
         result,
       } as Partial<{}>);
 
       return <div>Hello</div>;
     };
 
-    renderWithClient(<App />, {
-      client,
-      wrapper: Profiler,
+    renderStream.render(<App />, {
+      wrapper: createClientWrapper(client),
     });
 
     // initial suspended render
-    await Profiler.takeRender();
+    await renderStream.takeRender();
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.error).toEqual(
         new ApolloError({
-          graphQLErrors: [new GraphQLError('Expected { foo: "bar" } to be a GraphQL schema.')],
+          graphQLErrors: [{ message: 'Expected { foo: "bar" } to be a GraphQL schema.' }],
         }),
       );
     }
@@ -873,7 +877,8 @@ describe('schema proxy', () => {
       },
     });
 
-    const Profiler = createDefaultProfiler<ViewerQueryData>();
+    using _disabledAct = disableActEnvironment();
+    const renderStream = createDefaultProfiler<ViewerQueryData>();
 
     using _fetch = createSchemaFetch(forkedSchema).mockGlobal();
 
@@ -925,7 +930,7 @@ describe('schema proxy', () => {
       const result = useSuspenseQuery(query);
       const [changeViewerName] = useMutation(mutation);
 
-      Profiler.mergeSnapshot({
+      renderStream.mergeSnapshot({
         result,
       } as Partial<{}>);
 
@@ -939,16 +944,15 @@ describe('schema proxy', () => {
 
     const user = userEvent.setup();
 
-    renderWithClient(<App />, {
-      client,
-      wrapper: Profiler,
+    renderStream.render(<App />, {
+      wrapper: createClientWrapper(client),
     });
 
     // initial suspended render
-    await Profiler.takeRender();
+    await renderStream.takeRender();
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result?.data).toEqual({
         viewer: {
@@ -967,11 +971,11 @@ describe('schema proxy', () => {
       });
     }
 
-    await act(() => user.click(screen.getByText('Change name')));
+    await user.click(screen.getByText('Change name'));
 
-    await Profiler.takeRender();
+    await renderStream.takeRender();
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result?.data).toEqual({
         viewer: {
@@ -1015,7 +1019,8 @@ describe('schema proxy', () => {
         },
       },
     });
-    const Profiler = createDefaultProfiler<ViewerQueryData>();
+    using _disabledAct = disableActEnvironment();
+    const renderStream = createDefaultProfiler<ViewerQueryData>();
 
     resetTestSchema.add({
       resolvers: {
@@ -1070,7 +1075,7 @@ describe('schema proxy', () => {
     const Child = () => {
       const result = useSuspenseQuery(query);
 
-      Profiler.mergeSnapshot({
+      renderStream.mergeSnapshot({
         result,
       } as Partial<{}>);
 
@@ -1081,16 +1086,15 @@ describe('schema proxy', () => {
       );
     };
 
-    renderWithClient(<App />, {
-      client,
-      wrapper: Profiler,
+    renderStream.render(<App />, {
+      wrapper: createClientWrapper(client),
     });
 
     // initial suspended render
-    await Profiler.takeRender();
+    await renderStream.takeRender();
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result?.data).toEqual({
         viewer: {
@@ -1113,13 +1117,13 @@ describe('schema proxy', () => {
 
     const user = userEvent.setup();
 
-    await act(() => user.click(screen.getByText('Refetch')));
+    await user.click(screen.getByText('Refetch'));
 
     // initial suspended render
-    await Profiler.takeRender();
+    await renderStream.takeRender();
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result?.data).toEqual({
         viewer: {
@@ -1140,7 +1144,8 @@ describe('schema proxy', () => {
   });
 
   it('createSchemaFetch respects min and max delay', async () => {
-    const Profiler = createDefaultProfiler<ViewerQueryData>();
+    using _disabledAct = disableActEnvironment();
+    const renderStream = createDefaultProfiler<ViewerQueryData>();
 
     const minDelay = 1500;
     const maxDelay = 2000;
@@ -1184,25 +1189,31 @@ describe('schema proxy', () => {
     const Child = () => {
       const result = useSuspenseQuery(query);
 
-      Profiler.mergeSnapshot({
+      renderStream.mergeSnapshot({
         result,
       } as Partial<{}>);
 
       return <div>Hello</div>;
     };
 
-    renderWithClient(<App />, {
-      client,
-      wrapper: Profiler,
+    await renderStream.render(<App />, {
+      wrapper: createClientWrapper(client),
     });
 
     // initial suspended render
-    await Profiler.takeRender();
+    await renderStream.takeRender();
 
-    await expect(Profiler).not.toRerender({ timeout: minDelay - 100 });
+    if (IS_REACT_19) {
+      // not sure why we have this additional commit
+      expect((await renderStream.takeRender()).snapshot).toStrictEqual({
+        result: null,
+      });
+    }
+
+    await expect(renderStream).not.toRerender({ timeout: minDelay - 100 });
 
     {
-      const { snapshot } = await Profiler.takeRender({
+      const { snapshot } = await renderStream.takeRender({
         // This timeout doesn't start until after our `minDelay - 100`
         // timeout above, so we don't have to wait the full `maxDelay`
         // here.

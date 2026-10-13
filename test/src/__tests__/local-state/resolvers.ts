@@ -1,27 +1,21 @@
 import gql from 'graphql-tag';
 import { DocumentNode, ExecutionResult } from 'graphql';
-import { assign } from 'lodash';
 import {
   ApolloClient,
   ApolloQueryResult,
+  NetworkStatus,
   Resolvers,
-  WatchQueryOptions,
   isReference,
   Observable,
-  Observer,
   ApolloLink,
 } from '@apollo/client';
+import { LocalState } from '@apollo/client/core/LocalState';
+import { ObservableStream } from '@apollo/client/testing/internal';
+import { MockLink } from '@apollo/client/testing';
 
-import { LocalState } from '../../core/LocalState';
-import { itAsync } from '../../testing';
-import mockQueryManager from '../../testing/core/mocking/mockQueryManager';
-import wrap from '../../testing/core/wrap';
 import { Hermes } from '../../../../src';
 
-// Helper method that sets up a mockQueryManager and then passes on the
-// results to an observer.
-const assertWithObserver = ({
-  reject,
+const setupTestWithResolvers = ({
   resolvers,
   query,
   serverQuery,
@@ -30,10 +24,8 @@ const assertWithObserver = ({
   serverResult,
   error,
   delay,
-  observer,
 }: {
-  reject: (reason: any) => any;
-  resolvers?: Resolvers;
+  resolvers: Resolvers;
   query: DocumentNode;
   serverQuery?: DocumentNode;
   variables?: object;
@@ -41,28 +33,26 @@ const assertWithObserver = ({
   error?: Error;
   serverResult?: ExecutionResult;
   delay?: number;
-  observer: Observer<ApolloQueryResult<any>>;
 }) => {
-  const queryManager = mockQueryManager({
-    request: { query: serverQuery || query, variables },
-    result: serverResult,
-    error,
-    delay,
+  const client = new ApolloClient({
+    cache: new Hermes({ addTypename: false }),
+    link: new MockLink([
+      {
+        request: { query: serverQuery || query, variables },
+        result: serverResult,
+        error,
+        delay,
+      },
+    ]),
   });
 
-  if (resolvers) {
-    queryManager.getLocalState().addResolvers(resolvers);
-  }
+  client.addResolvers(resolvers);
 
-  const finalOptions = assign({ query, variables }, queryOptions) as WatchQueryOptions;
-  return queryManager.watchQuery<any>(finalOptions).subscribe({
-    next: wrap(reject, observer.next!),
-    error: observer.error,
-  });
+  return new ObservableStream(client.watchQuery<any>({ query, variables, ...queryOptions }));
 };
 
 describe('Basic resolver capabilities', () => {
-  itAsync('should run resolvers for @client queries', (resolve, reject) => {
+  it('should run resolvers for @client queries', async () => {
     const query = gql`
       query Test {
         foo @client {
@@ -77,24 +67,18 @@ describe('Basic resolver capabilities', () => {
       },
     };
 
-    assertWithObserver({
-      reject,
-      resolvers,
-      query,
-      observer: {
-        next({ data }) {
-          try {
-            expect(data).toEqual({ foo: { bar: true } });
-          } catch (error) {
-            reject(error);
-          }
-          resolve();
-        },
-      },
+    const stream = setupTestWithResolvers({ resolvers, query });
+
+    await expect(stream).toEmitApolloQueryResult({
+      data: { foo: { bar: true } },
+      loading: false,
+      networkStatus: NetworkStatus.ready,
     });
+
+    await expect(stream).not.toEmitAnything();
   });
 
-  itAsync('should handle queries with a mix of @client and server fields', (resolve, reject) => {
+  it('should handle queries with a mix of @client and server fields', async () => {
     const query = gql`
       query Mixed {
         foo @client {
@@ -120,26 +104,26 @@ describe('Basic resolver capabilities', () => {
       },
     };
 
-    assertWithObserver({
-      reject,
+    const stream = setupTestWithResolvers({
       resolvers,
       query,
       serverQuery,
       serverResult: { data: { bar: { baz: true } } },
-      observer: {
-        next({ data }) {
-          try {
-            expect(data).toEqual({ foo: { bar: true }, bar: { baz: true } });
-          } catch (error) {
-            reject(error);
-          }
-          resolve();
-        },
-      },
     });
+
+    await expect(stream).toEmitApolloQueryResult({
+      data: {
+        foo: { bar: true },
+        bar: { baz: true },
+      },
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+    });
+
+    await expect(stream).not.toEmitAnything();
   });
 
-  itAsync('should handle a mix of @client fields with fragments and server fields', (resolve, reject) => {
+  it('should handle a mix of @client fields with fragments and server fields', async () => {
     const query = gql`
       fragment client on ClientData {
         bar
@@ -170,30 +154,27 @@ describe('Basic resolver capabilities', () => {
       },
     };
 
-    assertWithObserver({
-      reject,
+    const stream = setupTestWithResolvers({
       resolvers,
       query,
       serverQuery,
       serverResult: { data: { bar: { baz: true, __typename: 'Bar' } } },
-      observer: {
-        next({ data }) {
-          try {
-            // Hermes: results can hold extra cached fields (here the unselected __typename).
-            expect(data).toMatchObject({
-              foo: { bar: true, __typename: 'ClientData' },
-              bar: { baz: true },
-            });
-          } catch (error) {
-            reject(error);
-          }
-          resolve();
-        },
-      },
     });
+
+    // Hermes: results can hold extra cached fields (here the unselected __typename).
+    await expect(stream).toEmitMatchedValue({
+      data: {
+        foo: { bar: true, __typename: 'ClientData' },
+        bar: { baz: true },
+      },
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+    });
+
+    await expect(stream).not.toEmitAnything();
   });
 
-  itAsync('should handle @client fields inside fragments', (resolve, reject) => {
+  it('should handle @client fields inside fragments', async () => {
     const query = gql`
       fragment Foo on Foo {
         bar
@@ -233,31 +214,28 @@ describe('Basic resolver capabilities', () => {
       },
     };
 
-    assertWithObserver({
-      reject,
+    const stream = setupTestWithResolvers({
       resolvers,
       query,
       serverQuery,
       serverResult: {
         data: { foo: { bar: true, __typename: `Foo` }, bar: { baz: true } },
       },
-      observer: {
-        next({ data }) {
-          try {
-            expect(data).toEqual({
-              foo: { bar: true, baz: false, __typename: 'Foo' },
-              bar: { baz: true },
-            });
-          } catch (error) {
-            reject(error);
-          }
-          resolve();
-        },
-      },
     });
+
+    await expect(stream).toEmitApolloQueryResult({
+      data: {
+        foo: { bar: true, baz: false, __typename: 'Foo' },
+        bar: { baz: true },
+      },
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+    });
+
+    await expect(stream).not.toEmitAnything();
   });
 
-  itAsync('should have access to query variables when running @client resolvers', (resolve, reject) => {
+  it('should have access to query variables when running @client resolvers', async () => {
     const query = gql`
       query WithVariables($id: ID!) {
         foo @client {
@@ -275,26 +253,23 @@ describe('Basic resolver capabilities', () => {
       },
     };
 
-    assertWithObserver({
-      reject,
+    const stream = setupTestWithResolvers({
       resolvers,
       query,
       variables: { id: 1 },
-      observer: {
-        next({ data }) {
-          try {
-            // Hermes: results can hold extra cached fields (here the unselected __typename).
-            expect(data).toMatchObject({ foo: { bar: 1 } });
-          } catch (error) {
-            reject(error);
-          }
-          resolve();
-        },
-      },
     });
+
+    // Hermes: results can hold extra cached fields (here the unselected __typename).
+    await expect(stream).toEmitMatchedValue({
+      data: { foo: { bar: 1 } },
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+    });
+
+    await expect(stream).not.toEmitAnything();
   });
 
-  itAsync('should pass context to @client resolvers', (resolve, reject) => {
+  it('should pass context to @client resolvers', async () => {
     const query = gql`
       query WithContext {
         foo @client {
@@ -312,98 +287,89 @@ describe('Basic resolver capabilities', () => {
       },
     };
 
-    assertWithObserver({
-      reject,
+    const stream = setupTestWithResolvers({
       resolvers,
       query,
       queryOptions: { context: { id: 1 } },
-      observer: {
-        next({ data }) {
-          try {
-            // Hermes: results can hold extra cached fields (here the unselected __typename).
-            expect(data).toMatchObject({ foo: { bar: 1 } });
-          } catch (error) {
-            reject(error);
+    });
+
+    // Hermes: results can hold extra cached fields (here the unselected __typename).
+    await expect(stream).toEmitMatchedValue({
+      data: { foo: { bar: 1 } },
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+    });
+
+    await expect(stream).not.toEmitAnything();
+  });
+
+  it('should combine local @client resolver results with server results, for the same field', async () => {
+    const query = gql`
+      query author {
+        author {
+          name
+          stats {
+            totalPosts
+            postsToday @client
           }
-          resolve();
+        }
+      }
+    `;
+
+    const serverQuery = gql`
+      query author {
+        author {
+          name
+          stats {
+            totalPosts
+          }
+        }
+      }
+    `;
+
+    const resolvers = {
+      Stats: {
+        postsToday: () => 10,
+      },
+    };
+
+    const stream = setupTestWithResolvers({
+      resolvers,
+      query,
+      serverQuery,
+      serverResult: {
+        data: {
+          author: {
+            name: 'John Smith',
+            stats: {
+              totalPosts: 100,
+              __typename: 'Stats',
+            },
+            __typename: 'Author',
+          },
         },
       },
     });
+
+    // Hermes: results can hold extra cached fields (here the unselected __typename).
+    await expect(stream).toEmitMatchedValue({
+      data: {
+        author: {
+          name: 'John Smith',
+          stats: {
+            totalPosts: 100,
+            postsToday: 10,
+          },
+        },
+      },
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+    });
+
+    await expect(stream).not.toEmitAnything();
   });
 
-  itAsync(
-    'should combine local @client resolver results with server results, for the same field',
-    (resolve, reject) => {
-      const query = gql`
-        query author {
-          author {
-            name
-            stats {
-              totalPosts
-              postsToday @client
-            }
-          }
-        }
-      `;
-
-      const serverQuery = gql`
-        query author {
-          author {
-            name
-            stats {
-              totalPosts
-            }
-          }
-        }
-      `;
-
-      const resolvers = {
-        Stats: {
-          postsToday: () => 10,
-        },
-      };
-
-      assertWithObserver({
-        reject,
-        resolvers,
-        query,
-        serverQuery,
-        serverResult: {
-          data: {
-            author: {
-              name: 'John Smith',
-              stats: {
-                totalPosts: 100,
-                __typename: 'Stats',
-              },
-              __typename: 'Author',
-            },
-          },
-        },
-        observer: {
-          next({ data }) {
-            try {
-              // Hermes: results can hold extra cached fields (here the unselected __typename).
-              expect(data).toMatchObject({
-                author: {
-                  name: 'John Smith',
-                  stats: {
-                    totalPosts: 100,
-                    postsToday: 10,
-                  },
-                },
-              });
-            } catch (error) {
-              reject(error);
-            }
-            resolve();
-          },
-        },
-      });
-    },
-  );
-
-  itAsync('should handle resolvers that work with booleans properly', (resolve, reject) => {
+  it('should handle resolvers that work with booleans properly', async () => {
     const query = gql`
       query CartDetails {
         isInCart @client
@@ -422,11 +388,12 @@ describe('Basic resolver capabilities', () => {
       },
     });
 
-    return client.query({ query, fetchPolicy: 'network-only' }).then(({ data }: any) => {
-      expect({ ...data }).toMatchObject({
-        isInCart: false,
-      });
-      resolve();
+    const result = await client.query({ query, fetchPolicy: 'network-only' });
+
+    expect(result).toEqualApolloQueryResult({
+      data: { isInCart: false },
+      loading: false,
+      networkStatus: NetworkStatus.ready,
     });
   });
 
@@ -550,7 +517,7 @@ describe('Basic resolver capabilities', () => {
     ]);
   });
 
-  itAsync('should not run resolvers without @client directive (issue #9571)', (resolve, reject) => {
+  it('should not run resolvers without @client directive (issue #9571)', async () => {
     const query = gql`
       query Mixed {
         foo @client {
@@ -579,30 +546,25 @@ describe('Basic resolver capabilities', () => {
       },
     };
 
-    assertWithObserver({
-      reject,
+    const stream = setupTestWithResolvers({
       resolvers,
       query,
       serverQuery,
       serverResult: { data: { bar: { baz: true } } },
-      observer: {
-        next({ data }) {
-          try {
-            // Hermes: results can hold extra cached fields (here the unselected __typename).
-            expect(data).toMatchObject({ foo: { bar: true }, bar: { baz: true } });
-            expect(barResolver).not.toHaveBeenCalled();
-          } catch (error) {
-            reject(error);
-          }
-          resolve();
-        },
-      },
     });
+
+    // Hermes: results can hold extra cached fields (here the unselected __typename).
+    await expect(stream).toEmitMatchedValue({
+      data: { foo: { bar: true }, bar: { baz: true } },
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+    });
+    expect(barResolver).not.toHaveBeenCalled();
   });
 });
 
 describe('Writing cache data from resolvers', () => {
-  it('should let you write to the cache with a mutation', () => {
+  it('should let you write to the cache with a mutation', async () => {
     const query = gql`
       {
         field @client
@@ -628,15 +590,17 @@ describe('Writing cache data from resolvers', () => {
       },
     });
 
-    return client
-      .mutate({ mutation })
-      .then(() => client.query({ query }))
-      .then(({ data }) => {
-        expect({ ...data }).toMatchObject({ field: 1 });
-      });
+    await client.mutate({ mutation });
+    const result = await client.query({ query });
+
+    expect(result).toEqualApolloQueryResult({
+      data: { field: 1 },
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+    });
   });
 
-  it('should let you write to the cache with a mutation using an ID', () => {
+  it('should let you write to the cache with a mutation using an ID', async () => {
     const query = gql`
       {
         obj @client {
@@ -682,15 +646,19 @@ describe('Writing cache data from resolvers', () => {
       },
     });
 
-    return client
-      .mutate({ mutation })
-      .then(() => client.query({ query }))
-      .then(({ data }: any) => {
-        expect(data.obj.field).toEqual(2);
-      });
+    await client.mutate({ mutation });
+
+    const result = await client.query({ query });
+
+    // Hermes: results can hold extra cached fields (here the unselected id).
+    expect(result).toMatchObject({
+      data: { obj: { __typename: 'Object', field: 2 } },
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+    });
   });
 
-  it('should not overwrite __typename when writing to the cache with an id', () => {
+  it('should not overwrite __typename when writing to the cache with an id', async () => {
     const query = gql`
       {
         obj @client {
@@ -744,20 +712,25 @@ describe('Writing cache data from resolvers', () => {
       },
     });
 
-    return client
-      .mutate({ mutation })
-      .then(() => client.query({ query }))
-      .then(({ data }: any) => {
-        expect(data.obj.__typename).toEqual('Object');
-        expect(data.obj.field.__typename).toEqual('Field');
-      })
-      .catch(e => console.log(e));
+    await client.mutate({ mutation });
+    const result = await client.query({ query });
+
+    expect(result).toEqualApolloQueryResult({
+      data: {
+        obj: {
+          __typename: 'Object',
+          field: { __typename: 'Field', field2: 2 },
+          id: 'uniqueId',
+        },
+      },
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+    });
   });
 });
 
 describe('Resolving field aliases', () => {
-  itAsync('should run resolvers for missing client queries with aliased field', (resolve, reject) => {
-    // expect.assertions(1);
+  it('should run resolvers for missing client queries with aliased field', async () => {
     const query = gql`
       query Aliased {
         foo @client {
@@ -785,60 +758,52 @@ describe('Resolving field aliases', () => {
       },
     });
 
-    client
-      .query({ query })
-      .then(({ data }) => {
-        try {
-          // Hermes: results can hold extra cached fields (here the field under its unaliased name too).
-          expect(data).toMatchObject({
-            foo: { bar: true, __typename: 'Foo' },
-            baz: { foo: true, __typename: 'Baz' },
-          });
-        } catch (e) {
-          reject(e);
-          return;
-        }
-        resolve();
-      })
-      .catch(reject);
+    const result = await client.query({ query });
+
+    // Hermes: results can hold extra cached fields (here the field under its unaliased name too).
+    expect(result).toMatchObject({
+      data: {
+        foo: { bar: true, __typename: 'Foo' },
+        baz: { foo: true, __typename: 'Baz' },
+      },
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+    });
   });
 
-  itAsync(
-    'should run resolvers for client queries when aliases are in use on the @client-tagged node',
-    (resolve, reject) => {
-      const aliasedQuery = gql`
-        query Test {
-          fie: foo @client {
-            bar
-          }
+  it('should run resolvers for client queries when aliases are in use on the @client-tagged node', async () => {
+    const aliasedQuery = gql`
+      query Test {
+        fie: foo @client {
+          bar
         }
-      `;
+      }
+    `;
 
-      const client = new ApolloClient({
-        cache: new Hermes(),
-        link: ApolloLink.empty(),
-        resolvers: {
-          Query: {
-            foo: () => ({ bar: true, __typename: 'Foo' }),
-            fie: () => {
-              reject("Called the resolver using the alias' name, instead of the correct resolver name.");
-            },
-          },
+    const fie = jest.fn();
+    const client = new ApolloClient({
+      cache: new Hermes(),
+      link: ApolloLink.empty(),
+      resolvers: {
+        Query: {
+          foo: () => ({ bar: true, __typename: 'Foo' }),
+          fie,
         },
-      });
+      },
+    });
 
-      client
-        .query({ query: aliasedQuery })
-        .then(({ data }) => {
-          // Hermes: results can hold extra cached fields (here the field under its unaliased name too).
-          expect(data).toMatchObject({ fie: { bar: true, __typename: 'Foo' } });
-          resolve();
-        })
-        .catch(reject);
-    },
-  );
+    const result = await client.query({ query: aliasedQuery });
 
-  itAsync('should respect aliases for *nested fields* on the @client-tagged node', (resolve, reject) => {
+    // Hermes: results can hold extra cached fields (here the field under its unaliased name too).
+    expect(result).toMatchObject({
+      data: { fie: { bar: true, __typename: 'Foo' } },
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+    });
+    expect(fie).not.toHaveBeenCalled();
+  });
+
+  it('should respect aliases for *nested fields* on the @client-tagged node', async () => {
     const aliasedQuery = gql`
       query Test {
         fie: foo @client {
@@ -852,33 +817,33 @@ describe('Resolving field aliases', () => {
 
     const link = new ApolloLink(() => Observable.of({ data: { baz: { foo: true, __typename: 'Baz' } } }));
 
+    const fie = jest.fn();
     const client = new ApolloClient({
       cache: new Hermes(),
       link,
       resolvers: {
         Query: {
           foo: () => ({ bar: true, __typename: 'Foo' }),
-          fie: () => {
-            reject("Called the resolver using the alias' name, instead of the correct resolver name.");
-          },
+          fie,
         },
       },
     });
 
-    client
-      .query({ query: aliasedQuery })
-      .then(({ data }) => {
-        // Hermes: results can hold extra cached fields (here the field under its unaliased name too).
-        expect(data).toMatchObject({
-          fie: { fum: true, __typename: 'Foo' },
-          baz: { foo: true, __typename: 'Baz' },
-        });
-        resolve();
-      })
-      .catch(reject);
+    const result = await client.query({ query: aliasedQuery });
+
+    // Hermes: results can hold extra cached fields (here the field under its unaliased name too).
+    expect(result).toMatchObject({
+      data: {
+        fie: { fum: true, __typename: 'Foo' },
+        baz: { foo: true, __typename: 'Baz' },
+      },
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+    });
+    expect(fie).not.toHaveBeenCalled();
   });
 
-  it('should pull initialized values for aliased fields tagged with @client from the cache', () => {
+  it('should pull initialized values for aliased fields tagged with @client from the cache', async () => {
     const query = gql`
       {
         fie: foo @client {
@@ -910,183 +875,194 @@ describe('Resolving field aliases', () => {
       },
     });
 
-    return client.query({ query }).then(({ data }) => {
-      expect({ ...data }).toMatchObject({
-        fie: { bar: 'yo', __typename: 'Foo' },
-      });
+    const result = await client.query({ query });
+
+    // Hermes: results can hold extra cached fields (here the field under its unaliased name too).
+    expect(result).toMatchObject({
+      data: { fie: { bar: 'yo', __typename: 'Foo' } },
+      loading: false,
+      networkStatus: NetworkStatus.ready,
     });
   });
 
-  it(
-    'should resolve @client fields using local resolvers and not have ' +
-      'their value overridden when a fragment is loaded',
-    () => {
-      const query = gql`
-        fragment LaunchDetails on Launch {
-          id
-          __typename
+  it('should resolve @client fields using local resolvers and not have their value overridden when a fragment is loaded', async () => {
+    const query = gql`
+      fragment LaunchDetails on Launch {
+        id
+        __typename
+      }
+      query Launch {
+        launch {
+          isInCart @client
+          ...LaunchDetails
         }
-        query Launch {
-          launch {
-            isInCart @client
-            ...LaunchDetails
-          }
-        }
-      `;
+      }
+    `;
 
-      const link = new ApolloLink(() =>
-        Observable.of({
-          data: {
-            launch: {
-              id: 1,
-              __typename: 'Launch',
-            },
-          },
-        }),
-      );
-
-      const client = new ApolloClient({
-        cache: new Hermes(),
-        link,
-        resolvers: {
-          Launch: {
-            isInCart() {
-              return true;
-            },
-          },
-        },
-      });
-
-      client.writeQuery({
-        query: gql`
-          {
-            launch {
-              isInCart
-            }
-          }
-        `,
+    const link = new ApolloLink(() =>
+      Observable.of({
         data: {
           launch: {
-            isInCart: false,
+            id: 1,
             __typename: 'Launch',
           },
         },
-      });
+      }),
+    );
 
-      return client
-        .query({ query })
-        .then(({ data }) => {
-          // `isInCart` resolver is fired, returning `true` (which is then
-          // stored in the cache).
-          expect(data.launch.isInCart).toBe(true);
-        })
-        .then(() => {
-          client.query({ query }).then(({ data }) => {
-            // When the same query fires again, `isInCart` should be pulled from
-            // the cache and have a value of `true`.
-            expect(data.launch.isInCart).toBe(true);
-          });
-        });
-    },
-  );
-});
-
-describe('Force local resolvers', () => {
-  it(
-    'should force the running of local resolvers marked with ' +
-      '`@client(always: true)` when using `ApolloClient.query`',
-    async () => {
-      const query = gql`
-        query Author {
-          author {
-            name
-            isLoggedIn @client(always: true)
-          }
-        }
-      `;
-
-      const cache = new Hermes();
-      const client = new ApolloClient({
-        cache,
-        link: ApolloLink.empty(),
-        resolvers: {},
-      });
-
-      cache.writeQuery({
-        query,
-        data: {
-          author: {
-            name: 'John Smith',
-            isLoggedIn: false,
-            __typename: 'Author',
-          },
-        },
-      });
-
-      // When the resolver isn't defined, there isn't anything to force, so
-      // make sure the query resolves from the cache properly.
-      const { data: data1 } = await client.query({ query });
-      expect(data1.author.isLoggedIn).toEqual(false);
-
-      client.addResolvers({
-        Author: {
-          isLoggedIn() {
+    const client = new ApolloClient({
+      cache: new Hermes(),
+      link,
+      resolvers: {
+        Launch: {
+          isInCart() {
             return true;
           },
         },
-      });
+      },
+    });
 
-      // A resolver is defined, so make sure it's forced, and the result
-      // resolves properly as a combination of cache and local resolver
-      // data.
-      const { data: data2 } = await client.query({ query });
-      expect(data2.author.isLoggedIn).toEqual(true);
-    },
-  );
-
-  it(
-    'should avoid running forced resolvers a second time when ' +
-      'loading results over the network (so not from the cache)',
-    async () => {
-      const query = gql`
-        query Author {
-          author {
-            name
-            isLoggedIn @client(always: true)
+    client.writeQuery({
+      query: gql`
+        {
+          launch {
+            isInCart
           }
         }
-      `;
+      `,
+      data: {
+        launch: {
+          isInCart: false,
+          __typename: 'Launch',
+        },
+      },
+    });
 
-      const link = new ApolloLink(() =>
-        Observable.of({
-          data: {
-            author: {
-              name: 'John Smith',
-              __typename: 'Author',
-            },
-          },
-        }),
-      );
+    // `isInCart` resolver is fired, returning `true` (which is then
+    // stored in the cache).
+    await expect(client.query({ query })).resolves.toEqualApolloQueryResult({
+      data: { launch: { __typename: 'Launch', id: 1, isInCart: true } },
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+    });
 
-      let count = 0;
-      const client = new ApolloClient({
-        cache: new Hermes(),
-        link,
-        resolvers: {
-          Author: {
-            isLoggedIn() {
-              count += 1;
-              return true;
-            },
+    // When the same query fires again, `isInCart` should be pulled from
+    // the cache and have a value of `true`.
+    await expect(client.query({ query })).resolves.toEqualApolloQueryResult({
+      data: { launch: { __typename: 'Launch', id: 1, isInCart: true } },
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+    });
+  });
+});
+
+describe('Force local resolvers', () => {
+  it('should force the running of local resolvers marked with `@client(always: true)` when using `ApolloClient.query`', async () => {
+    const query = gql`
+      query Author {
+        author {
+          name
+          isLoggedIn @client(always: true)
+        }
+      }
+    `;
+
+    const cache = new Hermes();
+    const client = new ApolloClient({
+      cache,
+      link: ApolloLink.empty(),
+      resolvers: {},
+    });
+
+    cache.writeQuery({
+      query,
+      data: {
+        author: {
+          name: 'John Smith',
+          isLoggedIn: false,
+          __typename: 'Author',
+        },
+      },
+    });
+
+    // When the resolver isn't defined, there isn't anything to force, so
+    // make sure the query resolves from the cache properly.
+    await expect(client.query({ query })).resolves.toEqualApolloQueryResult({
+      data: {
+        author: { __typename: 'Author', isLoggedIn: false, name: 'John Smith' },
+      },
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+    });
+
+    client.addResolvers({
+      Author: {
+        isLoggedIn() {
+          return true;
+        },
+      },
+    });
+
+    // A resolver is defined, so make sure it's forced, and the result
+    // resolves properly as a combination of cache and local resolver
+    // data.
+    await expect(client.query({ query })).resolves.toEqualApolloQueryResult({
+      data: {
+        author: { __typename: 'Author', isLoggedIn: true, name: 'John Smith' },
+      },
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+    });
+  });
+
+  it('should avoid running forced resolvers a second time when loading results over the network (so not from the cache)', async () => {
+    const query = gql`
+      query Author {
+        author {
+          name
+          isLoggedIn @client(always: true)
+        }
+      }
+    `;
+
+    const link = new ApolloLink(() =>
+      Observable.of({
+        data: {
+          author: {
+            name: 'John Smith',
+            __typename: 'Author',
           },
         },
-      });
+      }),
+    );
 
-      const { data } = await client.query({ query });
-      expect(data.author.isLoggedIn).toEqual(true);
-      expect(count).toEqual(1);
-    },
-  );
+    let count = 0;
+    const client = new ApolloClient({
+      cache: new Hermes(),
+      link,
+      resolvers: {
+        Author: {
+          isLoggedIn() {
+            count += 1;
+            return true;
+          },
+        },
+      },
+    });
+
+    await expect(client.query({ query })).resolves.toEqualApolloQueryResult({
+      data: {
+        author: {
+          __typename: 'Author',
+          isLoggedIn: true,
+          name: 'John Smith',
+        },
+      },
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+    });
+    expect(count).toEqual(1);
+  });
 
   it('should only force resolvers for fields marked with `@client(always: true)`, not all `@client` fields', async () => {
     const query = gql`
@@ -1126,59 +1102,57 @@ describe('Force local resolvers', () => {
     expect(isLoggedInCount).toEqual(2);
   });
 
-  itAsync(
-    'should force the running of local resolvers marked with ' +
-      '`@client(always: true)` when using `ApolloClient.watchQuery`',
-    (resolve, reject) => {
-      const query = gql`
-        query IsUserLoggedIn {
-          isUserLoggedIn @client(always: true)
-        }
-      `;
+  it('should force the running of local resolvers marked with `@client(always: true)` when using `ApolloClient.watchQuery`', async () => {
+    const query = gql`
+      query IsUserLoggedIn {
+        isUserLoggedIn @client(always: true)
+      }
+    `;
 
-      const queryNoForce = gql`
-        query IsUserLoggedIn {
-          isUserLoggedIn @client
-        }
-      `;
+    const queryNoForce = gql`
+      query IsUserLoggedIn {
+        isUserLoggedIn @client
+      }
+    `;
 
-      let callCount = 0;
-      const client = new ApolloClient({
-        cache: new Hermes(),
-        resolvers: {
-          Query: {
-            isUserLoggedIn() {
-              callCount += 1;
-              return true;
-            },
+    let callCount = 0;
+    const client = new ApolloClient({
+      cache: new Hermes(),
+      resolvers: {
+        Query: {
+          isUserLoggedIn() {
+            callCount += 1;
+            return true;
           },
         },
-      });
+      },
+    });
 
-      client.watchQuery({ query }).subscribe({
-        next() {
-          expect(callCount).toBe(1);
+    {
+      const stream = new ObservableStream(client.watchQuery({ query }));
 
-          client.watchQuery({ query }).subscribe({
-            next() {
-              expect(callCount).toBe(2);
+      await expect(stream).toEmitNext();
+      expect(callCount).toBe(1);
+    }
 
-              client.watchQuery({ query: queryNoForce }).subscribe({
-                next() {
-                  // Result is loaded from the cache since the resolver
-                  // isn't being forced.
-                  expect(callCount).toBe(2);
-                  resolve();
-                },
-              });
-            },
-          });
-        },
-      });
-    },
-  );
+    {
+      const stream = new ObservableStream(client.watchQuery({ query }));
 
-  it('should allow client-only virtual resolvers (#4731)', () => {
+      await expect(stream).toEmitNext();
+      expect(callCount).toBe(2);
+    }
+
+    {
+      const stream = new ObservableStream(client.watchQuery({ query: queryNoForce }));
+
+      await expect(stream).toEmitNext();
+      // Result is loaded from the cache since the resolver
+      // isn't being forced.
+      expect(callCount).toBe(2);
+    }
+  });
+
+  it('should allow client-only virtual resolvers (#4731)', async () => {
     const query = gql`
       query UserData {
         userData @client {
@@ -1209,21 +1183,25 @@ describe('Force local resolvers', () => {
       },
     });
 
-    return client.query({ query }).then(result => {
-      expect(result.data).toEqual({
+    const result = await client.query({ query });
+
+    expect(result).toEqualApolloQueryResult({
+      data: {
         userData: {
           __typename: 'User',
           firstName: 'Ben',
           lastName: 'Newman',
           fullName: 'Ben Newman',
         },
-      });
+      },
+      loading: false,
+      networkStatus: NetworkStatus.ready,
     });
   });
 });
 
 describe('Async resolvers', () => {
-  itAsync('should support async @client resolvers', async (resolve, reject) => {
+  it('should support async @client resolvers', async () => {
     const query = gql`
       query Member {
         isLoggedIn @client
@@ -1241,14 +1219,16 @@ describe('Async resolvers', () => {
       },
     });
 
-    const {
-      data: { isLoggedIn },
-    } = await client.query({ query })!;
-    expect(isLoggedIn).toBe(true);
-    return resolve();
+    const result = await client.query({ query })!;
+
+    expect(result).toEqualApolloQueryResult({
+      data: { isLoggedIn: true },
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+    });
   });
 
-  itAsync('should support async @client resolvers mixed with remotely resolved data', async (resolve, reject) => {
+  it('should support async @client resolvers mixed with remotely resolved data', async () => {
     const query = gql`
       query Member {
         member {
@@ -1291,13 +1271,20 @@ describe('Async resolvers', () => {
       },
     });
 
-    const {
-      data: { member },
-    } = await client.query({ query })!;
-    expect(member.name).toBe(testMember.name);
-    expect(member.isLoggedIn).toBe(testMember.isLoggedIn);
-    expect(member.sessionCount).toBe(testMember.sessionCount);
-    return resolve();
+    const result = await client.query({ query })!;
+
+    expect(result).toEqualApolloQueryResult({
+      data: {
+        member: {
+          name: testMember.name,
+          isLoggedIn: testMember.isLoggedIn,
+          sessionCount: testMember.sessionCount,
+          __typename: 'Member',
+        },
+      },
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+    });
   });
 });
 

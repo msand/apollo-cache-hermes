@@ -1,6 +1,5 @@
 import { expectTypeOf } from 'expect-type';
-
-import type { CacheSizes, defaultCacheSizes } from '../sizes';
+import type { CacheSizes, defaultCacheSizes } from '@apollo/client/utilities/caching/sizes';
 
 it.skip('type tests', () => {
   expectTypeOf<keyof CacheSizes>().toMatchTypeOf<keyof typeof defaultCacheSizes>();

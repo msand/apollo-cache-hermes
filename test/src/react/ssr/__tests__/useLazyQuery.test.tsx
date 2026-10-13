@@ -3,10 +3,10 @@ import * as React from 'react';
 import { DocumentNode } from 'graphql';
 import gql from 'graphql-tag';
 import { ApolloClient, ApolloProvider } from '@apollo/client';
+import { mockSingleLink } from '@apollo/client/testing';
+import { useLazyQuery } from '@apollo/client/react/hooks';
+import { renderToStringWithData } from '@apollo/client/react/ssr';
 
-import { mockSingleLink } from '../../../testing';
-import { useLazyQuery } from '../../hooks';
-import { renderToStringWithData } from '..';
 import { Hermes } from '../../../../../src';
 
 describe('useLazyQuery Hook SSR', () => {

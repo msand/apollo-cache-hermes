@@ -1,9 +1,12 @@
 import { makeExecutableSchema } from '@graphql-tools/schema';
-import { ApolloClient, Resolvers, gql, NormalizedCacheObject, InMemoryCache } from '@apollo/client';
+import { ApolloClient, Resolvers, gql } from '@apollo/client';
+import { SchemaLink } from '@apollo/client/link/schema';
 
-import { SchemaLink } from '../link/schema';
+import { Hermes } from '../../../src';
 
-describe('resultCache cleaning', () => {
+// Hermes: asserts on InMemoryCache's StoreReader result caches (executeSelectionSet,
+// executeSubSelectedArray), which Hermes does not have.
+describe.skip('resultCache cleaning', () => {
   const fragments = gql`
     fragment user on User {
       id
@@ -134,11 +137,11 @@ describe('resultCache cleaning', () => {
     },
   };
 
-  let client: ApolloClient<NormalizedCacheObject>;
+  let client: ApolloClient<any>;
 
   beforeEach(() => {
     client = new ApolloClient({
-      cache: new InMemoryCache(),
+      cache: new Hermes(),
       link: new SchemaLink({
         schema: makeExecutableSchema({
           typeDefs,
@@ -149,7 +152,7 @@ describe('resultCache cleaning', () => {
   });
 
   afterEach(() => {
-    const storeReader = (client.cache as InMemoryCache)['storeReader'];
+    const storeReader = (client.cache as any)['storeReader'];
     expect(storeReader['executeSubSelectedArray'].size).toBeGreaterThan(0);
     expect(storeReader['executeSelectionSet'].size).toBeGreaterThan(0);
     client.cache.evict({

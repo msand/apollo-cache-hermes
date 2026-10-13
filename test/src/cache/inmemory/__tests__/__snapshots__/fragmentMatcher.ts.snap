@@ -22,6 +22,7 @@ Object {
       },
       Object {
         "__typename": "H",
+        "h": "not c",
       },
     ],
   },

@@ -1,13 +1,16 @@
-import type { ApolloClient } from '@apollo/client';
-
-import type { DocumentNode, OperationVariables } from '../../../test/src/core/index';
-import type { QueryRef } from '../../../test/src/react/internal/index';
+// Apollo Client 3.14.1 src/testing/matchers/index.d.ts, with imports pointed at the package.
 import type {
-  NextRenderOptions,
-  Profiler,
-  ProfiledComponent,
-  ProfiledHook,
-} from '../../../test/src/testing/internal/index';
+  ApolloClient,
+  ApolloQueryResult,
+  DocumentNode,
+  FetchResult,
+  OperationVariables,
+} from '@apollo/client/core';
+import type { QueryRef, QueryResult } from '@apollo/client/react';
+import { ObservableStream } from '@apollo/client/testing/internal';
+import { RenderStreamMatchers } from '@testing-library/react-render-stream/expect';
+import { TakeOptions } from '@apollo/client/testing/internal/ObservableStream';
+import { CheckedKeys } from '@apollo/client/testing/matchers/toEqualQueryResult';
 
 interface ApolloCustomMatchers<R = void, T = {}> {
   /**
@@ -33,21 +36,75 @@ interface ApolloCustomMatchers<R = void, T = {}> {
       ) => R
     : { error: 'matcher needs to be called on an ApolloClient instance' };
 
-  toRerender: T extends Profiler<any, any> | ProfiledComponent<any, any> | ProfiledHook<any, any>
-    ? (options?: NextRenderOptions) => Promise<R>
-    : { error: 'matcher needs to be called on a ProfiledComponent instance' };
-
-  toRenderExactlyTimes: T extends Profiler<any, any> | ProfiledComponent<any, any> | ProfiledHook<any, any>
-    ? (count: number, options?: NextRenderOptions) => Promise<R>
-    : { error: 'matcher needs to be called on a ProfiledComponent instance' };
-
   toBeGarbageCollected: T extends WeakRef<any>
     ? () => Promise<R>
     : { error: 'matcher needs to be called on a WeakRef instance' };
+
+  toComplete: T extends ObservableStream<any>
+    ? (options?: TakeOptions) => Promise<R>
+    : { error: 'matcher needs to be called on an ObservableStream instance' };
+
+  toEmitApolloQueryResult: T extends ObservableStream<infer QueryResult>
+    ? QueryResult extends ApolloQueryResult<infer TData>
+      ? (value: ApolloQueryResult<TData>, options?: TakeOptions) => Promise<R>
+      : { error: 'matcher needs to be matched with an ApolloQueryResult' }
+    : { error: 'matcher needs to be called on an ObservableStream instance' };
+
+  toEmitAnything: T extends ObservableStream<any>
+    ? (options?: TakeOptions) => Promise<R>
+    : { error: 'matcher needs to be called on an ObservableStream instance' };
+
+  toEmitError: T extends ObservableStream<any>
+    ? (error?: any, options?: TakeOptions) => Promise<R>
+    : { error: 'matcher needs to be called on an ObservableStream instance' };
+
+  toEmitFetchResult: T extends ObservableStream<FetchResult<infer TData>>
+    ? (value: FetchResult<TData>, options?: TakeOptions) => Promise<R>
+    : {
+        error: 'matcher needs to be called on an ObservableStream<FetchResult<TData>> instance';
+      };
+
+  /**
+   * Used to determine if the observable stream emitted a `next` event. Use
+   * `toEmitValue` to check if the `next` event emitted a specific value.
+   */
+  toEmitNext: T extends ObservableStream<any>
+    ? (options?: TakeOptions) => Promise<R>
+    : { error: 'matcher needs to be called on an ObservableStream instance' };
+
+  toEmitValue: T extends ObservableStream<any>
+    ? (value: any, options?: TakeOptions) => Promise<R>
+    : { error: 'matcher needs to be called on an ObservableStream instance' };
+
+  toEmitValueStrict: T extends ObservableStream<any>
+    ? (value: any, options?: TakeOptions) => Promise<R>
+    : { error: 'matcher needs to be called on an ObservableStream instance' };
+
+  toEmitMatchedValue: T extends ObservableStream<any>
+    ? (value: any, options?: TakeOptions) => Promise<R>
+    : { error: 'matcher needs to be called on an ObservableStream instance' };
+
+  toEqualApolloQueryResult: T extends ApolloQueryResult<infer TData>
+    ? (expected: ApolloQueryResult<TData>) => R
+    : T extends Promise<ApolloQueryResult<infer TData>>
+      ? (expected: ApolloQueryResult<TData>) => R
+      : { error: 'matchers needs to be called on an ApolloQueryResult' };
+
+  toEqualQueryResult: T extends QueryResult<infer TData, infer TVariables>
+    ? (expected: Pick<QueryResult<TData, TVariables>, CheckedKeys>) => R
+    : T extends Promise<QueryResult<infer TData, infer TVariables>>
+      ? (expected: Pick<QueryResult<TData, TVariables>, CheckedKeys>) => R
+      : { error: 'matchers needs to be called on a QueryResult' };
+
+  toEqualFetchResult: T extends FetchResult<infer TData, infer TContext, infer TExtensions>
+    ? (expected: FetchResult<TData, TContext, TExtensions>) => R
+    : T extends Promise<FetchResult<infer TData, infer TContext, infer TExtensions>>
+      ? (expected: FetchResult<TData, TContext, TExtensions>) => R
+      : { error: 'matchers needs to be called on a FetchResult' };
 }
 
 declare global {
   namespace jest {
-    interface Matchers<R = void, T = {}> extends ApolloCustomMatchers<R, T> {}
+    interface Matchers<R = void, T = {}> extends ApolloCustomMatchers<R, T>, RenderStreamMatchers<R, T> {}
   }
 }

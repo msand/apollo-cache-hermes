@@ -1,10 +1,9 @@
 import gql from 'graphql-tag';
 import { visit, FragmentDefinitionNode } from 'graphql';
+import { hasOwn } from '@apollo/client/cache/inmemory/helpers';
 
-import { itAsync } from '../../../testing';
-import { hasOwn } from '../helpers';
 import { Hermes } from '../../../../../src';
-import { InMemoryCache } from '../inMemoryCache';
+import { toNormalizedCacheObject } from '../../../../helpers';
 
 describe('fragment matching', () => {
   it('can match exact types with or without possibleTypes', () => {
@@ -12,7 +11,7 @@ describe('fragment matching', () => {
       addTypename: true,
     });
 
-    const cacheWithPossibleTypes = new InMemoryCache({
+    const cacheWithPossibleTypes = new Hermes({
       addTypename: true,
       possibleTypes: {
         Animal: ['Cat', 'Dog'],
@@ -58,7 +57,7 @@ describe('fragment matching', () => {
   });
 
   it('can match interface subtypes', () => {
-    const cache = new InMemoryCache({
+    const cache = new Hermes({
       addTypename: true,
       possibleTypes: {
         Animal: ['Cat', 'Dog'],
@@ -90,7 +89,7 @@ describe('fragment matching', () => {
   });
 
   it('can match union member types', () => {
-    const cache = new InMemoryCache({
+    const cache = new Hermes({
       addTypename: true,
       possibleTypes: {
         Status: ['PASSING', 'FAILING', 'SKIPPED'],
@@ -140,7 +139,7 @@ describe('fragment matching', () => {
   });
 
   it('can match indirect subtypes while avoiding cycles', () => {
-    const cache = new InMemoryCache({
+    const cache = new Hermes({
       addTypename: true,
       possibleTypes: {
         Animal: ['Animal', 'Bug', 'Mammal'],
@@ -243,8 +242,8 @@ describe('policies.fragmentMatches', () => {
     console.warn = warn;
   });
 
-  itAsync('can infer fuzzy subtypes heuristically', (resolve, reject) => {
-    const cache = new InMemoryCache({
+  it('can infer fuzzy subtypes heuristically', async () => {
+    const cache = new Hermes({
       possibleTypes: {
         A: ['B', 'C'],
         B: ['D'],
@@ -279,8 +278,11 @@ describe('policies.fragmentMatches', () => {
       visit(fragments, {
         FragmentDefinition(frag) {
           function check(typename: string, result: boolean) {
-            if (result !== cache.policies.fragmentMatches(frag, typename)) {
-              reject(`fragment ${frag.name.value} should${result ? '' : ' not'} have matched typename ${typename}`);
+            // Hermes: cache.fragmentMatches (InMemoryCache's delegates to policies.fragmentMatches).
+            if (result !== cache.fragmentMatches(frag, typename)) {
+              throw new Error(
+                `fragment ${frag.name.value} should${result ? '' : ' not'} have matched typename ${typename}`,
+              );
             }
           }
 
@@ -475,10 +477,12 @@ describe('policies.fragmentMatches', () => {
       }).size,
     ).toBe('ABCDEF'.length);
 
-    expect(cache.extract()).toMatchSnapshot();
+    // Hermes: unselected fields (here, H's h) are stored too (see the snapshot).
+    expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
 
     // Now add the TooLong subtype of C explicitly.
-    cache.policies.addPossibleTypes({
+    // Hermes: possibleTypes are added to the cache's context (InMemoryCache's policies).
+    (cache as any)._queryable._context.addPossibleTypes({
       C: ['TooLong'],
     });
 
@@ -574,7 +578,5 @@ describe('policies.fragmentMatches', () => {
         },
       }).size,
     ).toBe('ABCDEF'.length);
-
-    resolve();
   });
 });

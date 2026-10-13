@@ -1,8 +1,9 @@
 import gql from 'graphql-tag';
 import { DocumentNode, OperationDefinitionNode } from 'graphql';
 import { ApolloClient, ApolloLink, Operation } from '@apollo/client';
+import { mockSingleLink, mockObservableLink, wait } from '@apollo/client/testing';
+import { ObservableStream, spyOnConsole } from '@apollo/client/testing/internal';
 
-import { itAsync, mockSingleLink, mockObservableLink } from '../testing';
 import { Hermes } from '../../../src';
 
 const isSub = (operation: Operation) =>
@@ -54,13 +55,11 @@ describe('subscribeToMore', () => {
     name: string;
   }
 
-  itAsync('triggers new result from subscription data', (resolve, reject) => {
-    let latestResult: any = null;
+  it('triggers new result from subscription data', async () => {
     const wSLink = mockObservableLink();
-    const httpLink = mockSingleLink(req1).setOnError(reject);
+    const httpLink = mockSingleLink(req1);
 
     const link = ApolloLink.split(isSub, wSLink, httpLink);
-    let counter = 0;
 
     const client = new ApolloClient({
       cache: new Hermes({ addTypename: false }),
@@ -68,21 +67,7 @@ describe('subscribeToMore', () => {
     });
 
     const obsHandle = client.watchQuery({ query });
-
-    const sub = obsHandle.subscribe({
-      next(queryResult: any) {
-        latestResult = queryResult;
-        if (++counter === 3) {
-          sub.unsubscribe();
-          expect(latestResult).toEqual({
-            data: { entry: { value: 'Amanda Liu' } },
-            loading: false,
-            networkStatus: 7,
-          });
-          resolve();
-        }
-      },
-    });
+    const stream = new ObservableStream(obsHandle);
 
     obsHandle.subscribeToMore<SubscriptionData>({
       document: gql`
@@ -95,25 +80,34 @@ describe('subscribeToMore', () => {
       },
     });
 
-    let i = 0;
-    function simulate() {
-      const result = results[i++];
-      if (result) {
-        wSLink.simulateResult(result);
-        setTimeout(simulate, 10);
-      }
-    }
-    simulate();
+    await expect(stream).toEmitValue({
+      data: { entry: { value: '1' } },
+      loading: false,
+      networkStatus: 7,
+    });
+
+    wSLink.simulateResult(results[0]);
+
+    await expect(stream).toEmitValue({
+      data: { entry: { value: 'Dahivat Pandya' } },
+      loading: false,
+      networkStatus: 7,
+    });
+
+    await wait(10);
+    wSLink.simulateResult(results[1]);
+
+    await expect(stream).toEmitValue({
+      data: { entry: { value: 'Amanda Liu' } },
+      loading: false,
+      networkStatus: 7,
+    });
   });
 
-  itAsync('calls error callback on error', (resolve, reject) => {
-    let latestResult: any = null;
+  it('calls error callback on error', async () => {
     const wSLink = mockObservableLink();
-    const httpLink = mockSingleLink(req1).setOnError(reject);
-
+    const httpLink = mockSingleLink(req1);
     const link = ApolloLink.split(isSub, wSLink, httpLink);
-
-    let counter = 0;
 
     const client = new ApolloClient({
       link,
@@ -123,14 +117,9 @@ describe('subscribeToMore', () => {
     const obsHandle = client.watchQuery<(typeof req1)['result']['data']>({
       query,
     });
-    const sub = obsHandle.subscribe({
-      next(queryResult: any) {
-        latestResult = queryResult;
-        counter++;
-      },
-    });
+    const stream = new ObservableStream(obsHandle);
 
-    let errorCount = 0;
+    const onError = jest.fn();
 
     obsHandle.subscribeToMore<SubscriptionData>({
       document: gql`
@@ -141,37 +130,37 @@ describe('subscribeToMore', () => {
       updateQuery: (_, { subscriptionData }) => {
         return { entry: { value: subscriptionData.data.name } };
       },
-      onError: () => {
-        errorCount += 1;
-      },
+      onError,
     });
 
-    setTimeout(() => {
-      sub.unsubscribe();
-      expect(latestResult).toEqual({
-        data: { entry: { value: 'Amanda Liu' } },
-        loading: false,
-        networkStatus: 7,
-      });
-      expect(counter).toBe(2);
-      expect(errorCount).toBe(1);
-      resolve();
-    }, 15);
-
-    for (let i = 0; i < 2; i++) {
-      wSLink.simulateResult(results2[i]);
+    for (const result of results2) {
+      wSLink.simulateResult(result);
     }
+
+    await expect(stream).toEmitValue({
+      data: { entry: { value: '1' } },
+      loading: false,
+      networkStatus: 7,
+    });
+
+    await expect(stream).toEmitValue({
+      data: { entry: { value: 'Amanda Liu' } },
+      loading: false,
+      networkStatus: 7,
+    });
+
+    await wait(15);
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(new Error('You cant touch this'));
   });
 
-  itAsync('prints unhandled subscription errors to the console', (resolve, reject) => {
-    let latestResult: any = null;
+  it('prints unhandled subscription errors to the console', async () => {
+    using _ = spyOnConsole('error');
 
     const wSLink = mockObservableLink();
-    const httpLink = mockSingleLink(req1).setOnError(reject);
-
+    const httpLink = mockSingleLink(req1);
     const link = ApolloLink.split(isSub, wSLink, httpLink);
-
-    let counter = 0;
 
     const client = new ApolloClient({
       link,
@@ -181,18 +170,7 @@ describe('subscribeToMore', () => {
     const obsHandle = client.watchQuery({
       query,
     });
-    const sub = obsHandle.subscribe({
-      next(queryResult: any) {
-        latestResult = queryResult;
-        counter++;
-      },
-    });
-
-    let errorCount = 0;
-    const consoleErr = console.error;
-    console.error = (_: Error) => {
-      errorCount += 1;
-    };
+    const stream = new ObservableStream(obsHandle);
 
     obsHandle.subscribeToMore({
       document: gql`
@@ -205,31 +183,31 @@ describe('subscribeToMore', () => {
       },
     });
 
-    setTimeout(() => {
-      sub.unsubscribe();
-      expect(latestResult).toEqual({
-        data: { entry: { value: '1' } },
-        loading: false,
-        networkStatus: 7,
-      });
-      expect(counter).toBe(1);
-      expect(errorCount).toBe(1);
-      console.error = consoleErr;
-      resolve();
-    }, 15);
-
-    for (let i = 0; i < 2; i++) {
-      wSLink.simulateResult(results3[i]);
+    for (const result of results3) {
+      wSLink.simulateResult(result);
     }
+
+    await expect(stream).toEmitValue({
+      data: { entry: { value: '1' } },
+      loading: false,
+      networkStatus: 7,
+    });
+
+    await wait(15);
+
+    expect(console.error).toHaveBeenCalledTimes(1);
+    expect(console.error).toHaveBeenCalledWith(
+      'Unhandled GraphQL subscription error',
+      new Error('You cant touch this'),
+    );
+
+    await expect(stream).not.toEmitAnything();
   });
 
-  itAsync('should not corrupt the cache (#3062)', async (resolve, reject) => {
-    let latestResult: any = null;
+  it('should not corrupt the cache (#3062)', async () => {
     const wSLink = mockObservableLink();
-    const httpLink = mockSingleLink(req4).setOnError(reject);
-
+    const httpLink = mockSingleLink(req4);
     const link = ApolloLink.split(isSub, wSLink, httpLink);
-    let counter = 0;
 
     const client = new ApolloClient({
       cache: new Hermes({ addTypename: false }).restore({
@@ -250,13 +228,7 @@ describe('subscribeToMore', () => {
     const obsHandle = client.watchQuery<(typeof req4)['result']['data']>({
       query,
     });
-
-    const sub = obsHandle.subscribe({
-      next(queryResult: any) {
-        latestResult = queryResult;
-        counter++;
-      },
-    });
+    const stream = new ObservableStream(obsHandle);
 
     let nextMutation: { value: string };
     obsHandle.subscribeToMore<SubscriptionData>({
@@ -265,15 +237,20 @@ describe('subscribeToMore', () => {
           name
         }
       `,
-      updateQuery: (prev, { subscriptionData }) => {
-        expect(prev.entry).not.toContainEqual(nextMutation);
+      updateQuery: (prev, { subscriptionData, complete, previousData }) => {
+        expect(complete).toBe(true);
+        expect(previousData).toStrictEqual(prev);
+        // Type Guard
+        if (!complete) {
+          return;
+        }
+
+        expect(previousData.entry).not.toContainEqual(nextMutation);
         return {
-          entry: [...prev.entry, { value: subscriptionData.data.name }],
+          entry: [...previousData.entry, { value: subscriptionData.data.name }],
         };
       },
     });
-
-    const wait = (dur: any) => new Promise(resolve => setTimeout(resolve, dur));
 
     for (let i = 0; i < 2; i++) {
       // init optimistic mutation
@@ -292,33 +269,34 @@ describe('subscribeToMore', () => {
       client.cache.removeOptimistic(i.toString());
       // note: we don't complete mutation with performTransaction because a real example would detect duplicates
     }
-    sub.unsubscribe();
-    expect(counter).toBe(3);
-    expect(latestResult).toEqual({
+
+    await expect(stream).toEmitValue({
+      data: { entry: [{ value: 1 }, { value: 2 }] },
+      loading: false,
+      networkStatus: 7,
+    });
+
+    await expect(stream).toEmitValue({
       data: {
-        entry: [
-          {
-            value: 1,
-          },
-          {
-            value: 2,
-          },
-          {
-            value: 'Dahivat Pandya',
-          },
-          {
-            value: 'Amanda Liu',
-          },
-        ],
+        entry: [{ value: 1 }, { value: 2 }, { value: 'Dahivat Pandya' }],
       },
       loading: false,
       networkStatus: 7,
     });
-    resolve();
+
+    await expect(stream).toEmitValue({
+      data: {
+        entry: [{ value: 1 }, { value: 2 }, { value: 'Dahivat Pandya' }, { value: 'Amanda Liu' }],
+      },
+      loading: false,
+      networkStatus: 7,
+    });
+
+    await expect(stream).not.toEmitAnything();
   });
   // TODO add a test that checks that subscriptions are cancelled when obs is unsubscribed from.
 
-  itAsync('allows specification of custom types for variables and payload (#4246)', (resolve, reject) => {
+  it('allows specification of custom types for variables and payload (#4246)', async () => {
     interface TypedOperation extends Operation {
       variables: {
         someNumber: number;
@@ -332,12 +310,9 @@ describe('subscribeToMore', () => {
       someString: string;
     }
 
-    let latestResult: any = null;
     const wSLink = mockObservableLink();
-    const httpLink = mockSingleLink(typedReq).setOnError(reject);
-
+    const httpLink = mockSingleLink(typedReq);
     const link = ApolloLink.split(isSub, wSLink, httpLink);
-    let counter = 0;
 
     const client = new ApolloClient({
       cache: new Hermes({ addTypename: false }),
@@ -350,21 +325,7 @@ describe('subscribeToMore', () => {
       query,
       variables: { someNumber: 1 },
     });
-
-    const sub = obsHandle.subscribe({
-      next(queryResult: any) {
-        latestResult = queryResult;
-        if (++counter === 3) {
-          sub.unsubscribe();
-          expect(latestResult).toEqual({
-            data: { entry: { value: 'Amanda Liu' } },
-            loading: false,
-            networkStatus: 7,
-          });
-          resolve();
-        }
-      },
-    });
+    const stream = new ObservableStream(obsHandle);
 
     obsHandle.subscribeToMore<SubscriptionData, TypedSubscriptionVariables>({
       document: gql`
@@ -380,14 +341,27 @@ describe('subscribeToMore', () => {
       },
     });
 
-    let i = 0;
-    function simulate() {
-      const result = results[i++];
-      if (result) {
-        wSLink.simulateResult(result);
-        setTimeout(simulate, 10);
-      }
-    }
-    simulate();
+    await expect(stream).toEmitValue({
+      data: { entry: { value: '1' } },
+      loading: false,
+      networkStatus: 7,
+    });
+
+    wSLink.simulateResult(results[0]);
+
+    await expect(stream).toEmitValue({
+      data: { entry: { value: 'Dahivat Pandya' } },
+      loading: false,
+      networkStatus: 7,
+    });
+
+    await wait(10);
+    wSLink.simulateResult(results[1]);
+
+    await expect(stream).toEmitValue({
+      data: { entry: { value: 'Amanda Liu' } },
+      loading: false,
+      networkStatus: 7,
+    });
   });
 });

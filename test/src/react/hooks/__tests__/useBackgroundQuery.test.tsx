@@ -1,36 +1,68 @@
 import * as React from 'react';
+import { Suspense } from 'react';
 import { act, screen, renderHook } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ErrorBoundary as ReactErrorBoundary, FallbackProps } from 'react-error-boundary';
 import { expectTypeOf } from 'expect-type';
 import { GraphQLError } from 'graphql';
+import {
+  gql,
+  ApolloError,
+  ApolloClient,
+  ErrorPolicy,
+  NetworkStatus,
+  TypedDocumentNode,
+  ApolloLink,
+  Observable,
+  split,
+} from '@apollo/client/core';
+import {
+  MockedResponse,
+  MockLink,
+  MockSubscriptionLink,
+  mockSingleLink,
+  MockedProvider,
+  wait,
+} from '@apollo/client/testing';
+import { concatPagination, offsetLimitPagination, DeepPartial, getMainDefinition } from '@apollo/client/utilities';
+import { useBackgroundQuery } from '@apollo/client/react/hooks/useBackgroundQuery';
+import { UseReadQueryResult, useReadQuery } from '@apollo/client/react/hooks/useReadQuery';
+import { ApolloProvider } from '@apollo/client/react/context';
+import { QueryRef, QueryReference } from '@apollo/client/react/internal';
+import { SuspenseQueryHookFetchPolicy } from '@apollo/client/react/types/types';
 import equal from '@wry/equality';
-import { ApolloClient, ApolloLink, ApolloProvider, InMemoryCache, skipToken } from '@apollo/client';
-import { Suspense } from 'react';
-
-import { gql, ApolloError, ErrorPolicy, NetworkStatus, TypedDocumentNode, Observable } from '../../../core';
-import { MockedResponse, MockLink, MockSubscriptionLink, mockSingleLink, MockedProvider, wait } from '../../../testing';
-import { concatPagination, offsetLimitPagination, DeepPartial } from '../../../utilities';
-import { useBackgroundQuery } from '../useBackgroundQuery';
-import { UseReadQueryResult, useReadQuery } from '../useReadQuery';
-import { QueryRef, QueryReference } from '../../internal';
-import { SuspenseQueryHookFetchPolicy } from '../../types/types';
-import { RefetchWritePolicy } from '../../../core/watchQueryOptions';
+import {
+  RefetchWritePolicy,
+  SubscribeToMoreOptions,
+  SubscribeToMoreFunction,
+} from '@apollo/client/core/watchQueryOptions';
+import { skipToken } from '@apollo/client/react/hooks/constants';
 import {
   PaginatedCaseData,
-  Profiler,
   SimpleCaseData,
   VariablesCaseData,
   VariablesCaseVariables,
-  createProfiler,
-  renderWithClient,
-  renderWithMocks,
+  createMockWrapper,
+  createClientWrapper,
   setupPaginatedCase,
   setupSimpleCase,
   setupVariablesCase,
   spyOnConsole,
+  addDelayToMocks,
+} from '@apollo/client/testing/internal';
+import {
+  MaskedVariablesCaseData,
+  setupMaskedVariablesCase,
+  UnmaskedVariablesCaseData,
+} from '@apollo/client/testing/internal/scenarios';
+import { Masked, MaskedDocumentNode } from '@apollo/client/masking';
+import {
+  RenderStream,
+  createRenderStream,
+  disableActEnvironment,
   useTrackRenders,
-} from '../../../testing/internal';
+} from '@testing-library/react-render-stream';
+
 import { Hermes } from '../../../../../src';
 
 afterEach(() => {
@@ -40,7 +72,7 @@ afterEach(() => {
 function createDefaultTrackedComponents<
   Snapshot extends { result: UseReadQueryResult<any> | null },
   TData = Snapshot['result'] extends UseReadQueryResult<infer TData> | null ? TData : unknown,
->(Profiler: Profiler<Snapshot>) {
+>(renderStream: RenderStream<Snapshot>) {
   function SuspenseFallback() {
     useTrackRenders();
     return <div>Loading</div>;
@@ -48,7 +80,7 @@ function createDefaultTrackedComponents<
 
   function ReadQueryHook({ queryRef }: { queryRef: QueryRef<TData> }) {
     useTrackRenders();
-    Profiler.mergeSnapshot({
+    renderStream.mergeSnapshot({
       result: useReadQuery(queryRef),
     } as Partial<Snapshot>);
 
@@ -58,10 +90,10 @@ function createDefaultTrackedComponents<
   return { SuspenseFallback, ReadQueryHook };
 }
 
-function createTrackedErrorComponents<Snapshot extends { error: Error | null }>(Profiler: Profiler<Snapshot>) {
+function createTrackedErrorComponents<Snapshot extends { error: Error | null }>(renderStream: RenderStream<Snapshot>) {
   function ErrorFallback({ error }: FallbackProps) {
     useTrackRenders({ name: 'ErrorFallback' });
-    Profiler.mergeSnapshot({ error } as Partial<Snapshot>);
+    renderStream.mergeSnapshot({ error } as Partial<Snapshot>);
 
     return <div>Error</div>;
   }
@@ -74,7 +106,7 @@ function createTrackedErrorComponents<Snapshot extends { error: Error | null }>(
 }
 
 function createErrorProfiler<TData = unknown>() {
-  return createProfiler({
+  return createRenderStream({
     initialSnapshot: {
       error: null as Error | null,
       result: null as UseReadQueryResult<TData> | null,
@@ -83,7 +115,7 @@ function createErrorProfiler<TData = unknown>() {
 }
 
 function createDefaultProfiler<TData = unknown>() {
-  return createProfiler({
+  return createRenderStream({
     initialSnapshot: {
       result: null as UseReadQueryResult<TData> | null,
     },
@@ -93,9 +125,9 @@ function createDefaultProfiler<TData = unknown>() {
 it('fetches a simple query with minimal config', async () => {
   const { query, mocks } = setupSimpleCase();
 
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
 
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -108,16 +140,17 @@ it('fetches a simple query with minimal config', async () => {
     );
   }
 
-  renderWithMocks(<App />, { mocks, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createMockWrapper({ mocks }) });
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
   {
-    const { renderedComponents, snapshot } = await Profiler.takeRender();
+    const { renderedComponents, snapshot } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -127,7 +160,7 @@ it('fetches a simple query with minimal config', async () => {
     });
   }
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it('tears down the query on unmount', async () => {
@@ -136,8 +169,8 @@ it('tears down the query on unmount', async () => {
     link: new MockLink(mocks),
     cache: new Hermes(),
   });
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -150,13 +183,16 @@ it('tears down the query on unmount', async () => {
     );
   }
 
-  const { unmount } = renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  const { unmount } = await renderStream.render(<App />, {
+    wrapper: createClientWrapper(client),
+  });
 
   // initial suspended render
-  await Profiler.takeRender();
+  await renderStream.takeRender();
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { greeting: 'Hello' },
@@ -255,8 +291,8 @@ it('will resubscribe after disposed when mounting useReadQuery', async () => {
     },
   });
 
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -271,27 +307,28 @@ it('will resubscribe after disposed when mounting useReadQuery', async () => {
     );
   }
 
-  renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
 
   expect(client.getObservableQueries().size).toBe(1);
   expect(client).toHaveSuspenseCacheEntryUsing(query);
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App]);
   }
 
   // Wait long enough for auto dispose to kick in
-  await wait(50);
+  await wait(80);
 
   expect(client.getObservableQueries().size).toBe(0);
   expect(client).not.toHaveSuspenseCacheEntryUsing(query);
 
-  await act(() => user.click(screen.getByText('Toggle')));
+  await user.click(screen.getByText('Toggle'));
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -307,7 +344,7 @@ it('will resubscribe after disposed when mounting useReadQuery', async () => {
   });
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -317,7 +354,7 @@ it('will resubscribe after disposed when mounting useReadQuery', async () => {
     });
   }
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it('auto resubscribes when mounting useReadQuery after naturally disposed by useReadQuery', async () => {
@@ -328,8 +365,8 @@ it('auto resubscribes when mounting useReadQuery after naturally disposed by use
     cache: new Hermes(),
   });
 
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -344,7 +381,8 @@ it('auto resubscribes when mounting useReadQuery after naturally disposed by use
     );
   }
 
-  renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
 
   const toggleButton = screen.getByText('Toggle');
 
@@ -352,13 +390,13 @@ it('auto resubscribes when mounting useReadQuery after naturally disposed by use
   expect(client).toHaveSuspenseCacheEntryUsing(query);
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { greeting: 'Hello' },
@@ -367,8 +405,8 @@ it('auto resubscribes when mounting useReadQuery after naturally disposed by use
     });
   }
 
-  await act(() => user.click(toggleButton));
-  await Profiler.takeRender();
+  await user.click(toggleButton);
+  await renderStream.takeRender();
   await wait(0);
 
   expect(client.getObservableQueries().size).toBe(0);
@@ -377,13 +415,13 @@ it('auto resubscribes when mounting useReadQuery after naturally disposed by use
   // again.
   expect(client).toHaveSuspenseCacheEntryUsing(query);
 
-  await act(() => user.click(toggleButton));
+  await user.click(toggleButton);
 
   expect(client.getObservableQueries().size).toBe(1);
   expect(client).toHaveSuspenseCacheEntryUsing(query);
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -399,7 +437,7 @@ it('auto resubscribes when mounting useReadQuery after naturally disposed by use
   });
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -409,7 +447,7 @@ it('auto resubscribes when mounting useReadQuery after naturally disposed by use
     });
   }
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it('does not recreate queryRef and execute a network request when rerendering useBackgroundQuery after queryRef is disposed', async () => {
@@ -430,8 +468,8 @@ it('does not recreate queryRef and execute a network request when rerendering us
     cache: new Hermes(),
   });
 
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -448,18 +486,21 @@ it('does not recreate queryRef and execute a network request when rerendering us
     );
   }
 
-  const { rerender } = renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  const { rerender } = await renderStream.render(<App />, {
+    wrapper: createClientWrapper(client),
+  });
 
   const toggleButton = screen.getByText('Toggle');
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { greeting: 'Hello' },
@@ -468,19 +509,19 @@ it('does not recreate queryRef and execute a network request when rerendering us
     });
   }
 
-  await act(() => user.click(toggleButton));
-  await Profiler.takeRender();
+  await user.click(toggleButton);
+  await renderStream.takeRender();
   await wait(0);
 
-  rerender(<App />);
-  await Profiler.takeRender();
+  await rerender(<App />);
+  await renderStream.takeRender();
 
   expect(fetchCount).toBe(1);
 
-  await act(() => user.click(toggleButton));
+  await user.click(toggleButton);
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -492,7 +533,7 @@ it('does not recreate queryRef and execute a network request when rerendering us
 
   expect(fetchCount).toBe(1);
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 // https://github.com/apollographql/apollo-client/issues/11815
@@ -514,13 +555,13 @@ it('does not recreate queryRef or execute a network request when rerendering use
     cache: new Hermes(),
   });
 
-  const Profiler = createProfiler({
+  const renderStream = createRenderStream({
     initialSnapshot: {
       queryRef: null as QueryRef<SimpleCaseData> | null,
       result: null as UseReadQueryResult<SimpleCaseData> | null,
     },
   });
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -529,7 +570,7 @@ it('does not recreate queryRef or execute a network request when rerendering use
     // another network request was made
     const [queryRef] = useBackgroundQuery(query, { fetchPolicy: 'no-cache' });
 
-    Profiler.mergeSnapshot({ queryRef });
+    renderStream.mergeSnapshot({ queryRef });
 
     return (
       <>
@@ -541,36 +582,32 @@ it('does not recreate queryRef or execute a network request when rerendering use
     );
   }
 
-  renderWithClient(<App />, {
-    client,
-    wrapper: ({ children }) => (
-      <Profiler>
-        <React.StrictMode>{children}</React.StrictMode>
-      </Profiler>
-    ),
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, {
+    wrapper: createClientWrapper(client, React.StrictMode),
   });
 
   const incrementButton = screen.getByText('Increment');
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
-  const firstRender = await Profiler.takeRender();
+  const firstRender = await renderStream.takeRender();
   const initialQueryRef = firstRender.snapshot.queryRef;
 
-  await act(() => user.click(incrementButton));
+  await user.click(incrementButton);
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.queryRef).toBe(initialQueryRef);
     expect(fetchCount).toBe(1);
   }
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it('disposes of the queryRef when unmounting before it is used by useReadQuery', async () => {
@@ -580,7 +617,7 @@ it('disposes of the queryRef when unmounting before it is used by useReadQuery',
     cache: new Hermes(),
   });
 
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
 
   function App() {
     useTrackRenders();
@@ -589,13 +626,16 @@ it('disposes of the queryRef when unmounting before it is used by useReadQuery',
     return null;
   }
 
-  const { unmount } = renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  const { unmount } = await renderStream.render(<App />, {
+    wrapper: createClientWrapper(client),
+  });
 
   expect(client.getObservableQueries().size).toBe(1);
   expect(client).toHaveSuspenseCacheEntryUsing(query);
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App]);
   }
@@ -614,7 +654,7 @@ it('disposes of old queryRefs when changing variables before the queryRef is use
     cache: new Hermes(),
   });
 
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
 
   function App({ id }: { id: string }) {
     useTrackRenders();
@@ -623,9 +663,9 @@ it('disposes of old queryRefs when changing variables before the queryRef is use
     return null;
   }
 
-  const { rerender } = renderWithClient(<App id='1' />, {
-    client,
-    wrapper: Profiler,
+  using _disabledAct = disableActEnvironment();
+  const { rerender } = await renderStream.render(<App id='1' />, {
+    wrapper: createClientWrapper(client),
   });
 
   expect(client.getObservableQueries().size).toBe(1);
@@ -634,14 +674,14 @@ it('disposes of old queryRefs when changing variables before the queryRef is use
   });
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App]);
   }
 
-  rerender(<App id='2' />);
+  await rerender(<App id='2' />);
 
-  await wait(0);
+  await wait(10);
 
   expect(client.getObservableQueries().size).toBe(1);
   expect(client).toHaveSuspenseCacheEntryUsing(query, {
@@ -659,7 +699,7 @@ it('does not prematurely dispose of the queryRef when using strict mode', async 
     cache: new Hermes(),
   });
 
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
 
   function App() {
     useTrackRenders();
@@ -668,17 +708,13 @@ it('does not prematurely dispose of the queryRef when using strict mode', async 
     return null;
   }
 
-  renderWithClient(<App />, {
-    client,
-    wrapper: ({ children }) => (
-      <React.StrictMode>
-        <Profiler>{children}</Profiler>
-      </React.StrictMode>
-    ),
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, {
+    wrapper: createClientWrapper(client, React.StrictMode),
   });
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App]);
   }
@@ -697,7 +733,7 @@ it('disposes of the queryRef when unmounting before it is used by useReadQuery e
   });
   const user = userEvent.setup();
 
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
 
   function App() {
     useTrackRenders();
@@ -712,16 +748,16 @@ it('disposes of the queryRef when unmounting before it is used by useReadQuery e
     );
   }
 
-  const { unmount } = renderWithClient(<App />, {
-    client,
-    wrapper: Profiler,
+  using _disabledAct = disableActEnvironment();
+  const { unmount } = await renderStream.render(<App />, {
+    wrapper: createClientWrapper(client),
   });
   const button = screen.getByText('Increment');
 
-  await act(() => user.click(button));
+  await user.click(button);
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App]);
   }
@@ -749,9 +785,9 @@ it('allows the client to be overridden', async () => {
     cache: new Hermes(),
   });
 
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
 
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -764,16 +800,19 @@ it('allows the client to be overridden', async () => {
     );
   }
 
-  renderWithClient(<App />, { client: globalClient, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, {
+    wrapper: createClientWrapper(globalClient),
+  });
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -783,7 +822,7 @@ it('allows the client to be overridden', async () => {
     });
   }
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it('passes context to the link', async () => {
@@ -802,9 +841,9 @@ it('passes context to the link', async () => {
     });
   });
 
-  const Profiler = createDefaultProfiler();
+  const renderStream = createDefaultProfiler();
 
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -819,16 +858,17 @@ it('passes context to the link', async () => {
     );
   }
 
-  renderWithMocks(<App />, { link, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createMockWrapper({ link }) });
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { context: { valueA: 'A', valueB: 'B' } },
@@ -876,9 +916,9 @@ it.skip('enables canonical results when canonizeResults is "true"', async () => 
 
   cache.writeQuery({ query, data: { results } });
 
-  const Profiler = createDefaultProfiler<Data>();
+  const renderStream = createDefaultProfiler<Data>();
 
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -891,11 +931,12 @@ it.skip('enables canonical results when canonizeResults is "true"', async () => 
     );
   }
 
-  renderWithMocks(<App />, { cache, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createMockWrapper({ cache }) });
 
   const {
     snapshot: { result },
-  } = await Profiler.takeRender();
+  } = await renderStream.takeRender();
 
   const resultSet = new Set(result!.data.results);
   const values = Array.from(resultSet).map(item => item.value);
@@ -916,8 +957,8 @@ it("can disable canonical results when the cache's canonizeResults setting is tr
     results: Result[];
   }
 
-  const cache = new InMemoryCache({
-    canonizeResults: true,
+  const cache = new Hermes({
+    // Hermes: canonizeResults is an InMemoryCache-only option; Hermes never canonizes results.
     typePolicies: {
       Result: {
         keyFields: false,
@@ -944,9 +985,9 @@ it("can disable canonical results when the cache's canonizeResults setting is tr
 
   cache.writeQuery({ query, data: { results } });
 
-  const Profiler = createDefaultProfiler<Data>();
+  const renderStream = createDefaultProfiler<Data>();
 
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -959,9 +1000,10 @@ it("can disable canonical results when the cache's canonizeResults setting is tr
     );
   }
 
-  renderWithMocks(<App />, { cache, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createMockWrapper({ cache }) });
 
-  const { snapshot } = await Profiler.takeRender();
+  const { snapshot } = await renderStream.takeRender();
   const result = snapshot.result!;
 
   const resultSet = new Set(result.data.results);
@@ -986,9 +1028,9 @@ it('returns initial cache data followed by network data when the fetch policy is
 
   cache.writeQuery({ query, data: { greeting: 'from cache' } });
 
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
 
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -1003,10 +1045,11 @@ it('returns initial cache data followed by network data when the fetch policy is
     );
   }
 
-  renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -1017,7 +1060,7 @@ it('returns initial cache data followed by network data when the fetch policy is
   }
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -1027,7 +1070,7 @@ it('returns initial cache data followed by network data when the fetch policy is
     });
   }
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it('all data is present in the cache, no network request is made', async () => {
@@ -1049,9 +1092,9 @@ it('all data is present in the cache, no network request is made', async () => {
 
   cache.writeQuery({ query, data: { greeting: 'from cache' } });
 
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
 
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -1066,9 +1109,10 @@ it('all data is present in the cache, no network request is made', async () => {
     );
   }
 
-  renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
 
-  const { snapshot, renderedComponents } = await Profiler.takeRender();
+  const { snapshot, renderedComponents } = await renderStream.takeRender();
 
   expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
   expect(snapshot.result).toEqual({
@@ -1079,7 +1123,7 @@ it('all data is present in the cache, no network request is made', async () => {
 
   expect(fetchCount).toBe(0);
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it('partial data is present in the cache so it is ignored and network request is made', async () => {
@@ -1105,9 +1149,9 @@ it('partial data is present in the cache so it is ignored and network request is
     cache.writeQuery({ query, data: { hello: 'from cache' } });
   }
 
-  const Profiler = createDefaultProfiler();
+  const renderStream = createDefaultProfiler();
 
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -1122,16 +1166,17 @@ it('partial data is present in the cache so it is ignored and network request is
     );
   }
 
-  renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { foo: 'bar', hello: 'from link' },
@@ -1140,7 +1185,7 @@ it('partial data is present in the cache so it is ignored and network request is
     });
   }
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it("existing data in the cache is ignored when fetchPolicy is 'network-only'", async () => {
@@ -1156,9 +1201,9 @@ it("existing data in the cache is ignored when fetchPolicy is 'network-only'", a
 
   cache.writeQuery({ query, data: { greeting: 'from cache' } });
 
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
 
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -1173,16 +1218,17 @@ it("existing data in the cache is ignored when fetchPolicy is 'network-only'", a
     );
   }
 
-  renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { greeting: 'from link' },
@@ -1195,7 +1241,7 @@ it("existing data in the cache is ignored when fetchPolicy is 'network-only'", a
     ROOT_QUERY: { type: 0, data: { greeting: 'from link' } },
   });
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it("fetches data from the network but does not update the cache when fetchPolicy is 'no-cache'", async () => {
@@ -1211,9 +1257,9 @@ it("fetches data from the network but does not update the cache when fetchPolicy
 
   cache.writeQuery({ query, data: { greeting: 'from cache' } });
 
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
 
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -1226,16 +1272,17 @@ it("fetches data from the network but does not update the cache when fetchPolicy
     );
   }
 
-  renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { greeting: 'from link' },
@@ -1248,7 +1295,7 @@ it("fetches data from the network but does not update the cache when fetchPolicy
     ROOT_QUERY: { type: 0, data: { greeting: 'from cache' } },
   });
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it('works with startTransition to change variables', async () => {
@@ -1300,14 +1347,14 @@ it('works with startTransition to change variables', async () => {
     cache: new Hermes(),
   });
 
-  const Profiler = createProfiler({
+  const renderStream = createRenderStream({
     initialSnapshot: {
       isPending: false,
       result: null as UseReadQueryResult<Data> | null,
     },
   });
 
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -1317,7 +1364,7 @@ it('works with startTransition to change variables', async () => {
       variables: { id },
     });
 
-    Profiler.mergeSnapshot({ isPending });
+    renderStream.mergeSnapshot({ isPending });
 
     return (
       <>
@@ -1339,16 +1386,17 @@ it('works with startTransition to change variables', async () => {
     );
   }
 
-  renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
     expect(snapshot).toEqual({
@@ -1361,10 +1409,10 @@ it('works with startTransition to change variables', async () => {
     });
   }
 
-  await act(() => user.click(screen.getByText('Change todo')));
+  await user.click(screen.getByText('Change todo'));
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     // startTransition will avoid rendering the suspense fallback for already
     // revealed content if the state update inside the transition causes the
@@ -1386,7 +1434,7 @@ it('works with startTransition to change variables', async () => {
   }
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     // Eventually we should see the updated todo content once its done
     // suspending.
@@ -1438,9 +1486,9 @@ it('does not suspend deferred queries with data in the cache and using a "cache-
   });
   const client = new ApolloClient({ cache, link });
 
-  const Profiler = createDefaultProfiler<Data>();
+  const renderStream = createDefaultProfiler<Data>();
 
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -1455,10 +1503,11 @@ it('does not suspend deferred queries with data in the cache and using a "cache-
     );
   }
 
-  renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -1484,7 +1533,7 @@ it('does not suspend deferred queries with data in the cache and using a "cache-
   });
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -1516,7 +1565,7 @@ it('does not suspend deferred queries with data in the cache and using a "cache-
   });
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -1532,7 +1581,7 @@ it('does not suspend deferred queries with data in the cache and using a "cache-
     });
   }
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it('reacts to cache updates', async () => {
@@ -1543,9 +1592,9 @@ it('reacts to cache updates', async () => {
     cache: new Hermes(),
   });
 
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
 
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -1558,16 +1607,17 @@ it('reacts to cache updates', async () => {
     );
   }
 
-  renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { greeting: 'Hello' },
@@ -1582,7 +1632,7 @@ it('reacts to cache updates', async () => {
   });
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -1598,7 +1648,7 @@ it('reacts to cache updates', async () => {
   });
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -1608,15 +1658,15 @@ it('reacts to cache updates', async () => {
     });
   }
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it('reacts to variables updates', async () => {
   const { query, mocks } = setupVariablesCase();
 
-  const Profiler = createDefaultProfiler<VariablesCaseData>();
+  const renderStream = createDefaultProfiler<VariablesCaseData>();
 
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App({ id }: { id: string }) {
     useTrackRenders();
@@ -1629,19 +1679,21 @@ it('reacts to variables updates', async () => {
     );
   }
 
-  const { rerender } = renderWithMocks(<App id='1' />, {
-    mocks,
-    wrapper: Profiler,
+  using _disabledAct = disableActEnvironment();
+  const { rerender } = await renderStream.render(<App id='1' />, {
+    wrapper: createMockWrapper({
+      mocks: addDelayToMocks(mocks, 150, true),
+    }),
   });
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: {
@@ -1652,16 +1704,16 @@ it('reacts to variables updates', async () => {
     });
   }
 
-  rerender(<App id='2' />);
+  await rerender(<App id='2' />);
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: {
@@ -1672,14 +1724,14 @@ it('reacts to variables updates', async () => {
     });
   }
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it('does not suspend when `skip` is true', async () => {
   const { query, mocks } = setupSimpleCase();
 
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -1688,20 +1740,21 @@ it('does not suspend when `skip` is true', async () => {
     return <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>;
   }
 
-  renderWithMocks(<App />, { mocks, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createMockWrapper({ mocks }) });
 
-  const { renderedComponents } = await Profiler.takeRender();
+  const { renderedComponents } = await renderStream.takeRender();
 
   expect(renderedComponents).toStrictEqual([App]);
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it('does not suspend when using `skipToken` in options', async () => {
   const { query, mocks } = setupSimpleCase();
 
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -1710,21 +1763,22 @@ it('does not suspend when using `skipToken` in options', async () => {
     return <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>;
   }
 
-  renderWithMocks(<App />, { mocks, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createMockWrapper({ mocks }) });
 
-  const { renderedComponents } = await Profiler.takeRender();
+  const { renderedComponents } = await renderStream.takeRender();
 
   expect(renderedComponents).toStrictEqual([App]);
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it('suspends when `skip` becomes `false` after it was `true`', async () => {
   const { query, mocks } = setupSimpleCase();
   const user = userEvent.setup();
 
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -1739,24 +1793,25 @@ it('suspends when `skip` becomes `false` after it was `true`', async () => {
     );
   }
 
-  renderWithMocks(<App />, { mocks, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createMockWrapper({ mocks }) });
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App]);
   }
 
-  await act(() => user.click(screen.getByText('Run query')));
+  await user.click(screen.getByText('Run query'));
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { greeting: 'Hello' },
@@ -1765,15 +1820,15 @@ it('suspends when `skip` becomes `false` after it was `true`', async () => {
     });
   }
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it('suspends when switching away from `skipToken` in options', async () => {
   const { query, mocks } = setupSimpleCase();
 
   const user = userEvent.setup();
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -1788,24 +1843,25 @@ it('suspends when switching away from `skipToken` in options', async () => {
     );
   }
 
-  renderWithMocks(<App />, { mocks, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createMockWrapper({ mocks }) });
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App]);
   }
 
-  await act(() => user.click(screen.getByText('Run query')));
+  await user.click(screen.getByText('Run query'));
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { greeting: 'Hello' },
@@ -1814,15 +1870,15 @@ it('suspends when switching away from `skipToken` in options', async () => {
     });
   }
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it('renders skip result, does not suspend, and maintains `data` when `skip` becomes `true` after it was `false`', async () => {
   const { query, mocks } = setupSimpleCase();
 
   const user = userEvent.setup();
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -1837,16 +1893,17 @@ it('renders skip result, does not suspend, and maintains `data` when `skip` beco
     );
   }
 
-  renderWithMocks(<App />, { mocks, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createMockWrapper({ mocks }) });
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { greeting: 'Hello' },
@@ -1855,10 +1912,10 @@ it('renders skip result, does not suspend, and maintains `data` when `skip` beco
     });
   }
 
-  await act(() => user.click(screen.getByText('Toggle skip')));
+  await user.click(screen.getByText('Toggle skip'));
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -1868,14 +1925,14 @@ it('renders skip result, does not suspend, and maintains `data` when `skip` beco
     });
   }
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it('renders skip result, does not suspend, and maintains `data` when switching back to `skipToken`', async () => {
   const { query, mocks } = setupSimpleCase();
   const user = userEvent.setup();
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -1890,16 +1947,17 @@ it('renders skip result, does not suspend, and maintains `data` when switching b
     );
   }
 
-  renderWithMocks(<App />, { mocks, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createMockWrapper({ mocks }) });
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { greeting: 'Hello' },
@@ -1908,10 +1966,10 @@ it('renders skip result, does not suspend, and maintains `data` when switching b
     });
   }
 
-  await act(() => user.click(screen.getByText('Toggle skip')));
+  await user.click(screen.getByText('Toggle skip'));
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -1921,7 +1979,7 @@ it('renders skip result, does not suspend, and maintains `data` when switching b
     });
   }
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it('does not make network requests when `skip` is `true`', async () => {
@@ -1950,8 +2008,8 @@ it('does not make network requests when `skip` is `true`', async () => {
     cache: new Hermes(),
   });
 
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -1966,24 +2024,25 @@ it('does not make network requests when `skip` is `true`', async () => {
     );
   }
 
-  renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
 
   // initial skipped result
-  await Profiler.takeRender();
+  await renderStream.takeRender();
   expect(fetchCount).toBe(0);
 
   // Toggle skip to `false`
-  await act(() => user.click(screen.getByText('Toggle skip')));
+  await user.click(screen.getByText('Toggle skip'));
 
   expect(fetchCount).toBe(1);
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { greeting: 'Hello' },
@@ -1993,11 +2052,11 @@ it('does not make network requests when `skip` is `true`', async () => {
   }
 
   // Toggle skip to `true`
-  await act(() => user.click(screen.getByText('Toggle skip')));
+  await user.click(screen.getByText('Toggle skip'));
 
   expect(fetchCount).toBe(1);
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { greeting: 'Hello' },
@@ -2009,8 +2068,8 @@ it('does not make network requests when `skip` is `true`', async () => {
 
 it('does not make network requests when `skipToken` is used', async () => {
   const { query, mocks } = setupSimpleCase();
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
   const user = userEvent.setup();
 
   let fetchCount = 0;
@@ -2048,24 +2107,25 @@ it('does not make network requests when `skipToken` is used', async () => {
     );
   }
 
-  renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
 
   // initial skipped result
-  await Profiler.takeRender();
+  await renderStream.takeRender();
   expect(fetchCount).toBe(0);
 
   // Toggle skip to `false`
-  await act(() => user.click(screen.getByText('Toggle skip')));
+  await user.click(screen.getByText('Toggle skip'));
 
   expect(fetchCount).toBe(1);
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { greeting: 'Hello' },
@@ -2075,11 +2135,11 @@ it('does not make network requests when `skipToken` is used', async () => {
   }
 
   // Toggle skip to `true`
-  await act(() => user.click(screen.getByText('Toggle skip')));
+  await user.click(screen.getByText('Toggle skip'));
 
   expect(fetchCount).toBe(1);
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { greeting: 'Hello' },
@@ -2091,8 +2151,8 @@ it('does not make network requests when `skipToken` is used', async () => {
 
 it('does not make network requests when `skipToken` is used in strict mode', async () => {
   const { query, mocks } = setupSimpleCase();
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
   const user = userEvent.setup();
 
   let fetchCount = 0;
@@ -2130,25 +2190,21 @@ it('does not make network requests when `skipToken` is used in strict mode', asy
     );
   }
 
-  renderWithClient(<App />, {
-    client,
-    wrapper: ({ children }) => (
-      <React.StrictMode>
-        <Profiler>{children}</Profiler>
-      </React.StrictMode>
-    ),
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, {
+    wrapper: createClientWrapper(client, React.StrictMode),
   });
 
   // initial skipped result
-  await Profiler.takeRender();
+  await renderStream.takeRender();
   expect(fetchCount).toBe(0);
 
   // Toggle skip to `false`
-  await act(() => user.click(screen.getByText('Toggle skip')));
-  await Profiler.takeRender();
+  await user.click(screen.getByText('Toggle skip'));
+  await renderStream.takeRender();
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { greeting: 'Hello' },
@@ -2160,10 +2216,10 @@ it('does not make network requests when `skipToken` is used in strict mode', asy
   expect(fetchCount).toBe(1);
 
   // Toggle skip to `true`
-  await act(() => user.click(screen.getByText('Toggle skip')));
+  await user.click(screen.getByText('Toggle skip'));
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { greeting: 'Hello' },
@@ -2174,13 +2230,13 @@ it('does not make network requests when `skipToken` is used in strict mode', asy
 
   expect(fetchCount).toBe(1);
 
-  await expect(Profiler).not.toRerender();
+  await expect(renderStream).not.toRerender();
 });
 
 it('does not make network requests when using `skip` option in strict mode', async () => {
   const { query, mocks } = setupSimpleCase();
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
   const user = userEvent.setup();
 
   let fetchCount = 0;
@@ -2218,25 +2274,21 @@ it('does not make network requests when using `skip` option in strict mode', asy
     );
   }
 
-  renderWithClient(<App />, {
-    client,
-    wrapper: ({ children }) => (
-      <React.StrictMode>
-        <Profiler>{children}</Profiler>
-      </React.StrictMode>
-    ),
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, {
+    wrapper: createClientWrapper(client, React.StrictMode),
   });
 
   // initial skipped result
-  await Profiler.takeRender();
+  await renderStream.takeRender();
   expect(fetchCount).toBe(0);
 
   // Toggle skip to `false`
-  await act(() => user.click(screen.getByText('Toggle skip')));
-  await Profiler.takeRender();
+  await user.click(screen.getByText('Toggle skip'));
+  await renderStream.takeRender();
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { greeting: 'Hello' },
@@ -2248,10 +2300,10 @@ it('does not make network requests when using `skip` option in strict mode', asy
   expect(fetchCount).toBe(1);
 
   // Toggle skip to `true`
-  await act(() => user.click(screen.getByText('Toggle skip')));
+  await user.click(screen.getByText('Toggle skip'));
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { greeting: 'Hello' },
@@ -2262,7 +2314,7 @@ it('does not make network requests when using `skip` option in strict mode', asy
 
   expect(fetchCount).toBe(1);
 
-  await expect(Profiler).not.toRerender();
+  await expect(renderStream).not.toRerender();
 });
 
 it('result is referentially stable', async () => {
@@ -2270,8 +2322,8 @@ it('result is referentially stable', async () => {
 
   let result: UseReadQueryResult<SimpleCaseData> | null = null;
 
-  const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<SimpleCaseData>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -2284,16 +2336,19 @@ it('result is referentially stable', async () => {
     );
   }
 
-  const { rerender } = renderWithMocks(<App />, { mocks, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  const { rerender } = await renderStream.render(<App />, {
+    wrapper: createMockWrapper({ mocks }),
+  });
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { greeting: 'Hello' },
@@ -2304,10 +2359,10 @@ it('result is referentially stable', async () => {
     result = snapshot.result;
   }
 
-  rerender(<App />);
+  await rerender(<App />);
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toBe(result);
   }
@@ -2317,13 +2372,13 @@ it('`skip` option works with `startTransition`', async () => {
   const { query, mocks } = setupSimpleCase();
 
   const user = userEvent.setup();
-  const Profiler = createProfiler({
+  const renderStream = createRenderStream({
     initialSnapshot: {
       isPending: false,
       result: null as UseReadQueryResult<SimpleCaseData> | null,
     },
   });
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -2331,7 +2386,7 @@ it('`skip` option works with `startTransition`', async () => {
     const [isPending, startTransition] = React.useTransition();
     const [queryRef] = useBackgroundQuery(query, { skip });
 
-    Profiler.mergeSnapshot({ isPending });
+    renderStream.mergeSnapshot({ isPending });
 
     return (
       <>
@@ -2350,19 +2405,20 @@ it('`skip` option works with `startTransition`', async () => {
     );
   }
 
-  renderWithMocks(<App />, { mocks, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createMockWrapper({ mocks }) });
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App]);
   }
 
   // Toggle skip to `false`
-  await act(() => user.click(screen.getByText('Toggle skip')));
+  await user.click(screen.getByText('Toggle skip'));
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App]);
     expect(snapshot).toEqual({
@@ -2372,7 +2428,7 @@ it('`skip` option works with `startTransition`', async () => {
   }
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
     expect(snapshot).toEqual({
@@ -2385,21 +2441,21 @@ it('`skip` option works with `startTransition`', async () => {
     });
   }
 
-  await expect(Profiler).not.toRerender();
+  await expect(renderStream).not.toRerender();
 });
 
 it('`skipToken` works with `startTransition`', async () => {
   const { query, mocks } = setupSimpleCase();
   const user = userEvent.setup();
 
-  const Profiler = createProfiler({
+  const renderStream = createRenderStream({
     initialSnapshot: {
       isPending: false,
       result: null as UseReadQueryResult<SimpleCaseData> | null,
     },
   });
 
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -2407,7 +2463,7 @@ it('`skipToken` works with `startTransition`', async () => {
     const [isPending, startTransition] = React.useTransition();
     const [queryRef] = useBackgroundQuery(query, skip ? skipToken : undefined);
 
-    Profiler.mergeSnapshot({ isPending });
+    renderStream.mergeSnapshot({ isPending });
 
     return (
       <>
@@ -2426,19 +2482,20 @@ it('`skipToken` works with `startTransition`', async () => {
     );
   }
 
-  renderWithMocks(<App />, { mocks, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createMockWrapper({ mocks }) });
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App]);
   }
 
   // Toggle skip to `false`
-  await act(() => user.click(screen.getByText('Toggle skip')));
+  await user.click(screen.getByText('Toggle skip'));
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App]);
     expect(snapshot).toEqual({
@@ -2448,7 +2505,7 @@ it('`skipToken` works with `startTransition`', async () => {
   }
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
     expect(snapshot).toEqual({
@@ -2461,7 +2518,7 @@ it('`skipToken` works with `startTransition`', async () => {
     });
   }
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it('applies `errorPolicy` on next fetch when it changes between renders', async () => {
@@ -2483,9 +2540,9 @@ it('applies `errorPolicy` on next fetch when it changes between renders', async 
     },
   ];
 
-  const Profiler = createErrorProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
-  const { ErrorBoundary } = createTrackedErrorComponents(Profiler);
+  const renderStream = createErrorProfiler<SimpleCaseData>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
+  const { ErrorBoundary } = createTrackedErrorComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -2507,13 +2564,14 @@ it('applies `errorPolicy` on next fetch when it changes between renders', async 
     );
   }
 
-  renderWithMocks(<App />, { mocks, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createMockWrapper({ mocks }) });
 
   // initial render
-  await Profiler.takeRender();
+  await renderStream.takeRender();
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { greeting: 'Hello' },
@@ -2522,14 +2580,14 @@ it('applies `errorPolicy` on next fetch when it changes between renders', async 
     });
   }
 
-  await act(() => user.click(screen.getByText('Change error policy')));
-  await Profiler.takeRender();
+  await user.click(screen.getByText('Change error policy'));
+  await renderStream.takeRender();
 
-  await act(() => user.click(screen.getByText('Refetch greeting')));
-  await Profiler.takeRender();
+  await user.click(screen.getByText('Refetch greeting'));
+  await renderStream.takeRender();
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
     expect(snapshot).toEqual({
@@ -2568,8 +2626,8 @@ it('applies `context` on next fetch when it changes between renders', async () =
 
   const client = new ApolloClient({ link, cache: new Hermes() });
 
-  const Profiler = createDefaultProfiler<Data>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<Data>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -2589,16 +2647,17 @@ it('applies `context` on next fetch when it changes between renders', async () =
     );
   }
 
-  renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { context: { phase: 'initial' } },
@@ -2607,14 +2666,14 @@ it('applies `context` on next fetch when it changes between renders', async () =
     });
   }
 
-  await act(() => user.click(screen.getByText('Update context')));
-  await Profiler.takeRender();
+  await user.click(screen.getByText('Update context'));
+  await renderStream.takeRender();
 
-  await act(() => user.click(screen.getByText('Refetch')));
-  await Profiler.takeRender();
+  await user.click(screen.getByText('Refetch'));
+  await renderStream.takeRender();
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { context: { phase: 'rerender' } },
@@ -2670,8 +2729,8 @@ it.skip('returns canonical results immediately when `canonizeResults` changes fr
     data: { results },
   });
 
-  const Profiler = createDefaultProfiler<Data>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<Data>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -2690,10 +2749,11 @@ it.skip('returns canonical results immediately when `canonizeResults` changes fr
     );
   }
 
-  renderWithMocks(<App />, { cache, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createMockWrapper({ cache }) });
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
     const result = snapshot.result!;
     const resultSet = new Set(result.data.results);
     const values = Array.from(resultSet).map(item => item.value);
@@ -2704,10 +2764,10 @@ it.skip('returns canonical results immediately when `canonizeResults` changes fr
     expect(values).toEqual([0, 1, 1, 2, 3, 5]);
   }
 
-  await act(() => user.click(screen.getByText('Canonize results')));
+  await user.click(screen.getByText('Canonize results'));
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
     const result = snapshot.result!;
     const resultSet = new Set(result.data.results);
     const values = Array.from(resultSet).map(item => item.value);
@@ -2774,8 +2834,8 @@ it.skip('applies changed `refetchWritePolicy` to next fetch when changing betwee
     cache,
   });
 
-  const Profiler = createDefaultProfiler<Data>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<Data>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -2798,13 +2858,14 @@ it.skip('applies changed `refetchWritePolicy` to next fetch when changing betwee
     );
   }
 
-  renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
 
   // initial suspended render
-  await Profiler.takeRender();
+  await renderStream.takeRender();
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { primes: [2, 3, 5, 7, 11] },
@@ -2814,11 +2875,11 @@ it.skip('applies changed `refetchWritePolicy` to next fetch when changing betwee
     expect(mergeParams).toEqual([[undefined, [2, 3, 5, 7, 11]]]);
   }
 
-  await act(() => user.click(screen.getByText('Refetch next')));
-  await Profiler.takeRender();
+  await user.click(screen.getByText('Refetch next'));
+  await renderStream.takeRender();
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { primes: [2, 3, 5, 7, 11, 13, 17, 19, 23, 29] },
@@ -2834,14 +2895,14 @@ it.skip('applies changed `refetchWritePolicy` to next fetch when changing betwee
     ]);
   }
 
-  await act(() => user.click(screen.getByText('Change refetch write policy')));
-  await Profiler.takeRender();
+  await user.click(screen.getByText('Change refetch write policy'));
+  await renderStream.takeRender();
 
-  await act(() => user.click(screen.getByText('Refetch last')));
-  await Profiler.takeRender();
+  await user.click(screen.getByText('Refetch last'));
+  await renderStream.takeRender();
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { primes: [31, 37, 41, 43, 47] },
@@ -2921,8 +2982,8 @@ it('applies `returnPartialData` on next fetch when it changes between renders', 
     cache,
   });
 
-  const Profiler = createDefaultProfiler<VariablesCaseData>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<VariablesCaseData>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -2939,13 +3000,14 @@ it('applies `returnPartialData` on next fetch when it changes between renders', 
     );
   }
 
-  renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
 
   // initial suspended render
-  await Profiler.takeRender();
+  await renderStream.takeRender();
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: {
@@ -2956,8 +3018,8 @@ it('applies `returnPartialData` on next fetch when it changes between renders', 
     });
   }
 
-  await act(() => user.click(screen.getByText('Update partial data')));
-  await Profiler.takeRender();
+  await user.click(screen.getByText('Update partial data'));
+  await renderStream.takeRender();
 
   cache.modify({
     id: cache.identify({ __typename: 'Character', id: '1' }),
@@ -2967,7 +3029,7 @@ it('applies `returnPartialData` on next fetch when it changes between renders', 
   });
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: { character: { __typename: 'Character', id: '1' } },
@@ -2977,7 +3039,7 @@ it('applies `returnPartialData` on next fetch when it changes between renders', 
   }
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: {
@@ -3016,8 +3078,8 @@ it('applies updated `fetchPolicy` on next fetch when it changes between renders'
     cache,
   });
 
-  const Profiler = createDefaultProfiler<VariablesCaseData>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<VariablesCaseData>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     const [fetchPolicy, setFetchPolicy] = React.useState<SuspenseQueryHookFetchPolicy>('cache-first');
@@ -3038,10 +3100,11 @@ it('applies updated `fetchPolicy` on next fetch when it changes between renders'
     );
   }
 
-  renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: {
@@ -3056,9 +3119,9 @@ it('applies updated `fetchPolicy` on next fetch when it changes between renders'
     });
   }
 
-  await act(() => user.click(screen.getByText('Change fetch policy')));
+  await user.click(screen.getByText('Change fetch policy'));
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     // ensure we haven't changed the result yet just by changing the fetch policy
     expect(snapshot.result).toEqual({
@@ -3074,11 +3137,11 @@ it('applies updated `fetchPolicy` on next fetch when it changes between renders'
     });
   }
 
-  await act(() => user.click(screen.getByText('Refetch')));
-  await Profiler.takeRender();
+  await user.click(screen.getByText('Refetch'));
+  await renderStream.takeRender();
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: {
@@ -3147,9 +3210,9 @@ it('properly handles changing options along with changing `variables`', async ()
     cache,
   });
 
-  const Profiler = createErrorProfiler<VariablesCaseData>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
-  const { ErrorBoundary } = createTrackedErrorComponents(Profiler);
+  const renderStream = createErrorProfiler<VariablesCaseData>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
+  const { ErrorBoundary } = createTrackedErrorComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -3174,10 +3237,11 @@ it('properly handles changing options along with changing `variables`', async ()
     );
   }
 
-  renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot).toEqual({
       error: null,
@@ -3195,11 +3259,11 @@ it('properly handles changing options along with changing `variables`', async ()
     });
   }
 
-  await act(() => user.click(screen.getByText('Get second character')));
-  await Profiler.takeRender();
+  await user.click(screen.getByText('Get second character'));
+  await renderStream.takeRender();
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot).toEqual({
       error: null,
@@ -3217,10 +3281,10 @@ it('properly handles changing options along with changing `variables`', async ()
     });
   }
 
-  await act(() => user.click(screen.getByText('Get first character')));
+  await user.click(screen.getByText('Get first character'));
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot).toEqual({
       error: null,
@@ -3238,11 +3302,11 @@ it('properly handles changing options along with changing `variables`', async ()
     });
   }
 
-  await act(() => user.click(screen.getByText('Refetch')));
-  await Profiler.takeRender();
+  await user.click(screen.getByText('Refetch'));
+  await renderStream.takeRender();
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     // Ensure we render the inline error instead of the error boundary, which
     // tells us the error policy was properly applied.
@@ -3284,8 +3348,8 @@ it('does not suspend when partial data is in the cache and using a "cache-first"
     cache,
   });
 
-  const Profiler = createDefaultProfiler<DeepPartial<VariablesCaseData>>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<DeepPartial<VariablesCaseData>>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -3302,10 +3366,11 @@ it('does not suspend when partial data is in the cache and using a "cache-first"
     );
   }
 
-  renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -3316,7 +3381,7 @@ it('does not suspend when partial data is in the cache and using a "cache-first"
   }
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -3328,7 +3393,7 @@ it('does not suspend when partial data is in the cache and using a "cache-first"
     });
   }
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it('suspends and does not use partial data from other variables in the cache when changing variables and using a "cache-first" fetch policy with returnPartialData: true', async () => {
@@ -3349,8 +3414,8 @@ it('suspends and does not use partial data from other variables in the cache whe
     variables: { id: '1' },
   });
 
-  const Profiler = createDefaultProfiler<DeepPartial<VariablesCaseData>>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<DeepPartial<VariablesCaseData>>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App({ id }: { id: string }) {
     useTrackRenders();
@@ -3367,14 +3432,16 @@ it('suspends and does not use partial data from other variables in the cache whe
     );
   }
 
-  const { rerender } = renderWithMocks(<App id='1' />, {
-    cache,
-    mocks,
-    wrapper: Profiler,
+  using _disabledAct = disableActEnvironment();
+  const { rerender } = await renderStream.render(<App id='1' />, {
+    wrapper: createMockWrapper({
+      cache,
+      mocks: addDelayToMocks(mocks, 150, true),
+    }),
   });
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -3385,7 +3452,7 @@ it('suspends and does not use partial data from other variables in the cache whe
   }
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -3397,16 +3464,16 @@ it('suspends and does not use partial data from other variables in the cache whe
     });
   }
 
-  rerender(<App id='2' />);
+  await rerender(<App id='2' />);
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -3418,7 +3485,7 @@ it('suspends and does not use partial data from other variables in the cache whe
     });
   }
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it('suspends when partial data is in the cache and using a "network-only" fetch policy with returnPartialData', async () => {
@@ -3445,8 +3512,8 @@ it('suspends when partial data is in the cache and using a "network-only" fetch 
     cache,
   });
 
-  const Profiler = createDefaultProfiler<DeepPartial<VariablesCaseData>>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<DeepPartial<VariablesCaseData>>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -3463,16 +3530,17 @@ it('suspends when partial data is in the cache and using a "network-only" fetch 
     );
   }
 
-  renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: {
@@ -3483,7 +3551,7 @@ it('suspends when partial data is in the cache and using a "network-only" fetch 
     });
   }
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it('suspends when partial data is in the cache and using a "no-cache" fetch policy with returnPartialData', async () => {
@@ -3511,8 +3579,8 @@ it('suspends when partial data is in the cache and using a "no-cache" fetch poli
     cache,
   });
 
-  const Profiler = createDefaultProfiler<DeepPartial<VariablesCaseData>>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<DeepPartial<VariablesCaseData>>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -3529,16 +3597,17 @@ it('suspends when partial data is in the cache and using a "no-cache" fetch poli
     );
   }
 
-  renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
   {
-    const { snapshot } = await Profiler.takeRender();
+    const { snapshot } = await renderStream.takeRender();
 
     expect(snapshot.result).toEqual({
       data: {
@@ -3549,7 +3618,7 @@ it('suspends when partial data is in the cache and using a "no-cache" fetch poli
     });
   }
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it('warns when using returnPartialData with a "no-cache" fetch policy', async () => {
@@ -3608,8 +3677,8 @@ it('does not suspend when partial data is in the cache and using a "cache-and-ne
     cache,
   });
 
-  const Profiler = createDefaultProfiler<DeepPartial<VariablesCaseData>>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<DeepPartial<VariablesCaseData>>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -3626,10 +3695,11 @@ it('does not suspend when partial data is in the cache and using a "cache-and-ne
     );
   }
 
-  renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -3640,7 +3710,7 @@ it('does not suspend when partial data is in the cache and using a "cache-and-ne
   }
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -3652,7 +3722,7 @@ it('does not suspend when partial data is in the cache and using a "cache-and-ne
     });
   }
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it('suspends and does not use partial data when changing variables and using a "cache-and-network" fetch policy with returnPartialData', async () => {
@@ -3673,8 +3743,8 @@ it('suspends and does not use partial data when changing variables and using a "
     variables: { id: '1' },
   });
 
-  const Profiler = createDefaultProfiler<DeepPartial<VariablesCaseData>>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<DeepPartial<VariablesCaseData>>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App({ id }: { id: string }) {
     useTrackRenders();
@@ -3691,14 +3761,16 @@ it('suspends and does not use partial data when changing variables and using a "
     );
   }
 
-  const { rerender } = renderWithMocks(<App id='1' />, {
-    cache,
-    mocks,
-    wrapper: Profiler,
+  using _disabledAct = disableActEnvironment();
+  const { rerender } = await renderStream.render(<App id='1' />, {
+    wrapper: createMockWrapper({
+      cache,
+      mocks: addDelayToMocks(mocks, 150, true),
+    }),
   });
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -3709,7 +3781,7 @@ it('suspends and does not use partial data when changing variables and using a "
   }
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -3721,16 +3793,16 @@ it('suspends and does not use partial data when changing variables and using a "
     });
   }
 
-  rerender(<App id='2' />);
+  await rerender(<App id='2' />);
 
   {
-    const { renderedComponents } = await Profiler.takeRender();
+    const { renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
   }
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -3742,7 +3814,7 @@ it('suspends and does not use partial data when changing variables and using a "
     });
   }
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it('does not suspend deferred queries with partial data in the cache and using a "cache-first" fetch policy with `returnPartialData`', async () => {
@@ -3790,8 +3862,8 @@ it('does not suspend deferred queries with partial data in the cache and using a
 
   const client = new ApolloClient({ link, cache });
 
-  const Profiler = createDefaultProfiler<DeepPartial<QueryData>>();
-  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+  const renderStream = createDefaultProfiler<DeepPartial<QueryData>>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
   function App() {
     useTrackRenders();
@@ -3807,10 +3879,11 @@ it('does not suspend deferred queries with partial data in the cache and using a
     );
   }
 
-  renderWithClient(<App />, { client, wrapper: Profiler });
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -3835,7 +3908,7 @@ it('does not suspend deferred queries with partial data in the cache and using a
   });
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -3870,7 +3943,7 @@ it('does not suspend deferred queries with partial data in the cache and using a
   );
 
   {
-    const { snapshot, renderedComponents } = await Profiler.takeRender();
+    const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
     expect(snapshot.result).toEqual({
@@ -3886,7 +3959,7 @@ it('does not suspend deferred queries with partial data in the cache and using a
     });
   }
 
-  await expect(Profiler).not.toRerender({ timeout: 50 });
+  await expect(renderStream).not.toRerender({ timeout: 50 });
 });
 
 it.each<SuspenseQueryHookFetchPolicy>(['cache-first', 'network-only', 'cache-and-network'])(
@@ -3899,8 +3972,8 @@ it.each<SuspenseQueryHookFetchPolicy>(['cache-first', 'network-only', 'cache-and
       link: new MockLink(mocks),
     });
 
-    const Profiler = createDefaultProfiler<SimpleCaseData>();
-    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+    const renderStream = createDefaultProfiler<SimpleCaseData>();
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
     function App() {
       useTrackRenders();
@@ -3913,23 +3986,19 @@ it.each<SuspenseQueryHookFetchPolicy>(['cache-first', 'network-only', 'cache-and
       );
     }
 
-    renderWithClient(<App />, {
-      client,
-      wrapper: ({ children }) => (
-        <React.StrictMode>
-          <Profiler>{children}</Profiler>
-        </React.StrictMode>
-      ),
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(<App />, {
+      wrapper: createClientWrapper(client, React.StrictMode),
     });
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result).toEqual({
         data: { greeting: 'Hello' },
@@ -3944,7 +4013,7 @@ it.each<SuspenseQueryHookFetchPolicy>(['cache-first', 'network-only', 'cache-and
     });
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result).toEqual({
         data: { greeting: 'Updated hello' },
@@ -3953,16 +4022,916 @@ it.each<SuspenseQueryHookFetchPolicy>(['cache-first', 'network-only', 'cache-and
       });
     }
 
-    await expect(Profiler).not.toRerender({ timeout: 50 });
+    await expect(renderStream).not.toRerender({ timeout: 50 });
   },
 );
+
+it('masks queries when dataMasking is `true`', async () => {
+  type UserFieldsFragment = {
+    age: number;
+  } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+  interface Query {
+    currentUser: {
+      __typename: 'User';
+      id: number;
+      name: string;
+    } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+  }
+
+  const query: MaskedDocumentNode<Query, never> = gql`
+    query MaskedQuery {
+      currentUser {
+        id
+        name
+        ...UserFields
+      }
+    }
+
+    fragment UserFields on User {
+      age
+    }
+  `;
+
+  const mocks = [
+    {
+      request: { query },
+      result: {
+        data: {
+          currentUser: {
+            __typename: 'User',
+            id: 1,
+            name: 'Test User',
+            age: 30,
+          },
+        },
+      },
+    },
+  ];
+
+  const client = new ApolloClient({
+    dataMasking: true,
+    cache: new Hermes(),
+    link: new MockLink(mocks),
+  });
+
+  const renderStream = createDefaultProfiler<Masked<Query>>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
+
+  function App() {
+    useTrackRenders();
+    const [queryRef] = useBackgroundQuery(query);
+
+    return (
+      <Suspense fallback={<SuspenseFallback />}>
+        <ReadQueryHook queryRef={queryRef} />
+      </Suspense>
+    );
+  }
+
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, {
+    wrapper: createClientWrapper(client),
+  });
+
+  // loading
+  await renderStream.takeRender();
+
+  {
+    const { snapshot } = await renderStream.takeRender();
+
+    expect(snapshot.result).toEqual({
+      data: {
+        currentUser: {
+          __typename: 'User',
+          id: 1,
+          name: 'Test User',
+        },
+      },
+      error: undefined,
+      networkStatus: NetworkStatus.ready,
+    });
+  }
+});
+
+it('does not mask query when dataMasking is `false`', async () => {
+  type UserFieldsFragment = {
+    age: number;
+  } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+  interface Query {
+    currentUser: {
+      __typename: 'User';
+      id: number;
+      name: string;
+    } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+  }
+
+  const query: TypedDocumentNode<Query, never> = gql`
+    query MaskedQuery {
+      currentUser {
+        id
+        name
+        ...UserFields
+      }
+    }
+
+    fragment UserFields on User {
+      age
+    }
+  `;
+
+  const mocks = [
+    {
+      request: { query },
+      result: {
+        data: {
+          currentUser: {
+            __typename: 'User',
+            id: 1,
+            name: 'Test User',
+            age: 30,
+          },
+        },
+      },
+    },
+  ];
+
+  const client = new ApolloClient({
+    dataMasking: false,
+    cache: new Hermes(),
+    link: new MockLink(mocks),
+  });
+
+  const renderStream = createDefaultProfiler<Query>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
+
+  function App() {
+    useTrackRenders();
+    const [queryRef] = useBackgroundQuery(query);
+
+    return (
+      <Suspense fallback={<SuspenseFallback />}>
+        <ReadQueryHook queryRef={queryRef} />
+      </Suspense>
+    );
+  }
+
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
+
+  // loading
+  await renderStream.takeRender();
+
+  const { snapshot } = await renderStream.takeRender();
+
+  expect(snapshot.result).toEqual({
+    data: {
+      currentUser: {
+        __typename: 'User',
+        id: 1,
+        name: 'Test User',
+        age: 30,
+      },
+    },
+    error: undefined,
+    networkStatus: NetworkStatus.ready,
+  });
+});
+
+it('does not mask query by default', async () => {
+  type UserFieldsFragment = {
+    age: number;
+  } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+  interface Query {
+    currentUser: {
+      __typename: 'User';
+      id: number;
+      name: string;
+    } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+  }
+
+  const query: TypedDocumentNode<Query, never> = gql`
+    query MaskedQuery {
+      currentUser {
+        id
+        name
+        ...UserFields
+      }
+    }
+
+    fragment UserFields on User {
+      age
+    }
+  `;
+
+  const mocks = [
+    {
+      request: { query },
+      result: {
+        data: {
+          currentUser: {
+            __typename: 'User',
+            id: 1,
+            name: 'Test User',
+            age: 30,
+          },
+        },
+      },
+    },
+  ];
+
+  const client = new ApolloClient({
+    cache: new Hermes(),
+    link: new MockLink(mocks),
+  });
+
+  const renderStream = createDefaultProfiler<Query>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
+
+  function App() {
+    useTrackRenders();
+    const [queryRef] = useBackgroundQuery(query);
+
+    return (
+      <Suspense fallback={<SuspenseFallback />}>
+        <ReadQueryHook queryRef={queryRef} />
+      </Suspense>
+    );
+  }
+
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
+
+  // loading
+  await renderStream.takeRender();
+
+  const { snapshot } = await renderStream.takeRender();
+
+  expect(snapshot.result).toEqual({
+    data: {
+      currentUser: {
+        __typename: 'User',
+        id: 1,
+        name: 'Test User',
+        age: 30,
+      },
+    },
+    error: undefined,
+    networkStatus: NetworkStatus.ready,
+  });
+});
+
+it('masks queries updated by the cache', async () => {
+  type UserFieldsFragment = {
+    age: number;
+  } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+  interface Query {
+    currentUser: {
+      __typename: 'User';
+      id: number;
+      name: string;
+    } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+  }
+
+  const query: MaskedDocumentNode<Query, never> = gql`
+    query MaskedQuery {
+      currentUser {
+        id
+        name
+        ...UserFields
+      }
+    }
+
+    fragment UserFields on User {
+      age
+    }
+  `;
+
+  const mocks = [
+    {
+      request: { query },
+      result: {
+        data: {
+          currentUser: {
+            __typename: 'User',
+            id: 1,
+            name: 'Test User',
+            age: 30,
+          },
+        },
+      },
+    },
+  ];
+
+  const client = new ApolloClient({
+    dataMasking: true,
+    cache: new Hermes(),
+    link: new MockLink(mocks),
+  });
+
+  const renderStream = createDefaultProfiler<Masked<Query>>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
+
+  function App() {
+    useTrackRenders();
+    const [queryRef] = useBackgroundQuery(query);
+
+    return (
+      <Suspense fallback={<SuspenseFallback />}>
+        <ReadQueryHook queryRef={queryRef} />
+      </Suspense>
+    );
+  }
+
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
+
+  // loading
+  await renderStream.takeRender();
+
+  {
+    const { snapshot } = await renderStream.takeRender();
+
+    expect(snapshot.result).toEqual({
+      data: {
+        currentUser: {
+          __typename: 'User',
+          id: 1,
+          name: 'Test User',
+        },
+      },
+      error: undefined,
+      networkStatus: NetworkStatus.ready,
+    });
+  }
+
+  client.writeQuery({
+    query,
+    data: {
+      currentUser: {
+        __typename: 'User',
+        id: 1,
+        name: 'Test User (updated)',
+        // @ts-ignore TODO: Determine how to handle cache writes with masked
+        // query type
+        age: 35,
+      },
+    },
+  });
+
+  {
+    const { snapshot } = await renderStream.takeRender();
+
+    expect(snapshot.result).toEqual({
+      data: {
+        currentUser: {
+          __typename: 'User',
+          id: 1,
+          name: 'Test User (updated)',
+        },
+      },
+      error: undefined,
+      networkStatus: NetworkStatus.ready,
+    });
+  }
+});
+
+it('does not rerender when updating field in named fragment', async () => {
+  type UserFieldsFragment = {
+    age: number;
+  } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+  interface Query {
+    currentUser: {
+      __typename: 'User';
+      id: number;
+      name: string;
+    } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+  }
+
+  const query: MaskedDocumentNode<Query, never> = gql`
+    query MaskedQuery {
+      currentUser {
+        id
+        name
+        ...UserFields
+      }
+    }
+
+    fragment UserFields on User {
+      age
+    }
+  `;
+
+  const mocks = [
+    {
+      request: { query },
+      result: {
+        data: {
+          currentUser: {
+            __typename: 'User',
+            id: 1,
+            name: 'Test User',
+            age: 30,
+          },
+        },
+      },
+    },
+  ];
+
+  const client = new ApolloClient({
+    dataMasking: true,
+    cache: new Hermes(),
+    link: new MockLink(mocks),
+  });
+
+  const renderStream = createDefaultProfiler<Masked<Query>>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
+
+  function App() {
+    useTrackRenders();
+    const [queryRef] = useBackgroundQuery(query);
+
+    return (
+      <Suspense fallback={<SuspenseFallback />}>
+        <ReadQueryHook queryRef={queryRef} />
+      </Suspense>
+    );
+  }
+
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, {
+    wrapper: createClientWrapper(client),
+  });
+
+  // loading
+  await renderStream.takeRender();
+
+  {
+    const { snapshot } = await renderStream.takeRender();
+
+    expect(snapshot.result).toEqual({
+      data: {
+        currentUser: {
+          __typename: 'User',
+          id: 1,
+          name: 'Test User',
+        },
+      },
+      error: undefined,
+      networkStatus: NetworkStatus.ready,
+    });
+  }
+
+  client.writeQuery({
+    query,
+    data: {
+      currentUser: {
+        __typename: 'User',
+        id: 1,
+        name: 'Test User',
+        // @ts-ignore TODO: Determine how to handle cache writes with masked
+        // query type
+        age: 35,
+      },
+    },
+  });
+
+  await expect(renderStream).not.toRerender();
+
+  expect(client.readQuery({ query })).toEqual({
+    currentUser: {
+      __typename: 'User',
+      id: 1,
+      name: 'Test User',
+      age: 35,
+    },
+  });
+});
+
+it('masks result from cache when using with cache-first fetch policy', async () => {
+  type UserFieldsFragment = {
+    age: number;
+  } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+  interface Query {
+    currentUser: {
+      __typename: 'User';
+      id: number;
+      name: string;
+    } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+  }
+
+  const query: MaskedDocumentNode<Query, never> = gql`
+    query MaskedQuery {
+      currentUser {
+        id
+        name
+        ...UserFields
+      }
+    }
+
+    fragment UserFields on User {
+      age
+    }
+  `;
+
+  const mocks = [
+    {
+      request: { query },
+      result: {
+        data: {
+          currentUser: {
+            __typename: 'User',
+            id: 1,
+            name: 'Test User',
+            age: 30,
+          },
+        },
+      },
+    },
+  ];
+
+  const client = new ApolloClient({
+    dataMasking: true,
+    cache: new Hermes(),
+    link: new MockLink(mocks),
+  });
+
+  client.writeQuery({
+    query,
+    data: {
+      currentUser: {
+        __typename: 'User',
+        id: 1,
+        name: 'Test User',
+        age: 30,
+      },
+    },
+  });
+
+  const renderStream = createDefaultProfiler<Masked<Query>>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
+
+  function App() {
+    useTrackRenders();
+    const [queryRef] = useBackgroundQuery(query, {
+      fetchPolicy: 'cache-first',
+    });
+
+    return (
+      <Suspense fallback={<SuspenseFallback />}>
+        <ReadQueryHook queryRef={queryRef} />
+      </Suspense>
+    );
+  }
+
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
+
+  const { snapshot } = await renderStream.takeRender();
+
+  expect(snapshot.result).toEqual({
+    data: {
+      currentUser: {
+        __typename: 'User',
+        id: 1,
+        name: 'Test User',
+      },
+    },
+    error: undefined,
+    networkStatus: NetworkStatus.ready,
+  });
+});
+
+it('masks cache and network result when using cache-and-network fetch policy', async () => {
+  type UserFieldsFragment = {
+    age: number;
+  } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+  interface Query {
+    currentUser: {
+      __typename: 'User';
+      id: number;
+      name: string;
+    } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+  }
+
+  const query: MaskedDocumentNode<Query, never> = gql`
+    query MaskedQuery {
+      currentUser {
+        id
+        name
+        ...UserFields
+      }
+    }
+
+    fragment UserFields on User {
+      age
+    }
+  `;
+
+  const mocks = [
+    {
+      request: { query },
+      result: {
+        data: {
+          currentUser: {
+            __typename: 'User',
+            id: 1,
+            name: 'Test User (server)',
+            age: 35,
+          },
+        },
+      },
+      delay: 20,
+    },
+  ];
+
+  const client = new ApolloClient({
+    dataMasking: true,
+    cache: new Hermes(),
+    link: new MockLink(mocks),
+  });
+
+  client.writeQuery({
+    query,
+    data: {
+      currentUser: {
+        __typename: 'User',
+        id: 1,
+        name: 'Test User',
+        age: 34,
+      },
+    },
+  });
+
+  const renderStream = createDefaultProfiler<Masked<Query>>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
+
+  function App() {
+    useTrackRenders();
+    const [queryRef] = useBackgroundQuery(query, {
+      fetchPolicy: 'cache-and-network',
+    });
+
+    return (
+      <Suspense fallback={<SuspenseFallback />}>
+        <ReadQueryHook queryRef={queryRef} />
+      </Suspense>
+    );
+  }
+
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
+
+  {
+    const { snapshot } = await renderStream.takeRender();
+
+    expect(snapshot.result).toEqual({
+      data: {
+        currentUser: {
+          __typename: 'User',
+          id: 1,
+          name: 'Test User',
+        },
+      },
+      error: undefined,
+      networkStatus: NetworkStatus.loading,
+    });
+  }
+
+  {
+    const { snapshot } = await renderStream.takeRender();
+
+    expect(snapshot.result).toEqual({
+      data: {
+        currentUser: {
+          __typename: 'User',
+          id: 1,
+          name: 'Test User (server)',
+        },
+      },
+      error: undefined,
+      networkStatus: NetworkStatus.ready,
+    });
+  }
+});
+
+it('masks partial cache data when returnPartialData is `true`', async () => {
+  type UserFieldsFragment = {
+    __typename: 'User';
+    age: number;
+  } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+  interface Query {
+    currentUser: {
+      __typename: 'User';
+      id: number;
+      name: string;
+    } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+  }
+
+  const query: MaskedDocumentNode<Query, never> = gql`
+    query MaskedQuery {
+      currentUser {
+        id
+        name
+        ...UserFields
+      }
+    }
+
+    fragment UserFields on User {
+      age
+    }
+  `;
+
+  const mocks = [
+    {
+      request: { query },
+      result: {
+        data: {
+          currentUser: {
+            __typename: 'User',
+            id: 1,
+            name: 'Test User (server)',
+            age: 35,
+          },
+        },
+      },
+      delay: 20,
+    },
+  ];
+
+  const client = new ApolloClient({
+    dataMasking: true,
+    cache: new Hermes(),
+    link: new MockLink(mocks),
+  });
+
+  {
+    using _ = spyOnConsole('error');
+    client.writeQuery({
+      query,
+      data: {
+        // @ts-expect-error writing partial cache data
+        currentUser: {
+          __typename: 'User',
+          id: 1,
+          age: 34,
+        },
+      },
+    });
+  }
+
+  const renderStream = createDefaultProfiler<DeepPartial<Masked<Query>>>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
+
+  function App() {
+    useTrackRenders();
+    const [queryRef] = useBackgroundQuery(query, { returnPartialData: true });
+
+    return (
+      <Suspense fallback={<SuspenseFallback />}>
+        <ReadQueryHook queryRef={queryRef} />
+      </Suspense>
+    );
+  }
+
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
+
+  {
+    const { snapshot } = await renderStream.takeRender();
+
+    expect(snapshot.result).toEqual({
+      data: {
+        currentUser: {
+          __typename: 'User',
+          id: 1,
+        },
+      },
+      error: undefined,
+      networkStatus: NetworkStatus.loading,
+    });
+  }
+
+  {
+    const { snapshot } = await renderStream.takeRender();
+
+    expect(snapshot.result).toEqual({
+      data: {
+        currentUser: {
+          __typename: 'User',
+          id: 1,
+          name: 'Test User (server)',
+        },
+      },
+      error: undefined,
+      networkStatus: NetworkStatus.ready,
+    });
+  }
+});
+
+it('masks partial data returned from data on errors with errorPolicy `all`', async () => {
+  type UserFieldsFragment = {
+    age: number;
+  } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+  interface Query {
+    currentUser: {
+      __typename: 'User';
+      id: number;
+      name: string;
+    } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+  }
+
+  const query: MaskedDocumentNode<Query, never> = gql`
+    query MaskedQuery {
+      currentUser {
+        id
+        name
+        ...UserFields
+      }
+    }
+
+    fragment UserFields on User {
+      age
+    }
+  `;
+
+  const mocks = [
+    {
+      request: { query },
+      result: {
+        data: {
+          currentUser: {
+            __typename: 'User',
+            id: 1,
+            name: null,
+            age: 34,
+          },
+        },
+        errors: [new GraphQLError("Couldn't get name")],
+      },
+      delay: 20,
+    },
+  ];
+
+  const client = new ApolloClient({
+    dataMasking: true,
+    cache: new Hermes(),
+    link: new MockLink(mocks),
+  });
+
+  const renderStream = createDefaultProfiler<Masked<Query> | undefined>();
+  const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
+
+  function App() {
+    useTrackRenders();
+    const [queryRef] = useBackgroundQuery(query, { errorPolicy: 'all' });
+
+    return (
+      <Suspense fallback={<SuspenseFallback />}>
+        <ReadQueryHook queryRef={queryRef} />
+      </Suspense>
+    );
+  }
+
+  using _disabledAct = disableActEnvironment();
+  await renderStream.render(<App />, { wrapper: createClientWrapper(client) });
+
+  // loading
+  await renderStream.takeRender();
+
+  {
+    const { snapshot } = await renderStream.takeRender();
+
+    expect(snapshot.result).toEqual({
+      data: {
+        currentUser: {
+          __typename: 'User',
+          id: 1,
+          name: null,
+        },
+      },
+      error: new ApolloError({
+        graphQLErrors: [new GraphQLError("Couldn't get name")],
+      }),
+      networkStatus: NetworkStatus.error,
+    });
+  }
+});
 
 describe('refetch', () => {
   it('re-suspends when calling `refetch`', async () => {
     const { query, mocks: defaultMocks } = setupVariablesCase();
     const user = userEvent.setup();
-    const Profiler = createDefaultProfiler<VariablesCaseData>();
-    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+    const renderStream = createDefaultProfiler<VariablesCaseData>();
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
     const mocks: MockedResponse<VariablesCaseData>[] = [
       ...defaultMocks,
@@ -3997,16 +4966,19 @@ describe('refetch', () => {
       );
     }
 
-    renderWithMocks(<App />, { mocks, wrapper: Profiler });
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(<App />, {
+      wrapper: createMockWrapper({ mocks }),
+    });
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result).toEqual({
         data: {
@@ -4021,17 +4993,17 @@ describe('refetch', () => {
       });
     }
 
-    await act(() => user.click(screen.getByText('Refetch')));
+    await user.click(screen.getByText('Refetch'));
 
     {
       // parent component re-suspends
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result).toEqual({
         data: {
@@ -4046,14 +5018,14 @@ describe('refetch', () => {
       });
     }
 
-    await expect(Profiler).not.toRerender({ timeout: 50 });
+    await expect(renderStream).not.toRerender({ timeout: 50 });
   });
 
   it('re-suspends when calling `refetch` with new variables', async () => {
     const { query, mocks } = setupVariablesCase();
     const user = userEvent.setup();
-    const Profiler = createDefaultProfiler<VariablesCaseData>();
-    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+    const renderStream = createDefaultProfiler<VariablesCaseData>();
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
     function App() {
       useTrackRenders();
@@ -4071,16 +5043,19 @@ describe('refetch', () => {
       );
     }
 
-    renderWithMocks(<App />, { mocks, wrapper: Profiler });
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(<App />, {
+      wrapper: createMockWrapper({ mocks }),
+    });
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result).toEqual({
         data: {
@@ -4095,16 +5070,16 @@ describe('refetch', () => {
       });
     }
 
-    await act(() => user.click(screen.getByText('Refetch')));
+    await user.click(screen.getByText('Refetch'));
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result).toEqual({
         data: {
@@ -4119,14 +5094,14 @@ describe('refetch', () => {
       });
     }
 
-    await expect(Profiler).not.toRerender({ timeout: 50 });
+    await expect(renderStream).not.toRerender({ timeout: 50 });
   });
 
   it('re-suspends multiple times when calling `refetch` multiple times', async () => {
     const { query, mocks: defaultMocks } = setupVariablesCase();
     const user = userEvent.setup();
-    const Profiler = createDefaultProfiler<VariablesCaseData>();
-    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+    const renderStream = createDefaultProfiler<VariablesCaseData>();
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
     const mocks: MockedResponse<VariablesCaseData>[] = [
       ...defaultMocks,
@@ -4174,16 +5149,19 @@ describe('refetch', () => {
       );
     }
 
-    renderWithMocks(<App />, { mocks, wrapper: Profiler });
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(<App />, {
+      wrapper: createMockWrapper({ mocks }),
+    });
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result).toEqual({
         data: {
@@ -4196,16 +5174,16 @@ describe('refetch', () => {
 
     const button = screen.getByText('Refetch');
 
-    await act(() => user.click(button));
+    await user.click(button);
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result).toEqual({
         data: {
@@ -4220,16 +5198,16 @@ describe('refetch', () => {
       });
     }
 
-    await act(() => user.click(button));
+    await user.click(button);
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result).toEqual({
         data: {
@@ -4244,7 +5222,7 @@ describe('refetch', () => {
       });
     }
 
-    await expect(Profiler).not.toRerender({ timeout: 50 });
+    await expect(renderStream).not.toRerender({ timeout: 50 });
   });
 
   it('throws errors when errors are returned after calling `refetch`', async () => {
@@ -4262,9 +5240,9 @@ describe('refetch', () => {
       },
     ];
 
-    const Profiler = createErrorProfiler<VariablesCaseData>();
-    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
-    const { ErrorBoundary } = createTrackedErrorComponents(Profiler);
+    const renderStream = createErrorProfiler<VariablesCaseData>();
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
+    const { ErrorBoundary } = createTrackedErrorComponents(renderStream);
 
     function App() {
       useTrackRenders();
@@ -4284,16 +5262,19 @@ describe('refetch', () => {
       );
     }
 
-    renderWithMocks(<App />, { mocks, wrapper: Profiler });
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(<App />, {
+      wrapper: createMockWrapper({ mocks }),
+    });
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot).toEqual({
         error: null,
@@ -4311,16 +5292,16 @@ describe('refetch', () => {
       });
     }
 
-    await act(() => user.click(screen.getByText('Refetch')));
+    await user.click(screen.getByText('Refetch'));
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot, renderedComponents } = await Profiler.takeRender();
+      const { snapshot, renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual(['ErrorFallback']);
       expect(snapshot.error).toEqual(
@@ -4330,7 +5311,7 @@ describe('refetch', () => {
       );
     }
 
-    await expect(Profiler).not.toRerender({ timeout: 50 });
+    await expect(renderStream).not.toRerender({ timeout: 50 });
   });
 
   it('ignores errors returned after calling `refetch` when errorPolicy is set to "ignore"', async () => {
@@ -4347,9 +5328,9 @@ describe('refetch', () => {
       },
     ];
 
-    const Profiler = createErrorProfiler<VariablesCaseData | undefined>();
-    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
-    const { ErrorBoundary } = createTrackedErrorComponents(Profiler);
+    const renderStream = createErrorProfiler<VariablesCaseData | undefined>();
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
+    const { ErrorBoundary } = createTrackedErrorComponents(renderStream);
 
     function App() {
       useTrackRenders();
@@ -4370,16 +5351,19 @@ describe('refetch', () => {
       );
     }
 
-    renderWithMocks(<App />, { mocks, wrapper: Profiler });
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(<App />, {
+      wrapper: createMockWrapper({ mocks }),
+    });
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot).toEqual({
         error: null,
@@ -4397,16 +5381,16 @@ describe('refetch', () => {
       });
     }
 
-    await act(() => user.click(screen.getByText('Refetch')));
+    await user.click(screen.getByText('Refetch'));
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot).toEqual({
         error: null,
@@ -4424,7 +5408,7 @@ describe('refetch', () => {
       });
     }
 
-    await expect(Profiler).not.toRerender({ timeout: 50 });
+    await expect(renderStream).not.toRerender({ timeout: 50 });
   });
 
   it('returns errors after calling `refetch` when errorPolicy is set to "all"', async () => {
@@ -4441,9 +5425,9 @@ describe('refetch', () => {
       },
     ];
 
-    const Profiler = createErrorProfiler<VariablesCaseData | undefined>();
-    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
-    const { ErrorBoundary } = createTrackedErrorComponents(Profiler);
+    const renderStream = createErrorProfiler<VariablesCaseData | undefined>();
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
+    const { ErrorBoundary } = createTrackedErrorComponents(renderStream);
 
     function App() {
       useTrackRenders();
@@ -4464,16 +5448,19 @@ describe('refetch', () => {
       );
     }
 
-    renderWithMocks(<App />, { mocks, wrapper: Profiler });
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(<App />, {
+      wrapper: createMockWrapper({ mocks }),
+    });
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot).toEqual({
         error: null,
@@ -4491,16 +5478,16 @@ describe('refetch', () => {
       });
     }
 
-    await act(() => user.click(screen.getByText('Refetch')));
+    await user.click(screen.getByText('Refetch'));
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot).toEqual({
         error: null,
@@ -4520,7 +5507,7 @@ describe('refetch', () => {
       });
     }
 
-    await expect(Profiler).not.toRerender({ timeout: 50 });
+    await expect(renderStream).not.toRerender({ timeout: 50 });
   });
 
   it('handles partial data results after calling `refetch` when errorPolicy is set to "all"', async () => {
@@ -4538,9 +5525,9 @@ describe('refetch', () => {
       },
     ];
 
-    const Profiler = createErrorProfiler<VariablesCaseData | undefined>();
-    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
-    const { ErrorBoundary } = createTrackedErrorComponents(Profiler);
+    const renderStream = createErrorProfiler<VariablesCaseData | undefined>();
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
+    const { ErrorBoundary } = createTrackedErrorComponents(renderStream);
 
     function App() {
       useTrackRenders();
@@ -4561,16 +5548,19 @@ describe('refetch', () => {
       );
     }
 
-    renderWithMocks(<App />, { mocks, wrapper: Profiler });
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(<App />, {
+      wrapper: createMockWrapper({ mocks }),
+    });
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot).toEqual({
         error: null,
@@ -4588,16 +5578,16 @@ describe('refetch', () => {
       });
     }
 
-    await act(() => user.click(screen.getByText('Refetch')));
+    await user.click(screen.getByText('Refetch'));
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot).toEqual({
         error: null,
@@ -4617,7 +5607,7 @@ describe('refetch', () => {
       });
     }
 
-    await expect(Profiler).not.toRerender({ timeout: 50 });
+    await expect(renderStream).not.toRerender({ timeout: 50 });
   });
 
   it('can refetch after error is encountered', async () => {
@@ -4663,12 +5653,12 @@ describe('refetch', () => {
       },
     ];
 
-    const Profiler = createErrorProfiler<Data>();
-    const { SuspenseFallback } = createDefaultTrackedComponents(Profiler);
+    const renderStream = createErrorProfiler<Data>();
+    const { SuspenseFallback } = createDefaultTrackedComponents(renderStream);
 
     function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
       useTrackRenders();
-      Profiler.mergeSnapshot({ error: error as Error });
+      renderStream.mergeSnapshot({ error: error as Error });
 
       return <button onClick={resetErrorBoundary}>Retry</button>;
     }
@@ -4690,15 +5680,18 @@ describe('refetch', () => {
 
     function Todo({ queryRef }: { queryRef: QueryRef<Data> }) {
       useTrackRenders();
-      Profiler.mergeSnapshot({ result: useReadQuery(queryRef) });
+      renderStream.mergeSnapshot({ result: useReadQuery(queryRef) });
 
       return null;
     }
 
-    renderWithMocks(<App />, { mocks, wrapper: Profiler });
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(<App />, {
+      wrapper: createMockWrapper({ mocks }),
+    });
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
@@ -4706,7 +5699,7 @@ describe('refetch', () => {
     {
       // Disable error message shown in the console due to an uncaught error.
       using _consoleSpy = spyOnConsole('error');
-      const { snapshot, renderedComponents } = await Profiler.takeRender();
+      const { snapshot, renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([ErrorFallback]);
       expect(snapshot).toEqual({
@@ -4717,16 +5710,16 @@ describe('refetch', () => {
       });
     }
 
-    await act(() => user.click(screen.getByText('Retry')));
+    await user.click(screen.getByText('Retry'));
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot, renderedComponents } = await Profiler.takeRender();
+      const { snapshot, renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([Todo]);
       expect(snapshot).toEqual({
@@ -4790,12 +5783,12 @@ describe('refetch', () => {
       },
     ];
 
-    const Profiler = createErrorProfiler<Data>();
-    const { SuspenseFallback } = createDefaultTrackedComponents(Profiler);
+    const renderStream = createErrorProfiler<Data>();
+    const { SuspenseFallback } = createDefaultTrackedComponents(renderStream);
 
     function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
       useTrackRenders();
-      Profiler.mergeSnapshot({ error: error as Error });
+      renderStream.mergeSnapshot({ error: error as Error });
 
       return <button onClick={resetErrorBoundary}>Retry</button>;
     }
@@ -4817,21 +5810,24 @@ describe('refetch', () => {
 
     function Todo({ queryRef }: { queryRef: QueryRef<Data> }) {
       useTrackRenders();
-      Profiler.mergeSnapshot({ result: useReadQuery(queryRef) });
+      renderStream.mergeSnapshot({ result: useReadQuery(queryRef) });
 
       return null;
     }
 
-    renderWithMocks(<App />, { mocks, wrapper: Profiler });
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(<App />, {
+      wrapper: createMockWrapper({ mocks }),
+    });
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot, renderedComponents } = await Profiler.takeRender();
+      const { snapshot, renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([ErrorFallback]);
       expect(snapshot).toEqual({
@@ -4842,16 +5838,16 @@ describe('refetch', () => {
       });
     }
 
-    await act(() => user.click(screen.getByText('Retry')));
+    await user.click(screen.getByText('Retry'));
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot, renderedComponents } = await Profiler.takeRender();
+      const { snapshot, renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([ErrorFallback]);
       expect(snapshot).toEqual({
@@ -4905,14 +5901,14 @@ describe('refetch', () => {
       },
     ];
 
-    const Profiler = createProfiler({
+    const renderStream = createRenderStream({
       initialSnapshot: {
         isPending: false,
         result: null as UseReadQueryResult<Data> | null,
       },
     });
 
-    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
     function App() {
       useTrackRenders();
@@ -4921,14 +5917,14 @@ describe('refetch', () => {
         variables: { id: '1' },
       });
 
-      Profiler.mergeSnapshot({ isPending });
+      renderStream.mergeSnapshot({ isPending });
 
       return (
         <>
           <button
             onClick={() => {
               startTransition(() => {
-                refetch();
+                void refetch();
               });
             }}
           >
@@ -4941,16 +5937,19 @@ describe('refetch', () => {
       );
     }
 
-    renderWithMocks(<App />, { mocks, wrapper: Profiler });
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(<App />, {
+      wrapper: createMockWrapper({ mocks }),
+    });
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot).toEqual({
         isPending: false,
@@ -4962,7 +5961,7 @@ describe('refetch', () => {
       });
     }
 
-    await act(() => user.click(screen.getByText('Refetch')));
+    await user.click(screen.getByText('Refetch'));
 
     {
       // startTransition will avoid rendering the suspense fallback for already
@@ -4973,7 +5972,7 @@ describe('refetch', () => {
       // suspends until the todo is finished loading. Seeing the suspense
       // fallback is an indication that we are suspending the component too late
       // in the process.
-      const { snapshot, renderedComponents } = await Profiler.takeRender();
+      const { snapshot, renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
       expect(snapshot).toEqual({
@@ -4987,7 +5986,7 @@ describe('refetch', () => {
     }
 
     {
-      const { snapshot, renderedComponents } = await Profiler.takeRender();
+      const { snapshot, renderedComponents } = await renderStream.takeRender();
 
       // Eventually we should see the updated todo content once its done
       // suspending.
@@ -5047,8 +6046,8 @@ describe('refetch', () => {
       },
     });
 
-    const Profiler = createDefaultProfiler<QueryData>();
-    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+    const renderStream = createDefaultProfiler<QueryData>();
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
     const client = new ApolloClient({
       link: new MockLink(mocks),
@@ -5072,16 +6071,19 @@ describe('refetch', () => {
       );
     }
 
-    renderWithClient(<App />, { client, wrapper: Profiler });
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(<App />, {
+      wrapper: createClientWrapper(client),
+    });
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result).toEqual({
         data: { primes: [2, 3, 5, 7, 11] },
@@ -5091,16 +6093,16 @@ describe('refetch', () => {
       expect(mergeParams).toEqual([[undefined, [2, 3, 5, 7, 11]]]);
     }
 
-    await act(() => user.click(screen.getByText('Refetch')));
+    await user.click(screen.getByText('Refetch'));
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result).toEqual({
         data: { primes: [2, 3, 5, 7, 11, 13, 17, 19, 23, 29] },
@@ -5165,8 +6167,8 @@ describe('refetch', () => {
       cache,
     });
 
-    const Profiler = createDefaultProfiler<QueryData>();
-    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+    const renderStream = createDefaultProfiler<QueryData>();
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
     function App() {
       useTrackRenders();
@@ -5184,16 +6186,19 @@ describe('refetch', () => {
       );
     }
 
-    renderWithClient(<App />, { client, wrapper: Profiler });
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(<App />, {
+      wrapper: createClientWrapper(client),
+    });
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result).toEqual({
         data: { primes: [2, 3, 5, 7, 11] },
@@ -5203,16 +6208,16 @@ describe('refetch', () => {
       expect(mergeParams).toEqual([[undefined, [2, 3, 5, 7, 11]]]);
     }
 
-    await act(() => user.click(screen.getByText('Refetch')));
+    await user.click(screen.getByText('Refetch'));
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result).toEqual({
         data: { primes: [13, 17, 19, 23, 29] },
@@ -5241,8 +6246,8 @@ describe('fetchMore', () => {
       },
     });
     const user = userEvent.setup();
-    const Profiler = createDefaultProfiler<PaginatedCaseData>();
-    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+    const renderStream = createDefaultProfiler<PaginatedCaseData>();
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
     function App() {
       useTrackRenders();
@@ -5258,16 +6263,19 @@ describe('fetchMore', () => {
       );
     }
 
-    renderWithMocks(<App />, { cache, link, wrapper: Profiler });
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(<App />, {
+      wrapper: createMockWrapper({ cache, link }),
+    });
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
       expect(snapshot.result).toEqual({
         data: {
           letters: [
@@ -5280,16 +6288,16 @@ describe('fetchMore', () => {
       });
     }
 
-    await act(() => user.click(screen.getByText('Fetch more')));
+    await user.click(screen.getByText('Fetch more'));
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
       expect(snapshot.result).toEqual({
         data: {
           letters: [
@@ -5302,14 +6310,14 @@ describe('fetchMore', () => {
       });
     }
 
-    await expect(Profiler).not.toRerender({ timeout: 50 });
+    await expect(renderStream).not.toRerender({ timeout: 50 });
   });
 
   it('properly uses `updateQuery` when calling `fetchMore`', async () => {
     const { query, link } = setupPaginatedCase();
     const user = userEvent.setup();
-    const Profiler = createDefaultProfiler<PaginatedCaseData>();
-    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+    const renderStream = createDefaultProfiler<PaginatedCaseData>();
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
     function App() {
       useTrackRenders();
@@ -5336,16 +6344,19 @@ describe('fetchMore', () => {
       );
     }
 
-    renderWithMocks(<App />, { link, wrapper: Profiler });
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(<App />, {
+      wrapper: createMockWrapper({ link }),
+    });
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
       expect(snapshot.result).toEqual({
         data: {
           letters: [
@@ -5358,16 +6369,16 @@ describe('fetchMore', () => {
       });
     }
 
-    await act(() => user.click(screen.getByText('Fetch more')));
+    await user.click(screen.getByText('Fetch more'));
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result).toEqual({
         data: {
@@ -5383,15 +6394,15 @@ describe('fetchMore', () => {
       });
     }
 
-    await expect(Profiler).not.toRerender({ timeout: 50 });
+    await expect(renderStream).not.toRerender({ timeout: 50 });
   });
 
   // Hermes: concatPagination relies on keyArgs: false, which is not implemented.
   it.skip('properly uses cache field policies when calling `fetchMore` without `updateQuery`', async () => {
     const { query, link } = setupPaginatedCase();
     const user = userEvent.setup();
-    const Profiler = createDefaultProfiler<PaginatedCaseData>();
-    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+    const renderStream = createDefaultProfiler<PaginatedCaseData>();
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
     const client = new ApolloClient({
       link,
@@ -5420,16 +6431,19 @@ describe('fetchMore', () => {
       );
     }
 
-    renderWithClient(<App />, { client, wrapper: Profiler });
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(<App />, {
+      wrapper: createClientWrapper(client),
+    });
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
       expect(snapshot.result).toEqual({
         data: {
           letters: [
@@ -5442,16 +6456,16 @@ describe('fetchMore', () => {
       });
     }
 
-    await act(() => user.click(screen.getByText('Fetch more')));
+    await user.click(screen.getByText('Fetch more'));
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result).toEqual({
         data: {
@@ -5467,7 +6481,7 @@ describe('fetchMore', () => {
       });
     }
 
-    await expect(Profiler).not.toRerender({ timeout: 50 });
+    await expect(renderStream).not.toRerender({ timeout: 50 });
   });
 
   // Hermes: offsetLimitPagination relies on keyArgs: false, which is not implemented.
@@ -5534,13 +6548,13 @@ describe('fetchMore', () => {
       },
     ];
 
-    const Profiler = createProfiler({
+    const renderStream = createRenderStream({
       initialSnapshot: {
         isPending: false,
         result: null as UseReadQueryResult<Data> | null,
       },
     });
-    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
     const client = new ApolloClient({
       link: new MockLink(mocks),
@@ -5562,14 +6576,14 @@ describe('fetchMore', () => {
         variables: { offset: 0 },
       });
 
-      Profiler.mergeSnapshot({ isPending });
+      renderStream.mergeSnapshot({ isPending });
 
       return (
         <>
           <button
             onClick={() => {
               startTransition(() => {
-                fetchMore({ variables: { offset: 1 } });
+                void fetchMore({ variables: { offset: 1 } });
               });
             }}
           >
@@ -5582,16 +6596,19 @@ describe('fetchMore', () => {
       );
     }
 
-    renderWithClient(<App />, { client, wrapper: Profiler });
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(<App />, {
+      wrapper: createClientWrapper(client),
+    });
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot).toEqual({
         isPending: false,
@@ -5612,7 +6629,7 @@ describe('fetchMore', () => {
       });
     }
 
-    await act(() => user.click(screen.getByText('Load more')));
+    await user.click(screen.getByText('Load more'));
 
     {
       // startTransition will avoid rendering the suspense fallback for already
@@ -5622,7 +6639,7 @@ describe('fetchMore', () => {
       // Here we should not see the suspense fallback while the component suspends
       // until the todo is finished loading. Seeing the suspense fallback is an
       // indication that we are suspending the component too late in the process.
-      const { snapshot, renderedComponents } = await Profiler.takeRender();
+      const { snapshot, renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
       expect(snapshot).toEqual({
@@ -5647,7 +6664,7 @@ describe('fetchMore', () => {
     {
       // Eventually we should see the updated todos content once its done
       // suspending.
-      const { snapshot, renderedComponents } = await Profiler.takeRender();
+      const { snapshot, renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
       expect(snapshot).toEqual({
@@ -5675,7 +6692,7 @@ describe('fetchMore', () => {
       });
     }
 
-    await expect(Profiler).not.toRerender();
+    await expect(renderStream).not.toRerender();
   });
 
   // https://github.com/apollographql/apollo-client/issues/11708
@@ -5741,14 +6758,14 @@ describe('fetchMore', () => {
       },
     ];
 
-    const Profiler = createProfiler({
+    const renderStream = createRenderStream({
       initialSnapshot: {
         isPending: false,
         result: null as UseReadQueryResult<Data> | null,
       },
     });
 
-    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(Profiler);
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
 
     const client = new ApolloClient({
       link: new MockLink(mocks),
@@ -5775,14 +6792,14 @@ describe('fetchMore', () => {
         variables: { offset: 0 },
       });
 
-      Profiler.mergeSnapshot({ isPending });
+      renderStream.mergeSnapshot({ isPending });
 
       return (
         <>
           <button
             onClick={() => {
               startTransition(() => {
-                fetchMore({ variables: { offset: 1 } });
+                void fetchMore({ variables: { offset: 1 } });
               });
             }}
           >
@@ -5795,16 +6812,19 @@ describe('fetchMore', () => {
       );
     }
 
-    renderWithClient(<App />, { client, wrapper: Profiler });
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(<App />, {
+      wrapper: createClientWrapper(client),
+    });
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot).toEqual({
         isPending: false,
@@ -5825,10 +6845,10 @@ describe('fetchMore', () => {
       });
     }
 
-    await act(() => user.click(screen.getByText('Load more')));
+    await user.click(screen.getByText('Load more'));
 
     {
-      const { snapshot, renderedComponents } = await Profiler.takeRender();
+      const { snapshot, renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
       expect(snapshot).toEqual({
@@ -5851,7 +6871,7 @@ describe('fetchMore', () => {
     }
 
     {
-      const { snapshot, renderedComponents } = await Profiler.takeRender();
+      const { snapshot, renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
       expect(snapshot).toEqual({
@@ -5879,7 +6899,126 @@ describe('fetchMore', () => {
       });
     }
 
-    await expect(Profiler).not.toRerender();
+    await expect(renderStream).not.toRerender();
+  });
+
+  it('can subscribe to subscriptions and react to cache updates via `subscribeToMore`', async () => {
+    interface SubscriptionData {
+      greetingUpdated: string;
+    }
+
+    type UpdateQueryFn = NonNullable<
+      SubscribeToMoreOptions<SimpleCaseData, Record<string, never>, SubscriptionData>['updateQuery']
+    >;
+
+    const subscription: TypedDocumentNode<SubscriptionData, Record<string, never>> = gql`
+      subscription {
+        greetingUpdated
+      }
+    `;
+
+    const { mocks, query } = setupSimpleCase();
+
+    const wsLink = new MockSubscriptionLink();
+    const mockLink = new MockLink(mocks);
+
+    const link = split(
+      ({ query }) => {
+        const definition = getMainDefinition(query);
+
+        return definition.kind === 'OperationDefinition' && definition.operation === 'subscription';
+      },
+      wsLink,
+      mockLink,
+    );
+
+    const client = new ApolloClient({ link, cache: new Hermes() });
+
+    const renderStream = createRenderStream({
+      initialSnapshot: {
+        subscribeToMore: null as SubscribeToMoreFunction<SimpleCaseData, Record<string, never>> | null,
+        result: null as UseReadQueryResult<SimpleCaseData> | null,
+      },
+    });
+
+    const { SuspenseFallback, ReadQueryHook } = createDefaultTrackedComponents(renderStream);
+
+    function App() {
+      useTrackRenders();
+      const [queryRef, { subscribeToMore }] = useBackgroundQuery(query);
+
+      renderStream.mergeSnapshot({ subscribeToMore });
+
+      return (
+        <Suspense fallback={<SuspenseFallback />}>
+          <ReadQueryHook queryRef={queryRef} />
+        </Suspense>
+      );
+    }
+
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(<App />, {
+      wrapper: createClientWrapper(client),
+    });
+
+    {
+      const { renderedComponents } = await renderStream.takeRender();
+
+      expect(renderedComponents).toStrictEqual([App, SuspenseFallback]);
+    }
+
+    {
+      const { renderedComponents, snapshot } = await renderStream.takeRender();
+
+      expect(renderedComponents).toStrictEqual([ReadQueryHook]);
+      expect(snapshot.result).toEqual({
+        data: { greeting: 'Hello' },
+        error: undefined,
+        networkStatus: NetworkStatus.ready,
+      });
+    }
+
+    const updateQuery = jest.fn<ReturnType<UpdateQueryFn>, Parameters<UpdateQueryFn>>(
+      (_, { subscriptionData: { data } }) => {
+        return { greeting: data.greetingUpdated };
+      },
+    );
+
+    const { snapshot } = renderStream.getCurrentRender();
+
+    snapshot.subscribeToMore!({ document: subscription, updateQuery });
+
+    wsLink.simulateResult({
+      result: {
+        data: {
+          greetingUpdated: 'Subscription hello',
+        },
+      },
+    });
+
+    {
+      const { snapshot, renderedComponents } = await renderStream.takeRender();
+
+      expect(renderedComponents).toStrictEqual([ReadQueryHook]);
+      expect(snapshot.result).toEqual({
+        data: { greeting: 'Subscription hello' },
+        error: undefined,
+        networkStatus: NetworkStatus.ready,
+      });
+    }
+
+    expect(updateQuery).toHaveBeenCalledTimes(1);
+    expect(updateQuery).toHaveBeenCalledWith(
+      { greeting: 'Hello' },
+      {
+        complete: true,
+        previousData: { greeting: 'Hello' },
+        subscriptionData: {
+          data: { greetingUpdated: 'Subscription hello' },
+        },
+        variables: {},
+      },
+    );
   });
 });
 
@@ -5924,6 +7063,32 @@ describe.skip('type tests', () => {
 
     expectTypeOf(explicit).toEqualTypeOf<VariablesCaseData>();
     expectTypeOf(explicit).not.toEqualTypeOf<VariablesCaseData | undefined>();
+
+    const { query: maskedQuery } = setupMaskedVariablesCase();
+
+    {
+      const [queryRef] = useBackgroundQuery(maskedQuery);
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData>>();
+      expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<MaskedVariablesCaseData, VariablesCaseVariables>(maskedQuery);
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<MaskedVariablesCaseData>();
+      expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(maskedQuery);
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData>>();
+      expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+    }
   });
 
   it('returns TData | undefined with errorPolicy: "ignore"', () => {
@@ -5945,6 +7110,32 @@ describe.skip('type tests', () => {
 
     expectTypeOf(explicit).toEqualTypeOf<VariablesCaseData | undefined>();
     expectTypeOf(explicit).not.toEqualTypeOf<VariablesCaseData>();
+
+    const { query: maskedQuery } = setupMaskedVariablesCase();
+
+    {
+      const [queryRef] = useBackgroundQuery(maskedQuery);
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData>>();
+      expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<MaskedVariablesCaseData, VariablesCaseVariables>(maskedQuery);
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<MaskedVariablesCaseData>();
+      expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(maskedQuery);
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData>>();
+      expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+    }
   });
 
   it('returns TData | undefined with errorPolicy: "all"', () => {
@@ -5965,6 +7156,38 @@ describe.skip('type tests', () => {
 
     expectTypeOf(explicit).toEqualTypeOf<VariablesCaseData | undefined>();
     expectTypeOf(explicit).not.toEqualTypeOf<VariablesCaseData>();
+
+    const { query: maskedQuery } = setupMaskedVariablesCase();
+
+    {
+      const [queryRef] = useBackgroundQuery(maskedQuery, {
+        errorPolicy: 'all',
+      });
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData> | undefined>();
+      expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData | undefined>();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<MaskedVariablesCaseData, VariablesCaseVariables>(maskedQuery, {
+        errorPolicy: 'all',
+      });
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<MaskedVariablesCaseData | undefined>();
+      expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData | undefined>();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(maskedQuery, {
+        errorPolicy: 'all',
+      });
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData> | undefined>();
+      expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData | undefined>();
+    }
   });
 
   it('returns TData with errorPolicy: "none"', () => {
@@ -5985,6 +7208,38 @@ describe.skip('type tests', () => {
 
     expectTypeOf(explicit).toEqualTypeOf<VariablesCaseData>();
     expectTypeOf(explicit).not.toEqualTypeOf<VariablesCaseData | undefined>();
+
+    const { query: maskedQuery } = setupMaskedVariablesCase();
+
+    {
+      const [queryRef] = useBackgroundQuery(maskedQuery, {
+        errorPolicy: 'none',
+      });
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData>>();
+      expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<MaskedVariablesCaseData, VariablesCaseVariables>(maskedQuery, {
+        errorPolicy: 'none',
+      });
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<MaskedVariablesCaseData>();
+      expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(maskedQuery, {
+        errorPolicy: 'none',
+      });
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData>>();
+      expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+    }
   });
 
   it('returns DeepPartial<TData> with returnPartialData: true', () => {
@@ -6006,6 +7261,38 @@ describe.skip('type tests', () => {
 
     expectTypeOf(explicit).toEqualTypeOf<DeepPartial<VariablesCaseData>>();
     expectTypeOf(explicit).not.toEqualTypeOf<VariablesCaseData>();
+
+    const { query: maskedQuery } = setupMaskedVariablesCase();
+
+    {
+      const [queryRef] = useBackgroundQuery(maskedQuery, {
+        returnPartialData: true,
+      });
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<DeepPartial<Masked<MaskedVariablesCaseData>>>();
+      expectTypeOf(data).not.toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData>>();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<MaskedVariablesCaseData, VariablesCaseVariables>(maskedQuery, {
+        returnPartialData: true,
+      });
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<DeepPartial<MaskedVariablesCaseData>>();
+      expectTypeOf(data).not.toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData>>();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(maskedQuery, {
+        returnPartialData: true,
+      });
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<DeepPartial<Masked<MaskedVariablesCaseData>>>();
+      expectTypeOf(data).not.toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData>>();
+    }
   });
 
   it('returns TData with returnPartialData: false', () => {
@@ -6027,6 +7314,38 @@ describe.skip('type tests', () => {
 
     expectTypeOf(explicit).toEqualTypeOf<VariablesCaseData>();
     expectTypeOf(explicit).not.toEqualTypeOf<DeepPartial<VariablesCaseData>>();
+
+    const { query: maskedQuery } = setupMaskedVariablesCase();
+
+    {
+      const [queryRef] = useBackgroundQuery(maskedQuery, {
+        returnPartialData: false,
+      });
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData>>();
+      expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<MaskedVariablesCaseData, VariablesCaseVariables>(maskedQuery, {
+        returnPartialData: false,
+      });
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<MaskedVariablesCaseData>();
+      expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(maskedQuery, {
+        returnPartialData: false,
+      });
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData>>();
+      expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+    }
   });
 
   it('returns TData when passing an option that does not affect TData', () => {
@@ -6048,10 +7367,43 @@ describe.skip('type tests', () => {
 
     expectTypeOf(explicit).toEqualTypeOf<VariablesCaseData>();
     expectTypeOf(explicit).not.toEqualTypeOf<DeepPartial<VariablesCaseData>>();
+
+    const { query: maskedQuery } = setupMaskedVariablesCase();
+
+    {
+      const [queryRef] = useBackgroundQuery(maskedQuery, {
+        fetchPolicy: 'no-cache',
+      });
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData>>();
+      expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<MaskedVariablesCaseData, VariablesCaseVariables>(maskedQuery, {
+        fetchPolicy: 'no-cache',
+      });
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<MaskedVariablesCaseData>();
+      expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(maskedQuery, {
+        fetchPolicy: 'no-cache',
+      });
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData>>();
+      expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+    }
   });
 
   it('handles combinations of options', () => {
     const { query } = setupVariablesCase();
+    const { query: maskedQuery } = setupMaskedVariablesCase();
 
     const [inferredPartialDataIgnoreQueryRef] = useBackgroundQuery(query, {
       returnPartialData: true,
@@ -6072,6 +7424,39 @@ describe.skip('type tests', () => {
     expectTypeOf(explicitPartialDataIgnore).toEqualTypeOf<DeepPartial<VariablesCaseData> | undefined>();
     expectTypeOf(explicitPartialDataIgnore).not.toEqualTypeOf<VariablesCaseData>();
 
+    {
+      const [queryRef] = useBackgroundQuery(maskedQuery, {
+        returnPartialData: true,
+        errorPolicy: 'ignore',
+      });
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<DeepPartial<Masked<MaskedVariablesCaseData>> | undefined>();
+      expectTypeOf(data).not.toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData> | undefined>();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<MaskedVariablesCaseData, VariablesCaseVariables>(maskedQuery, {
+        returnPartialData: true,
+        errorPolicy: 'ignore',
+      });
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<DeepPartial<MaskedVariablesCaseData> | undefined>();
+      expectTypeOf(data).not.toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData> | undefined>();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(maskedQuery, {
+        returnPartialData: true,
+        errorPolicy: 'ignore',
+      });
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<DeepPartial<Masked<MaskedVariablesCaseData>> | undefined>();
+      expectTypeOf(data).not.toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData> | undefined>();
+    }
+
     const [inferredPartialDataNoneQueryRef] = useBackgroundQuery(query, {
       returnPartialData: true,
       errorPolicy: 'none',
@@ -6091,6 +7476,39 @@ describe.skip('type tests', () => {
 
     expectTypeOf(explicitPartialDataNone).toEqualTypeOf<DeepPartial<VariablesCaseData>>();
     expectTypeOf(explicitPartialDataNone).not.toEqualTypeOf<VariablesCaseData>();
+
+    {
+      const [queryRef] = useBackgroundQuery(maskedQuery, {
+        returnPartialData: true,
+        errorPolicy: 'none',
+      });
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<DeepPartial<Masked<MaskedVariablesCaseData>>>();
+      expectTypeOf(data).not.toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData>>();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<MaskedVariablesCaseData, VariablesCaseVariables>(maskedQuery, {
+        returnPartialData: true,
+        errorPolicy: 'none',
+      });
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<DeepPartial<MaskedVariablesCaseData>>();
+      expectTypeOf(data).not.toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData>>();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(maskedQuery, {
+        returnPartialData: true,
+        errorPolicy: 'none',
+      });
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<DeepPartial<Masked<MaskedVariablesCaseData>>>();
+      expectTypeOf(data).not.toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData>>();
+    }
   });
 
   it('returns correct TData type when combined options that do not affect TData', () => {
@@ -6116,10 +7534,49 @@ describe.skip('type tests', () => {
 
     expectTypeOf(explicit).toEqualTypeOf<DeepPartial<VariablesCaseData>>();
     expectTypeOf(explicit).not.toEqualTypeOf<VariablesCaseData>();
+
+    const { query: maskedQuery } = setupMaskedVariablesCase();
+
+    {
+      const [queryRef] = useBackgroundQuery(maskedQuery, {
+        fetchPolicy: 'no-cache',
+        returnPartialData: true,
+        errorPolicy: 'none',
+      });
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<DeepPartial<Masked<MaskedVariablesCaseData>>>();
+      expectTypeOf(data).not.toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData>>();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<MaskedVariablesCaseData, VariablesCaseVariables>(maskedQuery, {
+        fetchPolicy: 'no-cache',
+        returnPartialData: true,
+        errorPolicy: 'none',
+      });
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<DeepPartial<MaskedVariablesCaseData>>();
+      expectTypeOf(data).not.toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData>>();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(maskedQuery, {
+        fetchPolicy: 'no-cache',
+        returnPartialData: true,
+        errorPolicy: 'none',
+      });
+      const { data } = useReadQuery(queryRef);
+
+      expectTypeOf(data).toEqualTypeOf<DeepPartial<Masked<MaskedVariablesCaseData>>>();
+      expectTypeOf(data).not.toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData>>();
+    }
   });
 
   it('returns QueryRef<TData> | undefined when `skip` is present', () => {
     const { query } = setupVariablesCase();
+    const { query: maskedQuery } = setupMaskedVariablesCase();
 
     const [inferredQueryRef] = useBackgroundQuery(query, {
       skip: true,
@@ -6139,6 +7596,37 @@ describe.skip('type tests', () => {
     >();
     expectTypeOf(explicitQueryRef).not.toEqualTypeOf<QueryRef<VariablesCaseData, VariablesCaseVariables>>();
 
+    {
+      const [queryRef] = useBackgroundQuery(maskedQuery, { skip: true });
+
+      expectTypeOf(queryRef).toEqualTypeOf<
+        QueryRef<Masked<MaskedVariablesCaseData>, VariablesCaseVariables> | undefined
+      >();
+      expectTypeOf(queryRef).not.toEqualTypeOf<QueryRef<MaskedVariablesCaseData, VariablesCaseVariables> | undefined>();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<MaskedVariablesCaseData, VariablesCaseVariables>(maskedQuery, {
+        skip: true,
+      });
+
+      expectTypeOf(queryRef).toEqualTypeOf<QueryRef<MaskedVariablesCaseData, VariablesCaseVariables> | undefined>();
+      expectTypeOf(queryRef).not.toEqualTypeOf<
+        QueryRef<Masked<MaskedVariablesCaseData>, VariablesCaseVariables> | undefined
+      >();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(maskedQuery, {
+        skip: true,
+      });
+
+      expectTypeOf(queryRef).toEqualTypeOf<
+        QueryRef<Masked<MaskedVariablesCaseData>, VariablesCaseVariables> | undefined
+      >();
+      expectTypeOf(queryRef).not.toEqualTypeOf<QueryRef<MaskedVariablesCaseData, VariablesCaseVariables> | undefined>();
+    }
+
     // TypeScript is too smart and using a `const` or `let` boolean variable
     // for the `skip` option results in a false positive. Using an options
     // object allows us to properly check for a dynamic case.
@@ -6155,6 +7643,41 @@ describe.skip('type tests', () => {
       QueryReference<VariablesCaseData, VariablesCaseVariables> | undefined
     >();
     expectTypeOf(dynamicQueryRef).not.toEqualTypeOf<QueryRef<VariablesCaseData, VariablesCaseVariables>>();
+
+    {
+      const [queryRef] = useBackgroundQuery(maskedQuery, {
+        skip: options.skip,
+      });
+
+      expectTypeOf(queryRef).toEqualTypeOf<
+        QueryRef<Masked<MaskedVariablesCaseData>, VariablesCaseVariables> | undefined
+      >();
+      expectTypeOf(queryRef).not.toEqualTypeOf<
+        QueryRef<UnmaskedVariablesCaseData, VariablesCaseVariables> | undefined
+      >();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<MaskedVariablesCaseData, VariablesCaseVariables>(maskedQuery, {
+        skip: options.skip,
+      });
+
+      expectTypeOf(queryRef).toEqualTypeOf<QueryRef<MaskedVariablesCaseData, VariablesCaseVariables> | undefined>();
+      expectTypeOf(queryRef).not.toEqualTypeOf<
+        QueryRef<Masked<MaskedVariablesCaseData>, VariablesCaseVariables> | undefined
+      >();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(maskedQuery, {
+        skip: options.skip,
+      });
+
+      expectTypeOf(queryRef).toEqualTypeOf<
+        QueryRef<Masked<MaskedVariablesCaseData>, VariablesCaseVariables> | undefined
+      >();
+      expectTypeOf(queryRef).not.toEqualTypeOf<QueryRef<MaskedVariablesCaseData, VariablesCaseVariables> | undefined>();
+    }
   });
 
   it('returns `undefined` when using `skipToken` unconditionally', () => {
@@ -6169,6 +7692,36 @@ describe.skip('type tests', () => {
 
     expectTypeOf(explicitQueryRef).toEqualTypeOf<undefined>();
     expectTypeOf(explicitQueryRef).not.toEqualTypeOf<QueryRef<VariablesCaseData, VariablesCaseVariables> | undefined>();
+
+    const { query: maskedQuery } = setupMaskedVariablesCase();
+
+    {
+      const [queryRef] = useBackgroundQuery(maskedQuery, skipToken);
+
+      expectTypeOf(queryRef).toEqualTypeOf<undefined>();
+      expectTypeOf(queryRef).not.toEqualTypeOf<
+        QueryRef<Masked<MaskedVariablesCaseData>, VariablesCaseVariables> | undefined
+      >();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<MaskedVariablesCaseData, VariablesCaseVariables>(maskedQuery, skipToken);
+
+      expectTypeOf(queryRef).toEqualTypeOf<undefined>();
+      expectTypeOf(queryRef).not.toEqualTypeOf<QueryRef<MaskedVariablesCaseData, VariablesCaseVariables> | undefined>();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(
+        maskedQuery,
+        skipToken,
+      );
+
+      expectTypeOf(queryRef).toEqualTypeOf<undefined>();
+      expectTypeOf(queryRef).not.toEqualTypeOf<
+        QueryRef<Masked<MaskedVariablesCaseData>, VariablesCaseVariables> | undefined
+      >();
+    }
   });
 
   it('returns QueryRef<TData> | undefined when using conditional `skipToken`', () => {
@@ -6195,6 +7748,41 @@ describe.skip('type tests', () => {
       QueryReference<VariablesCaseData, VariablesCaseVariables> | undefined
     >();
     expectTypeOf(explicitQueryRef).not.toEqualTypeOf<QueryRef<VariablesCaseData, VariablesCaseVariables>>();
+
+    const { query: maskedQuery } = setupMaskedVariablesCase();
+
+    {
+      const [queryRef] = useBackgroundQuery(maskedQuery, options.skip ? skipToken : undefined);
+
+      expectTypeOf(queryRef).toEqualTypeOf<
+        QueryRef<Masked<MaskedVariablesCaseData>, VariablesCaseVariables> | undefined
+      >();
+      expectTypeOf(queryRef).not.toEqualTypeOf<QueryRef<MaskedVariablesCaseData, VariablesCaseVariables> | undefined>();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<MaskedVariablesCaseData, VariablesCaseVariables>(
+        maskedQuery,
+        options.skip ? skipToken : undefined,
+      );
+
+      expectTypeOf(queryRef).toEqualTypeOf<QueryRef<MaskedVariablesCaseData, VariablesCaseVariables> | undefined>();
+      expectTypeOf(queryRef).not.toEqualTypeOf<
+        QueryRef<Masked<MaskedVariablesCaseData>, VariablesCaseVariables> | undefined
+      >();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(
+        maskedQuery,
+        options.skip ? skipToken : undefined,
+      );
+
+      expectTypeOf(queryRef).toEqualTypeOf<
+        QueryRef<Masked<MaskedVariablesCaseData>, VariablesCaseVariables> | undefined
+      >();
+      expectTypeOf(queryRef).not.toEqualTypeOf<QueryRef<MaskedVariablesCaseData, VariablesCaseVariables> | undefined>();
+    }
   });
 
   it('returns QueryRef<DeepPartial<TData>> | undefined when using `skipToken` with `returnPartialData`', () => {
@@ -6225,5 +7813,221 @@ describe.skip('type tests', () => {
       QueryReference<DeepPartial<VariablesCaseData>, VariablesCaseVariables> | undefined
     >();
     expectTypeOf(explicitQueryRef).not.toEqualTypeOf<QueryRef<VariablesCaseData, VariablesCaseVariables>>();
+
+    const { query: maskedQuery } = setupMaskedVariablesCase();
+
+    {
+      const [queryRef] = useBackgroundQuery(maskedQuery, options.skip ? skipToken : { returnPartialData: true });
+
+      expectTypeOf(queryRef).toEqualTypeOf<
+        QueryRef<DeepPartial<Masked<MaskedVariablesCaseData>>, VariablesCaseVariables> | undefined
+      >();
+      expectTypeOf(queryRef).not.toEqualTypeOf<
+        QueryRef<DeepPartial<MaskedVariablesCaseData>, VariablesCaseVariables> | undefined
+      >();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<MaskedVariablesCaseData, VariablesCaseVariables>(
+        maskedQuery,
+        options.skip ? skipToken : { returnPartialData: true },
+      );
+
+      expectTypeOf(queryRef).toEqualTypeOf<
+        QueryRef<DeepPartial<MaskedVariablesCaseData>, VariablesCaseVariables> | undefined
+      >();
+      expectTypeOf(queryRef).not.toEqualTypeOf<
+        QueryRef<DeepPartial<Masked<MaskedVariablesCaseData>>, VariablesCaseVariables> | undefined
+      >();
+    }
+
+    {
+      const [queryRef] = useBackgroundQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(
+        maskedQuery,
+        options.skip ? skipToken : { returnPartialData: true },
+      );
+
+      expectTypeOf(queryRef).toEqualTypeOf<
+        QueryRef<DeepPartial<Masked<MaskedVariablesCaseData>>, VariablesCaseVariables> | undefined
+      >();
+      expectTypeOf(queryRef).not.toEqualTypeOf<
+        QueryRef<DeepPartial<MaskedVariablesCaseData>, VariablesCaseVariables> | undefined
+      >();
+    }
+  });
+
+  it('uses proper masked types for refetch', async () => {
+    const { query, unmaskedQuery } = setupMaskedVariablesCase();
+
+    {
+      const [, { refetch }] = useBackgroundQuery(query);
+
+      const result = await refetch();
+
+      expectTypeOf(result.data).toEqualTypeOf<Masked<MaskedVariablesCaseData>>();
+      expectTypeOf(result.data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+    }
+
+    {
+      const [, { refetch }] = useBackgroundQuery(unmaskedQuery);
+
+      const result = await refetch();
+
+      expectTypeOf(result.data).toEqualTypeOf<MaskedVariablesCaseData>();
+      expectTypeOf(result.data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+    }
+  });
+
+  it('uses proper masked types for fetchMore', async () => {
+    const { query, unmaskedQuery } = setupMaskedVariablesCase();
+
+    {
+      const [, { fetchMore }] = useBackgroundQuery(query);
+
+      const result = await fetchMore({
+        updateQuery: (queryData, { fetchMoreResult }) => {
+          expectTypeOf(queryData).toEqualTypeOf<UnmaskedVariablesCaseData>();
+          expectTypeOf(queryData).not.toEqualTypeOf<MaskedVariablesCaseData>();
+
+          expectTypeOf(fetchMoreResult).toEqualTypeOf<UnmaskedVariablesCaseData>();
+          expectTypeOf(fetchMoreResult).not.toEqualTypeOf<MaskedVariablesCaseData>();
+
+          return {} as UnmaskedVariablesCaseData;
+        },
+      });
+
+      expectTypeOf(result.data).toEqualTypeOf<Masked<MaskedVariablesCaseData>>();
+      expectTypeOf(result.data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+    }
+
+    {
+      const [, { fetchMore }] = useBackgroundQuery(unmaskedQuery);
+
+      const result = await fetchMore({
+        updateQuery: (queryData, { fetchMoreResult }) => {
+          expectTypeOf(queryData).toEqualTypeOf<UnmaskedVariablesCaseData>();
+          expectTypeOf(queryData).not.toEqualTypeOf<MaskedVariablesCaseData>();
+
+          expectTypeOf(fetchMoreResult).toEqualTypeOf<UnmaskedVariablesCaseData>();
+          expectTypeOf(fetchMoreResult).not.toEqualTypeOf<MaskedVariablesCaseData>();
+
+          return {} as UnmaskedVariablesCaseData;
+        },
+      });
+
+      expectTypeOf(result.data).toEqualTypeOf<MaskedVariablesCaseData>();
+      expectTypeOf(result.data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+    }
+  });
+
+  it('uses proper masked types for subscribeToMore', async () => {
+    type CharacterFragment = {
+      __typename: 'Character';
+      name: string;
+    } & { ' $fragmentName': 'CharacterFragment' };
+
+    type Subscription = {
+      pushLetter: {
+        __typename: 'Character';
+        id: number;
+      } & { ' $fragmentRefs': { CharacterFragment: CharacterFragment } };
+    };
+
+    type UnmaskedSubscription = {
+      pushLetter: {
+        __typename: 'Character';
+        id: number;
+        name: string;
+      };
+    };
+
+    const { query, unmaskedQuery } = setupMaskedVariablesCase();
+
+    {
+      const [, { subscribeToMore }] = useBackgroundQuery(query);
+
+      const subscription: MaskedDocumentNode<Subscription, { letterId: string }> = gql`
+        subscription LetterPushed($letterId: ID!) {
+          pushLetter(letterId: $letterId) {
+            id
+            ...CharacterFragment
+          }
+        }
+
+        fragment CharacterFragment on Character {
+          name
+        }
+      `;
+
+      subscribeToMore({
+        document: subscription,
+        updateQuery: (queryData, { subscriptionData, variables, complete, previousData }) => {
+          expectTypeOf(queryData).toEqualTypeOf<UnmaskedVariablesCaseData>();
+          expectTypeOf(queryData).not.toEqualTypeOf<MaskedVariablesCaseData>();
+          expectTypeOf(previousData).toEqualTypeOf<
+            UnmaskedVariablesCaseData | DeepPartial<UnmaskedVariablesCaseData> | undefined
+          >();
+
+          if (complete) {
+            // Should narrow the type
+            expectTypeOf(previousData).toEqualTypeOf<UnmaskedVariablesCaseData>();
+            expectTypeOf(previousData).not.toEqualTypeOf<MaskedVariablesCaseData>();
+          } else {
+            expectTypeOf(previousData).toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData> | undefined>();
+          }
+
+          expectTypeOf(subscriptionData.data).toEqualTypeOf<UnmaskedSubscription>();
+          expectTypeOf(subscriptionData.data).not.toEqualTypeOf<Subscription>();
+
+          expectTypeOf(variables).toEqualTypeOf<VariablesCaseVariables | undefined>();
+
+          return {} as UnmaskedVariablesCaseData;
+        },
+      });
+    }
+
+    {
+      const [, { subscribeToMore }] = useBackgroundQuery(unmaskedQuery);
+
+      const subscription: TypedDocumentNode<Subscription, never> = gql`
+        subscription {
+          pushLetter {
+            id
+            ...CharacterFragment
+          }
+        }
+
+        fragment CharacterFragment on Character {
+          name
+        }
+      `;
+
+      subscribeToMore({
+        document: subscription,
+        updateQuery: (queryData, { subscriptionData, variables, complete, previousData }) => {
+          expectTypeOf(queryData).toEqualTypeOf<UnmaskedVariablesCaseData>();
+          expectTypeOf(queryData).not.toEqualTypeOf<MaskedVariablesCaseData>();
+
+          expectTypeOf(previousData).toEqualTypeOf<
+            UnmaskedVariablesCaseData | DeepPartial<UnmaskedVariablesCaseData> | undefined
+          >();
+
+          if (complete) {
+            // Should narrow the type
+            expectTypeOf(previousData).toEqualTypeOf<UnmaskedVariablesCaseData>();
+            expectTypeOf(previousData).not.toEqualTypeOf<MaskedVariablesCaseData>();
+          } else {
+            expectTypeOf(previousData).toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData> | undefined>();
+          }
+
+          expectTypeOf(subscriptionData.data).toEqualTypeOf<UnmaskedSubscription>();
+          expectTypeOf(subscriptionData.data).not.toEqualTypeOf<Subscription>();
+
+          expectTypeOf(variables).toEqualTypeOf<VariablesCaseVariables | undefined>();
+
+          return queryData;
+        },
+      });
+    }
   });
 });

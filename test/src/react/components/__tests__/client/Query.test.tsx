@@ -5,12 +5,12 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { ApolloClient, ApolloLink, ApolloProvider } from '@apollo/client';
 import { loadErrorMessages } from '@apollo/client/dev';
 import { Query } from '@apollo/client/react/components';
+import { NetworkStatus } from '@apollo/client/core';
+import { ApolloError } from '@apollo/client/errors';
+import { itAsync, mockSingleLink, MockedProvider } from '@apollo/client/testing';
+import { QueryResult } from '@apollo/client/react/types/types';
+import { disableActEnvironment, createRenderStream } from '@testing-library/react-render-stream';
 
-import { NetworkStatus } from '../../../../core';
-import { ApolloError } from '../../../../errors';
-import { itAsync, MockedProvider, mockSingleLink } from '../../../../testing';
-import { QueryResult } from '../../../types/types';
-import { profile } from '../../../../testing/internal';
 import { Hermes } from '../../../../../../src';
 
 // These tests assert the @apollo/client error text rather than its production placeholder.
@@ -208,13 +208,13 @@ describe('Query component', () => {
       ];
 
       const Component = () => (
-        <Query query={allPeopleQuery} data-ref={React.useRef()}>
+        <Query query={allPeopleQuery} data-ref={React.useRef(void 0)}>
           {(result: any) => {
             if (result.loading) {
               return null;
             }
             try {
-              expect(result.error).toEqual(new Error('error occurred'));
+              expect(result.error).toEqual(new ApolloError({ networkError: new Error('error occurred') }));
               finished = true;
             } catch (error) {
               reject(error);
@@ -1460,30 +1460,28 @@ describe('Query component', () => {
       return (
         <AllPeopleQuery2 query={query} notifyOnNetworkStatusChange={true}>
           {(r: any) => {
-            ProfiledContainer.replaceSnapshot(r);
+            replaceSnapshot(r);
             return null;
           }}
         </AllPeopleQuery2>
       );
     }
 
-    const ProfiledContainer = profile<QueryResult>({
-      Component: Container,
-    });
-
-    render(
+    using _disabledAct = disableActEnvironment();
+    const { takeRender, replaceSnapshot, render } = createRenderStream<QueryResult>();
+    await render(
       <ApolloProvider client={client}>
-        <ProfiledContainer />
+        <Container />
       </ApolloProvider>,
     );
 
     {
-      const { snapshot } = await ProfiledContainer.takeRender();
+      const { snapshot } = await takeRender();
       expect(snapshot.loading).toBe(true);
     }
 
     {
-      const { snapshot } = await ProfiledContainer.takeRender();
+      const { snapshot } = await takeRender();
       expect(snapshot.loading).toBe(false);
       expect(snapshot.data.allPeople).toEqual(data.allPeople);
       // First result is loaded, run a refetch to get the second result
@@ -1494,13 +1492,13 @@ describe('Query component', () => {
     }
 
     {
-      const { snapshot } = await ProfiledContainer.takeRender();
+      const { snapshot } = await takeRender();
       // Waiting for the second result to load
       expect(snapshot.loading).toBe(true);
     }
 
     {
-      const { snapshot } = await ProfiledContainer.takeRender();
+      const { snapshot } = await takeRender();
       expect(snapshot.loading).toBe(false);
       expect(snapshot.error).toBeTruthy();
       // The error arrived, run a refetch to get the third result
@@ -1511,13 +1509,13 @@ describe('Query component', () => {
     }
 
     {
-      const { snapshot } = await ProfiledContainer.takeRender();
+      const { snapshot } = await takeRender();
       expect(snapshot.loading).toBe(true);
       expect(snapshot.error).toBeFalsy();
     }
 
     {
-      const { snapshot } = await ProfiledContainer.takeRender();
+      const { snapshot } = await takeRender();
       expect(snapshot.loading).toBe(false);
       expect(snapshot.error).toBeFalsy();
       expect(snapshot.data.allPeople).toEqual(dataTwo.allPeople);

@@ -1,6 +1,5 @@
 import gql from 'graphql-tag';
-
-import { validateOperation } from '../validateOperation';
+import { validateOperation } from '@apollo/client/link/utils/validateOperation';
 
 describe('validateOperation', () => {
   it('should throw when invalid field in operation', () => {

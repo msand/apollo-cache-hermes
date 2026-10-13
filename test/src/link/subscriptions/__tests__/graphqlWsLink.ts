@@ -1,11 +1,10 @@
 import { Client } from 'graphql-ws';
 import { ExecutionResult, GraphQLError } from 'graphql';
 import gql from 'graphql-tag';
-
-import { Observable } from '../../../utilities';
-import { ApolloError } from '../../../errors';
-import { execute } from '../../core';
-import { GraphQLWsLink } from '..';
+import { Observable } from '@apollo/client/utilities';
+import { ApolloError } from '@apollo/client/errors';
+import { execute } from '@apollo/client/link/core';
+import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 
 const query = gql`
   query SampleQuery {

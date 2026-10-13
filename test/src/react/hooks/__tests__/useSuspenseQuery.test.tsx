@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { Fragment, StrictMode, Suspense, useTransition } from 'react';
-import { act, screen, render, renderHook, waitFor, RenderHookOptions } from '@testing-library/react';
+import { act, screen, waitFor, RenderHookOptions, renderHook } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ErrorBoundary } from 'react-error-boundary';
+import { ErrorBoundary, FallbackProps } from 'react-error-boundary';
 import { GraphQLError } from 'graphql';
 import { InvariantError } from 'ts-invariant';
 import { equal } from '@wry/equality';
@@ -12,13 +12,11 @@ import {
   ApolloProvider,
   ApolloLink,
   ApolloCache,
-  InMemoryCache,
   split,
   useSuspenseQuery,
   skipToken,
 } from '@apollo/client';
 import { loadErrorMessages } from '@apollo/client/dev';
-
 import {
   gql,
   ApolloError,
@@ -30,26 +28,37 @@ import {
   NetworkStatus,
   ApolloQueryResult,
   ErrorPolicy,
-} from '../../../core';
-import { DeepPartial, compact, concatPagination, getMainDefinition, offsetLimitPagination } from '../../../utilities';
-import { MockedProvider, MockedResponse, MockSubscriptionLink, MockLink } from '../../../testing';
-import { SuspenseQueryHookFetchPolicy } from '../..';
-import { UseSuspenseQueryResult } from '../useSuspenseQuery';
-import { RefetchWritePolicy, WatchQueryFetchPolicy } from '../../../core/watchQueryOptions';
+} from '@apollo/client/core';
+import {
+  DeepPartial,
+  compact,
+  concatPagination,
+  getMainDefinition,
+  offsetLimitPagination,
+} from '@apollo/client/utilities';
+import { MockedProvider, MockedResponse, MockSubscriptionLink, MockLink } from '@apollo/client/testing';
+import { SuspenseQueryHookFetchPolicy } from '@apollo/client/react';
+import { UseSuspenseQueryResult } from '@apollo/client/react/hooks/useSuspenseQuery';
+import { RefetchWritePolicy, WatchQueryFetchPolicy } from '@apollo/client/core/watchQueryOptions';
 import {
   PaginatedCaseData,
   PaginatedCaseVariables,
-  createProfiler,
-  profile,
   setupPaginatedCase,
   spyOnConsole,
-  useTrackRenders,
-} from '../../../testing/internal';
+  actAsync,
+  renderAsync,
+  renderHookAsync,
+} from '@apollo/client/testing/internal';
+import { Masked, MaskedDocumentNode, Unmasked } from '@apollo/client/masking';
+import { createRenderStream, disableActEnvironment, useTrackRenders } from '@testing-library/react-render-stream';
+
 import { Hermes } from '../../../../../src';
 
 // Hermes: these hooks come from the published @apollo/client package, whose error messages the
 // shared test env does not load.
 loadErrorMessages();
+
+const IS_REACT_19 = React.version.startsWith('19');
 
 type RenderSuspenseHookOptions<Props, TSerializedCache = {}> = Omit<RenderHookOptions<Props>, 'wrapper'> & {
   client?: ApolloClient<TSerializedCache>;
@@ -71,7 +80,7 @@ interface SimpleQueryData {
   greeting: string;
 }
 
-function renderSuspenseHook<Result, Props>(
+async function renderSuspenseHook<Result, Props>(
   render: (initialProps: Props) => Result,
   options: RenderSuspenseHookOptions<Props> = Object.create(null),
 ) {
@@ -98,7 +107,7 @@ function renderSuspenseHook<Result, Props>(
       link: options.link || new MockLink(mocks),
     });
 
-  const view = renderHook(
+  const { rerender, ...view } = await renderHookAsync(
     props => {
       renders.count++;
 
@@ -132,7 +141,11 @@ function renderSuspenseHook<Result, Props>(
     },
   );
 
-  return { ...view, renders };
+  return {
+    ...view,
+    renders,
+    rerenderAsync: (props?: Props | undefined) => actAsync(() => rerender(props)),
+  };
 }
 
 function useSimpleQueryCase() {
@@ -146,6 +159,7 @@ function useSimpleQueryCase() {
     {
       request: { query },
       result: { data: { greeting: 'Hello' } },
+      delay: 20,
     },
   ];
 
@@ -208,7 +222,7 @@ function useErrorCase<TData extends ErrorCaseData>(
     networkError,
     graphQLErrors,
   }: {
-    data?: TData;
+    data?: Unmasked<TData>;
     networkError?: Error;
     graphQLErrors?: GraphQLError[];
   } = Object.create(null),
@@ -261,9 +275,62 @@ function useVariablesQueryCase() {
         character: { __typename: 'Character', id: String(index + 1), name },
       },
     },
+    delay: 20,
   }));
 
   return { query, mocks };
+}
+
+type CharacterFragment = {
+  __typename: 'Character';
+  name: string;
+} & { ' $fragmentName'?: 'CharacterFragment' };
+
+interface MaskedVariablesCaseData {
+  character: {
+    __typename: 'Character';
+    id: string;
+  } & { ' $fragmentRefs'?: { CharacterFragment: CharacterFragment } };
+}
+
+interface UnmaskedVariablesCaseData {
+  character: {
+    __typename: 'Character';
+    id: string;
+    name: string;
+  };
+}
+
+function useMaskedVariablesQueryCase() {
+  const CHARACTERS = ['Spider-Man', 'Black Widow', 'Iron Man', 'Hulk'];
+
+  const document = gql`
+    query CharacterQuery($id: ID!) {
+      character(id: $id) {
+        id
+        ...CharacterFragment
+      }
+    }
+
+    fragment CharacterFragment on Character {
+      name
+    }
+  `;
+
+  const query: MaskedDocumentNode<MaskedVariablesCaseData, VariablesCaseVariables> = document;
+
+  const unmaskedQuery: TypedDocumentNode<MaskedVariablesCaseData, VariablesCaseVariables> = document;
+
+  const mocks = CHARACTERS.map((name, index) => ({
+    request: { query, variables: { id: String(index + 1) } },
+    result: {
+      data: {
+        character: { __typename: 'Character', id: String(index + 1), name },
+      },
+    },
+  }));
+
+  return { query, unmaskedQuery, mocks };
 }
 
 function wait(delay: number) {
@@ -330,7 +397,7 @@ describe('useSuspenseQuery', () => {
 
     const Component = () => {
       const result = useSuspenseQuery(query);
-      ProfiledApp.replaceSnapshot(result);
+      replaceSnapshot(result);
       return <div>{result.data.greeting}</div>;
     };
 
@@ -344,29 +411,30 @@ describe('useSuspenseQuery', () => {
       );
     };
 
-    const ProfiledApp = profile<UseSuspenseQueryResult<SimpleQueryData, OperationVariables>>({
-      Component: App,
-      snapshotDOM: true,
-    });
-
     const client = new ApolloClient({
       cache: new Hermes(),
       link: new MockLink(mocks),
     });
 
-    render(<ProfiledApp />, {
+    using _disabledAct = disableActEnvironment();
+    const { takeRender, replaceSnapshot, render } = await createRenderStream<
+      UseSuspenseQueryResult<SimpleQueryData, OperationVariables>
+    >({
+      snapshotDOM: true,
+    });
+    await render(<App />, {
       wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
     });
 
     {
       // ensure the hook suspends immediately
-      const { withinDOM, snapshot } = await ProfiledApp.takeRender();
+      const { withinDOM, snapshot } = await takeRender();
       expect(withinDOM().getByText('loading')).toBeInTheDocument();
       expect(snapshot).toBeUndefined();
     }
 
     {
-      const { withinDOM, snapshot } = await ProfiledApp.takeRender();
+      const { withinDOM, snapshot } = await takeRender();
       expect(withinDOM().queryByText('loading')).not.toBeInTheDocument();
       expect(withinDOM().getByText('Hello')).toBeInTheDocument();
       expect(snapshot).toMatchObject({
@@ -380,7 +448,7 @@ describe('useSuspenseQuery', () => {
   it('suspends a query with variables and returns results', async () => {
     const { query, mocks } = useVariablesQueryCase();
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { variables: { id: '1' } }), {
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { variables: { id: '1' } }), {
       mocks,
     });
 
@@ -392,7 +460,7 @@ describe('useSuspenseQuery', () => {
     });
 
     expect(renders.suspenseCount).toBe(1);
-    expect(renders.count).toBe(2);
+    expect(renders.count).toBe(2 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.frames).toMatchObject([
       {
         ...mocks[0].result,
@@ -405,7 +473,7 @@ describe('useSuspenseQuery', () => {
   it('returns the same results for the same variables', async () => {
     const { query, mocks } = useVariablesQueryCase();
 
-    const { result, rerender, renders } = renderSuspenseHook(
+    const { result, rerenderAsync, renders } = await renderSuspenseHook(
       ({ id }) => useSuspenseQuery(query, { variables: { id } }),
       { mocks, initialProps: { id: '1' } },
     );
@@ -419,10 +487,10 @@ describe('useSuspenseQuery', () => {
 
     const previousResult = result.current;
 
-    rerender({ id: '1' });
+    await rerenderAsync({ id: '1' });
 
     expect(result.current).toBe(previousResult);
-    expect(renders.count).toBe(3);
+    expect(renders.count).toBe(3 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([
       {
@@ -441,10 +509,10 @@ describe('useSuspenseQuery', () => {
   it('ensures result is referentially stable', async () => {
     const { query, mocks } = useVariablesQueryCase();
 
-    const { result, rerender } = renderSuspenseHook(({ id }) => useSuspenseQuery(query, { variables: { id } }), {
-      mocks,
-      initialProps: { id: '1' },
-    });
+    const { result, rerenderAsync } = await renderSuspenseHook(
+      ({ id }) => useSuspenseQuery(query, { variables: { id } }),
+      { mocks, initialProps: { id: '1' } },
+    );
 
     expect(screen.getByText('loading')).toBeInTheDocument();
 
@@ -457,7 +525,7 @@ describe('useSuspenseQuery', () => {
 
     const previousResult = result.current;
 
-    rerender({ id: '1' });
+    await rerenderAsync({ id: '1' });
 
     expect(result.current).toBe(previousResult);
   });
@@ -470,7 +538,7 @@ describe('useSuspenseQuery', () => {
       cache: new Hermes(),
     });
 
-    const { result } = renderSuspenseHook(() => useSuspenseQuery(query), {
+    const { result } = await renderSuspenseHook(() => useSuspenseQuery(query), {
       client,
     });
 
@@ -536,7 +604,7 @@ describe('useSuspenseQuery', () => {
       data: { results },
     });
 
-    const { result } = renderSuspenseHook(() => useSuspenseQuery(query, { canonizeResults: true }), { cache });
+    const { result } = await renderSuspenseHook(() => useSuspenseQuery(query, { canonizeResults: true }), { cache });
 
     const { data } = result.current;
     const resultSet = new Set(data.results);
@@ -554,8 +622,8 @@ describe('useSuspenseQuery', () => {
       value: number;
     }
 
-    const cache = new InMemoryCache({
-      canonizeResults: true,
+    const cache = new Hermes({
+      // Hermes: canonizeResults is an InMemoryCache-only option; Hermes never canonizes results.
       typePolicies: {
         Result: {
           keyFields: false,
@@ -585,7 +653,7 @@ describe('useSuspenseQuery', () => {
       data: { results },
     });
 
-    const { result } = renderSuspenseHook(() => useSuspenseQuery(query, { canonizeResults: false }), { cache });
+    const { result } = await renderSuspenseHook(() => useSuspenseQuery(query, { canonizeResults: false }), { cache });
 
     const { data } = result.current;
     const resultSet = new Set(data.results);
@@ -605,7 +673,7 @@ describe('useSuspenseQuery', () => {
       cache: new Hermes(),
     });
 
-    const { result, unmount } = renderSuspenseHook(() => useSuspenseQuery(query), { client });
+    const { result, unmount } = await renderSuspenseHook(() => useSuspenseQuery(query), { client });
 
     await waitFor(() => expect(result.current.data).toEqual(mocks[0].result.data));
 
@@ -630,14 +698,14 @@ describe('useSuspenseQuery', () => {
       cache: new Hermes(),
     });
 
-    const { rerender, result, unmount } = renderSuspenseHook(
+    const { rerenderAsync, result, unmount } = await renderSuspenseHook(
       ({ id }) => useSuspenseQuery(query, { variables: { id } }),
       { client, initialProps: { id: '1' } },
     );
 
     await waitFor(() => expect(result.current.data).toEqual(mocks[0].result.data));
 
-    rerender({ id: '2' });
+    await rerenderAsync({ id: '2' });
 
     await waitFor(() => {
       expect(result.current.data).toEqual(mocks[1].result.data);
@@ -682,7 +750,7 @@ describe('useSuspenseQuery', () => {
       cache: new Hermes(),
     });
 
-    const { rerender, result, unmount } = renderSuspenseHook(
+    const { rerenderAsync, result, unmount } = await renderSuspenseHook(
       ({ client }) => useSuspenseQuery(query, { client, variables: { id: '1' } }),
       { initialProps: { client: client1 } },
     );
@@ -693,7 +761,7 @@ describe('useSuspenseQuery', () => {
       }),
     );
 
-    rerender({ client: client2 });
+    await rerenderAsync({ client: client2 });
 
     await waitFor(() => {
       expect(result.current.data).toEqual({
@@ -750,7 +818,7 @@ describe('useSuspenseQuery', () => {
       return <span>{data.greeting}</span>;
     }
 
-    render(<App />);
+    await renderAsync(<App />);
 
     // Ensure <Greeting /> suspends immediately
     expect(screen.getByText('Loading greeting...')).toBeInTheDocument();
@@ -816,7 +884,7 @@ describe('useSuspenseQuery', () => {
       return <span>{data.greeting}</span>;
     }
 
-    render(<App />);
+    await renderAsync(<App />);
 
     // Ensure <Greeting /> suspends immediately
     expect(screen.getByText('Loading greeting...')).toBeInTheDocument();
@@ -876,7 +944,7 @@ describe('useSuspenseQuery', () => {
       return <span>{data.greeting}</span>;
     }
 
-    render(<App />);
+    await renderAsync(<App />);
 
     // Ensure <Greeting /> suspends immediately
     expect(screen.getByText('Loading greeting...')).toBeInTheDocument();
@@ -928,7 +996,7 @@ describe('useSuspenseQuery', () => {
       return <span>{data.greeting}</span>;
     }
 
-    render(<App />);
+    await renderAsync(<App />);
 
     // Ensure <Greeting /> suspends immediately
     expect(screen.getByText('Loading greeting...')).toBeInTheDocument();
@@ -959,7 +1027,7 @@ describe('useSuspenseQuery', () => {
       cache: new Hermes(),
     });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { client: localClient }), {
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { client: localClient }), {
       client: globalClient,
     });
 
@@ -987,7 +1055,7 @@ describe('useSuspenseQuery', () => {
       cache: new Hermes(),
     });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { client: localClient }), {
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { client: localClient }), {
       strictMode: true,
       client: globalClient,
     });
@@ -1018,7 +1086,7 @@ describe('useSuspenseQuery', () => {
       cache: new Hermes(),
     });
 
-    const { result } = renderSuspenseHook(() => useSuspenseQuery(query), {
+    const { result } = await renderSuspenseHook(() => useSuspenseQuery(query), {
       client,
     });
 
@@ -1033,7 +1101,7 @@ describe('useSuspenseQuery', () => {
   it('suspends when changing variables', async () => {
     const { query, mocks } = useVariablesQueryCase();
 
-    const { result, rerender, renders } = renderSuspenseHook(
+    const { result, rerenderAsync, renders } = await renderSuspenseHook(
       ({ id }) => useSuspenseQuery(query, { variables: { id } }),
       { mocks, initialProps: { id: '1' } },
     );
@@ -1046,7 +1114,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ id: '2' });
+    await rerenderAsync({ id: '2' });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -1056,7 +1124,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(4);
+    expect(renders.count).toBe(4 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(2);
     expect(renders.frames).toMatchObject([
       {
@@ -1095,9 +1163,10 @@ describe('useSuspenseQuery', () => {
       ]),
     });
 
-    const { result, rerender, renders } = renderSuspenseHook(({ client }) => useSuspenseQuery(query, { client }), {
-      initialProps: { client: client1 },
-    });
+    const { result, rerenderAsync, renders } = await renderSuspenseHook(
+      ({ client }) => useSuspenseQuery(query, { client }),
+      { initialProps: { client: client1 } },
+    );
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -1107,7 +1176,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ client: client2 });
+    await rerenderAsync({ client: client2 });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -1117,7 +1186,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(4);
+    expect(renders.count).toBe(4 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(2);
     expect(renders.frames).toMatchObject([
       {
@@ -1217,7 +1286,7 @@ describe('useSuspenseQuery', () => {
       );
     }
 
-    render(<App />);
+    await renderAsync(<App />);
 
     expect(screen.getByText('Loading first')).toBeInTheDocument();
     expect(screen.getByText('Loading second')).toBeInTheDocument();
@@ -1259,7 +1328,7 @@ describe('useSuspenseQuery', () => {
       },
     ];
 
-    const { result, rerender, renders } = renderSuspenseHook(
+    const { result, rerenderAsync, renders } = await renderSuspenseHook(
       ({ queryKey }) =>
         // intentionally use a fetch policy that will execute a network request
         useSuspenseQuery(query, { queryKey, fetchPolicy: 'network-only' }),
@@ -1274,7 +1343,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ queryKey: ['second'] });
+    await rerenderAsync({ queryKey: ['second'] });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -1284,7 +1353,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(4);
+    expect(renders.count).toBe(4 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(2);
     expect(renders.frames).toMatchObject([
       {
@@ -1316,7 +1385,7 @@ describe('useSuspenseQuery', () => {
       },
     ];
 
-    const { result, rerender, renders } = renderSuspenseHook(
+    const { result, rerenderAsync, renders } = await renderSuspenseHook(
       ({ queryKey }) =>
         // intentionally use a fetch policy that will execute a network request
         useSuspenseQuery(query, { queryKey, fetchPolicy: 'network-only' }),
@@ -1331,7 +1400,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ queryKey: ['greeting', 2] });
+    await rerenderAsync({ queryKey: ['greeting', 2] });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -1341,7 +1410,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(4);
+    expect(renders.count).toBe(4 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(2);
     expect(renders.frames).toMatchObject([
       {
@@ -1373,7 +1442,7 @@ describe('useSuspenseQuery', () => {
       },
     ];
 
-    const { result, rerender, renders } = renderSuspenseHook(
+    const { result, rerenderAsync, renders } = await renderSuspenseHook(
       ({ queryKey }) =>
         // intentionally use a fetch policy that will execute a network request
         useSuspenseQuery(query, { queryKey, fetchPolicy: 'network-only' }),
@@ -1388,7 +1457,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ queryKey: 'second' });
+    await rerenderAsync({ queryKey: 'second' });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -1398,7 +1467,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(4);
+    expect(renders.count).toBe(4 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(2);
     expect(renders.frames).toMatchObject([
       {
@@ -1430,7 +1499,7 @@ describe('useSuspenseQuery', () => {
       },
     ];
 
-    const { result, rerender, renders } = renderSuspenseHook(
+    const { result, rerenderAsync, renders } = await renderSuspenseHook(
       ({ queryKey }) =>
         // intentionally use a fetch policy that will execute a network request
         useSuspenseQuery(query, { queryKey, fetchPolicy: 'network-only' }),
@@ -1445,7 +1514,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ queryKey: 2 });
+    await rerenderAsync({ queryKey: 2 });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -1455,7 +1524,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(4);
+    expect(renders.count).toBe(4 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(2);
     expect(renders.frames).toMatchObject([
       {
@@ -1479,7 +1548,7 @@ describe('useSuspenseQuery', () => {
       link: new MockLink(mocks),
     });
 
-    const { result, rerender, renders } = renderSuspenseHook(
+    const { result, rerenderAsync, renders } = await renderSuspenseHook(
       ({ id }) => useSuspenseQuery(query, { variables: { id } }),
       { client, initialProps: { id: '1' } },
     );
@@ -1492,7 +1561,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ id: '2' });
+    await rerenderAsync({ id: '2' });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -1517,7 +1586,7 @@ describe('useSuspenseQuery', () => {
     });
 
     expect(renders.suspenseCount).toBe(2);
-    expect(renders.count).toBe(5);
+    expect(renders.count).toBe(5 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.frames).toMatchObject([
       {
         ...mocks[0].result,
@@ -1540,7 +1609,7 @@ describe('useSuspenseQuery', () => {
   it('uses cached result and does not suspend when switching back to already used variables while using `cache-first` fetch policy', async () => {
     const { query, mocks } = useVariablesQueryCase();
 
-    const { result, rerender, renders } = renderSuspenseHook(
+    const { result, rerenderAsync, renders } = await renderSuspenseHook(
       ({ id }) =>
         useSuspenseQuery(query, {
           fetchPolicy: 'cache-first',
@@ -1557,7 +1626,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ id: '2' });
+    await rerenderAsync({ id: '2' });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -1567,7 +1636,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ id: '1' });
+    await rerenderAsync({ id: '1' });
 
     expect(result.current).toMatchObject({
       ...mocks[0].result,
@@ -1575,7 +1644,7 @@ describe('useSuspenseQuery', () => {
       error: undefined,
     });
 
-    expect(renders.count).toBe(5);
+    expect(renders.count).toBe(5 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(2);
     expect(renders.frames).toMatchObject([
       {
@@ -1614,6 +1683,7 @@ describe('useSuspenseQuery', () => {
             character: { __typename: 'Character', id: '1', name: 'Spider-Man' },
           },
         },
+        delay: 20,
       },
       {
         request: { query, variables: { id: '2' } },
@@ -1626,6 +1696,7 @@ describe('useSuspenseQuery', () => {
             },
           },
         },
+        delay: 20,
       },
       {
         request: { query, variables: { id: '1' } },
@@ -1638,10 +1709,11 @@ describe('useSuspenseQuery', () => {
             },
           },
         },
+        delay: 20,
       },
     ];
 
-    const { result, rerender, renders } = renderSuspenseHook(
+    const { result, rerenderAsync, renders } = await renderSuspenseHook(
       ({ id }) =>
         useSuspenseQuery(query, {
           fetchPolicy: 'cache-and-network',
@@ -1658,7 +1730,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ id: '2' });
+    await rerenderAsync({ id: '2' });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -1668,7 +1740,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ id: '1' });
+    await rerenderAsync({ id: '1' });
 
     expect(result.current).toMatchObject({
       ...mocks[0].result,
@@ -1684,7 +1756,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(6);
+    expect(renders.count).toBe(6 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(2);
     expect(renders.frames).toMatchObject([
       {
@@ -1728,6 +1800,7 @@ describe('useSuspenseQuery', () => {
             character: { __typename: 'Character', id: '1', name: 'Spider-Man' },
           },
         },
+        delay: 20,
       },
       {
         request: { query, variables: { id: '2' } },
@@ -1740,6 +1813,7 @@ describe('useSuspenseQuery', () => {
             },
           },
         },
+        delay: 20,
       },
       {
         request: { query, variables: { id: '1' } },
@@ -1752,10 +1826,11 @@ describe('useSuspenseQuery', () => {
             },
           },
         },
+        delay: 20,
       },
     ];
 
-    const { result, rerender, renders } = renderSuspenseHook(
+    const { result, rerenderAsync, renders } = await renderSuspenseHook(
       ({ id }) =>
         useSuspenseQuery(query, {
           fetchPolicy: 'network-only',
@@ -1772,7 +1847,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ id: '2' });
+    await rerenderAsync({ id: '2' });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -1782,7 +1857,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ id: '1' });
+    await rerenderAsync({ id: '1' });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -1792,7 +1867,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(6);
+    expect(renders.count).toBe(6 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(3);
     expect(renders.frames).toMatchObject([
       {
@@ -1831,6 +1906,7 @@ describe('useSuspenseQuery', () => {
             character: { __typename: 'Character', id: '1', name: 'Spider-Man' },
           },
         },
+        delay: 20,
       },
       {
         request: { query, variables: { id: '2' } },
@@ -1843,6 +1919,7 @@ describe('useSuspenseQuery', () => {
             },
           },
         },
+        delay: 20,
       },
       {
         request: { query, variables: { id: '1' } },
@@ -1855,10 +1932,11 @@ describe('useSuspenseQuery', () => {
             },
           },
         },
+        delay: 20,
       },
     ];
 
-    const { result, rerender, renders } = renderSuspenseHook(
+    const { result, rerenderAsync, renders } = await renderSuspenseHook(
       ({ id }) =>
         useSuspenseQuery(query, {
           fetchPolicy: 'no-cache',
@@ -1875,7 +1953,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ id: '2' });
+    await rerenderAsync({ id: '2' });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -1885,7 +1963,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ id: '1' });
+    await rerenderAsync({ id: '1' });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -1895,7 +1973,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(6);
+    expect(renders.count).toBe(6 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(3);
     expect(renders.frames).toMatchObject([
       {
@@ -1924,7 +2002,7 @@ describe('useSuspenseQuery', () => {
       link: new MockLink(mocks),
     });
 
-    const { result, rerender, renders } = renderSuspenseHook(
+    const { result, rerenderAsync, renders } = await renderSuspenseHook(
       ({ id }) => useSuspenseQuery(query, { variables: { id } }),
       { client, initialProps: { id: '1' } },
     );
@@ -1937,7 +2015,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ id: '2' });
+    await rerenderAsync({ id: '2' });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -1947,7 +2025,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ id: '1' });
+    await rerenderAsync({ id: '1' });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -1972,7 +2050,7 @@ describe('useSuspenseQuery', () => {
     });
 
     expect(renders.suspenseCount).toBe(2);
-    expect(renders.count).toBe(6);
+    expect(renders.count).toBe(6 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.frames).toMatchObject([
       {
         ...mocks[0].result,
@@ -2007,10 +2085,10 @@ describe('useSuspenseQuery', () => {
       data: { greeting: 'hello from cache' },
     });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { fetchPolicy: 'cache-first' }), {
-      cache,
-      mocks,
-    });
+    const { result, renders } = await renderSuspenseHook(
+      () => useSuspenseQuery(query, { fetchPolicy: 'cache-first' }),
+      { cache, mocks },
+    );
 
     expect(result.current).toMatchObject({
       data: { greeting: 'hello from cache' },
@@ -2018,7 +2096,7 @@ describe('useSuspenseQuery', () => {
       error: undefined,
     });
 
-    expect(renders.count).toBe(1);
+    expect(renders.count).toBe(1 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(0);
     expect(renders.frames).toMatchObject([
       {
@@ -2051,7 +2129,7 @@ describe('useSuspenseQuery', () => {
       data: { greeting: 'hello from cache' },
     });
 
-    renderSuspenseHook(() => useSuspenseQuery(query, { fetchPolicy: 'cache-first' }), {
+    await renderSuspenseHook(() => useSuspenseQuery(query, { fetchPolicy: 'cache-first' }), {
       cache,
       link,
       initialProps: { id: '1' },
@@ -2082,6 +2160,7 @@ describe('useSuspenseQuery', () => {
       {
         request: { query: fullQuery },
         result: { data: { character: { id: '1', name: 'Doctor Strange' } } },
+        delay: 20,
       },
     ];
 
@@ -2092,10 +2171,10 @@ describe('useSuspenseQuery', () => {
       data: { character: { id: '1' } },
     });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(fullQuery, { fetchPolicy: 'cache-first' }), {
-      cache,
-      mocks,
-    });
+    const { result, renders } = await renderSuspenseHook(
+      () => useSuspenseQuery(fullQuery, { fetchPolicy: 'cache-first' }),
+      { cache, mocks },
+    );
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -2105,7 +2184,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(2);
+    expect(renders.count).toBe(2 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([
       {
@@ -2138,6 +2217,7 @@ describe('useSuspenseQuery', () => {
       {
         request: { query: fullQuery },
         result: { data: { character: { id: '1', name: 'Doctor Strange' } } },
+        delay: 20,
       },
     ];
 
@@ -2148,7 +2228,7 @@ describe('useSuspenseQuery', () => {
       data: { character: { id: '1' } },
     });
 
-    const { result, renders } = renderSuspenseHook(
+    const { result, renders } = await renderSuspenseHook(
       () =>
         useSuspenseQuery(fullQuery, {
           fetchPolicy: 'cache-first',
@@ -2172,7 +2252,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(2);
+    expect(renders.count).toBe(2 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(0);
     expect(renders.frames).toMatchObject([
       {
@@ -2207,7 +2287,7 @@ describe('useSuspenseQuery', () => {
       variables: { id: '1' },
     });
 
-    const { result, renders, rerender } = renderSuspenseHook(
+    const { result, renders, rerenderAsync } = await renderSuspenseHook(
       ({ id }) =>
         useSuspenseQuery(fullQuery, {
           fetchPolicy: 'cache-first',
@@ -2232,7 +2312,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ id: '2' });
+    await rerenderAsync({ id: '2' });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -2242,7 +2322,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(4);
+    expect(renders.count).toBe(4 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([
       {
@@ -2273,10 +2353,10 @@ describe('useSuspenseQuery', () => {
       data: { greeting: 'hello from cache' },
     });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { fetchPolicy: 'network-only' }), {
-      cache,
-      mocks,
-    });
+    const { result, renders } = await renderSuspenseHook(
+      () => useSuspenseQuery(query, { fetchPolicy: 'network-only' }),
+      { cache, mocks },
+    );
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -2286,7 +2366,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(2);
+    expect(renders.count).toBe(2 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([
       {
@@ -2319,6 +2399,7 @@ describe('useSuspenseQuery', () => {
       {
         request: { query: fullQuery },
         result: { data: { character: { id: '1', name: 'Doctor Strange' } } },
+        delay: 20,
       },
     ];
 
@@ -2329,7 +2410,7 @@ describe('useSuspenseQuery', () => {
       data: { character: { id: '1' } },
     });
 
-    const { result, renders } = renderSuspenseHook(
+    const { result, renders } = await renderSuspenseHook(
       () =>
         useSuspenseQuery(fullQuery, {
           fetchPolicy: 'network-only',
@@ -2348,7 +2429,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(2);
+    expect(renders.count).toBe(2 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([
       {
@@ -2369,7 +2450,7 @@ describe('useSuspenseQuery', () => {
       data: { greeting: 'hello from cache' },
     });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { fetchPolicy: 'no-cache' }), {
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { fetchPolicy: 'no-cache' }), {
       cache,
       mocks,
     });
@@ -2384,7 +2465,7 @@ describe('useSuspenseQuery', () => {
 
     const cachedData = cache.readQuery({ query });
 
-    expect(renders.count).toBe(2);
+    expect(renders.count).toBe(2 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([
       {
@@ -2401,7 +2482,7 @@ describe('useSuspenseQuery', () => {
 
     const cache = new Hermes();
 
-    const { result, rerender, renders } = renderSuspenseHook(
+    const { result, rerenderAsync, renders } = await renderSuspenseHook(
       () => useSuspenseQuery(query, { fetchPolicy: 'no-cache' }),
       { cache, mocks },
     );
@@ -2414,7 +2495,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(2);
+    expect(renders.count).toBe(2 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([
       {
@@ -2424,14 +2505,14 @@ describe('useSuspenseQuery', () => {
       },
     ]);
 
-    rerender();
+    await rerenderAsync();
 
     expect(result.current).toMatchObject({
       ...mocks[0].result,
       networkStatus: NetworkStatus.ready,
       error: undefined,
     });
-    expect(renders.count).toBe(3);
+    expect(renders.count).toBe(3 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([
       {
@@ -2471,6 +2552,7 @@ describe('useSuspenseQuery', () => {
       {
         request: { query: fullQuery },
         result: { data: { character: { id: '1', name: 'Doctor Strange' } } },
+        delay: 20,
       },
     ];
 
@@ -2481,7 +2563,7 @@ describe('useSuspenseQuery', () => {
       data: { character: { id: '1' } },
     });
 
-    const { result, renders } = renderSuspenseHook(
+    const { result, renders } = await renderSuspenseHook(
       () =>
         useSuspenseQuery(fullQuery, {
           fetchPolicy: 'no-cache',
@@ -2500,7 +2582,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(2);
+    expect(renders.count).toBe(2 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([
       {
@@ -2516,7 +2598,7 @@ describe('useSuspenseQuery', () => {
 
     const { query, mocks } = useSimpleQueryCase();
 
-    renderSuspenseHook(
+    await renderSuspenseHook(
       () =>
         useSuspenseQuery(query, {
           fetchPolicy: 'no-cache',
@@ -2525,7 +2607,7 @@ describe('useSuspenseQuery', () => {
       { mocks },
     );
 
-    expect(consoleSpy.warn).toHaveBeenCalledTimes(1);
+    expect(consoleSpy.warn).toHaveBeenCalledTimes(IS_REACT_19 ? 2 : 1);
     expect(consoleSpy.warn).toHaveBeenCalledWith(
       'Using `returnPartialData` with a `no-cache` fetch policy has no effect. To read partial data from the cache, consider using an alternate fetch policy.',
     );
@@ -2541,7 +2623,7 @@ describe('useSuspenseQuery', () => {
       data: { greeting: 'hello from cache' },
     });
 
-    const { result, renders } = renderSuspenseHook(
+    const { result, renders } = await renderSuspenseHook(
       () => useSuspenseQuery(query, { fetchPolicy: 'cache-and-network' }),
       { cache, mocks },
     );
@@ -2560,7 +2642,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(2);
+    expect(renders.count).toBe(2 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(0);
     expect(renders.frames).toMatchObject([
       {
@@ -2598,6 +2680,7 @@ describe('useSuspenseQuery', () => {
       {
         request: { query: fullQuery },
         result: { data: { character: { id: '1', name: 'Doctor Strange' } } },
+        delay: 20,
       },
     ];
 
@@ -2608,7 +2691,7 @@ describe('useSuspenseQuery', () => {
       data: { character: { id: '1' } },
     });
 
-    const { result, renders } = renderSuspenseHook(
+    const { result, renders } = await renderSuspenseHook(
       () =>
         useSuspenseQuery(fullQuery, {
           fetchPolicy: 'cache-and-network',
@@ -2632,7 +2715,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(2);
+    expect(renders.count).toBe(2 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(0);
     expect(renders.frames).toMatchObject([
       {
@@ -2667,7 +2750,7 @@ describe('useSuspenseQuery', () => {
       variables: { id: '1' },
     });
 
-    const { result, renders, rerender } = renderSuspenseHook(
+    const { result, renders, rerenderAsync } = await renderSuspenseHook(
       ({ id }) =>
         useSuspenseQuery(fullQuery, {
           fetchPolicy: 'cache-and-network',
@@ -2692,7 +2775,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ id: '2' });
+    await rerenderAsync({ id: '2' });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -2702,7 +2785,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(4);
+    expect(renders.count).toBe(4 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([
       {
@@ -2730,11 +2813,10 @@ describe('useSuspenseQuery', () => {
 
       const cache = new Hermes();
 
-      const { result } = renderSuspenseHook(({ id }) => useSuspenseQuery(query, { fetchPolicy, variables: { id } }), {
-        cache,
-        mocks,
-        initialProps: { id: '1' },
-      });
+      const { result } = await renderSuspenseHook(
+        ({ id }) => useSuspenseQuery(query, { fetchPolicy, variables: { id } }),
+        { cache, mocks, initialProps: { id: '1' } },
+      );
 
       await waitFor(() => {
         expect(result.current.data).toEqual(mocks[0].result.data);
@@ -2751,7 +2833,7 @@ describe('useSuspenseQuery', () => {
 
     const cache = new Hermes();
 
-    const { result } = renderSuspenseHook(
+    const { result } = await renderSuspenseHook(
       ({ id }) => useSuspenseQuery(query, { fetchPolicy: 'no-cache', variables: { id } }),
       { cache, mocks, initialProps: { id: '1' } },
     );
@@ -2775,7 +2857,7 @@ describe('useSuspenseQuery', () => {
         link: new MockLink(mocks),
       });
 
-      const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { fetchPolicy }), { client });
+      const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { fetchPolicy }), { client });
 
       await waitFor(() => {
         expect(result.current.data).toEqual(mocks[0].result.data);
@@ -2794,7 +2876,7 @@ describe('useSuspenseQuery', () => {
         });
       });
       expect(renders.suspenseCount).toBe(1);
-      expect(renders.count).toBe(3);
+      expect(renders.count).toBe(3 + (IS_REACT_19 ? renders.suspenseCount : 0));
       expect(renders.frames).toMatchObject([
         {
           ...mocks[0].result,
@@ -2818,7 +2900,7 @@ describe('useSuspenseQuery', () => {
       link: new MockLink(mocks),
     });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { fetchPolicy: 'no-cache' }), {
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { fetchPolicy: 'no-cache' }), {
       client,
     });
 
@@ -2840,7 +2922,7 @@ describe('useSuspenseQuery', () => {
       error: undefined,
     });
     expect(renders.suspenseCount).toBe(1);
-    expect(renders.count).toBe(2);
+    expect(renders.count).toBe(2 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.frames).toMatchObject([
       {
         ...mocks[0].result,
@@ -2855,7 +2937,7 @@ describe('useSuspenseQuery', () => {
     async fetchPolicy => {
       const { query, mocks } = useVariablesQueryCase();
 
-      const { result, rerender, renders } = renderSuspenseHook(
+      const { result, rerenderAsync, renders } = await renderSuspenseHook(
         ({ id }) => useSuspenseQuery(query, { fetchPolicy, variables: { id } }),
         { mocks, initialProps: { id: '1' } },
       );
@@ -2868,7 +2950,7 @@ describe('useSuspenseQuery', () => {
         });
       });
 
-      rerender({ id: '2' });
+      await rerenderAsync({ id: '2' });
 
       await waitFor(() => {
         expect(result.current).toMatchObject({
@@ -2883,7 +2965,7 @@ describe('useSuspenseQuery', () => {
       // 2. Unsuspend and return results from initial fetch
       // 3. Change variables and suspend
       // 5. Unsuspend and return results from refetch
-      expect(renders.count).toBe(4);
+      expect(renders.count).toBe(4 + (IS_REACT_19 ? renders.suspenseCount : 0));
       expect(renders.suspenseCount).toBe(2);
       expect(renders.frames).toMatchObject([
         {
@@ -2919,14 +3001,16 @@ describe('useSuspenseQuery', () => {
         {
           request: { query: query1 },
           result: { data: { hello: 'query1' } },
+          delay: 20,
         },
         {
           request: { query: query2 },
           result: { data: { world: 'query2' } },
+          delay: 20,
         },
       ];
 
-      const { result, rerender, renders } = renderSuspenseHook(
+      const { result, rerenderAsync, renders } = await renderSuspenseHook(
         ({ query }) => useSuspenseQuery(query, { fetchPolicy }),
         { mocks, initialProps: { query: query1 as DocumentNode } },
       );
@@ -2940,7 +3024,7 @@ describe('useSuspenseQuery', () => {
         });
       });
 
-      rerender({ query: query2 });
+      await rerenderAsync({ query: query2 });
 
       await waitFor(() => {
         expect(result.current).toMatchObject({
@@ -2955,7 +3039,7 @@ describe('useSuspenseQuery', () => {
       // 2. Unsuspend and return results from initial fetch
       // 3. Change queries and suspend
       // 5. Unsuspend and return results from refetch
-      expect(renders.count).toBe(4);
+      expect(renders.count).toBe(4 + (IS_REACT_19 ? renders.suspenseCount : 0));
       expect(renders.suspenseCount).toBe(2);
       expect(renders.frames).toMatchObject([
         {
@@ -2994,7 +3078,7 @@ describe('useSuspenseQuery', () => {
         });
       });
 
-      const { result, rerender } = renderSuspenseHook(
+      const { result, rerenderAsync } = await renderSuspenseHook(
         ({ id }) => useSuspenseQuery(query, { fetchPolicy, variables: { id } }),
         { link, initialProps: { id: '1' } },
       );
@@ -3005,7 +3089,7 @@ describe('useSuspenseQuery', () => {
 
       expect(fetchCount).toBe(1);
 
-      rerender({ id: '2' });
+      await rerenderAsync({ id: '2' });
 
       await waitFor(() => {
         expect(result.current.data).toEqual(mocks[1].result.data);
@@ -3037,7 +3121,7 @@ describe('useSuspenseQuery', () => {
         });
       });
 
-      const { result, renders } = renderSuspenseHook(
+      const { result, renders } = await renderSuspenseHook(
         ({ id }) => useSuspenseQuery(query, { fetchPolicy, variables: { id } }),
         { strictMode: true, link, initialProps: { id: '1' } },
       );
@@ -3065,7 +3149,7 @@ describe('useSuspenseQuery', () => {
         link: new MockLink(mocks),
       });
 
-      const { result } = renderSuspenseHook(() => useSuspenseQuery(query, { fetchPolicy }), {
+      const { result } = await renderSuspenseHook(() => useSuspenseQuery(query, { fetchPolicy }), {
         strictMode: true,
         client,
       });
@@ -3103,7 +3187,9 @@ describe('useSuspenseQuery', () => {
       data: { greeting: 'Hello from cache' },
     });
 
-    const { result } = renderSuspenseHook(() => useSuspenseQuery(query, { fetchPolicy: 'cache-first' }), { client });
+    const { result } = await renderSuspenseHook(() => useSuspenseQuery(query, { fetchPolicy: 'cache-first' }), {
+      client,
+    });
 
     expect(result.current.data).toEqual({ greeting: 'Hello from cache' });
 
@@ -3144,13 +3230,13 @@ describe('useSuspenseQuery', () => {
 
     client.writeQuery({ query, data: { greeting: 'hello from cache' } });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query), { client });
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query), { client });
 
     await waitFor(() => {
       expect(result.current.data).toEqual(mocks[0].result.data);
     });
 
-    expect(renders.count).toBe(2);
+    expect(renders.count).toBe(2 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([
       {
@@ -3174,7 +3260,7 @@ describe('useSuspenseQuery', () => {
       },
     });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query), { client });
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query), { client });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -3206,7 +3292,7 @@ describe('useSuspenseQuery', () => {
       },
     });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query), { strictMode: true, client });
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query), { strictMode: true, client });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -3254,7 +3340,7 @@ describe('useSuspenseQuery', () => {
       },
     });
 
-    const { result, rerender, renders } = renderSuspenseHook(
+    const { result, rerenderAsync, renders } = await renderSuspenseHook(
       ({ source }) =>
         useSuspenseQuery(query, {
           fetchPolicy: 'network-only',
@@ -3273,7 +3359,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ source: 'rerender' });
+    await rerenderAsync({ source: 'rerender' });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -3325,7 +3411,7 @@ describe('useSuspenseQuery', () => {
       },
     });
 
-    const { result, renders } = renderSuspenseHook(
+    const { result, renders } = await renderSuspenseHook(
       () =>
         useSuspenseQuery(query, {
           variables: { source: 'local', globalOnlyVar: undefined },
@@ -3375,7 +3461,7 @@ describe('useSuspenseQuery', () => {
       }),
     });
 
-    const { result } = renderSuspenseHook(
+    const { result } = await renderSuspenseHook(
       () =>
         useSuspenseQuery(query, {
           context: { valueA: 'A', valueB: 'B' },
@@ -3399,7 +3485,7 @@ describe('useSuspenseQuery', () => {
       networkError: new Error('Could not fetch'),
     });
 
-    const { renders } = renderSuspenseHook(() => useSuspenseQuery(query), {
+    const { renders } = await renderSuspenseHook(() => useSuspenseQuery(query), {
       mocks,
     });
 
@@ -3423,7 +3509,7 @@ describe('useSuspenseQuery', () => {
       graphQLErrors: [new GraphQLError('`id` should not be null')],
     });
 
-    const { renders } = renderSuspenseHook(() => useSuspenseQuery(query), {
+    const { renders } = await renderSuspenseHook(() => useSuspenseQuery(query), {
       mocks,
     });
 
@@ -3453,7 +3539,7 @@ describe('useSuspenseQuery', () => {
       link: new MockLink(mocks),
     });
 
-    const { renders } = renderSuspenseHook(() => useSuspenseQuery(query), {
+    const { renders } = await renderSuspenseHook(() => useSuspenseQuery(query), {
       client,
     });
 
@@ -3487,12 +3573,14 @@ describe('useSuspenseQuery', () => {
         result: {
           data: { user: { id: '1', name: 'Captain Marvel' } },
         },
+        delay: 20,
       },
       {
         request: { query, variables: { id: '1' } },
         result: {
           errors: [new GraphQLError('Something went wrong')],
         },
+        delay: 20,
       },
     ];
 
@@ -3501,7 +3589,7 @@ describe('useSuspenseQuery', () => {
       link: new MockLink(mocks),
     });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { variables: { id: '1' } }), {
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { variables: { id: '1' } }), {
       client,
     });
 
@@ -3513,8 +3601,8 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    act(() => {
-      result.current.refetch();
+    await actAsync(async () => {
+      void result.current.refetch().catch(() => {});
     });
 
     await waitFor(() => expect(renders.errorCount).toBe(1));
@@ -3528,7 +3616,7 @@ describe('useSuspenseQuery', () => {
       networkError: new Error('Could not fetch'),
     });
 
-    const { renders } = renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'none' }), { mocks });
+    const { renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'none' }), { mocks });
 
     await waitFor(() => expect(renders.errorCount).toBe(1));
 
@@ -3550,7 +3638,7 @@ describe('useSuspenseQuery', () => {
       graphQLErrors: [new GraphQLError('`id` should not be null')],
     });
 
-    const { renders } = renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'none' }), { mocks });
+    const { renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'none' }), { mocks });
 
     await waitFor(() => expect(renders.errorCount).toBe(1));
 
@@ -3572,7 +3660,7 @@ describe('useSuspenseQuery', () => {
 
     const { query, mocks } = useErrorCase({ graphQLErrors });
 
-    const { renders } = renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'none' }), { mocks });
+    const { renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'none' }), { mocks });
 
     await waitFor(() => expect(renders.errorCount).toBe(1));
 
@@ -3593,7 +3681,7 @@ describe('useSuspenseQuery', () => {
 
     const { query, mocks } = useErrorCase({ networkError });
 
-    const { renders } = renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'ignore' }), { mocks });
+    const { renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'ignore' }), { mocks });
 
     await waitFor(() => {
       expect(renders.errorCount).toBe(1);
@@ -3615,7 +3703,9 @@ describe('useSuspenseQuery', () => {
       graphQLErrors: [new GraphQLError('`id` should not be null')],
     });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'ignore' }), { mocks });
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'ignore' }), {
+      mocks,
+    });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -3627,7 +3717,7 @@ describe('useSuspenseQuery', () => {
 
     expect(renders.errorCount).toBe(0);
     expect(renders.errors).toEqual([]);
-    expect(renders.count).toBe(2);
+    expect(renders.count).toBe(2 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([{ data: undefined, networkStatus: NetworkStatus.ready, error: undefined }]);
   });
@@ -3638,7 +3728,9 @@ describe('useSuspenseQuery', () => {
       graphQLErrors: [new GraphQLError('`name` could not be found')],
     });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'ignore' }), { mocks });
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'ignore' }), {
+      mocks,
+    });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -3662,7 +3754,9 @@ describe('useSuspenseQuery', () => {
       graphQLErrors: [new GraphQLError('Fool me once'), new GraphQLError('Fool me twice')],
     });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'ignore' }), { mocks });
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'ignore' }), {
+      mocks,
+    });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -3685,7 +3779,7 @@ describe('useSuspenseQuery', () => {
       cache: new Hermes(),
     });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'ignore' }), {
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'ignore' }), {
       client,
     });
 
@@ -3720,7 +3814,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(3);
+    expect(renders.count).toBe(3 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.frames).toMatchObject([
       {
         data: undefined,
@@ -3742,7 +3836,7 @@ describe('useSuspenseQuery', () => {
 
     const { query, mocks } = useErrorCase({ networkError });
 
-    const { renders } = renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'all' }), { mocks });
+    const { renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'all' }), { mocks });
 
     await waitFor(() => {
       expect(renders.errorCount).toBe(1);
@@ -3764,7 +3858,9 @@ describe('useSuspenseQuery', () => {
 
     const { query, mocks } = useErrorCase({ graphQLErrors: [graphQLError] });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'all' }), { mocks });
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'all' }), {
+      mocks,
+    });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -3775,7 +3871,7 @@ describe('useSuspenseQuery', () => {
 
     expect(renders.errorCount).toBe(0);
     expect(renders.errors).toEqual([]);
-    expect(renders.count).toBe(2);
+    expect(renders.count).toBe(2 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([
       {
@@ -3802,7 +3898,9 @@ describe('useSuspenseQuery', () => {
       cache: new Hermes(),
     });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'all' }), { client });
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'all' }), {
+      client,
+    });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -3835,7 +3933,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(3);
+    expect(renders.count).toBe(3 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.frames).toMatchObject([
       {
         data: undefined,
@@ -3855,7 +3953,9 @@ describe('useSuspenseQuery', () => {
 
     const { query, mocks } = useErrorCase({ graphQLErrors });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'all' }), { mocks });
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'all' }), {
+      mocks,
+    });
 
     const expectedError = new ApolloError({ graphQLErrors });
 
@@ -3868,7 +3968,7 @@ describe('useSuspenseQuery', () => {
 
     expect(renders.errorCount).toBe(0);
     expect(renders.errors).toEqual([]);
-    expect(renders.count).toBe(2);
+    expect(renders.count).toBe(2 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([
       {
@@ -3893,7 +3993,9 @@ describe('useSuspenseQuery', () => {
       graphQLErrors: [graphQLError],
     });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'all' }), { mocks });
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'all' }), {
+      mocks,
+    });
 
     const expectedError = new ApolloError({ graphQLErrors: [graphQLError] });
 
@@ -3921,7 +4023,9 @@ describe('useSuspenseQuery', () => {
       graphQLErrors: [graphQLError],
     });
 
-    const { result, rerender } = renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'all' }), { mocks });
+    const { result, rerenderAsync } = await renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'all' }), {
+      mocks,
+    });
 
     const expectedError = new ApolloError({ graphQLErrors: [graphQLError] });
 
@@ -3929,7 +4033,7 @@ describe('useSuspenseQuery', () => {
       expect(result.current.error).toEqual(expectedError);
     });
 
-    rerender();
+    await rerenderAsync();
 
     expect(result.current.error).toEqual(expectedError);
   });
@@ -3952,16 +4056,18 @@ describe('useSuspenseQuery', () => {
         result: {
           errors: graphQLErrors,
         },
+        delay: 20,
       },
       {
         request: { query, variables: { id: '2' } },
         result: {
           data: { user: { id: '2', name: 'Captain Marvel' } },
         },
+        delay: 20,
       },
     ];
 
-    const { result, renders, rerender } = renderSuspenseHook(
+    const { result, renders, rerenderAsync } = await renderSuspenseHook(
       ({ id }) => useSuspenseQuery(query, { errorPolicy: 'all', variables: { id } }),
       { mocks, initialProps: { id: '1' } },
     );
@@ -3976,7 +4082,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ id: '2' });
+    await rerenderAsync({ id: '2' });
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -3986,7 +4092,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(4);
+    expect(renders.count).toBe(4 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.errorCount).toBe(0);
     expect(renders.errors).toEqual([]);
     expect(renders.suspenseCount).toBe(2);
@@ -4020,16 +4126,18 @@ describe('useSuspenseQuery', () => {
         result: {
           data: { user: { id: '1', name: 'Captain Marvel' } },
         },
+        delay: 20,
       },
       {
         request: { query, variables: { id: '1' } },
         result: {
           data: { user: { id: '1', name: 'Captain Marvel (updated)' } },
         },
+        delay: 20,
       },
     ];
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { variables: { id: '1' } }), {
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { variables: { id: '1' } }), {
       mocks,
       initialProps: { id: '1' },
     });
@@ -4042,10 +4150,13 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    act(() => {
-      result.current.refetch();
-    });
+    expect(renders.count).toBe(2 + (IS_REACT_19 ? renders.suspenseCount : 0));
+    expect(renders.suspenseCount).toBe(1);
 
+    // TODO check: using actAsync instead of unawaited act changes observed render counts here.
+    await actAsync(async () => {
+      void result.current.refetch();
+    });
     await waitFor(() => {
       expect(result.current).toMatchObject({
         ...mocks[1].result,
@@ -4054,7 +4165,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(4);
+    expect(renders.count).toBe(4 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(2);
     expect(renders.frames).toMatchObject([
       {
@@ -4146,7 +4257,7 @@ describe('useSuspenseQuery', () => {
       );
     }
 
-    render(<App />);
+    await renderAsync(<App />);
 
     expect(await screen.findByText('Loading')).toBeInTheDocument();
 
@@ -4183,16 +4294,18 @@ describe('useSuspenseQuery', () => {
         result: {
           data: { user: { id: '1', name: 'Captain Marvel' } },
         },
+        delay: 20,
       },
       {
         request: { query, variables: { id: '2' } },
         result: {
           data: { user: { id: '2', name: 'Captain America' } },
         },
+        delay: 20,
       },
     ];
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { variables: { id: '1' } }), {
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { variables: { id: '1' } }), {
       mocks,
     });
 
@@ -4204,8 +4317,8 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    act(() => {
-      result.current.refetch({ id: '2' });
+    await actAsync(async () => {
+      void result.current.refetch({ id: '2' });
     });
 
     await waitFor(() => {
@@ -4215,7 +4328,7 @@ describe('useSuspenseQuery', () => {
         error: undefined,
       });
     });
-    expect(renders.count).toBe(4);
+    expect(renders.count).toBe(4 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(2);
     expect(renders.frames).toMatchObject([
       {
@@ -4247,22 +4360,25 @@ describe('useSuspenseQuery', () => {
         result: {
           data: { user: { id: '1', name: 'Captain Marvel' } },
         },
+        delay: 20,
       },
       {
         request: { query, variables: { id: '1' } },
         result: {
           data: { user: { id: '1', name: 'Captain Marvel (updated)' } },
         },
+        delay: 20,
       },
       {
         request: { query, variables: { id: '1' } },
         result: {
           data: { user: { id: '1', name: 'Captain Marvel (updated again)' } },
         },
+        delay: 20,
       },
     ];
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { variables: { id: '1' } }), {
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { variables: { id: '1' } }), {
       mocks,
       initialProps: { id: '1' },
     });
@@ -4274,8 +4390,8 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    act(() => {
-      result.current.refetch();
+    await actAsync(async () => {
+      void result.current.refetch();
     });
 
     await waitFor(() => {
@@ -4286,8 +4402,8 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    act(() => {
-      result.current.refetch();
+    await actAsync(async () => {
+      void result.current.refetch();
     });
 
     await waitFor(() => {
@@ -4298,7 +4414,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(6);
+    expect(renders.count).toBe(6 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(3);
     expect(renders.frames).toMatchObject([
       {
@@ -4337,16 +4453,18 @@ describe('useSuspenseQuery', () => {
         result: {
           data: { user: { id: '1', name: 'Captain Marvel' } },
         },
+        delay: 20,
       },
       {
         request: { query, variables: { id: '1' } },
         result: {
           errors: [new GraphQLError('Something went wrong')],
         },
+        delay: 20,
       },
     ];
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { variables: { id: '1' } }), {
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { variables: { id: '1' } }), {
       mocks,
     });
 
@@ -4358,8 +4476,8 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    act(() => {
-      result.current.refetch();
+    await actAsync(async () => {
+      void result.current.refetch().catch(() => {});
     });
 
     await waitFor(() => {
@@ -4396,16 +4514,18 @@ describe('useSuspenseQuery', () => {
         result: {
           data: { user: { id: '1', name: 'Captain Marvel' } },
         },
+        delay: 20,
       },
       {
         request: { query, variables: { id: '1' } },
         result: {
           errors: [new GraphQLError('Something went wrong')],
         },
+        delay: 20,
       },
     ];
 
-    const { result, renders } = renderSuspenseHook(
+    const { result, renders } = await renderSuspenseHook(
       () =>
         useSuspenseQuery(query, {
           errorPolicy: 'ignore',
@@ -4422,7 +4542,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    await act(async () => {
+    await actAsync(async () => {
       await result.current.refetch();
     });
 
@@ -4458,16 +4578,18 @@ describe('useSuspenseQuery', () => {
         result: {
           data: { user: { id: '1', name: 'Captain Marvel' } },
         },
+        delay: 20,
       },
       {
         request: { query, variables: { id: '1' } },
         result: {
           errors: [new GraphQLError('Something went wrong')],
         },
+        delay: 20,
       },
     ];
 
-    const { result, renders } = renderSuspenseHook(
+    const { result, renders } = await renderSuspenseHook(
       () =>
         useSuspenseQuery(query, {
           errorPolicy: 'all',
@@ -4488,8 +4610,8 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    act(() => {
-      result.current.refetch();
+    await actAsync(async () => {
+      void result.current.refetch();
     });
 
     await waitFor(() => {
@@ -4532,6 +4654,7 @@ describe('useSuspenseQuery', () => {
         result: {
           data: { user: { id: '1', name: 'Captain Marvel' } },
         },
+        delay: 20,
       },
       {
         request: { query, variables: { id: '1' } },
@@ -4539,10 +4662,11 @@ describe('useSuspenseQuery', () => {
           data: { user: { id: '1', name: null } },
           errors: [new GraphQLError('Something went wrong')],
         },
+        delay: 20,
       },
     ];
 
-    const { result, renders } = renderSuspenseHook(
+    const { result, renders } = await renderSuspenseHook(
       () =>
         useSuspenseQuery(query, {
           errorPolicy: 'all',
@@ -4562,8 +4686,8 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    act(() => {
-      result.current.refetch();
+    await actAsync(async () => {
+      void result.current.refetch();
     });
 
     await waitFor(() => {
@@ -4593,7 +4717,7 @@ describe('useSuspenseQuery', () => {
   it('re-suspends when calling `fetchMore` with different variables', async () => {
     const { data, query, link } = usePaginatedCase();
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { variables: { limit: 2 } }), {
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { variables: { limit: 2 } }), {
       link,
     });
 
@@ -4605,8 +4729,8 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    act(() => {
-      result.current.fetchMore({ variables: { offset: 2 } });
+    await actAsync(async () => {
+      await result.current.fetchMore({ variables: { offset: 2 } });
     });
 
     await waitFor(() => {
@@ -4617,7 +4741,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(4);
+    expect(renders.count).toBe(4 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(2);
     expect(renders.frames).toMatchObject([
       {
@@ -4670,7 +4794,7 @@ describe('useSuspenseQuery', () => {
       );
     }
 
-    render(<App />);
+    await renderAsync(<App />);
 
     expect(await screen.findByText('Loading')).toBeInTheDocument();
 
@@ -4701,7 +4825,7 @@ describe('useSuspenseQuery', () => {
       data: { greeting: 'hello from cache' },
     });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query), { cache, mocks });
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query), { cache, mocks });
 
     expect(result.current).toMatchObject({
       data: { greeting: 'hello from cache' },
@@ -4709,8 +4833,8 @@ describe('useSuspenseQuery', () => {
       error: undefined,
     });
 
-    act(() => {
-      result.current.refetch();
+    await actAsync(async () => {
+      void result.current.refetch();
     });
 
     await waitFor(() => {
@@ -4721,7 +4845,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(3);
+    expect(renders.count).toBe(3 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([
       {
@@ -4740,7 +4864,7 @@ describe('useSuspenseQuery', () => {
   it('properly uses `updateQuery` when calling `fetchMore`', async () => {
     const { data, query, link } = usePaginatedCase();
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { variables: { limit: 2 } }), {
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { variables: { limit: 2 } }), {
       link,
     });
 
@@ -4751,8 +4875,8 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    act(() => {
-      result.current.fetchMore({
+    await actAsync(() => {
+      void result.current.fetchMore({
         variables: { offset: 2 },
         updateQuery: (prev, { fetchMoreResult }) => ({
           letters: prev.letters.concat(fetchMoreResult.letters),
@@ -4794,7 +4918,7 @@ describe('useSuspenseQuery', () => {
       },
     });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { variables: { limit: 2 } }), {
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { variables: { limit: 2 } }), {
       cache,
       link,
     });
@@ -4807,8 +4931,8 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    act(() => {
-      result.current.fetchMore({ variables: { offset: 2 } });
+    await actAsync(() => {
+      void result.current.fetchMore({ variables: { offset: 2 } });
     });
 
     await waitFor(() => {
@@ -4844,6 +4968,7 @@ describe('useSuspenseQuery', () => {
       {
         request: { query, variables: { min: 0, max: 12 } },
         result: { data: { primes: [2, 3, 5, 7, 11] } },
+        delay: 20,
       },
       {
         request: { query, variables: { min: 12, max: 30 } },
@@ -4869,7 +4994,7 @@ describe('useSuspenseQuery', () => {
       },
     });
 
-    const { result } = renderSuspenseHook(
+    const { result } = await renderSuspenseHook(
       () =>
         useSuspenseQuery(query, {
           variables: { min: 0, max: 12 },
@@ -4888,8 +5013,8 @@ describe('useSuspenseQuery', () => {
 
     expect(mergeParams).toEqual([[undefined, [2, 3, 5, 7, 11]]]);
 
-    act(() => {
-      result.current.refetch({ min: 12, max: 30 });
+    await actAsync(() => {
+      void result.current.refetch({ min: 12, max: 30 });
     });
 
     await waitFor(() => {
@@ -4918,6 +5043,7 @@ describe('useSuspenseQuery', () => {
       {
         request: { query, variables: { min: 0, max: 12 } },
         result: { data: { primes: [2, 3, 5, 7, 11] } },
+        delay: 20,
       },
       {
         request: { query, variables: { min: 12, max: 30 } },
@@ -4943,7 +5069,7 @@ describe('useSuspenseQuery', () => {
       },
     });
 
-    const { result } = renderSuspenseHook(
+    const { result } = await renderSuspenseHook(
       () =>
         useSuspenseQuery(query, {
           variables: { min: 0, max: 12 },
@@ -4962,8 +5088,8 @@ describe('useSuspenseQuery', () => {
 
     expect(mergeParams).toEqual([[undefined, [2, 3, 5, 7, 11]]]);
 
-    act(() => {
-      result.current.refetch({ min: 12, max: 30 });
+    await actAsync(() => {
+      void result.current.refetch({ min: 12, max: 30 });
     });
 
     await waitFor(() => {
@@ -4994,6 +5120,7 @@ describe('useSuspenseQuery', () => {
       {
         request: { query, variables: { min: 0, max: 12 } },
         result: { data: { primes: [2, 3, 5, 7, 11] } },
+        delay: 20,
       },
       {
         request: { query, variables: { min: 12, max: 30 } },
@@ -5019,7 +5146,7 @@ describe('useSuspenseQuery', () => {
       },
     });
 
-    const { result } = renderSuspenseHook(() => useSuspenseQuery(query, { variables: { min: 0, max: 12 } }), {
+    const { result } = await renderSuspenseHook(() => useSuspenseQuery(query, { variables: { min: 0, max: 12 } }), {
       cache,
       mocks,
     });
@@ -5034,8 +5161,8 @@ describe('useSuspenseQuery', () => {
 
     expect(mergeParams).toEqual([[undefined, [2, 3, 5, 7, 11]]]);
 
-    act(() => {
-      result.current.refetch({ min: 12, max: 30 });
+    await actAsync(() => {
+      void result.current.refetch({ min: 12, max: 30 });
     });
 
     await waitFor(() => {
@@ -5057,7 +5184,10 @@ describe('useSuspenseQuery', () => {
 
     const cache = new Hermes();
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { skip: true }), { cache, mocks });
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { skip: true }), {
+      cache,
+      mocks,
+    });
 
     expect(renders.suspenseCount).toBe(0);
     expect(result.current).toMatchObject({
@@ -5072,7 +5202,7 @@ describe('useSuspenseQuery', () => {
 
     const cache = new Hermes();
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, skipToken), { cache, mocks });
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, skipToken), { cache, mocks });
 
     expect(renders.suspenseCount).toBe(0);
     expect(result.current).toMatchObject({
@@ -5087,11 +5217,10 @@ describe('useSuspenseQuery', () => {
 
     const cache = new Hermes();
 
-    const { result, renders, rerender } = renderSuspenseHook(({ skip }) => useSuspenseQuery(query, { skip }), {
-      cache,
-      mocks,
-      initialProps: { skip: true },
-    });
+    const { result, renders, rerenderAsync } = await renderSuspenseHook(
+      ({ skip }) => useSuspenseQuery(query, { skip }),
+      { cache, mocks, initialProps: { skip: true } },
+    );
 
     expect(renders.suspenseCount).toBe(0);
     expect(result.current).toMatchObject({
@@ -5100,7 +5229,7 @@ describe('useSuspenseQuery', () => {
       error: undefined,
     });
 
-    rerender({ skip: false });
+    await rerenderAsync({ skip: false });
 
     expect(renders.suspenseCount).toBe(1);
 
@@ -5112,7 +5241,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(3);
+    expect(renders.count).toBe(3 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([
       { data: undefined, networkStatus: NetworkStatus.ready, error: undefined },
@@ -5127,7 +5256,7 @@ describe('useSuspenseQuery', () => {
   it('suspends when switching away from `skipToken` in options', async () => {
     const { query, mocks } = useSimpleQueryCase();
 
-    const { result, renders, rerender } = renderSuspenseHook(
+    const { result, renders, rerenderAsync } = await renderSuspenseHook(
       ({ skip }) => useSuspenseQuery(query, skip ? skipToken : void 0),
       { mocks, initialProps: { skip: true } },
     );
@@ -5139,7 +5268,7 @@ describe('useSuspenseQuery', () => {
       error: undefined,
     });
 
-    rerender({ skip: false });
+    await rerenderAsync({ skip: false });
 
     expect(renders.suspenseCount).toBe(1);
 
@@ -5151,7 +5280,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(3);
+    expect(renders.count).toBe(3 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([
       { data: undefined, networkStatus: NetworkStatus.ready, error: undefined },
@@ -5168,11 +5297,10 @@ describe('useSuspenseQuery', () => {
 
     const cache = new Hermes();
 
-    const { result, renders, rerender } = renderSuspenseHook(({ skip }) => useSuspenseQuery(query, { skip }), {
-      cache,
-      mocks,
-      initialProps: { skip: false },
-    });
+    const { result, renders, rerenderAsync } = await renderSuspenseHook(
+      ({ skip }) => useSuspenseQuery(query, { skip }),
+      { cache, mocks, initialProps: { skip: false } },
+    );
 
     expect(renders.suspenseCount).toBe(1);
 
@@ -5184,7 +5312,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ skip: true });
+    await rerenderAsync({ skip: true });
 
     expect(renders.suspenseCount).toBe(1);
 
@@ -5194,7 +5322,7 @@ describe('useSuspenseQuery', () => {
       error: undefined,
     });
 
-    expect(renders.count).toBe(3);
+    expect(renders.count).toBe(3 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([
       {
@@ -5215,7 +5343,7 @@ describe('useSuspenseQuery', () => {
 
     const cache = new Hermes();
 
-    const { result, renders, rerender } = renderSuspenseHook(
+    const { result, renders, rerenderAsync } = await renderSuspenseHook(
       ({ skip }) => useSuspenseQuery(query, skip ? skipToken : void 0),
       { cache, mocks, initialProps: { skip: false } },
     );
@@ -5230,7 +5358,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ skip: true });
+    await rerenderAsync({ skip: true });
 
     expect(renders.suspenseCount).toBe(1);
 
@@ -5240,7 +5368,7 @@ describe('useSuspenseQuery', () => {
       error: undefined,
     });
 
-    expect(renders.count).toBe(3);
+    expect(renders.count).toBe(3 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([
       {
@@ -5276,14 +5404,14 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    const { result, rerender } = renderSuspenseHook(
+    const { result, rerenderAsync } = await renderSuspenseHook(
       ({ skip, id }) => useSuspenseQuery(query, { skip, variables: { id } }),
       { mocks, link, initialProps: { skip: true, id: '1' } },
     );
 
     expect(fetchCount).toBe(0);
 
-    rerender({ skip: false, id: '1' });
+    await rerenderAsync({ skip: false, id: '1' });
 
     expect(fetchCount).toBe(1);
 
@@ -5295,7 +5423,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ skip: true, id: '2' });
+    await rerenderAsync({ skip: true, id: '2' });
 
     expect(fetchCount).toBe(1);
   });
@@ -5320,14 +5448,14 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    const { result, rerender } = renderSuspenseHook(
+    const { result, rerenderAsync } = await renderSuspenseHook(
       ({ skip, id }) => useSuspenseQuery(query, skip ? skipToken : { variables: { id } }),
       { mocks, link, initialProps: { skip: true, id: '1' } },
     );
 
     expect(fetchCount).toBe(0);
 
-    rerender({ skip: false, id: '1' });
+    await rerenderAsync({ skip: false, id: '1' });
 
     expect(fetchCount).toBe(1);
 
@@ -5339,7 +5467,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ skip: true, id: '2' });
+    await rerenderAsync({ skip: true, id: '2' });
 
     expect(fetchCount).toBe(1);
   });
@@ -5365,14 +5493,14 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    const { result, rerender } = renderSuspenseHook(
+    const { result, rerenderAsync } = await renderSuspenseHook(
       ({ skip, id }) => useSuspenseQuery(query, skip ? skipToken : { variables: { id } }),
       { mocks, link, strictMode: true, initialProps: { skip: true, id: '1' } },
     );
 
     expect(fetchCount).toBe(0);
 
-    rerender({ skip: false, id: '1' });
+    await rerenderAsync({ skip: false, id: '1' });
 
     expect(fetchCount).toBe(1);
 
@@ -5384,7 +5512,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ skip: true, id: '2' });
+    await rerenderAsync({ skip: true, id: '2' });
 
     expect(fetchCount).toBe(1);
   });
@@ -5409,14 +5537,14 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    const { result, rerender } = renderSuspenseHook(
+    const { result, rerenderAsync } = await renderSuspenseHook(
       ({ skip, id }) => useSuspenseQuery(query, { skip, variables: { id } }),
       { mocks, link, strictMode: true, initialProps: { skip: true, id: '1' } },
     );
 
     expect(fetchCount).toBe(0);
 
-    rerender({ skip: false, id: '1' });
+    await rerenderAsync({ skip: false, id: '1' });
 
     expect(fetchCount).toBe(1);
 
@@ -5428,7 +5556,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ skip: true, id: '2' });
+    await rerenderAsync({ skip: true, id: '2' });
 
     expect(fetchCount).toBe(1);
   });
@@ -5436,18 +5564,18 @@ describe('useSuspenseQuery', () => {
   it('`skip` result is referentially stable', async () => {
     const { query, mocks } = useSimpleQueryCase();
 
-    const { result, rerender } = renderSuspenseHook(({ skip }) => useSuspenseQuery(query, { skip }), {
+    const { result, rerenderAsync } = await renderSuspenseHook(({ skip }) => useSuspenseQuery(query, { skip }), {
       mocks,
       initialProps: { skip: true },
     });
 
     const skipResult = result.current;
 
-    rerender({ skip: true });
+    await rerenderAsync({ skip: true });
 
     expect(result.current).toBe(skipResult);
 
-    rerender({ skip: false });
+    await rerenderAsync({ skip: false });
 
     await waitFor(() => {
       expect(result.current.data).toEqual(mocks[0].result.data);
@@ -5455,7 +5583,7 @@ describe('useSuspenseQuery', () => {
 
     const fetchedSkipResult = result.current;
 
-    rerender({ skip: false });
+    await rerenderAsync({ skip: false });
 
     expect(fetchedSkipResult).toBe(fetchedSkipResult);
   });
@@ -5463,18 +5591,18 @@ describe('useSuspenseQuery', () => {
   it('`skip` result is referentially stable when using `skipToken` as options', async () => {
     const { query, mocks } = useSimpleQueryCase();
 
-    const { result, rerender } = renderSuspenseHook(({ skip }) => useSuspenseQuery(query, skip ? skipToken : void 0), {
-      mocks,
-      initialProps: { skip: true },
-    });
+    const { result, rerenderAsync } = await renderSuspenseHook(
+      ({ skip }) => useSuspenseQuery(query, skip ? skipToken : void 0),
+      { mocks, initialProps: { skip: true } },
+    );
 
     const skipResult = result.current;
 
-    rerender({ skip: true });
+    await rerenderAsync({ skip: true });
 
     expect(result.current).toBe(skipResult);
 
-    rerender({ skip: false });
+    await rerenderAsync({ skip: false });
 
     await waitFor(() => {
       expect(result.current.data).toEqual(mocks[0].result.data);
@@ -5482,7 +5610,7 @@ describe('useSuspenseQuery', () => {
 
     const fetchedSkipResult = result.current;
 
-    rerender({ skip: false });
+    await rerenderAsync({ skip: false });
 
     expect(fetchedSkipResult).toBe(fetchedSkipResult);
   });
@@ -5569,7 +5697,7 @@ describe('useSuspenseQuery', () => {
       );
     }
 
-    render(<App />);
+    await renderAsync(<App />);
 
     expect(screen.getByText('Loading')).toBeInTheDocument();
 
@@ -5671,7 +5799,7 @@ describe('useSuspenseQuery', () => {
       ) : null;
     }
 
-    render(<App />);
+    await renderAsync(<App />);
 
     expect(screen.queryByTestId('todo')).not.toBeInTheDocument();
 
@@ -5768,7 +5896,7 @@ describe('useSuspenseQuery', () => {
       ) : null;
     }
 
-    render(<App />);
+    await renderAsync(<App />);
 
     expect(screen.queryByTestId('todo')).not.toBeInTheDocument();
 
@@ -5801,10 +5929,11 @@ describe('useSuspenseQuery', () => {
         result: {
           errors: [new GraphQLError('oops')],
         },
+        delay: 20,
       },
     ];
 
-    const { result, rerender, renders } = renderSuspenseHook(
+    const { result, rerenderAsync, renders } = await renderSuspenseHook(
       ({ errorPolicy }) => useSuspenseQuery(query, { errorPolicy }),
       { mocks, initialProps: { errorPolicy: 'none' as ErrorPolicy } },
     );
@@ -5817,10 +5946,10 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ errorPolicy: 'all' });
+    await rerenderAsync({ errorPolicy: 'all' });
 
-    act(() => {
-      result.current.refetch();
+    await actAsync(async () => {
+      void result.current.refetch();
     });
 
     await waitFor(() => {
@@ -5877,10 +6006,10 @@ describe('useSuspenseQuery', () => {
       cache: new Hermes(),
     });
 
-    const { result, rerender, renders } = renderSuspenseHook(({ context }) => useSuspenseQuery(query, { context }), {
-      client,
-      initialProps: { context: { phase: 'initialValue' } },
-    });
+    const { result, rerenderAsync, renders } = await renderSuspenseHook(
+      ({ context }) => useSuspenseQuery(query, { context }),
+      { client, initialProps: { context: { phase: 'initialValue' } } },
+    );
 
     await waitFor(() => {
       expect(result.current).toMatchObject({
@@ -5890,10 +6019,10 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ context: { phase: 'rerender' } });
+    await rerenderAsync({ context: { phase: 'rerender' } });
 
-    act(() => {
-      result.current.refetch();
+    await actAsync(async () => {
+      void result.current.refetch();
     });
 
     await waitFor(() => {
@@ -5986,17 +6115,17 @@ describe('useSuspenseQuery', () => {
       }
     }
 
-    const { result, rerender, renders } = renderSuspenseHook(
+    const { result, rerenderAsync, renders } = await renderSuspenseHook(
       ({ canonizeResults }) => useSuspenseQuery(query, { canonizeResults }),
       { cache, initialProps: { canonizeResults: false } },
     );
 
     verifyCanonicalResults(result.current.data, false);
 
-    rerender({ canonizeResults: true });
+    await rerenderAsync({ canonizeResults: true });
 
     verifyCanonicalResults(result.current.data, true);
-    expect(renders.count).toBe(2);
+    expect(renders.count).toBe(2 + (IS_REACT_19 ? renders.suspenseCount : 0));
   });
 
   // Hermes: keyArgs is not implemented, so paginated/refetched pages are stored per argument set and never merged
@@ -6011,6 +6140,7 @@ describe('useSuspenseQuery', () => {
       {
         request: { query, variables: { min: 0, max: 12 } },
         result: { data: { primes: [2, 3, 5, 7, 11] } },
+        delay: 20,
       },
       {
         request: { query, variables: { min: 12, max: 30 } },
@@ -6041,7 +6171,7 @@ describe('useSuspenseQuery', () => {
       },
     });
 
-    const { result, rerender } = renderSuspenseHook(
+    const { result, rerenderAsync } = await renderSuspenseHook(
       ({ refetchWritePolicy }) =>
         useSuspenseQuery(query, {
           variables: { min: 0, max: 12 },
@@ -6064,8 +6194,8 @@ describe('useSuspenseQuery', () => {
 
     expect(mergeParams).toEqual([[undefined, [2, 3, 5, 7, 11]]]);
 
-    act(() => {
-      result.current.refetch({ min: 12, max: 30 });
+    await actAsync(async () => {
+      void result.current.refetch({ min: 12, max: 30 });
     });
 
     await waitFor(() => {
@@ -6084,10 +6214,10 @@ describe('useSuspenseQuery', () => {
       ],
     ]);
 
-    rerender({ refetchWritePolicy: 'overwrite' });
+    await rerenderAsync({ refetchWritePolicy: 'overwrite' });
 
-    act(() => {
-      result.current.refetch({ min: 30, max: 50 });
+    await actAsync(async () => {
+      void result.current.refetch({ min: 30, max: 50 });
     });
 
     await waitFor(() => {
@@ -6148,6 +6278,7 @@ describe('useSuspenseQuery', () => {
             },
           },
         },
+        delay: 20,
       },
       {
         request: { query: fullQuery },
@@ -6171,7 +6302,7 @@ describe('useSuspenseQuery', () => {
       data: { character: { __typename: 'Character', id: '1' } },
     });
 
-    const { result, renders, rerender } = renderSuspenseHook(
+    const { result, renders, rerenderAsync } = await renderSuspenseHook(
       ({ returnPartialData }) => useSuspenseQuery(fullQuery, { returnPartialData }),
       { cache, mocks, initialProps: { returnPartialData: false } },
     );
@@ -6186,7 +6317,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ returnPartialData: true });
+    await rerenderAsync({ returnPartialData: true });
 
     cache.modify({
       id: cache.identify({ __typename: 'Character', id: '1' }),
@@ -6209,7 +6340,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(5);
+    expect(renders.count).toBe(5 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([
       {
@@ -6275,7 +6406,7 @@ describe('useSuspenseQuery', () => {
       },
     });
 
-    const { result, /* renders, */ rerender } = renderSuspenseHook(
+    const { result, /* renders, */ rerenderAsync } = await renderSuspenseHook(
       ({ fetchPolicy }) => useSuspenseQuery(query, { fetchPolicy }),
       {
         cache,
@@ -6298,12 +6429,12 @@ describe('useSuspenseQuery', () => {
       error: undefined,
     });
 
-    rerender({ fetchPolicy: 'no-cache' });
+    await rerenderAsync({ fetchPolicy: 'no-cache' });
 
     const cacheKey = cache.identify({ __typename: 'Character', id: '1' })!;
 
-    act(() => {
-      result.current.refetch();
+    await actAsync(async () => {
+      void result.current.refetch();
     });
 
     await waitFor(() => {
@@ -6411,7 +6542,7 @@ describe('useSuspenseQuery', () => {
       },
     });
 
-    const { result, renders, rerender } = renderSuspenseHook(
+    const { result, renders, rerenderAsync } = await renderSuspenseHook(
       ({ errorPolicy, variables }) => useSuspenseQuery(query, { errorPolicy, variables }),
       {
         cache,
@@ -6435,7 +6566,7 @@ describe('useSuspenseQuery', () => {
       error: undefined,
     });
 
-    rerender({ errorPolicy: 'none', variables: { id: '2' } });
+    await rerenderAsync({ errorPolicy: 'none', variables: { id: '2' } });
 
     expect(renders.suspenseCount).toBe(1);
 
@@ -6453,10 +6584,10 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    rerender({ errorPolicy: 'all', variables: { id: '1' } });
+    await rerenderAsync({ errorPolicy: 'all', variables: { id: '1' } });
 
-    act(() => {
-      result.current.refetch();
+    await actAsync(async () => {
+      void result.current.refetch();
     });
 
     const expectedError = new ApolloError({
@@ -6496,18 +6627,21 @@ describe('useSuspenseQuery', () => {
         result: {
           data: { user: { id: '1', name: 'Captain Marvel' } },
         },
+        delay: 20,
       },
       {
         request: { query, variables: { id: '1' } },
         result: {
           data: { user: { id: '1', name: 'Captain Marvel (updated)' } },
         },
+        delay: 20,
       },
       {
         request: { query, variables: { id: '1' } },
         result: {
           data: { user: { id: '1', name: 'Captain Marvel (updated again)' } },
         },
+        delay: 20,
       },
     ];
 
@@ -6516,7 +6650,7 @@ describe('useSuspenseQuery', () => {
       link: new MockLink(mocks),
     });
 
-    const { result } = renderSuspenseHook(() => useSuspenseQuery(query, { variables: { id: '1' } }), {
+    const { result } = await renderSuspenseHook(() => useSuspenseQuery(query, { variables: { id: '1' } }), {
       client,
       initialProps: { id: '1' },
     });
@@ -6529,8 +6663,8 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    act(() => {
-      result.current.refetch();
+    await actAsync(async () => {
+      void result.current.refetch();
     });
 
     await waitFor(() => {
@@ -6541,8 +6675,8 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    act(() => {
-      result.current.refetch();
+    await actAsync(async () => {
+      void result.current.refetch();
     });
 
     await waitFor(() => {
@@ -6572,7 +6706,7 @@ describe('useSuspenseQuery', () => {
 
     const link = new MockSubscriptionLink();
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query), { link });
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query), { link });
 
     expect(renders.suspenseCount).toBe(1);
 
@@ -6620,7 +6754,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(3);
+    expect(renders.count).toBe(3 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([
       {
@@ -6660,7 +6794,7 @@ describe('useSuspenseQuery', () => {
 
       const link = new MockSubscriptionLink();
 
-      const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { fetchPolicy }), { link });
+      const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { fetchPolicy }), { link });
 
       expect(renders.suspenseCount).toBe(1);
 
@@ -6712,7 +6846,7 @@ describe('useSuspenseQuery', () => {
         });
       });
 
-      expect(renders.count).toBe(3);
+      expect(renders.count).toBe(3 + (IS_REACT_19 ? renders.suspenseCount : 0));
       expect(renders.suspenseCount).toBe(1);
       expect(renders.frames).toMatchObject([
         {
@@ -6764,9 +6898,10 @@ describe('useSuspenseQuery', () => {
       },
     });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { fetchPolicy: 'cache-first' }), {
-      cache,
-    });
+    const { result, renders } = await renderSuspenseHook(
+      () => useSuspenseQuery(query, { fetchPolicy: 'cache-first' }),
+      { cache },
+    );
 
     expect(result.current).toMatchObject({
       data: {
@@ -6828,7 +6963,7 @@ describe('useSuspenseQuery', () => {
       });
     }
 
-    const { result, renders } = renderSuspenseHook(
+    const { result, renders } = await renderSuspenseHook(
       () =>
         useSuspenseQuery(query, {
           fetchPolicy: 'cache-first',
@@ -6898,7 +7033,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(3);
+    expect(renders.count).toBe(3 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(0);
     expect(renders.frames).toMatchObject([
       {
@@ -6965,7 +7100,7 @@ describe('useSuspenseQuery', () => {
       },
     });
 
-    const { result, renders } = renderSuspenseHook(
+    const { result, renders } = await renderSuspenseHook(
       () => useSuspenseQuery(query, { fetchPolicy: 'cache-and-network' }),
       { client },
     );
@@ -7032,7 +7167,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(3);
+    expect(renders.count).toBe(3 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(0);
     expect(renders.frames).toMatchObject([
       {
@@ -7087,7 +7222,7 @@ describe('useSuspenseQuery', () => {
 
     const link = new MockSubscriptionLink();
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query), { link });
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query), { link });
 
     expect(renders.suspenseCount).toBe(1);
 
@@ -7187,7 +7322,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(4);
+    expect(renders.count).toBe(4 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([
       {
@@ -7258,7 +7393,7 @@ describe('useSuspenseQuery', () => {
 
     const link = new MockSubscriptionLink();
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query), { link });
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query), { link });
 
     expect(renders.suspenseCount).toBe(1);
 
@@ -7389,7 +7524,7 @@ describe('useSuspenseQuery', () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({ link, cache });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query), { client });
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query), { client });
 
     link.simulateResult({
       result: {
@@ -7446,7 +7581,7 @@ describe('useSuspenseQuery', () => {
     });
 
     let refetchPromise: Promise<ApolloQueryResult<unknown>>;
-    act(() => {
+    await actAsync(async () => {
       refetchPromise = result.current.refetch();
     });
 
@@ -7529,7 +7664,7 @@ describe('useSuspenseQuery', () => {
       error: undefined,
     });
 
-    expect(renders.count).toBe(6);
+    expect(renders.count).toBe(6 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(2);
     expect(renders.frames).toMatchObject([
       {
@@ -7605,10 +7740,10 @@ describe('useSuspenseQuery', () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({ link, cache });
 
-    const { result, rerender, renders } = renderSuspenseHook(({ skip }) => useSuspenseQuery(query, { skip }), {
-      client,
-      initialProps: { skip: true },
-    });
+    const { result, rerenderAsync, renders } = await renderSuspenseHook(
+      ({ skip }) => useSuspenseQuery(query, { skip }),
+      { client, initialProps: { skip: true } },
+    );
 
     expect(result.current).toMatchObject({
       data: undefined,
@@ -7616,7 +7751,7 @@ describe('useSuspenseQuery', () => {
       error: undefined,
     });
 
-    rerender({ skip: false });
+    await rerenderAsync({ skip: false });
 
     expect(renders.suspenseCount).toBe(1);
 
@@ -7674,7 +7809,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(4);
+    expect(renders.count).toBe(4 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([
       { data: undefined, networkStatus: NetworkStatus.ready, error: undefined },
@@ -7743,7 +7878,7 @@ describe('useSuspenseQuery', () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({ link, cache });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { variables: { offset: 0 } }), {
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { variables: { offset: 0 } }), {
       client,
     });
 
@@ -7808,7 +7943,7 @@ describe('useSuspenseQuery', () => {
     });
 
     let fetchMorePromise: Promise<ApolloQueryResult<unknown>>;
-    act(() => {
+    await actAsync(() => {
       fetchMorePromise = result.current.fetchMore({ variables: { offset: 1 } });
     });
 
@@ -7912,7 +8047,7 @@ describe('useSuspenseQuery', () => {
       error: undefined,
     });
 
-    expect(renders.count).toBe(5);
+    expect(renders.count).toBe(5 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(2);
     expect(renders.frames).toMatchObject([
       {
@@ -8022,7 +8157,7 @@ describe('useSuspenseQuery', () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({ link, cache });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { variables: { offset: 0 } }), {
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { variables: { offset: 0 } }), {
       client,
     });
 
@@ -8087,7 +8222,7 @@ describe('useSuspenseQuery', () => {
     });
 
     let fetchMorePromise: Promise<ApolloQueryResult<unknown>>;
-    act(() => {
+    await actAsync(() => {
       fetchMorePromise = result.current.fetchMore({
         variables: { offset: 1 },
       });
@@ -8192,7 +8327,7 @@ describe('useSuspenseQuery', () => {
       error: undefined,
     });
 
-    expect(renders.count).toBe(5);
+    expect(renders.count).toBe(5 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(2);
     expect(renders.frames).toMatchObject([
       {
@@ -8288,7 +8423,7 @@ describe('useSuspenseQuery', () => {
 
     const link = new MockSubscriptionLink();
 
-    const { renders } = renderSuspenseHook(() => useSuspenseQuery(query), {
+    const { renders } = await renderSuspenseHook(() => useSuspenseQuery(query), {
       link,
     });
 
@@ -8327,7 +8462,7 @@ describe('useSuspenseQuery', () => {
 
     const link = new MockSubscriptionLink();
 
-    const { renders } = renderSuspenseHook(() => useSuspenseQuery(query), {
+    const { renders } = await renderSuspenseHook(() => useSuspenseQuery(query), {
       link,
     });
 
@@ -8368,7 +8503,7 @@ describe('useSuspenseQuery', () => {
 
     const link = new MockSubscriptionLink();
 
-    const { renders } = renderSuspenseHook(() => useSuspenseQuery(query), {
+    const { renders } = await renderSuspenseHook(() => useSuspenseQuery(query), {
       link,
     });
 
@@ -8412,7 +8547,7 @@ describe('useSuspenseQuery', () => {
 
     const link = new MockSubscriptionLink();
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query), { link });
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query), { link });
 
     link.simulateResult({
       result: {
@@ -8540,7 +8675,9 @@ describe('useSuspenseQuery', () => {
 
     const link = new MockSubscriptionLink();
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'all' }), { link });
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'all' }), {
+      link,
+    });
 
     link.simulateResult({
       result: {
@@ -8642,7 +8779,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(3);
+    expect(renders.count).toBe(3 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([
       {
@@ -8712,7 +8849,9 @@ describe('useSuspenseQuery', () => {
 
     const link = new MockSubscriptionLink();
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'ignore' }), { link });
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'ignore' }), {
+      link,
+    });
 
     link.simulateResult({
       result: {
@@ -8806,7 +8945,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(3);
+    expect(renders.count).toBe(3 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(1);
     expect(renders.frames).toMatchObject([
       {
@@ -8872,7 +9011,9 @@ describe('useSuspenseQuery', () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({ link, cache });
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'all' }), { client });
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'all' }), {
+      client,
+    });
 
     link.simulateResult({
       result: {
@@ -8956,7 +9097,7 @@ describe('useSuspenseQuery', () => {
     });
 
     let refetchPromise: Promise<ApolloQueryResult<unknown>>;
-    act(() => {
+    await actAsync(async () => {
       refetchPromise = result.current.refetch();
     });
 
@@ -9068,7 +9209,7 @@ describe('useSuspenseQuery', () => {
       });
     });
 
-    expect(renders.count).toBe(7);
+    expect(renders.count).toBe(7 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.suspenseCount).toBe(2);
     expect(renders.frames).toMatchObject([
       {
@@ -9173,7 +9314,9 @@ describe('useSuspenseQuery', () => {
       mockLink,
     );
 
-    const { result, renders } = renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'ignore' }), { link });
+    const { result, renders } = await renderSuspenseHook(() => useSuspenseQuery(query, { errorPolicy: 'ignore' }), {
+      link,
+    });
 
     await waitFor(() => {
       expect(result.current.data).toEqual({ greeting: 'Hello' });
@@ -9212,6 +9355,8 @@ describe('useSuspenseQuery', () => {
     expect(updateQuery).toHaveBeenCalledWith(
       { greeting: 'Hello' },
       {
+        complete: true,
+        previousData: { greeting: 'Hello' },
         subscriptionData: {
           data: { greetingUpdated: 'Subscription hello' },
         },
@@ -9219,7 +9364,7 @@ describe('useSuspenseQuery', () => {
       },
     );
 
-    expect(renders.count).toBe(3);
+    expect(renders.count).toBe(3 + (IS_REACT_19 ? renders.suspenseCount : 0));
     expect(renders.frames).toMatchObject([
       { data: { greeting: 'Hello' }, networkStatus: NetworkStatus.ready },
       {
@@ -9289,7 +9434,7 @@ describe('useSuspenseQuery', () => {
       return <div data-testid='result'>{data.search.query}</div>;
     }
 
-    render(<App />);
+    await renderAsync(<App />);
 
     const input = screen.getByLabelText('Search');
 
@@ -9413,26 +9558,27 @@ describe('useSuspenseQuery', () => {
       );
     }
 
-    const ProfiledApp = profile({
-      Component: App,
+    using _disabledAct = disableActEnvironment();
+    const { takeRender, render } = await createRenderStream({
       snapshotDOM: true,
     });
+    await render(<App />);
 
-    render(<ProfiledApp />);
     {
-      const { withinDOM } = await ProfiledApp.takeRender();
+      const { withinDOM } = await takeRender();
       expect(withinDOM().getByText('Loading')).toBeInTheDocument();
     }
 
     {
-      const { withinDOM } = await ProfiledApp.takeRender();
+      const { withinDOM } = await takeRender();
 
       const todo = withinDOM().getByTestId('todo');
       expect(todo).toBeInTheDocument();
       expect(todo).toHaveTextContent('Clean room');
+      expect(todo).toHaveAttribute('aria-busy', 'false');
     }
-
-    await act(() => user.click(screen.getByText('Refresh')));
+    const el = screen.getByText('Refresh');
+    await user.click(el);
 
     // startTransition will avoid rendering the suspense fallback for already
     // revealed content if the state update inside the transition causes the
@@ -9442,7 +9588,7 @@ describe('useSuspenseQuery', () => {
     // until the todo is finished loading. Seeing the suspense fallback is an
     // indication that we are suspending the component too late in the process.
     {
-      const { withinDOM } = await ProfiledApp.takeRender();
+      const { withinDOM } = await takeRender();
       const todo = withinDOM().getByTestId('todo');
 
       expect(withinDOM().queryByText('Loading')).not.toBeInTheDocument();
@@ -9457,7 +9603,7 @@ describe('useSuspenseQuery', () => {
     // Eventually we should see the updated todo content once its done
     // suspending.
     {
-      const { withinDOM } = await ProfiledApp.takeRender();
+      const { withinDOM } = await takeRender();
       const todo = withinDOM().getByTestId('todo');
       expect(todo).toHaveTextContent('Take out trash (completed)');
     }
@@ -9533,7 +9679,7 @@ describe('useSuspenseQuery', () => {
           <button
             onClick={() => {
               startTransition(() => {
-                refetch();
+                void refetch();
               });
             }}
           >
@@ -9547,7 +9693,7 @@ describe('useSuspenseQuery', () => {
       );
     }
 
-    render(<App />);
+    await renderAsync(<App />);
 
     expect(screen.getByText('Loading')).toBeInTheDocument();
 
@@ -9684,7 +9830,7 @@ describe('useSuspenseQuery', () => {
           <button
             onClick={() => {
               startTransition(() => {
-                fetchMore({ variables: { offset: 1 } });
+                void fetchMore({ variables: { offset: 1 } });
               });
             }}
           >
@@ -9702,7 +9848,7 @@ describe('useSuspenseQuery', () => {
       );
     }
 
-    render(<App />);
+    await renderAsync(<App />);
 
     expect(screen.getByText('Loading')).toBeInTheDocument();
 
@@ -9759,7 +9905,7 @@ describe('useSuspenseQuery', () => {
     // preloaded cache
     await client.writeQuery({ query, data: { greeting: 'Hello' } });
 
-    const { result } = renderSuspenseHook(
+    const { result } = await renderSuspenseHook(
       () =>
         useSuspenseQuery(query, {
           fetchPolicy: 'cache-and-network',
@@ -9805,7 +9951,7 @@ describe('useSuspenseQuery', () => {
       link,
     });
 
-    const Profiler = createProfiler({
+    const renderStream = createRenderStream({
       initialSnapshot: {
         result: null as UseSuspenseQueryResult<PaginatedCaseData, PaginatedCaseVariables> | null,
       },
@@ -9825,14 +9971,14 @@ describe('useSuspenseQuery', () => {
       });
       const { data, fetchMore } = result;
 
-      Profiler.mergeSnapshot({ result });
+      renderStream.mergeSnapshot({ result });
 
       return (
         <button
           disabled={isPending}
           onClick={() =>
             startTransition(() => {
-              fetchMore({
+              void fetchMore({
                 variables: {
                   offset: data.letters.length,
                   limit: data.letters.length + 1,
@@ -9846,24 +9992,24 @@ describe('useSuspenseQuery', () => {
       );
     }
 
-    render(<App />, {
-      wrapper: ({ children }) => (
-        <ApolloProvider client={client}>
-          <Profiler>
-            <Suspense fallback={<SuspenseFallback />}>{children}</Suspense>
-          </Profiler>
-        </ApolloProvider>
-      ),
-    });
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(
+      <Suspense fallback={<SuspenseFallback />}>
+        <App />
+      </Suspense>,
+      {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
+    );
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([SuspenseFallback]);
     }
 
     {
-      const { snapshot, renderedComponents } = await Profiler.takeRender();
+      const { snapshot, renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App]);
       expect(snapshot.result?.data).toEqual({
@@ -9874,10 +10020,10 @@ describe('useSuspenseQuery', () => {
       });
     }
 
-    await act(() => user.click(screen.getByText('Fetch next')));
+    await user.click(screen.getByText('Fetch next'));
 
     {
-      const { snapshot, renderedComponents } = await Profiler.takeRender();
+      const { snapshot, renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App]);
       expect(screen.getByText('Fetch next')).toBeDisabled();
@@ -9890,7 +10036,7 @@ describe('useSuspenseQuery', () => {
     }
 
     {
-      const { snapshot, renderedComponents } = await Profiler.takeRender();
+      const { snapshot, renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App]);
       expect(snapshot.result?.data).toEqual({
@@ -9904,7 +10050,7 @@ describe('useSuspenseQuery', () => {
       });
     }
 
-    await expect(Profiler).not.toRerender();
+    await expect(renderStream).not.toRerender();
   });
 
   // https://github.com/apollographql/apollo-client/issues/11708
@@ -9970,7 +10116,7 @@ describe('useSuspenseQuery', () => {
       },
     ];
 
-    const Profiler = createProfiler({
+    const renderStream = createRenderStream({
       initialSnapshot: {
         isPending: false,
         result: null as Pick<UseSuspenseQueryResult<Data>, 'data' | 'error' | 'networkStatus'> | null,
@@ -10008,7 +10154,7 @@ describe('useSuspenseQuery', () => {
         variables: { offset: 0 },
       });
 
-      Profiler.mergeSnapshot({
+      renderStream.mergeSnapshot({
         isPending,
         result: { data, error, networkStatus },
       });
@@ -10017,7 +10163,7 @@ describe('useSuspenseQuery', () => {
         <button
           onClick={() => {
             startTransition(() => {
-              fetchMore({ variables: { offset: 1 } });
+              void fetchMore({ variables: { offset: 1 } });
             });
           }}
         >
@@ -10026,24 +10172,24 @@ describe('useSuspenseQuery', () => {
       );
     }
 
-    render(<App />, {
-      wrapper: ({ children }) => (
-        <ApolloProvider client={client}>
-          <Profiler>
-            <Suspense fallback={<SuspenseFallback />}>{children}</Suspense>
-          </Profiler>
-        </ApolloProvider>
-      ),
-    });
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(
+      <Suspense fallback={<SuspenseFallback />}>
+        <App />
+      </Suspense>,
+      {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
+    );
 
     {
-      const { renderedComponents } = await Profiler.takeRender();
+      const { renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([SuspenseFallback]);
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot).toEqual({
         isPending: false,
@@ -10064,10 +10210,10 @@ describe('useSuspenseQuery', () => {
       });
     }
 
-    await act(() => user.click(screen.getByText('Load more')));
+    await user.click(screen.getByText('Load more'));
 
     {
-      const { snapshot, renderedComponents } = await Profiler.takeRender();
+      const { snapshot, renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App]);
       expect(snapshot).toEqual({
@@ -10090,7 +10236,7 @@ describe('useSuspenseQuery', () => {
     }
 
     {
-      const { snapshot, renderedComponents } = await Profiler.takeRender();
+      const { snapshot, renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App]);
       expect(snapshot).toEqual({
@@ -10118,7 +10264,7 @@ describe('useSuspenseQuery', () => {
       });
     }
 
-    await expect(Profiler).not.toRerender();
+    await expect(renderStream).not.toRerender();
   });
 
   // https://github.com/apollographql/apollo-client/issues/11642
@@ -10171,7 +10317,7 @@ describe('useSuspenseQuery', () => {
       link,
     });
 
-    const Profiler = createProfiler({
+    const renderStream = createRenderStream({
       initialSnapshot: {
         result: null as UseSuspenseQueryResult<PaginatedCaseData, PaginatedCaseVariables> | null,
       },
@@ -10184,7 +10330,7 @@ describe('useSuspenseQuery', () => {
       });
       const { data, fetchMore } = result;
 
-      Profiler.mergeSnapshot({ result });
+      renderStream.mergeSnapshot({ result });
 
       return (
         <button
@@ -10202,21 +10348,21 @@ describe('useSuspenseQuery', () => {
       );
     }
 
-    render(<App />, {
-      wrapper: ({ children }) => (
-        <ApolloProvider client={client}>
-          <Profiler>
-            <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
-          </Profiler>
-        </ApolloProvider>
-      ),
-    });
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(
+      <Suspense fallback={<div>Loading...</div>}>
+        <App />
+      </Suspense>,
+      {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
+    );
 
     // initial suspended render
-    await Profiler.takeRender();
+    await renderStream.takeRender();
 
     {
-      const { snapshot, renderedComponents } = await Profiler.takeRender();
+      const { snapshot, renderedComponents } = await renderStream.takeRender();
 
       expect(renderedComponents).toStrictEqual([App]);
       expect(snapshot.result?.data).toEqual({
@@ -10227,11 +10373,11 @@ describe('useSuspenseQuery', () => {
       });
     }
 
-    await act(() => user.click(screen.getByText('Fetch next')));
-    await Profiler.takeRender();
+    await user.click(screen.getByText('Fetch next'));
+    await renderStream.takeRender();
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result?.data).toEqual({
         letters: [
@@ -10243,11 +10389,11 @@ describe('useSuspenseQuery', () => {
       });
     }
 
-    await act(() => user.click(screen.getByText('Fetch next')));
-    await Profiler.takeRender();
+    await user.click(screen.getByText('Fetch next'));
+    await renderStream.takeRender();
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
       expect(snapshot.result?.data).toEqual({
         letters: [
@@ -10259,7 +10405,1037 @@ describe('useSuspenseQuery', () => {
       });
     }
 
-    await expect(Profiler).not.toRerender();
+    await expect(renderStream).not.toRerender();
+  });
+
+  // https://github.com/apollographql/apollo-client/issues/12103
+  it('does not get stuck pending when `fetchMore` rejects with an error', async () => {
+    using _ = spyOnConsole('error');
+    const { query, data } = setupPaginatedCase();
+
+    const link = new ApolloLink(operation => {
+      const { offset = 0, limit = 2 } = operation.variables;
+      const letters = data.slice(offset, offset + limit);
+
+      return new Observable(observer => {
+        setTimeout(() => {
+          if (offset === 2) {
+            observer.next({
+              data: null,
+              errors: [{ message: 'Could not fetch letters' }],
+            });
+          } else {
+            observer.next({ data: { letters } });
+          }
+          observer.complete();
+        }, 150);
+      });
+    });
+
+    const client = new ApolloClient({
+      cache: new Hermes(),
+      link,
+    });
+
+    const renderStream = createRenderStream({
+      initialSnapshot: {
+        result: null as UseSuspenseQueryResult<PaginatedCaseData, PaginatedCaseVariables> | null,
+        error: null as ApolloError | null,
+      },
+    });
+
+    function SuspenseFallback() {
+      useTrackRenders();
+
+      return <div>Loading...</div>;
+    }
+
+    function ErrorFallback({ error }: FallbackProps) {
+      useTrackRenders();
+      renderStream.mergeSnapshot({ error: error as ApolloError });
+
+      return <div>Error</div>;
+    }
+
+    function App() {
+      useTrackRenders();
+      const result = useSuspenseQuery(query, {
+        variables: { offset: 0, limit: 2 },
+      });
+
+      renderStream.mergeSnapshot({ result });
+
+      return null;
+    }
+
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(
+      <Suspense fallback={<SuspenseFallback />}>
+        <ErrorBoundary FallbackComponent={ErrorFallback}>
+          <App />
+        </ErrorBoundary>
+      </Suspense>,
+      {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
+    );
+
+    {
+      const { renderedComponents } = await renderStream.takeRender();
+
+      expect(renderedComponents).toStrictEqual([SuspenseFallback]);
+    }
+
+    {
+      const { snapshot, renderedComponents } = await renderStream.takeRender();
+
+      expect(renderedComponents).toStrictEqual([App]);
+      expect(snapshot.result?.data).toEqual({
+        letters: [
+          { __typename: 'Letter', letter: 'A', position: 1 },
+          { __typename: 'Letter', letter: 'B', position: 2 },
+        ],
+      });
+    }
+
+    const { snapshot } = renderStream.getCurrentRender();
+    snapshot.result!.fetchMore({ variables: { offset: 2 } }).catch(() => {});
+
+    {
+      const { renderedComponents } = await renderStream.takeRender();
+
+      expect(renderedComponents).toStrictEqual([SuspenseFallback]);
+    }
+
+    {
+      const { snapshot, renderedComponents } = await renderStream.takeRender();
+
+      expect(renderedComponents).toStrictEqual([ErrorFallback]);
+      expect(snapshot.error).toEqual(
+        new ApolloError({
+          graphQLErrors: [{ message: 'Could not fetch letters' }],
+        }),
+      );
+    }
+
+    await expect(renderStream).not.toRerender();
+  });
+
+  it('masks queries when dataMasking is `true`', async () => {
+    type UserFieldsFragment = {
+      age: number;
+    } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+    interface Query {
+      currentUser: {
+        __typename: 'User';
+        id: number;
+        name: string;
+      } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+    }
+
+    const query: MaskedDocumentNode<Query, never> = gql`
+      query MaskedQuery {
+        currentUser {
+          id
+          name
+          ...UserFields
+        }
+      }
+
+      fragment UserFields on User {
+        age
+      }
+    `;
+
+    const mocks = [
+      {
+        request: { query },
+        result: {
+          data: {
+            currentUser: {
+              __typename: 'User',
+              id: 1,
+              name: 'Test User',
+              age: 30,
+            },
+          },
+        },
+      },
+    ];
+
+    const client = new ApolloClient({
+      dataMasking: true,
+      cache: new Hermes(),
+      link: new MockLink(mocks),
+    });
+
+    const renderStream = createRenderStream({
+      initialSnapshot: {
+        result: null as UseSuspenseQueryResult<Masked<Query>, never> | null,
+      },
+    });
+
+    function App() {
+      const result = useSuspenseQuery(query);
+
+      renderStream.replaceSnapshot({ result });
+
+      return null;
+    }
+
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(
+      <Suspense fallback={<div>Loading...</div>}>
+        <App />
+      </Suspense>,
+      {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
+    );
+
+    // loading
+    await renderStream.takeRender();
+
+    {
+      const { snapshot } = await renderStream.takeRender();
+      const { result } = snapshot;
+
+      expect(result?.data).toEqual({
+        currentUser: {
+          __typename: 'User',
+          id: 1,
+          name: 'Test User',
+        },
+      });
+    }
+  });
+
+  it('does not mask query when dataMasking is `false`', async () => {
+    type UserFieldsFragment = {
+      age: number;
+    } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+    interface Query {
+      currentUser: {
+        __typename: 'User';
+        id: number;
+        name: string;
+      } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+    }
+
+    const query: TypedDocumentNode<Query, never> = gql`
+      query MaskedQuery {
+        currentUser {
+          id
+          name
+          ...UserFields
+        }
+      }
+
+      fragment UserFields on User {
+        age
+      }
+    `;
+
+    const mocks = [
+      {
+        request: { query },
+        result: {
+          data: {
+            currentUser: {
+              __typename: 'User',
+              id: 1,
+              name: 'Test User',
+              age: 30,
+            },
+          },
+        },
+      },
+    ];
+
+    const client = new ApolloClient({
+      dataMasking: false,
+      cache: new Hermes(),
+      link: new MockLink(mocks),
+    });
+
+    const renderStream = createRenderStream({
+      initialSnapshot: {
+        result: null as UseSuspenseQueryResult<Query, never> | null,
+      },
+    });
+
+    function App() {
+      const result = useSuspenseQuery(query);
+
+      renderStream.replaceSnapshot({ result });
+
+      return null;
+    }
+
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(
+      <Suspense fallback='Loading'>
+        <App />
+      </Suspense>,
+      {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
+    );
+
+    // loading
+    await renderStream.takeRender();
+
+    const { snapshot } = await renderStream.takeRender();
+
+    expect(snapshot.result?.data).toEqual({
+      currentUser: {
+        __typename: 'User',
+        id: 1,
+        name: 'Test User',
+        age: 30,
+      },
+    });
+  });
+
+  it('does not mask query by default', async () => {
+    type UserFieldsFragment = {
+      age: number;
+    } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+    interface Query {
+      currentUser: {
+        __typename: 'User';
+        id: number;
+        name: string;
+      } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+    }
+
+    const query: TypedDocumentNode<Query, never> = gql`
+      query MaskedQuery {
+        currentUser {
+          id
+          name
+          ...UserFields
+        }
+      }
+
+      fragment UserFields on User {
+        age
+      }
+    `;
+
+    const mocks = [
+      {
+        request: { query },
+        result: {
+          data: {
+            currentUser: {
+              __typename: 'User',
+              id: 1,
+              name: 'Test User',
+              age: 30,
+            },
+          },
+        },
+      },
+    ];
+
+    const client = new ApolloClient({
+      cache: new Hermes(),
+      link: new MockLink(mocks),
+    });
+
+    const renderStream = createRenderStream({
+      initialSnapshot: {
+        result: null as UseSuspenseQueryResult<Query, never> | null,
+      },
+    });
+
+    function App() {
+      const result = useSuspenseQuery(query);
+
+      renderStream.replaceSnapshot({ result });
+
+      return null;
+    }
+
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(
+      <Suspense fallback='Loading'>
+        <App />
+      </Suspense>,
+      {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
+    );
+
+    // loading
+    await renderStream.takeRender();
+
+    const { snapshot } = await renderStream.takeRender();
+
+    expect(snapshot.result?.data).toEqual({
+      currentUser: {
+        __typename: 'User',
+        id: 1,
+        name: 'Test User',
+        age: 30,
+      },
+    });
+  });
+
+  it('masks queries updated by the cache', async () => {
+    type UserFieldsFragment = {
+      age: number;
+    } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+    interface Query {
+      currentUser: {
+        __typename: 'User';
+        id: number;
+        name: string;
+      } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+    }
+
+    const query: MaskedDocumentNode<Query, never> = gql`
+      query MaskedQuery {
+        currentUser {
+          id
+          name
+          ...UserFields
+        }
+      }
+
+      fragment UserFields on User {
+        age
+      }
+    `;
+
+    const mocks = [
+      {
+        request: { query },
+        result: {
+          data: {
+            currentUser: {
+              __typename: 'User',
+              id: 1,
+              name: 'Test User',
+              age: 30,
+            },
+          },
+        },
+      },
+    ];
+
+    const client = new ApolloClient({
+      dataMasking: true,
+      cache: new Hermes(),
+      link: new MockLink(mocks),
+    });
+
+    const renderStream = createRenderStream({
+      initialSnapshot: {
+        result: null as UseSuspenseQueryResult<Masked<Query>, never> | null,
+      },
+    });
+
+    function App() {
+      const result = useSuspenseQuery(query);
+
+      renderStream.replaceSnapshot({ result });
+
+      return null;
+    }
+
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(
+      <Suspense fallback='Loading'>
+        <App />
+      </Suspense>,
+      {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
+    );
+
+    // loading
+    await renderStream.takeRender();
+
+    {
+      const { snapshot } = await renderStream.takeRender();
+
+      expect(snapshot.result?.data).toEqual({
+        currentUser: {
+          __typename: 'User',
+          id: 1,
+          name: 'Test User',
+        },
+      });
+    }
+
+    setTimeout(() => {
+      client.writeQuery({
+        query,
+        data: {
+          currentUser: {
+            __typename: 'User',
+            id: 1,
+            name: 'Test User (updated)',
+            // @ts-ignore TODO: Determine how to handle cache writes with masked
+            // query type
+            age: 35,
+          },
+        },
+      });
+    });
+
+    {
+      const { snapshot } = await renderStream.takeRender();
+
+      expect(snapshot.result?.data).toEqual({
+        currentUser: {
+          __typename: 'User',
+          id: 1,
+          name: 'Test User (updated)',
+        },
+      });
+    }
+  });
+
+  it('does not rerender when updating field in named fragment', async () => {
+    type UserFieldsFragment = {
+      age: number;
+    } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+    interface Query {
+      currentUser: {
+        __typename: 'User';
+        id: number;
+        name: string;
+      } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+    }
+
+    const query: MaskedDocumentNode<Query, never> = gql`
+      query MaskedQuery {
+        currentUser {
+          id
+          name
+          ...UserFields
+        }
+      }
+
+      fragment UserFields on User {
+        age
+      }
+    `;
+
+    const mocks = [
+      {
+        request: { query },
+        result: {
+          data: {
+            currentUser: {
+              __typename: 'User',
+              id: 1,
+              name: 'Test User',
+              age: 30,
+            },
+          },
+        },
+      },
+    ];
+
+    const client = new ApolloClient({
+      dataMasking: true,
+      cache: new Hermes(),
+      link: new MockLink(mocks),
+    });
+
+    const renderStream = createRenderStream({
+      initialSnapshot: {
+        result: null as UseSuspenseQueryResult<Masked<Query>, never> | null,
+      },
+    });
+
+    function App() {
+      const result = useSuspenseQuery(query);
+
+      renderStream.replaceSnapshot({ result });
+
+      return null;
+    }
+
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(
+      <Suspense fallback='Loading'>
+        <App />
+      </Suspense>,
+      {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
+    );
+
+    // loading
+    await renderStream.takeRender();
+
+    {
+      const { snapshot } = await renderStream.takeRender();
+
+      expect(snapshot.result?.data).toEqual({
+        currentUser: {
+          __typename: 'User',
+          id: 1,
+          name: 'Test User',
+        },
+      });
+    }
+
+    client.writeQuery({
+      query,
+      data: {
+        currentUser: {
+          __typename: 'User',
+          id: 1,
+          name: 'Test User',
+          // @ts-ignore TODO: Determine how to handle cache writes with masked
+          // query type
+          age: 35,
+        },
+      },
+    });
+
+    await expect(renderStream).not.toRerender();
+
+    expect(client.readQuery({ query })).toEqual({
+      currentUser: {
+        __typename: 'User',
+        id: 1,
+        name: 'Test User',
+        age: 35,
+      },
+    });
+  });
+
+  it('masks result from cache when using with cache-first fetch policy', async () => {
+    type UserFieldsFragment = {
+      age: number;
+    } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+    interface Query {
+      currentUser: {
+        __typename: 'User';
+        id: number;
+        name: string;
+      } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+    }
+
+    const query: MaskedDocumentNode<Query, never> = gql`
+      query MaskedQuery {
+        currentUser {
+          id
+          name
+          ...UserFields
+        }
+      }
+
+      fragment UserFields on User {
+        age
+      }
+    `;
+
+    const mocks = [
+      {
+        request: { query },
+        result: {
+          data: {
+            currentUser: {
+              __typename: 'User',
+              id: 1,
+              name: 'Test User',
+              age: 30,
+            },
+          },
+        },
+      },
+    ];
+
+    const client = new ApolloClient({
+      dataMasking: true,
+      cache: new Hermes(),
+      link: new MockLink(mocks),
+    });
+
+    client.writeQuery({
+      query,
+      data: {
+        currentUser: {
+          __typename: 'User',
+          id: 1,
+          name: 'Test User',
+          age: 30,
+        },
+      },
+    });
+
+    const renderStream = createRenderStream({
+      initialSnapshot: {
+        result: null as UseSuspenseQueryResult<Masked<Query>, never> | null,
+      },
+    });
+
+    function App() {
+      const result = useSuspenseQuery(query, { fetchPolicy: 'cache-first' });
+
+      renderStream.replaceSnapshot({ result });
+
+      return null;
+    }
+
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(
+      <Suspense fallback='Loading'>
+        <App />
+      </Suspense>,
+      {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
+    );
+
+    const { snapshot } = await renderStream.takeRender();
+
+    expect(snapshot.result?.data).toEqual({
+      currentUser: {
+        __typename: 'User',
+        id: 1,
+        name: 'Test User',
+      },
+    });
+  });
+
+  it('masks cache and network result when using cache-and-network fetch policy', async () => {
+    type UserFieldsFragment = {
+      age: number;
+    } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+    interface Query {
+      currentUser: {
+        __typename: 'User';
+        id: number;
+        name: string;
+      } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+    }
+
+    const query: MaskedDocumentNode<Query, never> = gql`
+      query MaskedQuery {
+        currentUser {
+          id
+          name
+          ...UserFields
+        }
+      }
+
+      fragment UserFields on User {
+        age
+      }
+    `;
+
+    const mocks = [
+      {
+        request: { query },
+        result: {
+          data: {
+            currentUser: {
+              __typename: 'User',
+              id: 1,
+              name: 'Test User (server)',
+              age: 35,
+            },
+          },
+        },
+        delay: 20,
+      },
+    ];
+
+    const client = new ApolloClient({
+      dataMasking: true,
+      cache: new Hermes(),
+      link: new MockLink(mocks),
+    });
+
+    client.writeQuery({
+      query,
+      data: {
+        currentUser: {
+          __typename: 'User',
+          id: 1,
+          name: 'Test User',
+          age: 34,
+        },
+      },
+    });
+
+    const renderStream = createRenderStream({
+      initialSnapshot: {
+        result: null as UseSuspenseQueryResult<Masked<Query>, never> | null,
+      },
+    });
+
+    function App() {
+      const result = useSuspenseQuery(query, {
+        fetchPolicy: 'cache-and-network',
+      });
+
+      renderStream.replaceSnapshot({ result });
+
+      return null;
+    }
+
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(
+      <Suspense fallback='Loading'>
+        <App />
+      </Suspense>,
+      {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
+    );
+
+    {
+      const { snapshot } = await renderStream.takeRender();
+
+      expect(snapshot.result?.data).toEqual({
+        currentUser: {
+          __typename: 'User',
+          id: 1,
+          name: 'Test User',
+        },
+      });
+    }
+
+    {
+      const { snapshot } = await renderStream.takeRender();
+
+      expect(snapshot.result?.data).toEqual({
+        currentUser: {
+          __typename: 'User',
+          id: 1,
+          name: 'Test User (server)',
+        },
+      });
+    }
+  });
+
+  it('masks partial cache data when returnPartialData is `true`', async () => {
+    type UserFieldsFragment = {
+      __typename: 'User';
+      age: number;
+    } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+    interface Query {
+      currentUser: {
+        __typename: 'User';
+        id: number;
+        name: string;
+      } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+    }
+
+    const query: MaskedDocumentNode<Query, never> = gql`
+      query MaskedQuery {
+        currentUser {
+          id
+          name
+          ...UserFields
+        }
+      }
+
+      fragment UserFields on User {
+        age
+      }
+    `;
+
+    const mocks = [
+      {
+        request: { query },
+        result: {
+          data: {
+            currentUser: {
+              __typename: 'User',
+              id: 1,
+              name: 'Test User (server)',
+              age: 35,
+            },
+          },
+        },
+        delay: 20,
+      },
+    ];
+
+    const client = new ApolloClient({
+      dataMasking: true,
+      cache: new Hermes(),
+      link: new MockLink(mocks),
+    });
+
+    {
+      using _ = spyOnConsole('error');
+      client.writeQuery({
+        query,
+        data: {
+          // @ts-expect-error writing partial cache data
+          currentUser: {
+            __typename: 'User',
+            id: 1,
+            age: 34,
+          },
+        },
+      });
+    }
+
+    const renderStream = createRenderStream({
+      initialSnapshot: {
+        result: null as UseSuspenseQueryResult<DeepPartial<Masked<Query>>, never> | null,
+      },
+    });
+
+    function App() {
+      const result = useSuspenseQuery(query, { returnPartialData: true });
+
+      renderStream.replaceSnapshot({ result });
+
+      return null;
+    }
+
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(
+      <Suspense fallback='Loading'>
+        <App />
+      </Suspense>,
+      {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
+    );
+
+    {
+      const { snapshot } = await renderStream.takeRender();
+
+      expect(snapshot.result?.data).toEqual({
+        currentUser: {
+          __typename: 'User',
+          id: 1,
+        },
+      });
+    }
+
+    {
+      const { snapshot } = await renderStream.takeRender();
+
+      expect(snapshot.result?.data).toEqual({
+        currentUser: {
+          __typename: 'User',
+          id: 1,
+          name: 'Test User (server)',
+        },
+      });
+    }
+  });
+
+  it('masks partial data returned from data on errors with errorPolicy `all`', async () => {
+    type UserFieldsFragment = {
+      age: number;
+    } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+    interface Query {
+      currentUser: {
+        __typename: 'User';
+        id: number;
+        name: string;
+      } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+    }
+
+    const query: MaskedDocumentNode<Query, never> = gql`
+      query MaskedQuery {
+        currentUser {
+          id
+          name
+          ...UserFields
+        }
+      }
+
+      fragment UserFields on User {
+        age
+      }
+    `;
+
+    const mocks = [
+      {
+        request: { query },
+        result: {
+          data: {
+            currentUser: {
+              __typename: 'User',
+              id: 1,
+              name: null,
+              age: 34,
+            },
+          },
+          errors: [new GraphQLError("Couldn't get name")],
+        },
+        delay: 20,
+      },
+    ];
+
+    const client = new ApolloClient({
+      dataMasking: true,
+      cache: new Hermes(),
+      link: new MockLink(mocks),
+    });
+
+    const renderStream = createRenderStream({
+      initialSnapshot: {
+        result: null as UseSuspenseQueryResult<Masked<Query> | undefined, never> | null,
+      },
+    });
+
+    function App() {
+      const result = useSuspenseQuery(query, { errorPolicy: 'all' });
+
+      renderStream.replaceSnapshot({ result });
+
+      return null;
+    }
+
+    using _disabledAct = disableActEnvironment();
+    await renderStream.render(
+      <Suspense fallback='Loading'>
+        <App />
+      </Suspense>,
+      {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
+    );
+
+    // loading
+    await renderStream.takeRender();
+
+    {
+      const { snapshot } = await renderStream.takeRender();
+      const { result } = snapshot;
+
+      expect(result?.data).toEqual({
+        currentUser: {
+          __typename: 'User',
+          id: 1,
+          name: null,
+        },
+      });
+
+      expect(result?.error).toEqual(
+        new ApolloError({
+          graphQLErrors: [new GraphQLError("Couldn't get name")],
+        }),
+      );
+    }
   });
 
   describe.skip('type tests', () => {
@@ -10294,6 +11470,29 @@ describe('useSuspenseQuery', () => {
 
       expectTypeOf(explicit).toEqualTypeOf<VariablesCaseData>();
       expectTypeOf(explicit).not.toEqualTypeOf<VariablesCaseData | undefined>();
+
+      const { query: maskedQuery } = useMaskedVariablesQueryCase();
+
+      {
+        const { data } = useSuspenseQuery(maskedQuery);
+
+        expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData>>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+      }
+
+      {
+        const { data } = useSuspenseQuery<MaskedVariablesCaseData, VariablesCaseVariables>(maskedQuery);
+
+        expectTypeOf(data).toEqualTypeOf<MaskedVariablesCaseData>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+      }
+
+      {
+        const { data } = useSuspenseQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(maskedQuery);
+
+        expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData>>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+      }
     });
 
     it('returns TData | undefined with errorPolicy: "ignore"', () => {
@@ -10312,6 +11511,35 @@ describe('useSuspenseQuery', () => {
 
       expectTypeOf(explicit).toEqualTypeOf<VariablesCaseData | undefined>();
       expectTypeOf(explicit).not.toEqualTypeOf<VariablesCaseData>();
+
+      const { query: maskedQuery } = useMaskedVariablesQueryCase();
+
+      {
+        const { data } = useSuspenseQuery(maskedQuery, {
+          errorPolicy: 'ignore',
+        });
+
+        expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData> | undefined>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData | undefined>();
+      }
+
+      {
+        const { data } = useSuspenseQuery<MaskedVariablesCaseData, VariablesCaseVariables>(maskedQuery, {
+          errorPolicy: 'ignore',
+        });
+
+        expectTypeOf(data).toEqualTypeOf<MaskedVariablesCaseData | undefined>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData | undefined>();
+      }
+
+      {
+        const { data } = useSuspenseQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(maskedQuery, {
+          errorPolicy: 'ignore',
+        });
+
+        expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData> | undefined>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData | undefined>();
+      }
     });
 
     it('returns TData | undefined with errorPolicy: "all"', () => {
@@ -10330,6 +11558,33 @@ describe('useSuspenseQuery', () => {
 
       expectTypeOf(explicit).toEqualTypeOf<VariablesCaseData | undefined>();
       expectTypeOf(explicit).not.toEqualTypeOf<VariablesCaseData>();
+
+      const { query: maskedQuery } = useMaskedVariablesQueryCase();
+
+      {
+        const { data } = useSuspenseQuery(maskedQuery, { errorPolicy: 'all' });
+
+        expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData> | undefined>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData | undefined>();
+      }
+
+      {
+        const { data } = useSuspenseQuery<MaskedVariablesCaseData, VariablesCaseVariables>(maskedQuery, {
+          errorPolicy: 'all',
+        });
+
+        expectTypeOf(data).toEqualTypeOf<MaskedVariablesCaseData | undefined>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData | undefined>();
+      }
+
+      {
+        const { data } = useSuspenseQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(maskedQuery, {
+          errorPolicy: 'all',
+        });
+
+        expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData> | undefined>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData | undefined>();
+      }
     });
 
     it('returns TData with errorPolicy: "none"', () => {
@@ -10348,6 +11603,33 @@ describe('useSuspenseQuery', () => {
 
       expectTypeOf(explicit).toEqualTypeOf<VariablesCaseData>();
       expectTypeOf(explicit).not.toEqualTypeOf<VariablesCaseData | undefined>();
+
+      const { query: maskedQuery } = useMaskedVariablesQueryCase();
+
+      {
+        const { data } = useSuspenseQuery(maskedQuery, { errorPolicy: 'none' });
+
+        expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData>>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+      }
+
+      {
+        const { data } = useSuspenseQuery<MaskedVariablesCaseData, VariablesCaseVariables>(maskedQuery, {
+          errorPolicy: 'none',
+        });
+
+        expectTypeOf(data).toEqualTypeOf<MaskedVariablesCaseData>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+      }
+
+      {
+        const { data } = useSuspenseQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(maskedQuery, {
+          errorPolicy: 'none',
+        });
+
+        expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData>>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+      }
     });
 
     it('returns DeepPartial<TData> with returnPartialData: true', () => {
@@ -10366,6 +11648,35 @@ describe('useSuspenseQuery', () => {
 
       expectTypeOf(explicit).toEqualTypeOf<DeepPartial<VariablesCaseData>>();
       expectTypeOf(explicit).not.toEqualTypeOf<VariablesCaseData>();
+
+      const { query: maskedQuery } = useMaskedVariablesQueryCase();
+
+      {
+        const { data } = useSuspenseQuery(maskedQuery, {
+          returnPartialData: true,
+        });
+
+        expectTypeOf(data).toEqualTypeOf<DeepPartial<Masked<MaskedVariablesCaseData>>>();
+        expectTypeOf(data).not.toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData>>();
+      }
+
+      {
+        const { data } = useSuspenseQuery<MaskedVariablesCaseData, VariablesCaseVariables>(maskedQuery, {
+          returnPartialData: true,
+        });
+
+        expectTypeOf(data).toEqualTypeOf<DeepPartial<MaskedVariablesCaseData>>();
+        expectTypeOf(data).not.toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData>>();
+      }
+
+      {
+        const { data } = useSuspenseQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(maskedQuery, {
+          returnPartialData: true,
+        });
+
+        expectTypeOf(data).toEqualTypeOf<DeepPartial<Masked<MaskedVariablesCaseData>>>();
+        expectTypeOf(data).not.toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData>>();
+      }
     });
 
     it('returns TData with returnPartialData: false', () => {
@@ -10384,6 +11695,35 @@ describe('useSuspenseQuery', () => {
 
       expectTypeOf(explicit).toEqualTypeOf<VariablesCaseData>();
       expectTypeOf(explicit).not.toEqualTypeOf<DeepPartial<VariablesCaseData>>();
+
+      const { query: maskedQuery } = useMaskedVariablesQueryCase();
+
+      {
+        const { data } = useSuspenseQuery(maskedQuery, {
+          returnPartialData: false,
+        });
+
+        expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData>>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+      }
+
+      {
+        const { data } = useSuspenseQuery<MaskedVariablesCaseData, VariablesCaseVariables>(maskedQuery, {
+          returnPartialData: false,
+        });
+
+        expectTypeOf(data).toEqualTypeOf<MaskedVariablesCaseData>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+      }
+
+      {
+        const { data } = useSuspenseQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(maskedQuery, {
+          returnPartialData: false,
+        });
+
+        expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData>>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+      }
     });
 
     it('returns TData | undefined when skip is present', () => {
@@ -10416,6 +11756,44 @@ describe('useSuspenseQuery', () => {
 
       expectTypeOf(dynamic).toEqualTypeOf<VariablesCaseData | undefined>();
       expectTypeOf(dynamic).not.toEqualTypeOf<VariablesCaseData>();
+
+      const { query: maskedQuery } = useMaskedVariablesQueryCase();
+
+      {
+        const { data } = useSuspenseQuery(maskedQuery, { skip: true });
+
+        expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData> | undefined>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData | undefined>();
+      }
+
+      {
+        const { data } = useSuspenseQuery<MaskedVariablesCaseData, VariablesCaseVariables>(maskedQuery, { skip: true });
+
+        expectTypeOf(data).toEqualTypeOf<MaskedVariablesCaseData | undefined>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData | undefined>();
+      }
+
+      {
+        const { data } = useSuspenseQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(maskedQuery, {
+          skip: true,
+        });
+
+        expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData> | undefined>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData | undefined>();
+      }
+
+      {
+        const options = {
+          skip: true,
+        };
+
+        const { data } = useSuspenseQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(maskedQuery, {
+          skip: options.skip,
+        });
+
+        expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData> | undefined>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData | undefined>();
+      }
     });
 
     it('returns TData | undefined when using `skipToken` as options', () => {
@@ -10436,6 +11814,35 @@ describe('useSuspenseQuery', () => {
 
       expectTypeOf(explicit).toEqualTypeOf<VariablesCaseData | undefined>();
       expectTypeOf(explicit).not.toEqualTypeOf<VariablesCaseData>();
+
+      const { query: maskedQuery } = useMaskedVariablesQueryCase();
+
+      {
+        const { data } = useSuspenseQuery(maskedQuery, options.skip ? skipToken : { variables: { id: '1' } });
+
+        expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData> | undefined>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData | undefined>();
+      }
+
+      {
+        const { data } = useSuspenseQuery<MaskedVariablesCaseData, VariablesCaseVariables>(
+          maskedQuery,
+          options.skip ? skipToken : { variables: { id: '1' } },
+        );
+
+        expectTypeOf(data).toEqualTypeOf<MaskedVariablesCaseData | undefined>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData | undefined>();
+      }
+
+      {
+        const { data } = useSuspenseQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(
+          maskedQuery,
+          options.skip ? skipToken : { variables: { id: '1' } },
+        );
+
+        expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData> | undefined>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData | undefined>();
+      }
     });
 
     it('returns TData | undefined when using `skipToken` with undefined options', () => {
@@ -10456,6 +11863,35 @@ describe('useSuspenseQuery', () => {
 
       expectTypeOf(explicit).toEqualTypeOf<VariablesCaseData | undefined>();
       expectTypeOf(explicit).not.toEqualTypeOf<VariablesCaseData>();
+
+      const { query: maskedQuery } = useMaskedVariablesQueryCase();
+
+      {
+        const { data } = useSuspenseQuery(maskedQuery, options.skip ? skipToken : undefined);
+
+        expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData> | undefined>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData | undefined>();
+      }
+
+      {
+        const { data } = useSuspenseQuery<MaskedVariablesCaseData, VariablesCaseVariables>(
+          maskedQuery,
+          options.skip ? skipToken : undefined,
+        );
+
+        expectTypeOf(data).toEqualTypeOf<MaskedVariablesCaseData | undefined>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData | undefined>();
+      }
+
+      {
+        const { data } = useSuspenseQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(
+          maskedQuery,
+          options.skip ? skipToken : undefined,
+        );
+
+        expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData> | undefined>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData | undefined>();
+      }
     });
 
     it('returns DeepPartial<TData> | undefined when using `skipToken` as options with `returnPartialData`', () => {
@@ -10476,6 +11912,35 @@ describe('useSuspenseQuery', () => {
 
       expectTypeOf(explicit).toEqualTypeOf<DeepPartial<VariablesCaseData> | undefined>();
       expectTypeOf(explicit).not.toEqualTypeOf<VariablesCaseData>();
+
+      const { query: maskedQuery } = useMaskedVariablesQueryCase();
+
+      {
+        const { data } = useSuspenseQuery(maskedQuery, options.skip ? skipToken : { returnPartialData: true });
+
+        expectTypeOf(data).toEqualTypeOf<DeepPartial<Masked<MaskedVariablesCaseData>> | undefined>();
+        expectTypeOf(data).not.toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData> | undefined>();
+      }
+
+      {
+        const { data } = useSuspenseQuery<MaskedVariablesCaseData, VariablesCaseVariables>(
+          maskedQuery,
+          options.skip ? skipToken : { returnPartialData: true },
+        );
+
+        expectTypeOf(data).toEqualTypeOf<DeepPartial<MaskedVariablesCaseData> | undefined>();
+        expectTypeOf(data).not.toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData> | undefined>();
+      }
+
+      {
+        const { data } = useSuspenseQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(
+          maskedQuery,
+          options.skip ? skipToken : { returnPartialData: true },
+        );
+
+        expectTypeOf(data).toEqualTypeOf<DeepPartial<Masked<MaskedVariablesCaseData>> | undefined>();
+        expectTypeOf(data).not.toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData> | undefined>();
+      }
     });
 
     it('returns TData when passing an option that does not affect TData', () => {
@@ -10494,6 +11959,35 @@ describe('useSuspenseQuery', () => {
 
       expectTypeOf(explicit).toEqualTypeOf<VariablesCaseData>();
       expectTypeOf(explicit).not.toEqualTypeOf<DeepPartial<VariablesCaseData>>();
+
+      const { query: maskedQuery } = useMaskedVariablesQueryCase();
+
+      {
+        const { data } = useSuspenseQuery(maskedQuery, {
+          fetchPolicy: 'no-cache',
+        });
+
+        expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData>>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+      }
+
+      {
+        const { data } = useSuspenseQuery<MaskedVariablesCaseData, VariablesCaseVariables>(maskedQuery, {
+          fetchPolicy: 'no-cache',
+        });
+
+        expectTypeOf(data).toEqualTypeOf<MaskedVariablesCaseData>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+      }
+
+      {
+        const { data } = useSuspenseQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(maskedQuery, {
+          fetchPolicy: 'no-cache',
+        });
+
+        expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData>>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+      }
     });
 
     it('handles combinations of options', () => {
@@ -10506,6 +12000,7 @@ describe('useSuspenseQuery', () => {
       };
 
       const { query } = useVariablesQueryCase();
+      const { query: maskedQuery } = useMaskedVariablesQueryCase();
 
       const { data: inferredPartialDataIgnore } = useSuspenseQuery(query, {
         returnPartialData: true,
@@ -10523,6 +12018,16 @@ describe('useSuspenseQuery', () => {
       expectTypeOf(explicitPartialDataIgnore).toEqualTypeOf<DeepPartial<VariablesCaseData> | undefined>();
       expectTypeOf(explicitPartialDataIgnore).not.toEqualTypeOf<VariablesCaseData>();
 
+      {
+        const { data } = useSuspenseQuery(maskedQuery, {
+          returnPartialData: true,
+          errorPolicy: 'ignore',
+        });
+
+        expectTypeOf(data).toEqualTypeOf<DeepPartial<Masked<MaskedVariablesCaseData>> | undefined>();
+        expectTypeOf(data).not.toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData> | undefined>();
+      }
+
       const { data: inferredPartialDataNone } = useSuspenseQuery(query, {
         returnPartialData: true,
         errorPolicy: 'none',
@@ -10538,6 +12043,16 @@ describe('useSuspenseQuery', () => {
 
       expectTypeOf(explicitPartialDataNone).toEqualTypeOf<DeepPartial<VariablesCaseData>>();
       expectTypeOf(explicitPartialDataNone).not.toEqualTypeOf<VariablesCaseData>();
+
+      {
+        const { data } = useSuspenseQuery(maskedQuery, {
+          returnPartialData: true,
+          errorPolicy: 'ignore',
+        });
+
+        expectTypeOf(data).toEqualTypeOf<DeepPartial<Masked<MaskedVariablesCaseData>> | undefined>();
+        expectTypeOf(data).not.toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData> | undefined>();
+      }
 
       const { data: inferredSkipIgnore } = useSuspenseQuery(query, {
         skip: options.skip,
@@ -10555,6 +12070,16 @@ describe('useSuspenseQuery', () => {
       expectTypeOf(explicitSkipIgnore).toEqualTypeOf<VariablesCaseData | undefined>();
       expectTypeOf(explicitSkipIgnore).not.toEqualTypeOf<VariablesCaseData>();
 
+      {
+        const { data } = useSuspenseQuery(maskedQuery, {
+          skip: options.skip,
+          errorPolicy: 'ignore',
+        });
+
+        expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData> | undefined>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData | undefined>();
+      }
+
       const { data: inferredSkipNone } = useSuspenseQuery(query, {
         skip: options.skip,
         errorPolicy: 'none',
@@ -10570,6 +12095,16 @@ describe('useSuspenseQuery', () => {
 
       expectTypeOf(explicitSkipNone).toEqualTypeOf<VariablesCaseData | undefined>();
       expectTypeOf(explicitSkipNone).not.toEqualTypeOf<VariablesCaseData>();
+
+      {
+        const { data } = useSuspenseQuery(maskedQuery, {
+          skip: options.skip,
+          errorPolicy: 'none',
+        });
+
+        expectTypeOf(data).toEqualTypeOf<Masked<MaskedVariablesCaseData> | undefined>();
+        expectTypeOf(data).not.toEqualTypeOf<UnmaskedVariablesCaseData | undefined>();
+      }
 
       const { data: inferredPartialDataNoneSkip } = useSuspenseQuery(query, {
         skip: options.skip,
@@ -10588,6 +12123,17 @@ describe('useSuspenseQuery', () => {
 
       expectTypeOf(explicitPartialDataNoneSkip).toEqualTypeOf<DeepPartial<VariablesCaseData> | undefined>();
       expectTypeOf(explicitPartialDataNoneSkip).not.toEqualTypeOf<VariablesCaseData>();
+
+      {
+        const { data } = useSuspenseQuery(maskedQuery, {
+          skip: options.skip,
+          returnPartialData: true,
+          errorPolicy: 'none',
+        });
+
+        expectTypeOf(data).toEqualTypeOf<DeepPartial<Masked<MaskedVariablesCaseData>> | undefined>();
+        expectTypeOf(data).not.toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData> | undefined>();
+      }
     });
 
     it('returns correct TData type when combined options that do not affect TData', () => {
@@ -10610,6 +12156,200 @@ describe('useSuspenseQuery', () => {
 
       expectTypeOf(explicit).toEqualTypeOf<DeepPartial<VariablesCaseData>>();
       expectTypeOf(explicit).not.toEqualTypeOf<VariablesCaseData>();
+
+      const { query: maskedQuery } = useMaskedVariablesQueryCase();
+
+      {
+        const { data } = useSuspenseQuery(maskedQuery, {
+          fetchPolicy: 'no-cache',
+          returnPartialData: true,
+          errorPolicy: 'none',
+        });
+
+        expectTypeOf(data).toEqualTypeOf<DeepPartial<Masked<MaskedVariablesCaseData>>>();
+        expectTypeOf(data).not.toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData>>();
+      }
+
+      {
+        const { data } = useSuspenseQuery<MaskedVariablesCaseData, VariablesCaseVariables>(maskedQuery, {
+          fetchPolicy: 'no-cache',
+          returnPartialData: true,
+          errorPolicy: 'none',
+        });
+
+        expectTypeOf(data).toEqualTypeOf<DeepPartial<MaskedVariablesCaseData>>();
+        expectTypeOf(data).not.toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData>>();
+      }
+
+      {
+        const { data } = useSuspenseQuery<Masked<MaskedVariablesCaseData>, VariablesCaseVariables>(maskedQuery, {
+          fetchPolicy: 'no-cache',
+          returnPartialData: true,
+          errorPolicy: 'none',
+        });
+
+        expectTypeOf(data).toEqualTypeOf<DeepPartial<Masked<MaskedVariablesCaseData>>>();
+        expectTypeOf(data).not.toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData>>();
+      }
+    });
+
+    it('uses proper masked types for refetch', async () => {
+      const { query, unmaskedQuery } = useMaskedVariablesQueryCase();
+
+      {
+        const { refetch } = useSuspenseQuery(query);
+
+        const result = await refetch();
+
+        expectTypeOf(result.data).toEqualTypeOf<Masked<MaskedVariablesCaseData>>();
+        expectTypeOf(result.data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+      }
+
+      {
+        const { refetch } = useSuspenseQuery(unmaskedQuery);
+
+        const result = await refetch();
+
+        expectTypeOf(result.data).toEqualTypeOf<MaskedVariablesCaseData>();
+        expectTypeOf(result.data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+      }
+    });
+
+    it('uses proper masked types for fetchMore', async () => {
+      const { query, unmaskedQuery } = useMaskedVariablesQueryCase();
+
+      {
+        const { fetchMore } = useSuspenseQuery(query);
+
+        const result = await fetchMore({
+          updateQuery: (queryData, { fetchMoreResult }) => {
+            expectTypeOf(queryData).toEqualTypeOf<UnmaskedVariablesCaseData>();
+            expectTypeOf(queryData).not.toEqualTypeOf<MaskedVariablesCaseData>();
+
+            expectTypeOf(fetchMoreResult).toEqualTypeOf<UnmaskedVariablesCaseData>();
+            expectTypeOf(fetchMoreResult).not.toEqualTypeOf<MaskedVariablesCaseData>();
+
+            return {} as UnmaskedVariablesCaseData;
+          },
+        });
+
+        expectTypeOf(result.data).toEqualTypeOf<Masked<MaskedVariablesCaseData>>();
+        expectTypeOf(result.data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+      }
+
+      {
+        const { fetchMore } = useSuspenseQuery(unmaskedQuery);
+
+        const result = await fetchMore({
+          updateQuery: (queryData, { fetchMoreResult }) => {
+            expectTypeOf(queryData).toEqualTypeOf<UnmaskedVariablesCaseData>();
+            expectTypeOf(queryData).not.toEqualTypeOf<MaskedVariablesCaseData>();
+
+            expectTypeOf(fetchMoreResult).toEqualTypeOf<UnmaskedVariablesCaseData>();
+            expectTypeOf(fetchMoreResult).not.toEqualTypeOf<MaskedVariablesCaseData>();
+
+            return {} as UnmaskedVariablesCaseData;
+          },
+        });
+
+        expectTypeOf(result.data).toEqualTypeOf<MaskedVariablesCaseData>();
+        expectTypeOf(result.data).not.toEqualTypeOf<UnmaskedVariablesCaseData>();
+      }
+    });
+
+    it('uses proper masked types for subscribeToMore', async () => {
+      type CharacterFragment = {
+        __typename: 'Character';
+        name: string;
+      } & { ' $fragmentName': 'CharacterFragment' };
+
+      type Subscription = {
+        pushLetter: {
+          __typename: 'Character';
+          id: number;
+        } & { ' $fragmentRefs': { CharacterFragment: CharacterFragment } };
+      };
+
+      type UnmaskedSubscription = {
+        pushLetter: {
+          __typename: 'Character';
+          id: number;
+          name: string;
+        };
+      };
+
+      const { query, unmaskedQuery } = useMaskedVariablesQueryCase();
+
+      {
+        const { subscribeToMore } = useSuspenseQuery(query);
+
+        const subscription: MaskedDocumentNode<Subscription, never> = gql`
+          subscription {
+            pushLetter {
+              id
+              ...CharacterFragment
+            }
+          }
+
+          fragment CharacterFragment on Character {
+            name
+          }
+        `;
+
+        subscribeToMore({
+          document: subscription,
+          updateQuery: (queryData, { subscriptionData }) => {
+            expectTypeOf(queryData).toEqualTypeOf<UnmaskedVariablesCaseData>();
+            expectTypeOf(queryData).not.toEqualTypeOf<MaskedVariablesCaseData>();
+
+            expectTypeOf(subscriptionData.data).toEqualTypeOf<UnmaskedSubscription>();
+            expectTypeOf(subscriptionData.data).not.toEqualTypeOf<Subscription>();
+
+            return {} as UnmaskedVariablesCaseData;
+          },
+        });
+      }
+
+      {
+        const { subscribeToMore } = useSuspenseQuery(unmaskedQuery);
+
+        const subscription: TypedDocumentNode<Subscription, never> = gql`
+          subscription {
+            pushLetter {
+              id
+              ...CharacterFragment
+            }
+          }
+
+          fragment CharacterFragment on Character {
+            name
+          }
+        `;
+
+        subscribeToMore({
+          document: subscription,
+          updateQuery: (queryData, { subscriptionData, complete, previousData }) => {
+            expectTypeOf(queryData).toEqualTypeOf<UnmaskedVariablesCaseData>();
+            expectTypeOf(queryData).not.toEqualTypeOf<MaskedVariablesCaseData>();
+
+            expectTypeOf(complete).toEqualTypeOf<boolean>();
+            expectTypeOf(previousData).toEqualTypeOf<
+              UnmaskedVariablesCaseData | DeepPartial<UnmaskedVariablesCaseData> | undefined
+            >();
+
+            if (complete) {
+              expectTypeOf(previousData).toEqualTypeOf<UnmaskedVariablesCaseData>();
+            } else {
+              expectTypeOf(previousData).toEqualTypeOf<DeepPartial<UnmaskedVariablesCaseData> | undefined>();
+            }
+
+            expectTypeOf(subscriptionData.data).toEqualTypeOf<UnmaskedSubscription>();
+            expectTypeOf(subscriptionData.data).not.toEqualTypeOf<Subscription>();
+
+            return {} as UnmaskedVariablesCaseData;
+          },
+        });
+      }
     });
   });
 });

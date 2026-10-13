@@ -1,5 +1,5 @@
-import { toPromise } from '../toPromise';
-import { fromError } from '../fromError';
+import { toPromise } from '@apollo/client/link/utils/toPromise';
+import { fromError } from '@apollo/client/link/utils/fromError';
 
 describe('fromError', () => {
   it('acts as error call', () => {

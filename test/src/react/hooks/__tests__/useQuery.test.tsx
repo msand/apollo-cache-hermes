@@ -1,27 +1,21 @@
 import * as React from 'react';
-import { Fragment, ReactNode, useEffect, useRef, useState } from 'react';
-import { DocumentNode, GraphQLError } from 'graphql';
+import { Fragment, ReactNode, useEffect, useState } from 'react';
+import { DocumentNode, GraphQLError, GraphQLFormattedError } from 'graphql';
 import gql from 'graphql-tag';
 import { act, render, screen, waitFor, renderHook } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import {
-  ApolloClient,
-  ApolloProvider,
-  ApolloLink,
-  useQuery,
-  QueryResult,
-  useLazyQuery,
-  InMemoryCache,
-} from '@apollo/client';
-
+import { ApolloClient, ApolloProvider, ApolloLink, useQuery, QueryResult } from '@apollo/client';
 import {
   ApolloError,
+  ApolloQueryResult,
+  FetchPolicy,
   NetworkStatus,
   OperationVariables,
   TypedDocumentNode,
   WatchQueryFetchPolicy,
-} from '../../../core';
-import { Observable, Reference, concatPagination } from '../../../utilities';
+  WatchQueryOptions,
+} from '@apollo/client/core';
+import { Observable, Reference, concatPagination } from '@apollo/client/utilities';
 import {
   MockLink,
   MockedProvider,
@@ -30,14 +24,71 @@ import {
   tick,
   wait,
   MockedResponse,
-} from '../../../testing';
-import { useMutation } from '../useMutation';
-import { createProfiler, disableActWarnings, profileHook, spyOnConsole } from '../../../testing/internal';
-import { useApolloClient } from '../useApolloClient';
+} from '@apollo/client/testing';
+import { useMutation } from '@apollo/client/react/hooks/useMutation';
+import {
+  createClientWrapper,
+  setupPaginatedCase,
+  spyOnConsole,
+  withMutedDeprecations,
+} from '@apollo/client/testing/internal';
+import { useLazyQuery } from '@apollo/client/react/hooks/useLazyQuery';
+import { QueryManager } from '@apollo/client/core/QueryManager';
+import { InvariantError } from '@apollo/client/utilities/globals';
+import { Unmasked } from '@apollo/client/masking';
+import {
+  createRenderStream,
+  renderHookToSnapshotStream,
+  disableActEnvironment,
+} from '@testing-library/react-render-stream';
+import { loadErrorMessages } from '@apollo/client/dev';
+
 import { Hermes } from '../../../../../src';
 
+// Hermes: the hooks come from the published @apollo/client package, whose error messages the
+// shared test env does not load.
+loadErrorMessages();
+
+// Hermes: upstream imports mockFetchQuery from core/__tests__/ObservableQuery, which would also
+// register (and run) that whole suite here; it is inlined instead.
+const mockFetchQuery = (queryManager: QueryManager<any>) => {
+  const fetchConcastWithInfo = (queryManager as any).fetchConcastWithInfo;
+  const fetchQueryByPolicy = (queryManager as any).fetchQueryByPolicy;
+
+  const mock = (original: (...args: any[]) => any) =>
+    jest.fn((...args: any[]) => {
+      return original.apply(queryManager, args);
+    });
+
+  const mocks = {
+    fetchConcastWithInfo: mock(fetchConcastWithInfo),
+    fetchQueryByPolicy: mock(fetchQueryByPolicy),
+  };
+
+  Object.assign(queryManager, mocks);
+
+  return mocks;
+};
+
+// Hermes: reads may return a superset of the selected fields (see README). Matches data that
+// has (at least) the expected fields, like toMatchObject, inside toEqualQueryResult.
+function supersetOf<T>(expected: T): T {
+  return {
+    $$typeof: Symbol.for('jest.asymmetricMatcher'),
+    asymmetricMatch: (actual: unknown) => {
+      try {
+        expect(actual).toMatchObject(expected as object);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    toAsymmetricMatcher: () => `SupersetOf<${JSON.stringify(expected)}>`,
+  } as unknown as T;
+}
+
 const IS_REACT_17 = React.version.startsWith('17');
-const IS_REACT_19 = React.version.startsWith('19');
+const IS_REACT_18 = React.version.startsWith('18');
 
 describe('useQuery Hook', () => {
   describe('General use', () => {
@@ -56,17 +107,36 @@ describe('useQuery Hook', () => {
 
       const wrapper = ({ children }: any) => <MockedProvider mocks={mocks}>{children}</MockedProvider>;
 
-      const { result } = renderHook(() => useQuery(query), { wrapper });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(() => useQuery(query), { wrapper });
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual({ hello: 'world' });
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          called: true,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world' },
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          called: true,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('useQuery result is referentially stable', async () => {
@@ -82,25 +152,58 @@ describe('useQuery Hook', () => {
         },
       ];
       const wrapper = ({ children }: any) => <MockedProvider mocks={mocks}>{children}</MockedProvider>;
-      const { result, rerender } = renderHook(() => useQuery(query), {
+
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, rerender } = await renderHookToSnapshotStream(() => useQuery(query), {
         wrapper,
       });
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
       let oldResult: QueryResult<any, OperationVariables>;
 
-      await waitFor(() => {
-        result.current.loading === false;
-      });
+      {
+        const result = (oldResult = await takeSnapshot());
 
-      rerender({ children: null });
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
 
-      await waitFor(() => {
-        expect(result.current.networkStatus).toBe(NetworkStatus.ready);
-        oldResult = result.current;
-      });
+      await rerender();
 
-      await waitFor(() => {
-        expect(oldResult === result.current).toBe(true);
-      });
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+
+        expect(result).toBe(oldResult);
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('useQuery produces the expected renders initially', async () => {
@@ -116,26 +219,54 @@ describe('useQuery Hook', () => {
         },
       ];
       const wrapper = ({ children }: any) => <MockedProvider mocks={mocks}>{children}</MockedProvider>;
-      const { result, rerender } = renderHook(() => useQuery(query), {
+
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, rerender } = await renderHookToSnapshotStream(() => useQuery(query), {
         wrapper,
       });
 
-      await waitFor(() => result.current.loading === false);
+      {
+        const result = await takeSnapshot();
 
-      rerender({ children: null });
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
 
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-      expect(result.current.data).toEqual({ hello: 'world' });
-      expect(result.current.loading).toBe(false);
-      expect(result.current.data).toEqual({ hello: 'world' });
+      {
+        const result = await takeSnapshot();
 
-      // Repeat frame because rerender forces useQuery to be called again
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-      expect(result.current.data).toEqual({ hello: 'world' });
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      await rerender();
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('useQuery produces the expected frames when variables change', async () => {
@@ -155,51 +286,71 @@ describe('useQuery Hook', () => {
         },
       ];
       const wrapper = ({ children }: any) => <MockedProvider mocks={mocks}>{children}</MockedProvider>;
-      const { result, rerender } = renderHook(options => useQuery(query, options), {
+
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, rerender } = await renderHookToSnapshotStream(options => useQuery(query, options), {
         wrapper,
         initialProps: { variables: { id: 1 } },
       });
-      await waitFor(() => result.current.loading === false);
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-      await waitFor(() => {
-        expect(result.current.data).toEqual({ hello: 'world 1' });
-      });
-      await waitFor(() => {
-        expect(result.current.networkStatus).toBe(NetworkStatus.ready);
-      });
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-      await waitFor(() => {
-        expect(result.current.data).toEqual({ hello: 'world 1' });
-      });
-      await waitFor(() => {
-        expect(result.current.networkStatus).toBe(NetworkStatus.ready);
-      });
 
-      rerender({ variables: { id: 2 } });
-      await waitFor(() => {
-        expect(result.current.loading).toBe(true);
-      });
-      await waitFor(() => {
-        expect(result.current.data).toEqual({ hello: 'world 2' });
-      });
-      await waitFor(() => {
-        expect(result.current.networkStatus).toBe(NetworkStatus.ready);
-      });
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-      await waitFor(() => {
-        expect(result.current.data).toEqual({ hello: 'world 2' });
-      });
-      await waitFor(() => {
-        expect(result.current.networkStatus).toBe(NetworkStatus.ready);
-      });
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: { id: 1 },
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 1' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: { id: 1 },
+        });
+      }
+
+      await rerender({ variables: { id: 2 } });
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.setVariables,
+          previousData: { hello: 'world 1' },
+          variables: { id: 2 },
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 2' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 1' },
+          variables: { id: 2 },
+        });
+      }
     });
 
+    // TODO: Refactor this test. This test does not test the thing it says it
+    // does as there is no cache interaction in this test. This is essentially
+    // just a repeat of prior tests that rerender and check the result.
     it('should read and write results from the cache', async () => {
       const query = gql`
         {
@@ -220,23 +371,51 @@ describe('useQuery Hook', () => {
         </MockedProvider>
       );
 
-      const { result, rerender } = renderHook(() => useQuery(query), {
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, rerender } = await renderHookToSnapshotStream(() => useQuery(query), {
         wrapper,
       });
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual({ hello: 'world' });
+      {
+        const result = await takeSnapshot();
 
-      rerender();
-      expect(result.current.loading).toBe(false);
-      expect(result.current.data).toEqual({ hello: 'world' });
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      await rerender(undefined);
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
     });
 
     it('should preserve functions between renders', async () => {
@@ -259,20 +438,44 @@ describe('useQuery Hook', () => {
         </MockedProvider>
       );
 
-      const { result } = renderHook(() => useQuery(query), { wrapper });
-      expect(result.current.loading).toBe(true);
-      const { refetch, fetchMore, startPolling, stopPolling, subscribeToMore } = result.current;
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(refetch).toBe(result.current.refetch);
-      expect(fetchMore).toBe(result.current.fetchMore);
-      expect(startPolling).toBe(result.current.startPolling);
-      expect(stopPolling).toBe(result.current.stopPolling);
-      expect(subscribeToMore).toBe(result.current.subscribeToMore);
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, rerender } = await renderHookToSnapshotStream(() => useQuery(query), { wrapper });
+
+      const { loading, refetch, fetchMore, startPolling, stopPolling, subscribeToMore } = await takeSnapshot();
+      expect(loading).toBe(true);
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+
+        expect(refetch).toBe(result.refetch);
+        expect(fetchMore).toBe(result.fetchMore);
+        expect(startPolling).toBe(result.startPolling);
+        expect(stopPolling).toBe(result.stopPolling);
+        expect(subscribeToMore).toBe(result.subscribeToMore);
+      }
+
+      await rerender(undefined);
+
+      {
+        const result = await takeSnapshot();
+
+        expect(refetch).toBe(result.refetch);
+        expect(fetchMore).toBe(result.fetchMore);
+        expect(startPolling).toBe(result.startPolling);
+        expect(stopPolling).toBe(result.stopPolling);
+        expect(subscribeToMore).toBe(result.subscribeToMore);
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('should set called to true by default', async () => {
@@ -295,12 +498,12 @@ describe('useQuery Hook', () => {
         </MockedProvider>
       );
 
-      const { result, unmount } = renderHook(() => useQuery(query), {
-        wrapper,
-      });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(() => useQuery(query), { wrapper });
 
-      expect(result.current.called).toBe(true);
-      unmount();
+      const { called } = await takeSnapshot();
+
+      expect(called).toBe(true);
     });
 
     it('should set called to false when skip option is true', async () => {
@@ -323,12 +526,16 @@ describe('useQuery Hook', () => {
         </MockedProvider>
       );
 
-      const { result, unmount } = renderHook(() => useQuery(query, { skip: true }), { wrapper });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(() => useQuery(query, { skip: true }), { wrapper });
 
-      expect(result.current.called).toBe(false);
-      unmount();
+      const { called } = await takeSnapshot();
+
+      expect(called).toBe(false);
     });
 
+    // TODO: Remove this test after PR is reviewed since this is basically a
+    // duplicate of "useQuery produces the expected frames when variables change"
     it('should work with variables', async () => {
       const query = gql`
         query ($id: Int) {
@@ -354,32 +561,65 @@ describe('useQuery Hook', () => {
         </MockedProvider>
       );
 
-      const { result, rerender } = renderHook(({ id }) => useQuery(query, { variables: { id } }), {
-        wrapper,
-        initialProps: { id: 1 },
-      });
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, rerender } = await renderHookToSnapshotStream(
+        ({ id }) => useQuery(query, { variables: { id } }),
+        { wrapper, initialProps: { id: 1 } },
       );
-      expect(result.current.data).toEqual({ hello: 'world 1' });
 
-      rerender({ id: 2 });
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual({ hello: 'world 2' });
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: { id: 1 },
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 1' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: { id: 1 },
+        });
+      }
+
+      await rerender({ id: 2 });
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.setVariables,
+          previousData: { hello: 'world 1' },
+          variables: { id: 2 },
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 2' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 1' },
+          variables: { id: 2 },
+        });
+      }
     });
 
     it('should return the same results for the same variables', async () => {
@@ -407,35 +647,80 @@ describe('useQuery Hook', () => {
         </MockedProvider>
       );
 
-      const { result, rerender } = renderHook(({ id }) => useQuery(query, { variables: { id } }), {
-        wrapper,
-        initialProps: { id: 1 },
-      });
-
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, rerender } = await renderHookToSnapshotStream(
+        ({ id }) => useQuery(query, { variables: { id } }),
+        { wrapper, initialProps: { id: 1 } },
       );
-      expect(result.current.data).toEqual({ hello: 'world 1' });
 
-      rerender({ id: 2 });
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual({ hello: 'world 2' });
+      {
+        const result = await takeSnapshot();
 
-      rerender({ id: 2 });
-      expect(result.current.loading).toBe(false);
-      expect(result.current.data).toEqual({ hello: 'world 2' });
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: { id: 1 },
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 1' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: { id: 1 },
+        });
+      }
+
+      await rerender({ id: 2 });
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.setVariables,
+          previousData: { hello: 'world 1' },
+          variables: { id: 2 },
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 2' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 1' },
+          variables: { id: 2 },
+        });
+      }
+
+      await rerender({ id: 2 });
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 2' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 1' },
+          variables: { id: 2 },
+        });
+      }
     });
 
     it('should work with variables 2', async () => {
@@ -467,44 +752,93 @@ describe('useQuery Hook', () => {
         </MockedProvider>
       );
 
-      const { result, rerender } = renderHook(({ name }) => useQuery(query, { variables: { name } }), {
-        wrapper,
-        initialProps: { name: '' },
-      });
-
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, rerender } = await renderHookToSnapshotStream(
+        ({ name }) => useQuery(query, { variables: { name } }),
+        { wrapper, initialProps: { name: '' } },
       );
-      expect(result.current.data).toEqual({ names: ['Alice', 'Bob', 'Eve'] });
 
-      rerender({ name: 'z' });
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual({ names: [] });
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: { name: '' },
+        });
+      }
 
-      rerender({ name: 'zz' });
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual({ names: [] });
+        expect(result).toEqualQueryResult({
+          data: { names: ['Alice', 'Bob', 'Eve'] },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: { name: '' },
+        });
+      }
+
+      await rerender({ name: 'z' });
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.setVariables,
+          previousData: { names: ['Alice', 'Bob', 'Eve'] },
+          variables: { name: 'z' },
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { names: [] },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { names: ['Alice', 'Bob', 'Eve'] },
+          variables: { name: 'z' },
+        });
+      }
+
+      await rerender({ name: 'zz' });
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.setVariables,
+          previousData: { names: [] },
+          variables: { name: 'zz' },
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { names: [] },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { names: [] },
+          variables: { name: 'zz' },
+        });
+      }
     });
 
     // An unsuccessful attempt to reproduce https://github.com/apollographql/apollo-client/issues/9135.
@@ -538,7 +872,24 @@ describe('useQuery Hook', () => {
 
       const cache = new Hermes();
       let setName: any;
-      const { result } = renderHook(
+
+      using _disabledAct = disableActEnvironment();
+      // TODO: Take a deeper look into this to better understand what this is
+      // trying to test. There are a few problems with this:
+      //
+      // 1. We execute the mutation and a setState at the same time. What is
+      //    that meant to accomplish?
+      // 2. The update callback in the useMutation is writing data for none of
+      //    the results in the mocks. The mutation returns `updateName: true`,
+      //    yet the callback is trying to set a value from `data.updateGreeting`
+      // 3. The update callback in `useMutation` does not use `variables`, so
+      //    the written cache result does not affect any of the queries from the
+      //    `useQuery` returned here.
+      //
+      // My recommendation is to just delete the `useMutation` as part of this
+      // render callback as it doesn't seem to serve much of a purpose for this
+      // test.
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
         () => {
           const [name, setName1] = React.useState('world 1');
           setName = setName1;
@@ -563,41 +914,109 @@ describe('useQuery Hook', () => {
         },
       );
 
-      expect(result.current[0].loading).toBe(true);
-      expect(result.current[0].data).toBe(undefined);
-      expect(result.current[0].variables).toEqual({ name: 'world 1' });
-      await waitFor(
-        () => {
-          expect(result.current[0].loading).toBe(false);
-        },
-        { interval: 1 },
-      );
+      {
+        const [useQueryResult] = await takeSnapshot();
 
-      expect(result.current[0].data).toEqual({ hello: 'world 1' });
-      expect(result.current[0].variables).toEqual({ name: 'world 1' });
+        expect(useQueryResult).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: { name: 'world 1' },
+        });
+      }
 
-      const mutate = result.current[1][0];
-      act(() => {
-        mutate({ variables: { name: 'world 2' } });
-        setName('world 2');
-      });
+      {
+        const [useQueryResult] = await takeSnapshot();
 
-      expect(result.current[0].loading).toBe(true);
-      expect(result.current[0].data).toBe(undefined);
-      expect(result.current[0].variables).toEqual({ name: 'world 2' });
+        expect(useQueryResult).toEqualQueryResult({
+          data: { hello: 'world 1' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: { name: 'world 1' },
+        });
+      }
 
-      await waitFor(() => {
-        expect(result.current[0].loading).toBe(false);
-      });
-      await waitFor(() => {
-        expect(result.current[0].data).toEqual({ hello: 'world 2' });
-      });
-      await waitFor(() => {
-        expect(result.current[0].variables).toEqual({ name: 'world 2' });
-      });
+      const [, [mutate]] = getCurrentSnapshot();
+
+      void mutate({ variables: { name: 'world 2' } });
+      setName('world 2');
+
+      if (IS_REACT_17) {
+        {
+          const [useQueryResult] = await takeSnapshot();
+
+          expect(useQueryResult).toEqualQueryResult({
+            data: { hello: 'world 1' },
+            called: true,
+            loading: false,
+            networkStatus: NetworkStatus.ready,
+            previousData: undefined,
+            variables: { name: 'world 1' },
+          });
+        }
+
+        {
+          const [useQueryResult] = await takeSnapshot();
+
+          expect(useQueryResult).toEqualQueryResult({
+            data: undefined,
+            called: true,
+            loading: true,
+            networkStatus: NetworkStatus.setVariables,
+            previousData: { hello: 'world 1' },
+            variables: { name: 'world 2' },
+          });
+        }
+      }
+
+      {
+        const [useQueryResult] = await takeSnapshot();
+
+        expect(useQueryResult).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.setVariables,
+          previousData: { hello: 'world 1' },
+          variables: { name: 'world 2' },
+        });
+      }
+
+      {
+        const [useQueryResult] = await takeSnapshot();
+
+        expect(useQueryResult).toEqualQueryResult({
+          data: { hello: 'world 2' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 1' },
+          variables: { name: 'world 2' },
+        });
+      }
+
+      if (IS_REACT_18) {
+        const [useQueryResult] = await takeSnapshot();
+
+        expect(useQueryResult).toEqualQueryResult({
+          data: { hello: 'world 2' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 1' },
+          variables: { name: 'world 2' },
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     // TODO: Rewrite this test
+    // Context: https://legacy.reactjs.org/blog/2020/02/26/react-v16.13.0.html#warnings-for-some-updates-during-render
     it('should not error when forcing an update with React >= 16.13.0', async () => {
       const CAR_QUERY: DocumentNode = gql`
         query {
@@ -705,19 +1124,36 @@ describe('useQuery Hook', () => {
         },
       ];
 
-      const { result } = renderHook(() => useQuery(query, { ssr: false }), {
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(() => useQuery(query, { ssr: false }), {
         wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
       });
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual({ hello: 'world' });
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
     });
 
     it('should keep `no-cache` results when the tree is re-rendered', async () => {
@@ -768,44 +1204,105 @@ describe('useQuery Hook', () => {
         link,
         cache: new Hermes(),
       });
-      const ProfiledHook = profileHook(() => [useQuery(query1, { fetchPolicy: 'no-cache' }), useQuery(query2)]);
-      const { rerender } = render(<ProfiledHook />, {
-        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
-      });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, rerender } = await renderHookToSnapshotStream(
+        () => [useQuery(query1, { fetchPolicy: 'no-cache' }), useQuery(query2)],
+        {
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        },
+      );
 
       {
-        const [result0, result1] = await ProfiledHook.takeSnapshot();
-        expect(result0.loading).toBe(true);
-        expect(result0.data).toStrictEqual(undefined);
-        expect(result1.loading).toBe(true);
-        expect(result1.data).toStrictEqual(undefined);
+        const [result0, result1] = await takeSnapshot();
+
+        expect(result0).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+
+        expect(result1).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
       }
 
       {
-        const [result0, result1] = await ProfiledHook.takeSnapshot();
-        expect(result0.loading).toBe(false);
-        expect(result0.data).toStrictEqual(allPeopleData);
-        expect(result1.loading).toBe(true);
-        expect(result1.data).toStrictEqual(undefined);
+        const [result0, result1] = await takeSnapshot();
+
+        expect(result0).toEqualQueryResult({
+          data: allPeopleData,
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+
+        expect(result1).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
       }
 
       {
-        const [result0, result1] = await ProfiledHook.takeSnapshot();
-        expect(result0.loading).toBe(false);
-        expect(result0.data).toStrictEqual(allPeopleData);
-        expect(result1.loading).toBe(false);
-        expect(result1.data).toStrictEqual(allThingsData);
+        const [result0, result1] = await takeSnapshot();
+
+        expect(result0).toEqualQueryResult({
+          data: allPeopleData,
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+
+        expect(result1).toEqualQueryResult({
+          data: allThingsData,
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
       }
 
-      rerender(<ProfiledHook />);
+      await rerender();
+
       {
-        const [result0, result1] = await ProfiledHook.takeSnapshot();
-        expect(result0.loading).toBe(false);
-        expect(result0.data).toStrictEqual(allPeopleData);
-        expect(result1.loading).toBe(false);
-        expect(result1.data).toStrictEqual(allThingsData);
+        const [result0, result1] = await takeSnapshot();
+
+        expect(result0).toEqualQueryResult({
+          data: allPeopleData,
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+
+        expect(result1).toEqualQueryResult({
+          data: allThingsData,
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
       }
-      await expect(ProfiledHook).not.toRerender();
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('changing queries', async () => {
@@ -824,34 +1321,79 @@ describe('useQuery Hook', () => {
         {
           request: { query: query1 },
           result: { data: { hello: 'world' } },
+          delay: 20,
         },
         {
           request: { query: query2 },
           result: { data: { hello: 'world', name: 'world' } },
+          delay: 20,
+          maxUsageCount: Number.POSITIVE_INFINITY,
         },
       ];
 
       const cache = new Hermes();
-      const { result, rerender } = renderHook(({ query }) => useQuery(query, { pollInterval: 10 }), {
-        wrapper: ({ children }) => (
-          <MockedProvider mocks={mocks} cache={cache}>
-            {children}
-          </MockedProvider>
-        ),
-        initialProps: { query: query1 },
-      });
 
-      expect(result.current.loading).toBe(true);
-      rerender({ query: query2 });
-      expect(result.current.loading).toBe(true);
-
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, rerender } = await renderHookToSnapshotStream(
+        // TODO: I don't think this needs to be a polling query as it has
+        // nothing to do with this test. This test checks to ensure that
+        // changing queries executes the new query and returns the right value.
+        // We should consider removing the pollling from this test and save it
+        // for a polling-specific test instead.
+        ({ query }) => useQuery(query, { pollInterval: 10 }),
+        {
+          wrapper: ({ children }) => (
+            <MockedProvider mocks={mocks} cache={cache}>
+              {children}
+            </MockedProvider>
+          ),
+          initialProps: { query: query1 },
         },
-        { interval: 1 },
       );
-      expect(result.current.data).toEqual(mocks[1].result.data);
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      await rerender({ query: query2 });
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: mocks[1].result.data,
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      // We do not include expect(takeSnapshot).not.toRerender() here because
+      // this is a polling query.
     });
 
     it('`cache-and-network` fetch policy', async () => {
@@ -875,21 +1417,42 @@ describe('useQuery Hook', () => {
 
       cache.writeQuery({ query, data: { hello: 'from cache' } });
 
-      const { result } = renderHook(() => useQuery(query, { fetchPolicy: 'cache-and-network' }), {
-        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
-      });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(
+        () => useQuery(query, { fetchPolicy: 'cache-and-network' }),
+        {
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        },
+      );
 
       // TODO: FIXME
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toEqual({ hello: 'from cache' });
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual({ hello: 'from link' });
+        expect(result).toEqualQueryResult({
+          data: { hello: 'from cache' },
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'from link' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'from cache' },
+          variables: {},
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('should not use the cache when using `network-only`', async () => {
@@ -911,26 +1474,48 @@ describe('useQuery Hook', () => {
         data: { hello: 'from cache' },
       });
 
-      const { result } = renderHook(() => useQuery(query, { fetchPolicy: 'network-only' }), {
-        wrapper: ({ children }) => (
-          <MockedProvider mocks={mocks} cache={cache}>
-            {children}
-          </MockedProvider>
-        ),
-      });
-
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBeUndefined();
-
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(
+        () => useQuery(query, { fetchPolicy: 'network-only' }),
+        {
+          wrapper: ({ children }) => (
+            <MockedProvider mocks={mocks} cache={cache}>
+              {children}
+            </MockedProvider>
+          ),
         },
-        { interval: 1 },
       );
-      expect(result.current.data).toEqual({ hello: 'from link' });
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'from link' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
+    // TODO: Move this to ssr useQuery tests
     it('should use the cache when in ssrMode and fetchPolicy is `network-only`', async () => {
       const query = gql`
         query {
@@ -949,23 +1534,32 @@ describe('useQuery Hook', () => {
       });
 
       const client = new ApolloClient({ link, cache, ssrMode: true });
-      const { result } = renderHook(() => useQuery(query, { fetchPolicy: 'network-only' }), {
-        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
-      });
 
-      expect(result.current.loading).toBe(false);
-      expect(result.current.data).toEqual({ hello: 'from cache' });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(
+        () => useQuery(query, { fetchPolicy: 'network-only' }),
+        {
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        },
+      );
 
-      await expect(
-        waitFor(
-          () => {
-            expect(result.current.data).toEqual({ hello: 'from link' });
-          },
-          { interval: 1, timeout: 20 },
-        ),
-      ).rejects.toThrow();
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'from cache' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
+    // TODO: Move this to ssr useQuery tests
     it('should not hang when ssrMode is true but the cache is not populated for some reason', async () => {
       const query = gql`
         query {
@@ -983,20 +1577,129 @@ describe('useQuery Hook', () => {
         ssrMode: true,
       });
 
-      const { result } = renderHook(() => useQuery(query), {
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(() => useQuery(query), {
         wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
       });
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBeUndefined();
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'from link' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
+    });
+
+    // https://github.com/apollographql/apollo-client/issues/12458
+    it('returns correct result when cache updates after changing variables and skipping query', async () => {
+      interface Data {
+        user: {
+          __typename: 'User';
+          id: number;
+          name: string;
+        };
+      }
+
+      const query: TypedDocumentNode<Data, { id: number }> = gql`
+        query ($id: ID!) {
+          user(id: $id) {
+            id
+            name
+          }
+        }
+      `;
+
+      const client = new ApolloClient({
+        link: ApolloLink.empty(),
+        cache: new Hermes(),
+      });
+
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, rerender } = await renderHookToSnapshotStream(
+        ({ id, skip }) => useQuery(query, { skip, variables: { id } }),
+        {
+          initialProps: { id: 1, skip: true },
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
         },
-        { interval: 1 },
       );
-      expect(result.current.data).toEqual({ hello: 'from link' });
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        error: undefined,
+        called: false,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: { id: 1 },
+      });
+
+      client.writeQuery({
+        query,
+        variables: { id: 1 },
+        data: { user: { __typename: 'User', id: 1, name: 'User 1' } },
+      });
+      await rerender({ id: 1, skip: false });
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { user: { __typename: 'User', id: 1, name: 'User 1' } },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: { id: 1 },
+      });
+
+      await rerender({ id: 2, skip: true });
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        error: undefined,
+        called: false,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: { user: { __typename: 'User', id: 1, name: 'User 1' } },
+        variables: { id: 2 },
+      });
+
+      client.writeQuery({
+        query,
+        variables: { id: 2 },
+        data: { user: { __typename: 'User', id: 2, name: 'User 2' } },
+      });
+
+      await rerender({ id: 2, skip: false });
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { user: { __typename: 'User', id: 2, name: 'User 2' } },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: { user: { __typename: 'User', id: 1, name: 'User 1' } },
+        variables: { id: 2 },
+      });
+
+      await expect(takeSnapshot).not.toRerender();
     });
   });
 
@@ -1010,6 +1713,7 @@ describe('useQuery Hook', () => {
       const link = mockSingleLink({
         request: { query },
         result: { data: { hello: 'from link' } },
+        delay: 20,
       });
 
       const client = new ApolloClient({
@@ -1017,42 +1721,62 @@ describe('useQuery Hook', () => {
         cache: new Hermes(),
       });
 
-      const fetchPolicyLog: (string | undefined)[] = [];
-
       let defaultFetchPolicy: WatchQueryFetchPolicy = 'cache-and-network';
 
-      const { result } = renderHook(
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(
         () => {
           const result = useQuery(query, {
             defaultOptions: {
               fetchPolicy: defaultFetchPolicy,
             },
           });
-          fetchPolicyLog.push(result.observable.options.fetchPolicy);
-          return result;
+          return {
+            result,
+            fetchPolicy: result.observable.options.fetchPolicy,
+            defaultFetchPolicy,
+          };
         },
         {
           wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
         },
       );
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBeUndefined();
-      expect(fetchPolicyLog).toEqual(['cache-and-network']);
+      {
+        const { result, fetchPolicy, defaultFetchPolicy } = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+
+        expect(fetchPolicy).toBe('cache-and-network');
+        expect(defaultFetchPolicy).toBe('cache-and-network');
+      }
 
       // Change the default fetchPolicy to verify that it is not used the second
       // time useQuery is called.
       defaultFetchPolicy = 'network-only';
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
+      {
+        const { result, fetchPolicy, defaultFetchPolicy } = await takeSnapshot();
 
-      expect(result.current.data).toEqual({ hello: 'from link' });
-      expect(fetchPolicyLog).toEqual(['cache-and-network', 'cache-and-network']);
+        expect(result).toEqualQueryResult({
+          data: { hello: 'from link' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+
+        expect(fetchPolicy).toBe('cache-and-network');
+        expect(defaultFetchPolicy).toBe('network-only');
+      }
     });
 
     it('can provide individual default variables', async () => {
@@ -1071,12 +1795,14 @@ describe('useQuery Hook', () => {
         link: new ApolloLink(
           request =>
             new Observable(observer => {
-              observer.next({
-                data: {
-                  vars: request.variables,
-                },
-              });
-              observer.complete();
+              setTimeout(() => {
+                observer.next({
+                  data: {
+                    vars: request.variables,
+                  },
+                });
+                observer.complete();
+              }, 20);
             }),
         ),
 
@@ -1092,9 +1818,8 @@ describe('useQuery Hook', () => {
         },
       });
 
-      const fetchPolicyLog: (string | undefined)[] = [];
-
-      const { result } = renderHook(
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
         () => {
           const result = useQuery(query, {
             defaultOptions: {
@@ -1108,142 +1833,186 @@ describe('useQuery Hook', () => {
               mandatory: true,
             },
           });
-          fetchPolicyLog.push(result.observable.options.fetchPolicy);
-          return result;
+
+          return {
+            result,
+            // Provide a snapshot of these values for this render, rather
+            // than checking the mutable value on result.observable.
+            fetchPolicy: result.observable.options.fetchPolicy,
+            variables: result.observable.variables,
+          };
         },
         {
           wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
         },
       );
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBeUndefined();
-      expect(result.current.observable.variables).toEqual({
-        sourceOfVar: 'local',
-        isGlobal: false,
-        mandatory: true,
-      });
+      {
+        const { result, fetchPolicy, variables } = await takeSnapshot();
+        const { observable } = result;
 
-      expect(result.current.observable.options.fetchPolicy).toBe('cache-and-network');
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {
+            sourceOfVar: 'local',
+            isGlobal: false,
+            mandatory: true,
+          },
+        });
 
-      expect(
-        // The defaultOptions field is for useQuery options (QueryHookOptions),
-        // not the more general WatchQueryOptions that ObservableQuery sees.
-        'defaultOptions' in result.current.observable.options,
-      ).toBe(false);
-
-      expect(fetchPolicyLog).toEqual(['cache-and-network']);
-
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-
-      expect(result.current.data).toEqual({
-        vars: {
+        expect(variables).toEqual({
           sourceOfVar: 'local',
           isGlobal: false,
           mandatory: true,
+        });
+        expect(fetchPolicy).toBe('cache-and-network');
+        expect(
+          // The defaultOptions field is for useQuery options (QueryHookOptions),
+          // not the more general WatchQueryOptions that ObservableQuery sees.
+          'defaultOptions' in observable.options,
+        ).toBe(false);
+      }
+
+      {
+        const { result, fetchPolicy, variables } = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: {
+            vars: { sourceOfVar: 'local', isGlobal: false, mandatory: true },
+          },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {
+            sourceOfVar: 'local',
+            isGlobal: false,
+            mandatory: true,
+          },
+        });
+
+        expect(variables).toEqual({
+          sourceOfVar: 'local',
+          isGlobal: false,
+          mandatory: true,
+        });
+        expect(fetchPolicy).toBe('cache-and-network');
+      }
+
+      const {
+        result: { observable },
+      } = getCurrentSnapshot();
+      const finalResult = await observable.reobserve({
+        fetchPolicy: 'network-only',
+        nextFetchPolicy: 'cache-first',
+        variables: {
+          // Since reobserve replaces the variables object rather than merging
+          // the individual variables together, we need to include the current
+          // variables manually if we want them to show up in the output below.
+          ...observable.variables,
+          sourceOfVar: 'reobserve',
         },
       });
 
-      expect(fetchPolicyLog).toEqual(['cache-and-network', 'cache-and-network']);
-
-      const reobservePromise = act(() =>
-        result.current.observable
-          .reobserve({
-            fetchPolicy: 'network-only',
-            nextFetchPolicy: 'cache-first',
-            variables: {
-              // Since reobserve replaces the variables object rather than merging
-              // the individual variables together, we need to include the current
-              // variables manually if we want them to show up in the output below.
-              ...result.current.observable.variables,
-              sourceOfVar: 'reobserve',
-            },
-          })
-          .then(finalResult => {
-            expect(finalResult.loading).toBe(false);
-            expect(finalResult.data).toEqual({
-              vars: {
-                sourceOfVar: 'reobserve',
-                isGlobal: false,
-                mandatory: true,
-              },
-            });
-          }),
-      );
-
-      expect(result.current.observable.options.fetchPolicy).toBe('cache-first');
-
-      expect(result.current.observable.variables).toEqual({
-        sourceOfVar: 'reobserve',
-        isGlobal: false,
-        mandatory: true,
+      expect(finalResult).toEqualApolloQueryResult({
+        data: {
+          vars: {
+            sourceOfVar: 'reobserve',
+            isGlobal: false,
+            mandatory: true,
+          },
+        },
+        loading: false,
+        networkStatus: NetworkStatus.ready,
       });
 
-      await reobservePromise;
+      {
+        const { result, fetchPolicy, variables } = await takeSnapshot();
 
-      expect(result.current.observable.options.fetchPolicy).toBe('cache-first');
+        expect(result).toEqualQueryResult({
+          data: {
+            vars: {
+              sourceOfVar: 'reobserve',
+              isGlobal: false,
+              mandatory: true,
+            },
+          },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: {
+            vars: { sourceOfVar: 'local', isGlobal: false, mandatory: true },
+          },
+          variables: {
+            sourceOfVar: 'reobserve',
+            isGlobal: false,
+            mandatory: true,
+          },
+        });
 
-      expect(result.current.loading).toBe(false);
-      expect(result.current.data).toEqual({
-        vars: {
+        expect(variables).toEqual({
           sourceOfVar: 'reobserve',
           isGlobal: false,
           mandatory: true,
-        },
-      });
-      expect(result.current.observable.variables).toEqual(result.current.data!.vars);
+        });
+        expect(fetchPolicy).toBe('cache-first');
+      }
 
-      expect(fetchPolicyLog).toEqual(['cache-and-network', 'cache-and-network', 'cache-first']);
-
-      const reobserveNoVarMergePromise = act(() =>
-        result.current.observable
-          .reobserve({
-            fetchPolicy: 'network-only',
-            nextFetchPolicy: 'cache-first',
-            variables: {
-              // This reobservation is like the one above, with no variable merging.
-              // ...result.current.observable.variables,
-              sourceOfVar: 'reobserve without variable merge',
-            },
-          })
-          .then(finalResult => {
-            expect(finalResult.loading).toBe(false);
-            expect(finalResult.data).toEqual({
-              vars: {
-                sourceOfVar: 'reobserve without variable merge',
-                // Since we didn't merge in result.current.observable.variables, we
-                // don't see these variables anymore:
-                // isGlobal: false,
-                // mandatory: true,
-              },
-            });
-          }),
-      );
-
-      expect(result.current.observable.options.fetchPolicy).toBe('cache-first');
-
-      expect(result.current.observable.variables).toEqual({
-        sourceOfVar: 'reobserve without variable merge',
-      });
-
-      await reobserveNoVarMergePromise;
-
-      expect(result.current.observable.options.fetchPolicy).toBe('cache-first');
-
-      expect(result.current.loading).toBe(false);
-      expect(result.current.data).toEqual({
-        vars: {
+      const finalResultNoVarMerge = await getCurrentSnapshot().result.observable.reobserve({
+        fetchPolicy: 'network-only',
+        nextFetchPolicy: 'cache-first',
+        variables: {
+          // This reobservation is like the one above, with no variable merging.
+          // ...result.current.observable.variables,
           sourceOfVar: 'reobserve without variable merge',
         },
       });
-      expect(result.current.observable.variables).toEqual(result.current.data!.vars);
 
-      expect(fetchPolicyLog).toEqual(['cache-and-network', 'cache-and-network', 'cache-first', 'cache-first']);
+      expect(finalResultNoVarMerge).toEqualApolloQueryResult({
+        // Since we didn't merge in result.current.observable.variables, we
+        // don't see these variables anymore:
+        // isGlobal: false,
+        // mandatory: true,
+        data: { vars: { sourceOfVar: 'reobserve without variable merge' } },
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+      });
+
+      {
+        const { result, fetchPolicy, variables } = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: {
+            vars: {
+              sourceOfVar: 'reobserve without variable merge',
+            },
+          },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: {
+            vars: {
+              sourceOfVar: 'reobserve',
+              isGlobal: false,
+              mandatory: true,
+            },
+          },
+          variables: {
+            sourceOfVar: 'reobserve without variable merge',
+          },
+        });
+
+        expect(variables).toEqual({
+          sourceOfVar: 'reobserve without variable merge',
+        });
+        expect(fetchPolicy).toBe('cache-first');
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('defaultOptions do not confuse useQuery when unskipping a query (issue #9635)', async () => {
@@ -1279,17 +2048,21 @@ describe('useQuery Hook', () => {
 
       const defaultFetchPolicy = 'network-only';
 
-      const { result } = renderHook(
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
         () => {
           const [skip, setSkip] = useState(true);
+          const result = useQuery(query, {
+            skip,
+            defaultOptions: {
+              fetchPolicy: defaultFetchPolicy,
+            },
+          });
+
           return {
             setSkip,
-            query: useQuery(query, {
-              skip,
-              defaultOptions: {
-                fetchPolicy: defaultFetchPolicy,
-              },
-            }),
+            query: result,
+            fetchPolicy: result.observable.options.fetchPolicy,
           };
         },
         {
@@ -1297,69 +2070,102 @@ describe('useQuery Hook', () => {
         },
       );
 
-      expect(result.current.query.loading).toBe(false);
-      expect(result.current.query.networkStatus).toBe(NetworkStatus.ready);
-      expect(result.current.query.data).toBeUndefined();
+      {
+        const { query } = await takeSnapshot();
 
-      await expect(
-        waitFor(
-          () => {
-            expect(result.current.query.data).toEqual({ counter: 1 });
-          },
-          { interval: 1, timeout: 20 },
-        ),
-      ).rejects.toThrow();
+        expect(query).toEqualQueryResult({
+          data: undefined,
+          error: undefined,
+          called: false,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
 
-      act(() => {
-        result.current.setSkip(false);
-      });
-      expect(result.current.query.loading).toBe(true);
-      expect(result.current.query.networkStatus).toBe(NetworkStatus.loading);
-      expect(result.current.query.data).toBeUndefined();
-      await waitFor(
-        () => {
-          expect(result.current.query.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.query.networkStatus).toBe(NetworkStatus.ready);
-      expect(result.current.query.data).toEqual({ counter: 1 });
+      getCurrentSnapshot().setSkip(false);
 
-      const { options } = result.current.query.observable;
-      expect(options.fetchPolicy).toBe(defaultFetchPolicy);
+      {
+        const { query } = await takeSnapshot();
 
-      act(() => {
-        result.current.setSkip(true);
-      });
-      expect(result.current.query.loading).toBe(false);
-      expect(result.current.query.networkStatus).toBe(NetworkStatus.ready);
-      expect(result.current.query.data).toBeUndefined();
+        expect(query).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
 
-      await expect(
-        waitFor(
-          () => {
-            expect(result.current.query.data).toEqual({ counter: 1 });
-          },
-          { interval: 1, timeout: 20 },
-        ),
-      ).rejects.toThrow();
+      {
+        const { query, fetchPolicy } = await takeSnapshot();
 
-      act(() => {
-        result.current.setSkip(false);
-      });
-      expect(result.current.query.loading).toBe(true);
-      expect(result.current.query.networkStatus).toBe(NetworkStatus.loading);
-      expect(result.current.query.data).toEqual({ counter: 1 });
-      await waitFor(
-        () => {
-          expect(result.current.query.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.query.networkStatus).toBe(NetworkStatus.ready);
-      expect(result.current.query.data).toEqual({ counter: 2 });
+        expect(query).toEqualQueryResult({
+          data: { counter: 1 },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
 
-      expect(options.fetchPolicy).toBe(defaultFetchPolicy);
+        expect(fetchPolicy).toBe(defaultFetchPolicy);
+      }
+
+      getCurrentSnapshot().setSkip(true);
+
+      {
+        const { query, fetchPolicy } = await takeSnapshot();
+
+        expect(query).toEqualQueryResult({
+          // TODO: wut?
+          data: undefined,
+          // TODO: wut?
+          called: false,
+          error: undefined,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { counter: 1 },
+          variables: {},
+        });
+
+        expect(fetchPolicy).toBe('standby');
+      }
+
+      getCurrentSnapshot().setSkip(false);
+
+      {
+        const { query, fetchPolicy } = await takeSnapshot();
+
+        expect(query).toEqualQueryResult({
+          // TODO: wut?
+          data: { counter: 1 },
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: { counter: 1 },
+          variables: {},
+        });
+
+        expect(fetchPolicy).toBe(defaultFetchPolicy);
+      }
+
+      {
+        const { query, fetchPolicy } = await takeSnapshot();
+
+        expect(query).toEqualQueryResult({
+          data: { counter: 2 },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { counter: 1 },
+          variables: {},
+        });
+
+        expect(fetchPolicy).toBe(defaultFetchPolicy);
+      }
     });
   });
 
@@ -1377,10 +2183,12 @@ describe('useQuery Hook', () => {
     const client = new ApolloClient({
       link,
       cache: new Hermes(),
+      // TODO: is this really needed for this test?
       ssrMode: true,
     });
 
-    const { result } = renderHook(
+    using _disabledAct = disableActEnvironment();
+    const { takeSnapshot } = await renderHookToSnapshotStream(
       () => useQuery(query, { client }),
       // We deliberately do not provide the usual ApolloProvider wrapper for
       // this test, since we are providing the client directly to useQuery.
@@ -1393,17 +2201,31 @@ describe('useQuery Hook', () => {
       // }
     );
 
-    expect(result.current.loading).toBe(true);
-    expect(result.current.data).toBeUndefined();
+    {
+      const result = await takeSnapshot();
 
-    await waitFor(
-      () => {
-        expect(result.current.loading).toBe(false);
-      },
-      { interval: 1 },
-    );
+      expect(result).toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
+      });
+    }
 
-    expect(result.current.data).toEqual({ hello: 'from link' });
+    {
+      const result = await takeSnapshot();
+
+      expect(result).toEqualQueryResult({
+        data: { hello: 'from link' },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
+    }
   });
 
   describe('<React.StrictMode>', () => {
@@ -1434,7 +2256,8 @@ describe('useQuery Hook', () => {
         ),
       });
 
-      const { result } = renderHook(
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
         () =>
           useQuery(query, {
             fetchPolicy: 'cache-and-network',
@@ -1448,53 +2271,39 @@ describe('useQuery Hook', () => {
         },
       );
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.networkStatus).toBe(NetworkStatus.loading);
-      expect(result.current.data).toBe(undefined);
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.networkStatus).toBe(NetworkStatus.ready);
-      expect(result.current.data).toEqual({
-        linkCount: 1,
-      });
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { linkCount: 1 },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
 
       function checkObservableQueries(expectedLinkCount: number) {
         const obsQueries = client.getObservableQueries('all');
-        /*
-This is due to a timing change in React 19
+        const { observable } = getCurrentSnapshot();
+        expect(obsQueries.size).toBe(IS_REACT_17 || IS_REACT_18 ? 2 : 1);
 
-In React 18, you observe this pattern:
-
-  1.  render
-  2.  useState initializer
-  3.  component continues to render with first state
-  4.  strictMode: render again
-  5.  strictMode: call useState initializer again
-  6.  component continues to render with second state
-
-now, in React 19 it looks like this:
-
-  1.  render
-  2.  useState initializer
-  3.  strictMode: call useState initializer again
-  4.  component continues to render with one of these two states
-  5.  strictMode: render again
-  6.  component continues to render with the same state as during the first render
-
-Since useQuery breaks the rules of React and mutably creates an ObservableQuery on the state during render if none is present, React 18 did create two, while React 19 only creates one.
-
-This is pure coincidence though, and the useQuery rewrite that doesn't break the rules of hooks as much and creates the ObservableQuery as part of the state initializer will end up with behaviour closer to the old React 18 behaviour again.
-
-*/
-        expect(obsQueries.size).toBe(IS_REACT_19 ? 1 : 2);
-
-        const activeSet = new Set<typeof result.current.observable>();
-        const inactiveSet = new Set<typeof result.current.observable>();
+        const activeSet = new Set<typeof observable>();
+        const inactiveSet = new Set<typeof observable>();
         obsQueries.forEach(obsQuery => {
           if (obsQuery.hasObservers()) {
             expect(inactiveSet.has(obsQuery)).toBe(false);
@@ -1517,34 +2326,41 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       checkObservableQueries(1);
 
-      await result.current.reobserve().then(result => {
-        expect(result.loading).toBe(false);
-        expect(result.loading).toBe(false);
-        expect(result.networkStatus).toBe(NetworkStatus.ready);
-        expect(result.data).toEqual({
-          linkCount: 2,
-        });
+      await expect(getCurrentSnapshot().observable.reobserve()).resolves.toEqualApolloQueryResult({
+        data: { linkCount: 2 },
+        loading: false,
+        networkStatus: NetworkStatus.ready,
       });
 
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({
-            linkCount: 2,
-          });
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.networkStatus).toBe(NetworkStatus.ready);
-        },
-        { interval: 1 },
-      );
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { linkCount: 1 },
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: { linkCount: 1 },
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { linkCount: 2 },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { linkCount: 1 },
+          variables: {},
+        });
+      }
 
       checkObservableQueries(2);
+
+      await expect(takeSnapshot).not.toRerender();
     });
   });
 
@@ -1577,50 +2393,72 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const { result } = renderHook(() => useQuery(query, { pollInterval: 10 }), { wrapper });
-
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({ hello: 'world 1' });
-        },
-        { interval: 1 },
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () => useQuery(query, { pollInterval: 10 }),
+        { wrapper },
       );
 
-      expect(result.current.loading).toBe(false);
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({ hello: 'world 2' });
-        },
-        { interval: 1 },
-      );
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
 
-      expect(result.current.loading).toBe(false);
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({ hello: 'world 3' });
-        },
-        { interval: 1 },
-      );
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 1' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
 
-      expect(result.current.loading).toBe(false);
+      {
+        const result = await takeSnapshot();
 
-      const { data: previousData } = result.current;
-      result.current.stopPolling();
-      await expect(
-        waitFor(
-          () => {
-            expect(result.current.data).not.toEqual(previousData);
-          },
-          { interval: 1, timeout: 20 },
-        ),
-      ).rejects.toThrow();
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 2' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 1' },
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 3' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 2' },
+          variables: {},
+        });
+      }
+
+      getCurrentSnapshot().stopPolling();
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
+    // TODO: Refactor the initial state of this test. This test states that
+    // `skip` goes from `true` -> `false`, but it starts out unskipped before
+    // enabling it.
     it('should start polling when skip goes from true to false', async () => {
       const query = gql`
         {
@@ -1643,56 +2481,109 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       ];
 
       const cache = new Hermes();
-      const ProfiledUseQuery = profileHook(({ skip }: { skip?: boolean }) =>
-        useQuery(query, { pollInterval: 10, skip }),
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, rerender } = await renderHookToSnapshotStream(
+        ({ skip }: { skip?: boolean }) => useQuery(query, { pollInterval: 10, skip }),
+        {
+          initialProps: {},
+          wrapper: ({ children }) => (
+            <MockedProvider mocks={mocks} cache={cache}>
+              {children}
+            </MockedProvider>
+          ),
+        },
       );
-      const { rerender } = render(<ProfiledUseQuery />, {
-        wrapper: ({ children }) => (
-          <MockedProvider mocks={mocks} cache={cache}>
-            {children}
-          </MockedProvider>
-        ),
-      });
-      {
-        const result = await ProfiledUseQuery.takeSnapshot();
-        expect(result.loading).toBe(true);
-        expect(result.data).toBe(undefined);
-      }
-      {
-        const result = await ProfiledUseQuery.takeSnapshot();
-        expect(result.loading).toBe(false);
-        expect(result.data).toEqual({ hello: 'world 1' });
-      }
 
-      rerender(<ProfiledUseQuery skip />);
       {
-        const snapshot = await ProfiledUseQuery.takeSnapshot();
-        expect(snapshot.loading).toBe(false);
-        expect(snapshot.data).toEqual(undefined);
-      }
+        const result = await takeSnapshot();
 
-      await expect(ProfiledUseQuery).not.toRerender({ timeout: 100 });
-
-      rerender(<ProfiledUseQuery skip={false} />);
-      {
-        const result = await ProfiledUseQuery.takeSnapshot();
-        expect(result.loading).toBe(false);
-        expect(result.data).toEqual({ hello: 'world 1' });
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
       }
 
       {
-        const result = await ProfiledUseQuery.takeSnapshot();
-        expect(result.loading).toBe(false);
-        expect(result.data).toEqual({ hello: 'world 2' });
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 1' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      await rerender({ skip: true });
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          // TODO: wut?
+          data: undefined,
+          // TODO: wut?
+          called: false,
+          // TODO: wut?
+          error: undefined,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 1' },
+          variables: {},
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender({ timeout: 100 });
+
+      await rerender({ skip: false });
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 1' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 1' },
+          variables: {},
+        });
       }
 
       {
-        const result = await ProfiledUseQuery.takeSnapshot();
-        expect(result.loading).toBe(false);
-        expect(result.data).toEqual({ hello: 'world 3' });
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 2' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 1' },
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 3' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 2' },
+          variables: {},
+        });
       }
     });
 
+    // TODO: Move out of "polling" query tests since this doesn't test polling
     it('should return data from network when clients default fetch policy set to network-only', async () => {
       const query = gql`
         {
@@ -1719,18 +2610,36 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const { result } = renderHook(() => useQuery(query), { wrapper });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(() => useQuery(query), { wrapper });
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual(data);
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data,
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('should stop polling when component unmounts', async () => {
@@ -1769,20 +2678,35 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const ProfiledHook = profileHook(() => useQuery(query, { pollInterval: 20 }));
-
-      const { unmount } = render(<ProfiledHook />, { wrapper });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, unmount } = await renderHookToSnapshotStream(() => useQuery(query, { pollInterval: 20 }), {
+        wrapper,
+      });
 
       {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(true);
-        expect(result.data).toBe(undefined);
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
       }
 
       {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(false);
-        expect(result.data).toEqual({ hello: 'world 1' });
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 1' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
         expect(requestSpy).toHaveBeenCalled();
       }
 
@@ -1813,6 +2737,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
     // https://github.com/apollographql/apollo-client/issues/9431
     // https://github.com/apollographql/apollo-client/issues/11750
     it('stops polling when component unmounts with cache-and-network fetch policy', async () => {
+      jest.useFakeTimers();
       const query: TypedDocumentNode<{ hello: string }> = gql`
         query {
           hello
@@ -1823,17 +2748,17 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         {
           request: { query },
           result: { data: { hello: 'world 1' } },
-          delay: 3,
+          delay: 20,
         },
         {
           request: { query },
           result: { data: { hello: 'world 2' } },
-          delay: 3,
+          delay: 20,
         },
         {
           request: { query },
           result: { data: { hello: 'world 3' } },
-          delay: 3,
+          delay: 20,
         },
       ];
 
@@ -1844,50 +2769,80 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       const onErrorFn = jest.fn();
       link.setOnError(onErrorFn);
 
-      const ProfiledHook = profileHook(() => useQuery(query, { pollInterval: 10, fetchPolicy: 'cache-and-network' }));
-
       const client = new ApolloClient({
         queryDeduplication: false,
         link,
         cache,
       });
 
-      const { unmount } = render(<ProfiledHook />, {
-        wrapper: ({ children }: any) => <ApolloProvider client={client}>{children}</ApolloProvider>,
-      });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, unmount } = await renderHookToSnapshotStream(
+        () =>
+          useQuery(query, {
+            pollInterval: 100,
+            fetchPolicy: 'cache-and-network',
+          }),
+        {
+          wrapper: ({ children }: any) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        },
+      );
 
       {
-        const snapshot = await ProfiledHook.takeSnapshot();
+        const promise = takeSnapshot();
+        await jest.advanceTimersByTimeAsync(0);
 
-        expect(snapshot.loading).toBe(true);
-        expect(snapshot.data).toBeUndefined();
+        await expect(promise).resolves.toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
       }
 
-      {
-        const snapshot = await ProfiledHook.takeSnapshot();
+      jest.advanceTimersByTime(20);
 
-        expect(snapshot.loading).toBe(false);
-        expect(snapshot.data).toEqual({ hello: 'world 1' });
+      {
+        const promise = takeSnapshot();
+        await jest.advanceTimersByTimeAsync(0);
+
+        await expect(promise).resolves.toEqualQueryResult({
+          data: { hello: 'world 1' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
         expect(requestSpy).toHaveBeenCalledTimes(1);
       }
 
-      await wait(10);
+      jest.advanceTimersByTime(100);
 
       {
-        const snapshot = await ProfiledHook.takeSnapshot();
+        const promise = takeSnapshot();
+        await jest.advanceTimersByTimeAsync(0);
 
-        expect(snapshot.loading).toBe(false);
-        expect(snapshot.data).toEqual({ hello: 'world 2' });
+        await expect(promise).resolves.toEqualQueryResult({
+          data: { hello: 'world 2' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 1' },
+          variables: {},
+        });
         expect(requestSpy).toHaveBeenCalledTimes(2);
       }
 
       unmount();
 
-      await expect(ProfiledHook).not.toRerender({ timeout: 50 });
+      jest.advanceTimersByTime(200);
 
-      // TODO rarely seeing 3 here (also old `useQuery` implementation)
       expect(requestSpy).toHaveBeenCalledTimes(2);
       expect(onErrorFn).toHaveBeenCalledTimes(0);
+
+      jest.useRealTimers();
     });
 
     it('should stop polling when component is unmounted in Strict Mode', async () => {
@@ -1927,18 +2882,36 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </React.StrictMode>
       );
 
-      const { result, unmount } = renderHook(() => useQuery(query, { pollInterval: 10 }), { wrapper });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, unmount } = await renderHookToSnapshotStream(() => useQuery(query, { pollInterval: 10 }), {
+        wrapper,
+      });
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual({ hello: 'world 1' });
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 1' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
 
       const requestSpyCallCount = requestSpy.mock.calls.length;
       expect(requestSpy).toHaveBeenCalledTimes(requestSpyCallCount);
@@ -1994,46 +2967,70 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       const onErrorFn = jest.fn();
       link.setOnError(onErrorFn);
 
-      const ProfiledHook = profileHook(() => useQuery(query, { pollInterval: 10, fetchPolicy: 'cache-and-network' }));
-
       const client = new ApolloClient({ link, cache });
 
-      const { unmount } = render(<ProfiledHook />, {
-        wrapper: ({ children }: any) => (
-          <React.StrictMode>
-            <ApolloProvider client={client}>{children}</ApolloProvider>
-          </React.StrictMode>
-        ),
-      });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, unmount } = await renderHookToSnapshotStream(
+        () =>
+          useQuery(query, {
+            pollInterval: 25,
+            fetchPolicy: 'cache-and-network',
+          }),
+        {
+          wrapper: ({ children }: any) => (
+            <React.StrictMode>
+              <ApolloProvider client={client}>{children}</ApolloProvider>
+            </React.StrictMode>
+          ),
+        },
+      );
 
       {
-        const snapshot = await ProfiledHook.takeSnapshot();
+        const result = await takeSnapshot();
 
-        expect(snapshot.loading).toBe(true);
-        expect(snapshot.data).toBeUndefined();
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
       }
 
       {
-        const snapshot = await ProfiledHook.takeSnapshot();
+        const result = await takeSnapshot();
 
-        expect(snapshot.loading).toBe(false);
-        expect(snapshot.data).toEqual({ hello: 'world 1' });
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 1' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
         expect(requestSpy).toHaveBeenCalledTimes(1);
       }
 
-      await wait(10);
+      await wait(25);
 
       {
-        const snapshot = await ProfiledHook.takeSnapshot();
+        const result = await takeSnapshot();
 
-        expect(snapshot.loading).toBe(false);
-        expect(snapshot.data).toEqual({ hello: 'world 2' });
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 2' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 1' },
+          variables: {},
+        });
         expect(requestSpy).toHaveBeenCalledTimes(2);
       }
 
       unmount();
 
-      await expect(ProfiledHook).not.toRerender({ timeout: 50 });
+      await expect(takeSnapshot).not.toRerender({ timeout: 50 });
       // TODO rarely seeing 3 here investigate further
       expect(requestSpy).toHaveBeenCalledTimes(2);
       expect(onErrorFn).toHaveBeenCalledTimes(0);
@@ -2077,62 +3074,95 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </React.StrictMode>
       );
 
-      const { result } = renderHook(() => useQuery(query, { pollInterval: 20 }), { wrapper });
-
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({ hello: 'world 1' });
-        },
-        { interval: 1 },
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () => useQuery(query, { pollInterval: 20 }),
+        { wrapper },
       );
-      expect(result.current.loading).toBe(false);
 
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({ hello: 'world 2' });
-        },
-        { interval: 1 },
-      );
-      expect(result.current.loading).toBe(false);
+      {
+        const result = await takeSnapshot();
 
-      result.current.stopPolling();
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
 
-      await expect(
-        waitFor(
-          () => {
-            expect(result.current.data).toEqual({ hello: 'world 3' });
-          },
-          { interval: 1, timeout: 20 },
-        ),
-      ).rejects.toThrow();
-      result.current.startPolling(20);
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 1' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 2' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 1' },
+          variables: {},
+        });
+      }
+
+      getCurrentSnapshot().stopPolling();
+
+      await expect(takeSnapshot).not.toRerender({ timeout: 50 });
+
+      getCurrentSnapshot().startPolling(20);
 
       expect(requestSpy).toHaveBeenCalledTimes(2);
       expect(onErrorFn).toHaveBeenCalledTimes(0);
 
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({ hello: 'world 3' });
-        },
-        { interval: 1 },
-      );
-      expect(result.current.loading).toBe(false);
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({ hello: 'world 4' });
-        },
-        { interval: 1 },
-      );
-      expect(result.current.loading).toBe(false);
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 3' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 2' },
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 4' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 3' },
+          variables: {},
+        });
+      }
+
       expect(requestSpy).toHaveBeenCalledTimes(4);
       expect(onErrorFn).toHaveBeenCalledTimes(0);
       requestSpy.mockRestore();
     });
 
+    // TODO: This test does not really check for an error so we should probably
+    // do something different. That said, there are several other tests that
+    // call stopPolling on its own so we should either move this up in the test
+    // suite, or delete it as its tested from other tests.
     it('should not throw an error if stopPolling is called manually', async () => {
       const query = gql`
         {
@@ -2155,24 +3185,39 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const { result, unmount } = renderHook(() => useQuery(query), {
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot, unmount } = await renderHookToSnapshotStream(() => useQuery(query), {
         wrapper,
       });
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
 
-      expect(result.current.data).toEqual({ hello: 'world' });
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
 
       unmount();
-      result.current.stopPolling();
+      getCurrentSnapshot().stopPolling();
     });
 
     describe('should prevent fetches when `skipPollAttempt` returns `false`', () => {
@@ -2222,46 +3267,82 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
         const { result } = renderHook(() => useQuery(query, { pollInterval: 10 }), { wrapper });
 
-        expect(result.current.loading).toBe(true);
-        expect(result.current.data).toBe(undefined);
+        expect(result.current).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
 
         await waitFor(
           () => {
-            expect(result.current.data).toEqual({ hello: 'world 1' });
+            expect(result.current).toEqualQueryResult({
+              data: { hello: 'world 1' },
+              called: true,
+              loading: false,
+              networkStatus: NetworkStatus.ready,
+              previousData: undefined,
+              variables: {},
+            });
           },
           { interval: 1 },
         );
 
-        expect(result.current.loading).toBe(false);
-
-        await waitFor(
-          () => {
-            expect(result.current.data).toEqual({ hello: 'world 2' });
-          },
-          { interval: 1 },
-        );
+        await jest.advanceTimersByTimeAsync(12);
+        expect(result.current).toEqualQueryResult({
+          data: { hello: 'world 2' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 1' },
+          variables: {},
+        });
 
         skipPollAttempt.mockImplementation(() => true);
-        expect(result.current.loading).toBe(false);
 
-        await jest.advanceTimersByTime(12);
-        await waitFor(() => expect(result.current.data).toEqual({ hello: 'world 2' }), { interval: 1 });
+        await jest.advanceTimersByTimeAsync(12);
+        expect(result.current).toEqualQueryResult({
+          data: { hello: 'world 2' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 1' },
+          variables: {},
+        });
 
-        await jest.advanceTimersByTime(12);
-        await waitFor(() => expect(result.current.data).toEqual({ hello: 'world 2' }), { interval: 1 });
+        await jest.advanceTimersByTimeAsync(12);
+        expect(result.current).toEqualQueryResult({
+          data: { hello: 'world 2' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 1' },
+          variables: {},
+        });
 
-        await jest.advanceTimersByTime(12);
-        await waitFor(() => expect(result.current.data).toEqual({ hello: 'world 2' }), { interval: 1 });
+        await jest.advanceTimersByTimeAsync(12);
+        expect(result.current).toEqualQueryResult({
+          data: { hello: 'world 2' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 1' },
+          variables: {},
+        });
 
         skipPollAttempt.mockImplementation(() => false);
-        expect(result.current.loading).toBe(false);
 
-        await waitFor(
-          () => {
-            expect(result.current.data).toEqual({ hello: 'world 3' });
-          },
-          { interval: 1 },
-        );
+        await jest.advanceTimersByTimeAsync(12);
+        expect(result.current).toEqualQueryResult({
+          data: { hello: 'world 3' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 2' },
+          variables: {},
+        });
       });
 
       it('when defined for a single query', async () => {
@@ -2303,46 +3384,82 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           { wrapper },
         );
 
-        expect(result.current.loading).toBe(true);
-        expect(result.current.data).toBe(undefined);
+        expect(result.current).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
 
         await waitFor(
           () => {
-            expect(result.current.data).toEqual({ hello: 'world 1' });
+            expect(result.current).toEqualQueryResult({
+              data: { hello: 'world 1' },
+              called: true,
+              loading: false,
+              networkStatus: NetworkStatus.ready,
+              previousData: undefined,
+              variables: {},
+            });
           },
           { interval: 1 },
         );
 
-        expect(result.current.loading).toBe(false);
-
-        await waitFor(
-          () => {
-            expect(result.current.data).toEqual({ hello: 'world 2' });
-          },
-          { interval: 1 },
-        );
+        await jest.advanceTimersByTimeAsync(12);
+        expect(result.current).toEqualQueryResult({
+          data: { hello: 'world 2' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 1' },
+          variables: {},
+        });
 
         skipPollAttempt.mockImplementation(() => true);
-        expect(result.current.loading).toBe(false);
 
-        await jest.advanceTimersByTime(12);
-        await waitFor(() => expect(result.current.data).toEqual({ hello: 'world 2' }), { interval: 1 });
+        await jest.advanceTimersByTimeAsync(12);
+        expect(result.current).toEqualQueryResult({
+          data: { hello: 'world 2' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 1' },
+          variables: {},
+        });
 
-        await jest.advanceTimersByTime(12);
-        await waitFor(() => expect(result.current.data).toEqual({ hello: 'world 2' }), { interval: 1 });
+        await jest.advanceTimersByTimeAsync(12);
+        expect(result.current).toEqualQueryResult({
+          data: { hello: 'world 2' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 1' },
+          variables: {},
+        });
 
-        await jest.advanceTimersByTime(12);
-        await waitFor(() => expect(result.current.data).toEqual({ hello: 'world 2' }), { interval: 1 });
+        await jest.advanceTimersByTimeAsync(12);
+        expect(result.current).toEqualQueryResult({
+          data: { hello: 'world 2' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 1' },
+          variables: {},
+        });
 
         skipPollAttempt.mockImplementation(() => false);
-        expect(result.current.loading).toBe(false);
 
-        await waitFor(
-          () => {
-            expect(result.current.data).toEqual({ hello: 'world 3' });
-          },
-          { interval: 1 },
-        );
+        await jest.advanceTimersByTimeAsync(12);
+        expect(result.current).toEqualQueryResult({
+          data: { hello: 'world 3' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 2' },
+          variables: {},
+        });
       });
     });
   });
@@ -2373,18 +3490,35 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const { result } = renderHook(() => useQuery(query), { wrapper });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(() => useQuery(query), { wrapper });
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.error).toBeInstanceOf(ApolloError);
-      expect(result.current.error!.message).toBe('error');
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          error: new ApolloError({ graphQLErrors: [{ message: 'error' }] }),
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.error,
+          previousData: undefined,
+          variables: {},
+        });
+      }
     });
 
     it('calls `onError` when a GraphQL error is returned', async () => {
@@ -2410,30 +3544,40 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       );
 
       const onError = jest.fn();
-      const { result } = renderHook(() => useQuery(query, { onError }), {
-        wrapper,
-      });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(() => useQuery(query, { onError }), { wrapper });
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
 
-      expect(result.current.data).toBeUndefined();
-      expect(result.current.error).toBeInstanceOf(ApolloError);
-      expect(result.current.error!.message).toBe('error');
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(() => {
-        expect(onError).toHaveBeenCalledTimes(1);
-      });
-      await waitFor(() => {
-        expect(onError).toHaveBeenCalledWith(new ApolloError({ graphQLErrors: [new GraphQLError('error')] }));
-      });
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          error: new ApolloError({ graphQLErrors: [{ message: 'error' }] }),
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.error,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(new ApolloError({ graphQLErrors: [{ message: 'error' }] }));
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('calls `onError` when a network error has occurred', async () => {
@@ -2457,32 +3601,42 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       );
 
       const onError = jest.fn();
-      const { result } = renderHook(() => useQuery(query, { onError }), {
-        wrapper,
-      });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(() => useQuery(query, { onError }), { wrapper });
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-      expect(result.current.error).toBe(undefined);
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
 
-      expect(result.current.data).toBeUndefined();
-      expect(result.current.error).toBeInstanceOf(ApolloError);
-      expect(result.current.error!.message).toBe('Could not fetch');
-      expect(result.current.error!.networkError).toEqual(new Error('Could not fetch'));
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(() => {
-        expect(onError).toHaveBeenCalledTimes(1);
-      });
-      await waitFor(() => {
-        expect(onError).toHaveBeenCalledWith(new ApolloError({ networkError: new Error('Could not fetch') }));
-      });
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          error: new ApolloError({
+            networkError: new Error('Could not fetch'),
+          }),
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.error,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(new ApolloError({ networkError: new Error('Could not fetch') }));
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('removes partial data from result when response has errors', async () => {
@@ -2509,25 +3663,39 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       );
 
       const onError = jest.fn();
-      const { result } = renderHook(() => useQuery(query, { onError }), {
-        wrapper,
-      });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(() => useQuery(query, { onError }), { wrapper });
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-      expect(result.current.error).toBe(undefined);
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
 
-      expect(result.current.data).toBeUndefined();
-      expect(result.current.error).toBeInstanceOf(ApolloError);
-      expect(result.current.error!.message).toBe('Could not fetch "hello"');
-      expect(result.current.error!.graphQLErrors).toEqual([new GraphQLError('Could not fetch "hello"')]);
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          error: new ApolloError({
+            graphQLErrors: [{ message: 'Could not fetch "hello"' }],
+          }),
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.error,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('does not call `onError` when returning GraphQL errors while using an `errorPolicy` set to "ignore"', async () => {
@@ -2553,25 +3721,43 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       );
 
       const onError = jest.fn();
-      const { result } = renderHook(() => useQuery(query, { onError, errorPolicy: 'ignore' }), { wrapper });
-
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-      expect(result.current.error).toBe(undefined);
-
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(
+        () => useQuery(query, { onError, errorPolicy: 'ignore' }),
+        { wrapper },
       );
 
-      expect(result.current.data).toBeUndefined();
-      expect(result.current.error).toBeUndefined();
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
 
       await tick();
 
       expect(onError).not.toHaveBeenCalled();
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('calls `onError` when a network error has occurred while using an `errorPolicy` set to "ignore"', async () => {
@@ -2595,30 +3781,45 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       );
 
       const onError = jest.fn();
-      const { result } = renderHook(() => useQuery(query, { onError, errorPolicy: 'ignore' }), { wrapper });
-
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-      expect(result.current.error).toBe(undefined);
-
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(
+        () => useQuery(query, { onError, errorPolicy: 'ignore' }),
+        { wrapper },
       );
 
-      expect(result.current.data).toBeUndefined();
-      expect(result.current.error).toBeInstanceOf(ApolloError);
-      expect(result.current.error!.message).toBe('Could not fetch');
-      expect(result.current.error!.networkError).toEqual(new Error('Could not fetch'));
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(() => {
-        expect(onError).toHaveBeenCalledTimes(1);
-      });
-      await waitFor(() => {
-        expect(onError).toHaveBeenCalledWith(new ApolloError({ networkError: new Error('Could not fetch') }));
-      });
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          error: new ApolloError({
+            networkError: new Error('Could not fetch'),
+          }),
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.error,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(new ApolloError({ networkError: new Error('Could not fetch') }));
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('returns partial data and discards GraphQL errors when using an `errorPolicy` set to "ignore"', async () => {
@@ -2644,20 +3845,38 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const { result } = renderHook(() => useQuery(query, { errorPolicy: 'ignore' }), { wrapper });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(() => useQuery(query, { errorPolicy: 'ignore' }), {
+        wrapper,
+      });
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
 
-      expect(result.current.data).toEqual({ hello: null });
-      expect(result.current.error).toBeUndefined();
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: null },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('calls `onCompleted` with partial data but avoids calling `onError` when using an `errorPolicy` set to "ignore"', async () => {
@@ -2685,32 +3904,43 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       const onError = jest.fn();
       const onCompleted = jest.fn();
-      const { result } = renderHook(() => useQuery(query, { onError, onCompleted, errorPolicy: 'ignore' }), {
-        wrapper,
-      });
-
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(
+        () => useQuery(query, { onError, onCompleted, errorPolicy: 'ignore' }),
+        { wrapper },
       );
 
-      expect(result.current.data).toEqual({ hello: null });
-      expect(result.current.error).toBeUndefined();
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(() => {
-        expect(onCompleted).toHaveBeenCalledTimes(1);
-      });
-      await waitFor(() => {
-        expect(onCompleted).toHaveBeenCalledWith({ hello: null });
-      });
-      await waitFor(() => {
-        expect(onError).not.toHaveBeenCalled();
-      });
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: null },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      expect(onCompleted).toHaveBeenCalledTimes(1);
+      expect(onCompleted).toHaveBeenCalledWith({ hello: null });
+      expect(onError).not.toHaveBeenCalled();
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('calls `onError` when returning GraphQL errors while using an `errorPolicy` set to "all"', async () => {
@@ -2736,29 +3966,45 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       );
 
       const onError = jest.fn();
-      const { result } = renderHook(() => useQuery(query, { onError, errorPolicy: 'all' }), { wrapper });
-
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(
+        () => useQuery(query, { onError, errorPolicy: 'all' }),
+        { wrapper },
       );
 
-      expect(result.current.data).toBeUndefined();
-      expect(result.current.error).toBeInstanceOf(ApolloError);
-      expect(result.current.error!.message).toBe('error');
-      expect(result.current.error!.graphQLErrors).toEqual([new GraphQLError('error')]);
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(() => {
-        expect(onError).toHaveBeenCalledTimes(1);
-      });
-      await waitFor(() => {
-        expect(onError).toHaveBeenCalledWith(new ApolloError({ graphQLErrors: [new GraphQLError('error')] }));
-      });
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          error: new ApolloError({ graphQLErrors: [{ message: 'error' }] }),
+          // TODO: Why does this only populate when errorPolicy is "all"?
+          errors: [{ message: 'error' }],
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.error,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(new ApolloError({ graphQLErrors: [new GraphQLError('error')] }));
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('returns partial data when returning GraphQL errors while using an `errorPolicy` set to "all"', async () => {
@@ -2785,22 +4031,43 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       );
 
       const onError = jest.fn();
-      const { result } = renderHook(() => useQuery(query, { onError, errorPolicy: 'all' }), { wrapper });
-
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(
+        () => useQuery(query, { onError, errorPolicy: 'all' }),
+        { wrapper },
       );
 
-      expect(result.current.data).toEqual({ hello: null });
-      expect(result.current.error).toBeInstanceOf(ApolloError);
-      expect(result.current.error!.message).toBe('Could not fetch "hello"');
-      expect(result.current.error!.graphQLErrors).toEqual([new GraphQLError('Could not fetch "hello"')]);
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: null },
+          error: new ApolloError({
+            graphQLErrors: [{ message: 'Could not fetch "hello"' }],
+          }),
+          errors: [{ message: 'Could not fetch "hello"' }],
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.error,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('calls `onError` but not `onCompleted` when returning partial data with GraphQL errors while using an `errorPolicy` set to "all"', async () => {
@@ -2828,36 +4095,51 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       const onError = jest.fn();
       const onCompleted = jest.fn();
-      const { result } = renderHook(() => useQuery(query, { onError, onCompleted, errorPolicy: 'all' }), { wrapper });
-
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(
+        () => useQuery(query, { onError, onCompleted, errorPolicy: 'all' }),
+        { wrapper },
       );
 
-      expect(result.current.data).toEqual({ hello: null });
-      expect(result.current.error).toBeInstanceOf(ApolloError);
-      expect(result.current.error!.message).toBe('Could not fetch "hello"');
-      expect(result.current.error!.graphQLErrors).toEqual([new GraphQLError('Could not fetch "hello"')]);
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(() => {
-        expect(onError).toHaveBeenCalledTimes(1);
-      });
-      await waitFor(() => {
-        expect(onError).toHaveBeenCalledWith(
-          new ApolloError({
-            graphQLErrors: [new GraphQLError('Could not fetch "hello"')],
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: null },
+          error: new ApolloError({
+            graphQLErrors: [{ message: 'Could not fetch "hello"' }],
           }),
-        );
-      });
-      await waitFor(() => {
-        expect(onCompleted).not.toHaveBeenCalled();
-      });
+          errors: [{ message: 'Could not fetch "hello"' }],
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.error,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(
+        new ApolloError({
+          graphQLErrors: [new GraphQLError('Could not fetch "hello"')],
+        }),
+      );
+      expect(onCompleted).not.toHaveBeenCalled();
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('calls `onError` a single time when refetching returns a successful result', async () => {
@@ -2890,7 +4172,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       );
 
       const onError = jest.fn();
-      const { result } = renderHook(
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
         () =>
           useQuery(query, {
             onError,
@@ -2899,39 +4182,66 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         { wrapper },
       );
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
 
-      expect(result.current.error).toBeInstanceOf(ApolloError);
-      expect(result.current.error!.message).toBe('error');
+      {
+        const result = await takeSnapshot();
 
-      await new Promise(resolve => setTimeout(resolve));
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          error: new ApolloError({ graphQLErrors: [{ message: 'error' }] }),
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.error,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
       expect(onError).toHaveBeenCalledTimes(1);
 
-      result.current.refetch();
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(true);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.error).toBe(undefined);
+      void getCurrentSnapshot().refetch();
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual({ hello: 'world' });
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.refetch,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
       expect(onError).toHaveBeenCalledTimes(1);
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('should persist errors on re-render if they are still valid', async () => {
@@ -2957,49 +4267,56 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      let updates = 0;
-      const { result, rerender } = renderHook(
-        () => {
-          updates++;
-          return useQuery(query);
-        },
-        { wrapper },
-      );
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, rerender } = await renderHookToSnapshotStream(() => useQuery(query), { wrapper });
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-      expect(result.current.error).toBe(undefined);
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
 
-      expect(result.current.loading).toBe(false);
-      expect(result.current.data).toBe(undefined);
-      expect(result.current.error).toBeInstanceOf(ApolloError);
-      expect(result.current.error!.message).toBe('error');
+      {
+        const result = await takeSnapshot();
 
-      rerender();
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          error: new ApolloError({ graphQLErrors: [{ message: 'error' }] }),
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.error,
+          previousData: undefined,
+          variables: {},
+        });
+      }
 
-      expect(result.current.loading).toBe(false);
-      expect(result.current.data).toBe(undefined);
-      expect(result.current.error).toBeInstanceOf(ApolloError);
-      expect(result.current.error!.message).toBe('error');
+      await rerender(undefined);
 
-      const previousUpdates = updates;
-      await expect(
-        waitFor(
-          () => {
-            expect(updates).not.toEqual(previousUpdates);
-          },
-          { interval: 1, timeout: 20 },
-        ),
-      ).rejects.toThrow();
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          error: new ApolloError({ graphQLErrors: [{ message: 'error' }] }),
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.error,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
+    // TODO: Rewrite this test using renderHookToSnapshotStream
     it('should not return partial data from cache on refetch with errorPolicy: none (default) and notifyOnNetworkStatusChange: true', async () => {
       const query = gql`
         {
@@ -3131,6 +4448,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       expect(screen.queryByText(/partial data rendered/i)).toBeNull();
     });
 
+    // TODO: Rewrite this test using renderHookToSnapshotStream
     it('should return partial data from cache on refetch', async () => {
       const GET_DOG_DETAILS = gql`
         query dog($breed: String!) {
@@ -3235,51 +4553,58 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      let updates = 0;
-      const { result, rerender } = renderHook(
-        () => {
-          updates++;
-          return useQuery(query, {
-            onError: () => {},
-            onCompleted: () => {},
-          });
-        },
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, rerender } = await renderHookToSnapshotStream(
+        () => useQuery(query, { onError: () => {}, onCompleted: () => {} }),
         { wrapper },
       );
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-      expect(result.current.error).toBe(undefined);
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
 
-      expect(result.current.loading).toBe(false);
-      expect(result.current.data).toBe(undefined);
-      expect(result.current.error).toBeInstanceOf(ApolloError);
-      expect(result.current.error!.message).toBe('error');
+      {
+        const result = await takeSnapshot();
 
-      rerender();
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          error: new ApolloError({ graphQLErrors: [{ message: 'error' }] }),
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.error,
+          previousData: undefined,
+          variables: {},
+        });
+      }
 
-      expect(result.current.loading).toBe(false);
-      expect(result.current.data).toBe(undefined);
-      expect(result.current.error).toBeInstanceOf(ApolloError);
-      expect(result.current.error!.message).toBe('error');
+      await rerender(undefined);
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          error: new ApolloError({ graphQLErrors: [{ message: 'error' }] }),
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.error,
+          previousData: undefined,
+          variables: {},
+        });
+      }
 
       expect(onErrorFn).toHaveBeenCalledTimes(0);
-      const previousUpdates = updates;
-      await expect(
-        waitFor(
-          () => {
-            expect(updates).not.toEqual(previousUpdates);
-          },
-          { interval: 1, timeout: 20 },
-        ),
-      ).rejects.toThrow();
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('should not persist errors when variables change', async () => {
@@ -3319,53 +4644,99 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         },
       ];
 
-      const { result, rerender } = renderHook(({ id }) => useQuery(query, { variables: { id } }), {
-        wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
-        initialProps: { id: 1 },
-      });
-
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-      expect(result.current.error).toBe(undefined);
-
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, rerender } = await renderHookToSnapshotStream(
+        ({ id }) => useQuery(query, { variables: { id } }),
+        {
+          wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+          initialProps: { id: 1 },
         },
-        { interval: 1 },
       );
 
-      expect(result.current.data).toBe(undefined);
-      expect(result.current.error).toBeInstanceOf(ApolloError);
-      expect(result.current.error!.message).toBe('error');
+      {
+        const result = await takeSnapshot();
 
-      rerender({ id: 2 });
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-      expect(result.current.error).toBe(undefined);
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: { id: 1 },
+        });
+      }
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual({ hello: 'world 2' });
-      expect(result.current.error).toBe(undefined);
+      {
+        const result = await takeSnapshot();
 
-      rerender({ id: 1 });
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-      expect(result.current.error).toBe(undefined);
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          error: new ApolloError({ graphQLErrors: [{ message: 'error' }] }),
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.error,
+          previousData: undefined,
+          variables: { id: 1 },
+        });
+      }
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual({ hello: 'world 1' });
-      expect(result.current.error).toBe(undefined);
+      await rerender({ id: 2 });
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.setVariables,
+          previousData: undefined,
+          variables: { id: 2 },
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 2' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: { id: 2 },
+        });
+      }
+
+      await rerender({ id: 1 });
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.setVariables,
+          previousData: { hello: 'world 2' },
+          variables: { id: 1 },
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 1' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 2' },
+          variables: { id: 1 },
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('should render multiple errors when refetching', async () => {
@@ -3397,44 +4768,71 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const ProfiledHook = profileHook(() => useQuery(query, { notifyOnNetworkStatusChange: true }));
-      render(<ProfiledHook />, { wrapper });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () => useQuery(query, { notifyOnNetworkStatusChange: true }),
+        { wrapper },
+      );
 
       {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(true);
-        expect(result.data).toBe(undefined);
-        expect(result.error).toBe(undefined);
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
       }
 
       {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(false);
-        expect(result.data).toBe(undefined);
-        expect(result.error).toBeInstanceOf(ApolloError);
-        expect(result.error!.message).toBe('error 1');
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          error: new ApolloError({ graphQLErrors: [{ message: 'error 1' }] }),
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.error,
+          previousData: undefined,
+          variables: {},
+        });
       }
 
-      const catchFn = jest.fn();
-      ProfiledHook.getCurrentSnapshot().refetch().catch(catchFn);
+      await expect(getCurrentSnapshot().refetch()).rejects.toEqual(
+        new ApolloError({ graphQLErrors: [{ message: 'error 2' }] }),
+      );
+
       {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(true);
-        expect(result.data).toBe(undefined);
-        expect(result.error).toBe(undefined);
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.refetch,
+          previousData: undefined,
+          variables: {},
+        });
       }
 
       {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(false);
-        expect(result.data).toBe(undefined);
-        expect(result.error).toBeInstanceOf(ApolloError);
-        expect(result.error!.message).toBe('error 2');
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          error: new ApolloError({ graphQLErrors: [{ message: 'error 2' }] }),
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.error,
+          previousData: undefined,
+          variables: {},
+        });
       }
-      expect(catchFn.mock.calls.length).toBe(1);
-      expect(catchFn.mock.calls[0].length).toBe(1);
-      expect(catchFn.mock.calls[0][0]).toBeInstanceOf(ApolloError);
-      expect(catchFn.mock.calls[0][0].message).toBe('error 2');
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('should render the same error on refetch', async () => {
@@ -3466,37 +4864,75 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const { result } = renderHook(() => useQuery(query, { notifyOnNetworkStatusChange: true }), { wrapper });
-
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-      expect(result.current.error).toBe(undefined);
-
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () => useQuery(query, { notifyOnNetworkStatusChange: true }),
+        { wrapper },
       );
 
-      expect(result.current.data).toBe(undefined);
-      expect(result.current.error).toBeInstanceOf(ApolloError);
-      expect(result.current.error!.message).toBe('same error');
+      {
+        const result = await takeSnapshot();
 
-      const catchFn = jest.fn();
-      await act(async () => {
-        await result.current.refetch().catch(catchFn);
-      });
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
 
-      expect(result.current.loading).toBe(false);
-      expect(result.current.data).toBe(undefined);
-      expect(result.current.error).toBeInstanceOf(ApolloError);
-      expect(result.current.error!.message).toBe('same error');
+      {
+        const result = await takeSnapshot();
 
-      expect(catchFn.mock.calls.length).toBe(1);
-      expect(catchFn.mock.calls[0].length).toBe(1);
-      expect(catchFn.mock.calls[0][0]).toBeInstanceOf(ApolloError);
-      expect(catchFn.mock.calls[0][0].message).toBe('same error');
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          error: new ApolloError({
+            graphQLErrors: [{ message: 'same error' }],
+          }),
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.error,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      await expect(getCurrentSnapshot().refetch()).rejects.toEqual(
+        new ApolloError({ graphQLErrors: [{ message: 'same error' }] }),
+      );
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.refetch,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          error: new ApolloError({
+            graphQLErrors: [{ message: 'same error' }],
+          }),
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.error,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('should render data and errors with refetch', async () => {
@@ -3535,58 +4971,98 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const ProfiledHook = profileHook(() => useQuery(query, { notifyOnNetworkStatusChange: true }));
-      render(<ProfiledHook />, { wrapper });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () => useQuery(query, { notifyOnNetworkStatusChange: true }),
+        { wrapper },
+      );
 
       {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(true);
-        expect(result.data).toBe(undefined);
-        expect(result.error).toBe(undefined);
-      }
-      {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(false);
-        expect(result.data).toBe(undefined);
-        expect(result.error).toBeInstanceOf(ApolloError);
-        expect(result.error!.message).toBe('same error');
-      }
-      ProfiledHook.getCurrentSnapshot().refetch();
+        const result = await takeSnapshot();
 
-      {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(true);
-        expect(result.data).toBe(undefined);
-        expect(result.error).toBe(undefined);
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
       }
       {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(false);
-        expect(result.data).toEqual({ hello: 'world' });
-        expect(result.error).toBe(undefined);
-      }
-      const catchFn = jest.fn();
-      ProfiledHook.getCurrentSnapshot().refetch().catch(catchFn);
+        const result = await takeSnapshot();
 
-      {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(true);
-        expect(result.data).toEqual({ hello: 'world' });
-        expect(result.error).toBe(undefined);
-      }
-      {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(false);
-        // TODO: Is this correct behavior here?
-        expect(result.data).toEqual({ hello: 'world' });
-        expect(result.error).toBeInstanceOf(ApolloError);
-        expect(result.error!.message).toBe('same error');
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          error: new ApolloError({
+            graphQLErrors: [{ message: 'same error' }],
+          }),
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.error,
+          previousData: undefined,
+          variables: {},
+        });
       }
 
-      expect(catchFn.mock.calls.length).toBe(1);
-      expect(catchFn.mock.calls[0].length).toBe(1);
-      expect(catchFn.mock.calls[0][0]).toBeInstanceOf(ApolloError);
-      expect(catchFn.mock.calls[0][0].message).toBe('same error');
+      await getCurrentSnapshot().refetch();
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.refetch,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      await expect(getCurrentSnapshot().refetch()).rejects.toEqual(
+        new ApolloError({ graphQLErrors: [{ message: 'same error' }] }),
+      );
+
+      {
+        const result = await takeSnapshot();
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world' },
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.refetch,
+          previousData: { hello: 'world' },
+          variables: {},
+        });
+      }
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          // TODO: Is this correct behavior here?
+          data: { hello: 'world' },
+          error: new ApolloError({
+            graphQLErrors: [{ message: 'same error' }],
+          }),
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.error,
+          previousData: { hello: 'world' },
+          variables: {},
+        });
+      }
     });
 
     it('should call onCompleted when variables change', async () => {
@@ -3615,47 +5091,94 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       const onCompleted = jest.fn();
 
-      const { result, rerender } = renderHook(({ variables }) => useQuery(query, { variables, onCompleted }), {
-        wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
-        initialProps: {
-          variables: { first: 1 },
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, rerender } = await renderHookToSnapshotStream(
+        ({ variables }) => useQuery(query, { variables, onCompleted }),
+        {
+          wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+          initialProps: {
+            variables: { first: 1 },
+          },
         },
-      });
-
-      expect(result.current.loading).toBe(true);
-
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
       );
-      expect(result.current.data).toEqual(data1);
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: { first: 1 },
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: data1,
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: { first: 1 },
+        });
+      }
+
       expect(onCompleted).toHaveBeenLastCalledWith(data1);
 
-      rerender({ variables: { first: 2 } });
-      expect(result.current.loading).toBe(true);
+      await rerender({ variables: { first: 2 } });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual(data2);
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.setVariables,
+          previousData: data1,
+          variables: { first: 2 },
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: data2,
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: data1,
+          variables: { first: 2 },
+        });
+      }
+
       expect(onCompleted).toHaveBeenLastCalledWith(data2);
 
-      rerender({ variables: { first: 1 } });
-      expect(result.current.loading).toBe(false);
-      expect(result.current.data).toEqual(data1);
-      await waitFor(
-        () => {
-          expect(onCompleted).toHaveBeenLastCalledWith(data1);
-        },
-        { interval: 1 },
-      );
+      await rerender({ variables: { first: 1 } });
 
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: data1,
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: data2,
+          variables: { first: 1 },
+        });
+      }
+
+      expect(onCompleted).toHaveBeenLastCalledWith(data1);
       expect(onCompleted).toHaveBeenCalledTimes(3);
+
+      await expect(takeSnapshot).not.toRerender();
     });
   });
 
@@ -3679,6 +5202,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       { name: 'D', position: 4 },
     ];
 
+    // TODO: Include an offset variable so that these tests more closely
+    // resemble a real-world paginated API
     const mocks = [
       {
         request: { query, variables: { limit: 2 } },
@@ -3700,50 +5225,74 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
     ];
 
     it('should fetchMore with updateQuery', async () => {
-      // TODO: Calling fetchMore with an updateQuery callback is deprecated
-      using _warnSpy = spyOnConsole('warn');
-
       const wrapper = ({ children }: any) => <MockedProvider mocks={mocks}>{children}</MockedProvider>;
 
-      const { result } = renderHook(() => useQuery(query, { variables: { limit: 2 } }), { wrapper });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () => useQuery(query, { variables: { limit: 2 } }),
+        { wrapper },
+      );
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.networkStatus).toBe(NetworkStatus.loading);
-      expect(result.current.data).toBe(undefined);
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: { limit: 2 },
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { letters: ab },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: { limit: 2 },
+        });
+      }
+
+      const fetchMoreResult = await getCurrentSnapshot().fetchMore({
+        variables: { limit: 2 },
+        updateQuery: (prev, { fetchMoreResult }) => ({
+          letters: prev.letters.concat(fetchMoreResult.letters),
+        }),
       });
-      expect(result.current.networkStatus).toBe(NetworkStatus.ready);
-      expect(result.current.data).toEqual({ letters: ab });
 
-      await waitFor(
-        () =>
-          void result.current.fetchMore({
-            variables: { limit: 2 },
-            updateQuery: (prev, { fetchMoreResult }) => ({
-              letters: prev.letters.concat(fetchMoreResult.letters),
-            }),
-          }),
-      );
+      expect(fetchMoreResult).toEqualApolloQueryResult({
+        data: { letters: cd },
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+      });
 
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({ letters: ab.concat(cd) });
-        },
-        { interval: 1 },
-      );
-      expect(result.current.loading).toBe(false);
-      expect(result.current.networkStatus).toBe(NetworkStatus.ready);
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { letters: ab.concat(cd) },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { letters: ab },
+          variables: { limit: 2 },
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('should fetchMore with updateQuery and notifyOnNetworkStatusChange', async () => {
-      // TODO: Calling fetchMore with an updateQuery callback is deprecated
-      using _warnSpy = spyOnConsole('warn');
-
       const wrapper = ({ children }: any) => <MockedProvider mocks={mocks}>{children}</MockedProvider>;
 
-      const { result } = renderHook(
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
         () =>
           useQuery(query, {
             variables: { limit: 2 },
@@ -3752,42 +5301,72 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         { wrapper },
       );
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.networkStatus).toBe(NetworkStatus.loading);
-      expect(result.current.data).toBe(undefined);
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: { limit: 2 },
+        });
+      }
 
-      expect(result.current.networkStatus).toBe(NetworkStatus.ready);
-      expect(result.current.data).toEqual({ letters: ab });
+      {
+        const result = await takeSnapshot();
 
-      act(
-        () =>
-          void result.current.fetchMore({
-            variables: { limit: 2 },
-            updateQuery: (prev, { fetchMoreResult }) => ({
-              letters: prev.letters.concat(fetchMoreResult.letters),
-            }),
-          }),
-      );
+        expect(result).toEqualQueryResult({
+          data: { letters: ab },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: { limit: 2 },
+        });
+      }
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.networkStatus).toBe(NetworkStatus.fetchMore);
-      expect(result.current.data).toEqual({ letters: ab });
+      const fetchMoreResult = await getCurrentSnapshot().fetchMore({
+        variables: { limit: 2 },
+        updateQuery: (prev, { fetchMoreResult }) => ({
+          letters: prev.letters.concat(fetchMoreResult.letters),
+        }),
+      });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.networkStatus).toBe(NetworkStatus.ready);
-      expect(result.current.data).toEqual({ letters: ab.concat(cd) });
+      expect(fetchMoreResult).toEqualApolloQueryResult({
+        data: { letters: cd },
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+      });
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { letters: ab },
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.fetchMore,
+          previousData: { letters: ab },
+          variables: { limit: 2 },
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { letters: ab.concat(cd) },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { letters: ab },
+          variables: { limit: 2 },
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('fetchMore with concatPagination', async () => {
@@ -3807,30 +5386,62 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const { result } = renderHook(() => useQuery(query, { variables: { limit: 2 } }), { wrapper });
-
-      expect(result.current.loading).toBe(true);
-      expect(result.current.networkStatus).toBe(NetworkStatus.loading);
-      expect(result.current.data).toBe(undefined);
-
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () => useQuery(query, { variables: { limit: 2 } }),
+        { wrapper },
       );
-      expect(result.current.networkStatus).toBe(NetworkStatus.ready);
-      expect(result.current.data).toEqual({ letters: ab });
-      result.current.fetchMore({ variables: { limit: 2 } });
 
-      expect(result.current.loading).toBe(false);
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({ letters: ab.concat(cd) });
-        },
-        { interval: 1 },
-      );
-      expect(result.current.networkStatus).toBe(NetworkStatus.ready);
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: { limit: 2 },
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { letters: ab },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: { limit: 2 },
+        });
+      }
+
+      const fetchMoreResult = await getCurrentSnapshot().fetchMore({
+        variables: { limit: 2 },
+      });
+
+      expect(fetchMoreResult).toEqualApolloQueryResult({
+        data: { letters: cd },
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+      });
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { letters: ab.concat(cd) },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { letters: ab },
+          variables: { limit: 2 },
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('fetchMore with concatPagination and notifyOnNetworkStatusChange', async () => {
@@ -3850,7 +5461,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const { result } = renderHook(
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
         () =>
           useQuery(query, {
             variables: { limit: 2 },
@@ -3859,32 +5471,401 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         { wrapper },
       );
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.networkStatus).toBe(NetworkStatus.loading);
-      expect(result.current.data).toBe(undefined);
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: { limit: 2 },
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { letters: ab },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: { limit: 2 },
+        });
+      }
+
+      const fetchMoreResult = await getCurrentSnapshot().fetchMore({
+        variables: { limit: 2 },
+      });
+
+      expect(fetchMoreResult).toEqualApolloQueryResult({
+        data: { letters: cd },
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+      });
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { letters: ab },
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.fetchMore,
+          previousData: { letters: ab },
+          variables: { limit: 2 },
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { letters: ab.concat(cd) },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { letters: ab },
+          variables: { limit: 2 },
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
+    });
+
+    // https://github.com/apollographql/apollo-client/issues/11965
+    it('should only execute single network request when calling fetchMore with no-cache fetch policy', async () => {
+      const fetches: Array<{ variables: Record<string, unknown> }> = [];
+      const { query, data } = setupPaginatedCase();
+
+      const link = new ApolloLink(operation => {
+        fetches.push({ variables: operation.variables });
+
+        const { offset = 0, limit = 2 } = operation.variables;
+        const letters = data.slice(offset, offset + limit);
+
+        return new Observable(observer => {
+          setTimeout(() => {
+            observer.next({ data: { letters } });
+            observer.complete();
+          }, 10);
+        });
+      });
+
+      const client = new ApolloClient({ cache: new Hermes(), link });
+
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () =>
+          useQuery(query, {
+            fetchPolicy: 'no-cache',
+            variables: { limit: 2 },
+          }),
+        {
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
         },
-        { interval: 1 },
       );
-      expect(result.current.networkStatus).toBe(NetworkStatus.ready);
-      expect(result.current.data).toEqual({ letters: ab });
 
-      act(() => void result.current.fetchMore({ variables: { limit: 2 } }));
-      expect(result.current.loading).toBe(true);
-      expect(result.current.networkStatus).toBe(NetworkStatus.fetchMore);
-      expect(result.current.data).toEqual({ letters: ab });
+      // loading
+      await takeSnapshot();
+      // finished loading
+      await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
+      expect(fetches).toStrictEqual([{ variables: { limit: 2 } }]);
+
+      const { fetchMore } = getCurrentSnapshot();
+
+      await fetchMore({
+        variables: { offset: 2 },
+        updateQuery: (_, { fetchMoreResult }) => fetchMoreResult,
+      });
+
+      expect(fetches).toStrictEqual([{ variables: { limit: 2 } }, { variables: { limit: 2, offset: 2 } }]);
+    });
+
+    it('uses updateQuery to update the result of the query with no-cache queries', async () => {
+      const { query, link } = setupPaginatedCase();
+
+      const client = new ApolloClient({ cache: new Hermes(), link });
+
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () =>
+          useQuery(query, {
+            notifyOnNetworkStatusChange: true,
+            fetchPolicy: 'no-cache',
+            variables: { limit: 2 },
+          }),
+        {
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
         },
-        { interval: 1 },
       );
-      expect(result.current.networkStatus).toBe(NetworkStatus.ready);
-      expect(result.current.data).toEqual({ letters: ab.concat(cd) });
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: { limit: 2 },
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: {
+            letters: [
+              { __typename: 'Letter', letter: 'A', position: 1 },
+              { __typename: 'Letter', letter: 'B', position: 2 },
+            ],
+          },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: { limit: 2 },
+        });
+      }
+
+      const { fetchMore } = getCurrentSnapshot();
+
+      let fetchMorePromise = fetchMore({
+        variables: { offset: 2 },
+        updateQuery: (prev, { fetchMoreResult }) => ({
+          letters: prev.letters.concat(fetchMoreResult.letters),
+        }),
+      });
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: {
+            letters: [
+              { __typename: 'Letter', letter: 'A', position: 1 },
+              { __typename: 'Letter', letter: 'B', position: 2 },
+            ],
+          },
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.fetchMore,
+          previousData: {
+            letters: [
+              { __typename: 'Letter', letter: 'A', position: 1 },
+              { __typename: 'Letter', letter: 'B', position: 2 },
+            ],
+          },
+          variables: { limit: 2 },
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: {
+            letters: [
+              { __typename: 'Letter', letter: 'A', position: 1 },
+              { __typename: 'Letter', letter: 'B', position: 2 },
+              { __typename: 'Letter', letter: 'C', position: 3 },
+              { __typename: 'Letter', letter: 'D', position: 4 },
+            ],
+          },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: {
+            letters: [
+              { __typename: 'Letter', letter: 'A', position: 1 },
+              { __typename: 'Letter', letter: 'B', position: 2 },
+            ],
+          },
+          variables: { limit: 2 },
+        });
+
+        // Ensure we store the merged result as the last result
+        expect(result.observable.getCurrentResult(false).data).toEqual({
+          letters: [
+            { __typename: 'Letter', letter: 'A', position: 1 },
+            { __typename: 'Letter', letter: 'B', position: 2 },
+            { __typename: 'Letter', letter: 'C', position: 3 },
+            { __typename: 'Letter', letter: 'D', position: 4 },
+          ],
+        });
+      }
+
+      await expect(fetchMorePromise).resolves.toEqualApolloQueryResult({
+        data: {
+          letters: [
+            { __typename: 'Letter', letter: 'C', position: 3 },
+            { __typename: 'Letter', letter: 'D', position: 4 },
+          ],
+        },
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+      });
+
+      await expect(takeSnapshot).not.toRerender();
+
+      fetchMorePromise = fetchMore({
+        variables: { offset: 4 },
+        updateQuery: (_, { fetchMoreResult }) => fetchMoreResult,
+      });
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: {
+            letters: [
+              { __typename: 'Letter', letter: 'A', position: 1 },
+              { __typename: 'Letter', letter: 'B', position: 2 },
+              { __typename: 'Letter', letter: 'C', position: 3 },
+              { __typename: 'Letter', letter: 'D', position: 4 },
+            ],
+          },
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.fetchMore,
+          previousData: {
+            letters: [
+              { __typename: 'Letter', letter: 'A', position: 1 },
+              { __typename: 'Letter', letter: 'B', position: 2 },
+              { __typename: 'Letter', letter: 'C', position: 3 },
+              { __typename: 'Letter', letter: 'D', position: 4 },
+            ],
+          },
+          variables: { limit: 2 },
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: {
+            letters: [
+              { __typename: 'Letter', letter: 'E', position: 5 },
+              { __typename: 'Letter', letter: 'F', position: 6 },
+            ],
+          },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: {
+            letters: [
+              { __typename: 'Letter', letter: 'A', position: 1 },
+              { __typename: 'Letter', letter: 'B', position: 2 },
+              { __typename: 'Letter', letter: 'C', position: 3 },
+              { __typename: 'Letter', letter: 'D', position: 4 },
+            ],
+          },
+          variables: { limit: 2 },
+        });
+
+        expect(result.observable.getCurrentResult(false).data).toEqual({
+          letters: [
+            { __typename: 'Letter', letter: 'E', position: 5 },
+            { __typename: 'Letter', letter: 'F', position: 6 },
+          ],
+        });
+      }
+
+      await expect(fetchMorePromise).resolves.toEqualApolloQueryResult({
+        data: {
+          letters: [
+            { __typename: 'Letter', letter: 'E', position: 5 },
+            { __typename: 'Letter', letter: 'F', position: 6 },
+          ],
+        },
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+      });
+
+      await expect(takeSnapshot).not.toRerender();
+    });
+
+    it('throws when using fetchMore without updateQuery for no-cache queries', async () => {
+      const { query, link } = setupPaginatedCase();
+
+      const client = new ApolloClient({ cache: new Hermes(), link });
+
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () =>
+          useQuery(query, {
+            fetchPolicy: 'no-cache',
+            variables: { limit: 2 },
+          }),
+        {
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        },
+      );
+
+      // loading
+      await takeSnapshot();
+      // finished loading
+      await takeSnapshot();
+
+      const { fetchMore } = getCurrentSnapshot();
+
+      expect(() => fetchMore({ variables: { offset: 2 } })).toThrow(
+        new InvariantError(
+          'You must provide an `updateQuery` function when using `fetchMore` with a `no-cache` fetch policy.',
+        ),
+      );
+    });
+
+    it('does not write to cache when using fetchMore with no-cache queries', async () => {
+      const { query, data } = setupPaginatedCase();
+
+      const link = new ApolloLink(operation => {
+        const { offset = 0, limit = 2 } = operation.variables;
+        const letters = data.slice(offset, offset + limit);
+
+        return new Observable(observer => {
+          setTimeout(() => {
+            observer.next({ data: { letters } });
+            observer.complete();
+          }, 10);
+        });
+      });
+
+      const client = new ApolloClient({ cache: new Hermes(), link });
+
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () =>
+          useQuery(query, {
+            fetchPolicy: 'no-cache',
+            variables: { limit: 2 },
+          }),
+        {
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        },
+      );
+
+      // initial loading
+      await takeSnapshot();
+
+      // Initial result
+      await takeSnapshot();
+
+      const { fetchMore } = getCurrentSnapshot();
+      await fetchMore({
+        variables: { offset: 2 },
+        updateQuery: (_, { fetchMoreResult }) => fetchMoreResult,
+      });
+
+      expect(client.extract()).toStrictEqual({});
     });
 
     it('regression test for issue #8600', async () => {
@@ -3971,18 +5952,36 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const { result } = renderHook(() => useQuery(GET_COUNTRIES), { wrapper });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(() => useQuery(GET_COUNTRIES), { wrapper });
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBeUndefined();
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual({ countries });
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { countries },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
   });
 
@@ -4026,7 +6025,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       }
     `;
 
-    const Profiler = createProfiler({
+    using _disabledAct = disableActEnvironment();
+    const renderStream = createRenderStream({
       initialSnapshot: {
         useQueryResult: null as QueryResult<Query1, Variables> | null,
         useLazyQueryResult: null as QueryResult<Query2, Variables> | null,
@@ -4066,7 +6066,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         variables: { id: 1 },
       });
 
-      Profiler.replaceSnapshot({ useQueryResult, useLazyQueryResult });
+      renderStream.replaceSnapshot({ useQueryResult, useLazyQueryResult });
 
       return (
         <>
@@ -4076,7 +6076,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
               // Intentionally use reobserve here as opposed to refetch to
               // ensure we check against reported cache results with cache-first
               // and notifyOnNetworkStatusChange
-              useQueryResult.observable.reobserve();
+              void useQueryResult.observable.reobserve();
             }}
           >
             Reload 1st query
@@ -4085,89 +6085,170 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       );
     }
 
-    render(<App />, {
-      wrapper: ({ children }) => (
-        <ApolloProvider client={client}>
-          <Profiler>{children}</Profiler>
-        </ApolloProvider>
-      ),
+    await renderStream.render(<App />, {
+      wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
     });
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
-      expect(snapshot.useQueryResult).toMatchObject({
+      expect(snapshot.useQueryResult!).toEqualQueryResult({
         data: undefined,
-        loading: true,
-        networkStatus: NetworkStatus.loading,
-      });
-
-      expect(snapshot.useLazyQueryResult).toMatchObject({
-        called: false,
-        data: undefined,
-        loading: false,
-        networkStatus: NetworkStatus.ready,
-      });
-    }
-
-    {
-      const { snapshot } = await Profiler.takeRender();
-
-      expect(snapshot.useQueryResult).toMatchObject({
-        data: undefined,
-        error: new ApolloError({
-          graphQLErrors: [new GraphQLError('Intentional error')],
-        }),
-        loading: false,
-        networkStatus: NetworkStatus.error,
-      });
-
-      expect(snapshot.useLazyQueryResult).toMatchObject({
-        called: false,
-        data: undefined,
-        loading: false,
-        networkStatus: NetworkStatus.ready,
-      });
-    }
-
-    await act(() => user.click(screen.getByText('Run 2nd query')));
-
-    {
-      const { snapshot } = await Profiler.takeRender();
-
-      expect(snapshot.useQueryResult).toMatchObject({
-        data: undefined,
-        error: new ApolloError({
-          graphQLErrors: [new GraphQLError('Intentional error')],
-        }),
-        loading: false,
-        networkStatus: NetworkStatus.error,
-      });
-
-      expect(snapshot.useLazyQueryResult).toMatchObject({
         called: true,
-        data: undefined,
         loading: true,
         networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: { id: 1 },
+      });
+
+      expect(snapshot.useLazyQueryResult!).toEqualQueryResult({
+        data: undefined,
+        error: undefined,
+        called: false,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: { id: 1 },
       });
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
-      expect(snapshot.useQueryResult).toMatchObject({
+      expect(snapshot.useQueryResult!).toEqualQueryResult({
         data: undefined,
         error: new ApolloError({
           graphQLErrors: [new GraphQLError('Intentional error')],
         }),
+        called: true,
         loading: false,
         networkStatus: NetworkStatus.error,
+        previousData: undefined,
+        variables: { id: 1 },
+      });
+
+      expect(snapshot.useLazyQueryResult!).toEqualQueryResult({
+        data: undefined,
+        error: undefined,
+        called: false,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: { id: 1 },
+      });
+    }
+
+    await user.click(screen.getByText('Run 2nd query'));
+
+    {
+      const { snapshot } = await renderStream.takeRender();
+
+      expect(snapshot.useQueryResult!).toEqualQueryResult({
+        data: undefined,
+        error: new ApolloError({
+          graphQLErrors: [new GraphQLError('Intentional error')],
+        }),
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.error,
+        previousData: undefined,
+        variables: { id: 1 },
+      });
+
+      expect(snapshot.useLazyQueryResult!).toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: { id: 1 },
+      });
+    }
+
+    {
+      const { snapshot } = await renderStream.takeRender();
+
+      expect(snapshot.useQueryResult!).toEqualQueryResult({
+        data: undefined,
+        error: new ApolloError({
+          graphQLErrors: [new GraphQLError('Intentional error')],
+        }),
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.error,
+        previousData: undefined,
+        variables: { id: 1 },
       });
 
       // ensure we aren't setting a value on the observable query that contains
       // the partial result
-      expect(snapshot.useQueryResult?.observable.getCurrentResult(false)).toEqual({
+      expect(snapshot.useQueryResult?.observable.getCurrentResult(false)!).toEqualApolloQueryResult({
+        error: new ApolloError({
+          graphQLErrors: [new GraphQLError('Intentional error')],
+        }),
+        errors: [new GraphQLError('Intentional error')],
+        loading: false,
+        networkStatus: NetworkStatus.error,
+        partial: true,
+        // TODO: Fix ApolloQueryResult type to allow `data` to be an optional property.
+        // This fails without the type case for now even though the runtime
+        // code doesn't include a `data` property.
+      } as unknown as ApolloQueryResult<Query1>);
+
+      expect(snapshot.useLazyQueryResult!).toEqualQueryResult({
+        data: { person: { __typename: 'Person', id: 1, lastName: 'Doe' } },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: { id: 1 },
+      });
+    }
+
+    await user.click(screen.getByText('Reload 1st query'));
+
+    {
+      const { snapshot } = await renderStream.takeRender();
+
+      expect(snapshot.useQueryResult!).toEqualQueryResult({
         data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: { id: 1 },
+      });
+
+      expect(snapshot.useLazyQueryResult!).toEqualQueryResult({
+        data: { person: { __typename: 'Person', id: 1, lastName: 'Doe' } },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: { id: 1 },
+      });
+    }
+
+    {
+      const { snapshot } = await renderStream.takeRender();
+
+      expect(snapshot.useQueryResult!).toEqualQueryResult({
+        data: undefined,
+        error: new ApolloError({
+          graphQLErrors: [new GraphQLError('Intentional error')],
+        }),
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.error,
+        previousData: undefined,
+        variables: { id: 1 },
+      });
+
+      // ensure we aren't setting a value on the observable query that contains
+      // the partial result
+      expect(snapshot.useQueryResult?.observable.getCurrentResult(false)!).toEqualApolloQueryResult({
+        // TODO: Fix TypeScript types to allow for `data` to be `undefined`
+        data: undefined as unknown as Query1,
         error: new ApolloError({
           graphQLErrors: [new GraphQLError('Intentional error')],
         }),
@@ -4177,67 +6258,17 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         partial: true,
       });
 
-      expect(snapshot.useLazyQueryResult).toMatchObject({
-        called: true,
+      expect(snapshot.useLazyQueryResult!).toEqualQueryResult({
         data: { person: { __typename: 'Person', id: 1, lastName: 'Doe' } },
+        called: true,
         loading: false,
         networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: { id: 1 },
       });
     }
 
-    await act(() => user.click(screen.getByText('Reload 1st query')));
-
-    {
-      const { snapshot } = await Profiler.takeRender();
-
-      expect(snapshot.useQueryResult).toMatchObject({
-        data: undefined,
-        loading: true,
-        networkStatus: NetworkStatus.loading,
-      });
-
-      expect(snapshot.useLazyQueryResult).toMatchObject({
-        called: true,
-        data: { person: { __typename: 'Person', id: 1, lastName: 'Doe' } },
-        loading: false,
-        networkStatus: NetworkStatus.ready,
-      });
-    }
-
-    {
-      const { snapshot } = await Profiler.takeRender();
-
-      expect(snapshot.useQueryResult).toMatchObject({
-        data: undefined,
-        loading: false,
-        error: new ApolloError({
-          graphQLErrors: [new GraphQLError('Intentional error')],
-        }),
-        networkStatus: NetworkStatus.error,
-      });
-
-      // ensure we aren't setting a value on the observable query that contains
-      // the partial result
-      expect(snapshot.useQueryResult?.observable.getCurrentResult(false)).toEqual({
-        data: undefined,
-        error: new ApolloError({
-          graphQLErrors: [new GraphQLError('Intentional error')],
-        }),
-        errors: [new GraphQLError('Intentional error')],
-        loading: false,
-        networkStatus: NetworkStatus.error,
-        partial: true,
-      });
-
-      expect(snapshot.useLazyQueryResult).toMatchObject({
-        called: true,
-        data: { person: { __typename: 'Person', id: 1, lastName: 'Doe' } },
-        loading: false,
-        networkStatus: NetworkStatus.ready,
-      });
-    }
-
-    await expect(Profiler).not.toRerender();
+    await expect(renderStream).not.toRerender();
   });
 
   it('rerenders errored query for full cache write', async () => {
@@ -4283,7 +6314,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       }
     `;
 
-    const Profiler = createProfiler({
+    using _disabledAct = disableActEnvironment();
+    const renderStream = createRenderStream({
       initialSnapshot: {
         useQueryResult: null as QueryResult<Query1, Variables> | null,
         useLazyQueryResult: null as QueryResult<Query2, Variables> | null,
@@ -4329,95 +6361,110 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         variables: { id: 1 },
       });
 
-      Profiler.replaceSnapshot({ useQueryResult, useLazyQueryResult });
+      renderStream.replaceSnapshot({ useQueryResult, useLazyQueryResult });
 
       return <button onClick={() => execute()}>Run 2nd query</button>;
     }
 
-    render(<App />, {
-      wrapper: ({ children }) => (
-        <ApolloProvider client={client}>
-          <Profiler>{children}</Profiler>
-        </ApolloProvider>
-      ),
+    await renderStream.render(<App />, {
+      wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
     });
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
-      expect(snapshot.useQueryResult).toMatchObject({
+      expect(snapshot.useQueryResult!).toEqualQueryResult({
         data: undefined,
-        loading: true,
-        networkStatus: NetworkStatus.loading,
-      });
-
-      expect(snapshot.useLazyQueryResult).toMatchObject({
-        called: false,
-        data: undefined,
-        loading: false,
-        networkStatus: NetworkStatus.ready,
-      });
-    }
-
-    {
-      const { snapshot } = await Profiler.takeRender();
-
-      expect(snapshot.useQueryResult).toMatchObject({
-        data: undefined,
-        error: new ApolloError({
-          graphQLErrors: [new GraphQLError('Intentional error')],
-        }),
-        loading: false,
-        networkStatus: NetworkStatus.error,
-      });
-
-      expect(snapshot.useLazyQueryResult).toMatchObject({
-        called: false,
-        data: undefined,
-        loading: false,
-        networkStatus: NetworkStatus.ready,
-      });
-    }
-
-    await act(() => user.click(screen.getByText('Run 2nd query')));
-
-    {
-      const { snapshot } = await Profiler.takeRender();
-
-      expect(snapshot.useQueryResult).toMatchObject({
-        data: undefined,
-        error: new ApolloError({
-          graphQLErrors: [new GraphQLError('Intentional error')],
-        }),
-        loading: false,
-        networkStatus: NetworkStatus.error,
-      });
-
-      expect(snapshot.useLazyQueryResult).toMatchObject({
         called: true,
-        data: undefined,
         loading: true,
         networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: { id: 1 },
+      });
+
+      expect(snapshot.useLazyQueryResult!).toEqualQueryResult({
+        data: undefined,
+        error: undefined,
+        called: false,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: { id: 1 },
       });
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
+
+      expect(snapshot.useQueryResult!).toEqualQueryResult({
+        data: undefined,
+        error: new ApolloError({
+          graphQLErrors: [new GraphQLError('Intentional error')],
+        }),
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.error,
+        previousData: undefined,
+        variables: { id: 1 },
+      });
+
+      expect(snapshot.useLazyQueryResult!).toEqualQueryResult({
+        data: undefined,
+        error: undefined,
+        called: false,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: { id: 1 },
+      });
+    }
+
+    await user.click(screen.getByText('Run 2nd query'));
+
+    {
+      const { snapshot } = await renderStream.takeRender();
+
+      expect(snapshot.useQueryResult!).toEqualQueryResult({
+        data: undefined,
+        error: new ApolloError({
+          graphQLErrors: [new GraphQLError('Intentional error')],
+        }),
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.error,
+        previousData: undefined,
+        variables: { id: 1 },
+      });
+
+      expect(snapshot.useLazyQueryResult!).toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: { id: 1 },
+      });
+    }
+
+    {
+      const { snapshot } = await renderStream.takeRender();
 
       // We don't see the update from the cache for one more render cycle, hence
       // why this is still showing the error result even though the result from
       // the other query has finished and re-rendered.
-      expect(snapshot.useQueryResult).toMatchObject({
+      expect(snapshot.useQueryResult!).toEqualQueryResult({
         data: undefined,
         error: new ApolloError({
           graphQLErrors: [new GraphQLError('Intentional error')],
         }),
+        called: true,
         loading: false,
         networkStatus: NetworkStatus.error,
+        previousData: undefined,
+        variables: { id: 1 },
       });
 
-      expect(snapshot.useLazyQueryResult).toMatchObject({
-        called: true,
+      expect(snapshot.useLazyQueryResult!).toEqualQueryResult({
         data: {
           person: {
             __typename: 'Person',
@@ -4426,28 +6473,34 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             lastName: 'Doe',
           },
         },
+        called: true,
         loading: false,
         networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: { id: 1 },
       });
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
-      expect(snapshot.useQueryResult).toMatchObject({
-        data: {
+      expect(snapshot.useQueryResult!).toEqualQueryResult({
+        // Hermes: reads may return a superset of the selected fields (see README).
+        data: supersetOf({
           person: {
             __typename: 'Person',
             id: 1,
             firstName: 'John',
           },
-        },
+        }),
+        called: true,
         loading: false,
         networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: { id: 1 },
       });
 
-      expect(snapshot.useLazyQueryResult).toMatchObject({
-        called: true,
+      expect(snapshot.useLazyQueryResult!).toEqualQueryResult({
         data: {
           person: {
             __typename: 'Person',
@@ -4456,12 +6509,15 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             lastName: 'Doe',
           },
         },
+        called: true,
         loading: false,
         networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: { id: 1 },
       });
     }
 
-    await expect(Profiler).not.toRerender();
+    await expect(renderStream).not.toRerender();
   });
 
   it('does not rerender or refetch queries with errors for partial cache writes with returnPartialData: true', async () => {
@@ -4507,7 +6563,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       }
     `;
 
-    const Profiler = createProfiler({
+    using _disabledAct = disableActEnvironment();
+    const renderStream = createRenderStream({
       initialSnapshot: {
         useQueryResult: null as QueryResult<Query1, Variables> | null,
         useLazyQueryResult: null as QueryResult<Query2, Variables> | null,
@@ -4553,92 +6610,107 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         variables: { id: 1 },
       });
 
-      Profiler.replaceSnapshot({ useQueryResult, useLazyQueryResult });
+      renderStream.replaceSnapshot({ useQueryResult, useLazyQueryResult });
 
       return <button onClick={() => execute()}>Run 2nd query</button>;
     }
 
-    render(<App />, {
-      wrapper: ({ children }) => (
-        <ApolloProvider client={client}>
-          <Profiler>{children}</Profiler>
-        </ApolloProvider>
-      ),
+    await renderStream.render(<App />, {
+      wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
     });
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
-      expect(snapshot.useQueryResult).toMatchObject({
+      expect(snapshot.useQueryResult!).toEqualQueryResult({
         data: undefined,
+        called: true,
         loading: true,
         networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: { id: 1 },
       });
 
-      expect(snapshot.useLazyQueryResult).toMatchObject({
-        called: false,
+      expect(snapshot.useLazyQueryResult!).toEqualQueryResult({
         data: undefined,
+        error: undefined,
+        called: false,
         loading: false,
         networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: { id: 1 },
       });
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
-      expect(snapshot.useQueryResult).toMatchObject({
+      expect(snapshot.useQueryResult!).toEqualQueryResult({
         data: undefined,
         error: new ApolloError({
           graphQLErrors: [new GraphQLError('Intentional error')],
         }),
-        loading: false,
-        networkStatus: NetworkStatus.error,
-      });
-
-      expect(snapshot.useLazyQueryResult).toMatchObject({
-        called: false,
-        data: undefined,
-        loading: false,
-        networkStatus: NetworkStatus.ready,
-      });
-    }
-
-    await act(() => user.click(screen.getByText('Run 2nd query')));
-
-    {
-      const { snapshot } = await Profiler.takeRender();
-
-      expect(snapshot.useQueryResult).toMatchObject({
-        data: undefined,
-        error: new ApolloError({
-          graphQLErrors: [new GraphQLError('Intentional error')],
-        }),
-        loading: false,
-        networkStatus: NetworkStatus.error,
-      });
-
-      expect(snapshot.useLazyQueryResult).toMatchObject({
         called: true,
+        loading: false,
+        networkStatus: NetworkStatus.error,
+        previousData: undefined,
+        variables: { id: 1 },
+      });
+
+      expect(snapshot.useLazyQueryResult!).toEqualQueryResult({
         data: undefined,
+        error: undefined,
+        called: false,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: { id: 1 },
+      });
+    }
+
+    await user.click(screen.getByText('Run 2nd query'));
+
+    {
+      const { snapshot } = await renderStream.takeRender();
+
+      expect(snapshot.useQueryResult!).toEqualQueryResult({
+        data: undefined,
+        error: new ApolloError({
+          graphQLErrors: [new GraphQLError('Intentional error')],
+        }),
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.error,
+        previousData: undefined,
+        variables: { id: 1 },
+      });
+
+      expect(snapshot.useLazyQueryResult!).toEqualQueryResult({
+        data: undefined,
+        called: true,
         loading: true,
         networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: { id: 1 },
       });
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
-      expect(snapshot.useQueryResult).toMatchObject({
+      expect(snapshot.useQueryResult!).toEqualQueryResult({
         data: undefined,
         error: new ApolloError({
           graphQLErrors: [new GraphQLError('Intentional error')],
         }),
+        called: true,
         loading: false,
         networkStatus: NetworkStatus.error,
+        previousData: undefined,
+        variables: { id: 1 },
       });
 
-      expect(snapshot.useLazyQueryResult).toMatchObject({
-        called: true,
+      expect(snapshot.useLazyQueryResult!).toEqualQueryResult({
         data: {
           person: {
             __typename: 'Person',
@@ -4646,12 +6718,15 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             lastName: 'Doe',
           },
         },
+        called: true,
         loading: false,
         networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: { id: 1 },
       });
     }
 
-    await expect(Profiler).not.toRerender();
+    await expect(renderStream).not.toRerender();
   });
 
   it('delivers the full network response when a merge function returns an incomplete result', async () => {
@@ -4667,12 +6742,6 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         }
       }
     `;
-
-    const Profiler = createProfiler({
-      initialSnapshot: {
-        useQueryResult: null as QueryResult | null,
-      },
-    });
 
     const client = new ApolloClient({
       link: new MockLink([
@@ -4710,36 +6779,28 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       }),
     });
 
-    function App() {
-      const useQueryResult = useQuery(query);
-
-      Profiler.replaceSnapshot({ useQueryResult });
-
-      return null;
-    }
-
-    render(<App />, {
-      wrapper: ({ children }) => (
-        <ApolloProvider client={client}>
-          <Profiler>{children}</Profiler>
-        </ApolloProvider>
-      ),
+    using _disabledAct = disableActEnvironment();
+    const { takeSnapshot } = await renderHookToSnapshotStream(() => useQuery(query), {
+      wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
     });
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const result = await takeSnapshot();
 
-      expect(snapshot.useQueryResult).toMatchObject({
+      expect(result).toEqualQueryResult({
         data: undefined,
+        called: true,
         loading: true,
         networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
       });
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const result = await takeSnapshot();
 
-      expect(snapshot.useQueryResult).toMatchObject({
+      expect(result).toEqualQueryResult({
         data: {
           author: {
             __typename: 'Author',
@@ -4747,16 +6808,20 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             name: 'Author Lee',
             post: {
               __typename: 'Post',
+              id: 1,
               title: 'Title',
             },
           },
         },
+        called: true,
         loading: false,
         networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
       });
     }
 
-    await expect(Profiler).not.toRerender();
+    await expect(takeSnapshot).not.toRerender();
   });
 
   it('triggers a network request and rerenders with the new result when a mutation causes a partial cache update due to an incomplete merge function result', async () => {
@@ -4789,7 +6854,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
     const user = userEvent.setup();
 
-    const Profiler = createProfiler({
+    using _disabledAct = disableActEnvironment();
+    const renderStream = createRenderStream({
       initialSnapshot: {
         useQueryResult: null as QueryResult | null,
       },
@@ -4874,33 +6940,32 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       const useQueryResult = useQuery(query);
       const [mutate] = useMutation(mutation);
 
-      Profiler.replaceSnapshot({ useQueryResult });
+      renderStream.replaceSnapshot({ useQueryResult });
 
       return <button onClick={() => mutate()}>Run mutation</button>;
     }
 
-    render(<App />, {
-      wrapper: ({ children }) => (
-        <ApolloProvider client={client}>
-          <Profiler>{children}</Profiler>
-        </ApolloProvider>
-      ),
+    await renderStream.render(<App />, {
+      wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
     });
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
-      expect(snapshot.useQueryResult).toMatchObject({
+      expect(snapshot.useQueryResult!).toEqualQueryResult({
         data: undefined,
+        called: true,
         loading: true,
         networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
       });
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
-      expect(snapshot.useQueryResult).toMatchObject({
+      expect(snapshot.useQueryResult!).toEqualQueryResult({
         data: {
           author: {
             __typename: 'Author',
@@ -4908,22 +6973,26 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             name: 'Author Lee',
             post: {
               __typename: 'Post',
+              id: 1,
               title: 'Title',
             },
           },
         },
+        called: true,
         loading: false,
         networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
       });
     }
 
-    await act(() => user.click(screen.getByText('Run mutation')));
-    await Profiler.takeRender();
+    await user.click(screen.getByText('Run mutation'));
+    await renderStream.takeRender();
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
-      expect(snapshot.useQueryResult).toMatchObject({
+      expect(snapshot.useQueryResult!).toEqualQueryResult({
         data: {
           author: {
             __typename: 'Author',
@@ -4931,19 +7000,23 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             name: 'Author Lee',
             post: {
               __typename: 'Post',
+              id: 1,
               title: 'Title',
             },
           },
         },
+        called: true,
         loading: false,
         networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
       });
     }
 
     {
-      const { snapshot } = await Profiler.takeRender();
+      const { snapshot } = await renderStream.takeRender();
 
-      expect(snapshot.useQueryResult).toMatchObject({
+      expect(snapshot.useQueryResult!).toEqualQueryResult({
         data: {
           author: {
             __typename: 'Author',
@@ -4955,16 +7028,31 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             name: 'Author Lee (refetch)',
             post: {
               __typename: 'Post',
+              id: 1,
               title: 'Title',
             },
           },
         },
+        called: true,
         loading: false,
         networkStatus: NetworkStatus.ready,
+        previousData: {
+          author: {
+            __typename: 'Author',
+            id: 1,
+            name: 'Author Lee',
+            post: {
+              __typename: 'Post',
+              id: 1,
+              title: 'Title',
+            },
+          },
+        },
+        variables: {},
       });
     }
 
-    await expect(Profiler).not.toRerender();
+    await expect(renderStream).not.toRerender();
   });
 
   describe('Refetching', () => {
@@ -4994,35 +7082,68 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const ProfiledHook = profileHook(() =>
-        useQuery(query, {
-          variables: { id: 1 },
-          notifyOnNetworkStatusChange: true,
-        }),
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () =>
+          useQuery(query, {
+            variables: { id: 1 },
+            notifyOnNetworkStatusChange: true,
+          }),
+        { wrapper },
       );
+      {
+        const result = await takeSnapshot();
 
-      render(<ProfiledHook />, { wrapper });
-      {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(true);
-        expect(result.data).toBe(undefined);
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: { id: 1 },
+        });
       }
       {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(false);
-        expect(result.data).toEqual({ hello: 'world 1' });
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 1' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: { id: 1 },
+        });
       }
-      ProfiledHook.getCurrentSnapshot().refetch({ id: 2 });
+
+      await getCurrentSnapshot().refetch({ id: 2 });
+
       {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(true);
-        expect(result.data).toBe(undefined);
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.setVariables,
+          previousData: { hello: 'world 1' },
+          variables: { id: 2 },
+        });
       }
       {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(false);
-        expect(result.data).toEqual({ hello: 'world 2' });
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 2' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 1' },
+          variables: { id: 2 },
+        });
       }
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('refetching after an error', async () => {
@@ -5050,60 +7171,111 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       const cache = new Hermes();
 
-      const ProfiledHook = profileHook(() =>
-        useQuery(query, {
-          notifyOnNetworkStatusChange: true,
-        }),
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () =>
+          useQuery(query, {
+            notifyOnNetworkStatusChange: true,
+          }),
+        {
+          wrapper: ({ children }) => (
+            <MockedProvider mocks={mocks} cache={cache}>
+              {children}
+            </MockedProvider>
+          ),
+        },
       );
 
-      render(<ProfiledHook />, {
-        wrapper: ({ children }) => (
-          <MockedProvider mocks={mocks} cache={cache}>
-            {children}
-          </MockedProvider>
-        ),
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 1' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      await expect(getCurrentSnapshot().refetch()).rejects.toEqual(
+        new ApolloError({ networkError: new Error('This is an error!') }),
+      );
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 1' },
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.refetch,
+          previousData: { hello: 'world 1' },
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 1' },
+          error: new ApolloError({
+            networkError: new Error('This is an error!'),
+          }),
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.error,
+          previousData: { hello: 'world 1' },
+          variables: {},
+        });
+      }
+
+      await expect(getCurrentSnapshot().refetch()).resolves.toEqualApolloQueryResult({
+        data: { hello: 'world 2' },
+        loading: false,
+        networkStatus: NetworkStatus.ready,
       });
 
       {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(true);
-        expect(result.data).toBe(undefined);
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 1' },
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.refetch,
+          previousData: { hello: 'world 1' },
+          variables: {},
+        });
       }
       {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(false);
-        expect(result.error).toBe(undefined);
-        expect(result.data).toEqual({ hello: 'world 1' });
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world 2' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 1' },
+          variables: {},
+        });
       }
 
-      ProfiledHook.getCurrentSnapshot().refetch();
-      {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(true);
-        expect(result.error).toBe(undefined);
-        expect(result.data).toEqual({ hello: 'world 1' });
-      }
-
-      {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(false);
-        expect(result.error).toBeInstanceOf(ApolloError);
-        expect(result.data).toEqual({ hello: 'world 1' });
-      }
-
-      ProfiledHook.getCurrentSnapshot().refetch();
-      {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(true);
-        expect(result.error).toBe(undefined);
-        expect(result.data).toEqual({ hello: 'world 1' });
-      }
-      {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(false);
-        expect(result.error).toBe(undefined);
-        expect(result.data).toEqual({ hello: 'world 2' });
-      }
+      await expect(takeSnapshot).not.toRerender();
     });
 
     describe('refetchWritePolicy', () => {
@@ -5164,7 +7336,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           </MockedProvider>
         );
 
-        const { result } = renderHook(
+        using _disabledAct = disableActEnvironment();
+        const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
           () =>
             useQuery(query, {
               variables: { min: 0, max: 12 },
@@ -5175,62 +7348,75 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           { wrapper },
         );
 
-        expect(result.current.loading).toBe(true);
-        expect(result.current.error).toBe(undefined);
-        expect(result.current.data).toBe(undefined);
-        expect(typeof result.current.refetch).toBe('function');
+        {
+          const result = await takeSnapshot();
 
-        await waitFor(
-          () => {
-            expect(result.current.loading).toBe(false);
-          },
-          { interval: 1 },
-        );
-        expect(result.current.error).toBeUndefined();
-        expect(result.current.data).toEqual({ primes: [2, 3, 5, 7, 11] });
-        expect(mergeParams).toEqual([[void 0, [2, 3, 5, 7, 11]]]);
+          expect(result).toEqualQueryResult({
+            data: undefined,
+            called: true,
+            loading: true,
+            networkStatus: NetworkStatus.loading,
+            previousData: undefined,
+            variables: { min: 0, max: 12 },
+          });
+        }
 
-        const thenFn = jest.fn();
-        result.current.refetch({ min: 12, max: 30 }).then(thenFn);
+        {
+          const result = await takeSnapshot();
 
-        await waitFor(
-          () => {
-            expect(result.current.loading).toBe(true);
-          },
-          { interval: 1 },
-        );
-        expect(result.current.error).toBe(undefined);
-        expect(result.current.data).toEqual({
-          // We get the stale data because we configured keyArgs: false.
-          primes: [2, 3, 5, 7, 11],
+          expect(result).toEqualQueryResult({
+            data: { primes: [2, 3, 5, 7, 11] },
+            called: true,
+            loading: false,
+            networkStatus: NetworkStatus.ready,
+            previousData: undefined,
+            variables: { min: 0, max: 12 },
+          });
+        }
+
+        expect(mergeParams).toEqual([[undefined, [2, 3, 5, 7, 11]]]);
+
+        await expect(getCurrentSnapshot().refetch({ min: 12, max: 30 })).resolves.toEqualApolloQueryResult({
+          data: { primes: [13, 17, 19, 23, 29] },
+          loading: false,
+          networkStatus: NetworkStatus.ready,
         });
 
-        // This networkStatus is setVariables instead of refetch because we
-        // called refetch with new variables.
-        expect(result.current.networkStatus).toBe(NetworkStatus.setVariables);
+        {
+          const result = await takeSnapshot();
 
-        await waitFor(
-          () => {
-            expect(result.current.loading).toBe(false);
-          },
-          { interval: 1 },
-        );
+          expect(result).toEqualQueryResult({
+            // We get the stale data because we configured keyArgs: false.
+            data: { primes: [2, 3, 5, 7, 11] },
+            called: true,
+            loading: true,
+            // This networkStatus is setVariables instead of refetch because we
+            // called refetch with new variables.
+            networkStatus: NetworkStatus.setVariables,
+            previousData: { primes: [2, 3, 5, 7, 11] },
+            variables: { min: 12, max: 30 },
+          });
+        }
 
-        expect(result.current.error).toBe(undefined);
-        expect(result.current.data).toEqual({ primes: [13, 17, 19, 23, 29] });
+        {
+          const result = await takeSnapshot();
+
+          expect(result).toEqualQueryResult({
+            data: { primes: [13, 17, 19, 23, 29] },
+            called: true,
+            loading: false,
+            networkStatus: NetworkStatus.ready,
+            previousData: { primes: [2, 3, 5, 7, 11] },
+            variables: { min: 12, max: 30 },
+          });
+        }
+
         expect(mergeParams).toEqual([
           [undefined, [2, 3, 5, 7, 11]],
           // Without refetchWritePolicy: "overwrite", this array will be
           // all 10 primes (2 through 29) together.
           [undefined, [13, 17, 19, 23, 29]],
         ]);
-
-        expect(thenFn).toHaveBeenCalledTimes(1);
-        expect(thenFn).toHaveBeenCalledWith({
-          loading: false,
-          networkStatus: NetworkStatus.ready,
-          data: { primes: [13, 17, 19, 23, 29] },
-        });
       });
 
       // Hermes: keyArgs is not implemented, so refetches with new variables are stored separately instead of under one field
@@ -5258,7 +7444,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           </MockedProvider>
         );
 
-        const { result } = renderHook(
+        using _disabledAct = disableActEnvironment();
+        const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
           () =>
             useQuery(query, {
               variables: { min: 0, max: 12 },
@@ -5269,73 +7456,77 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           { wrapper },
         );
 
-        expect(result.current.loading).toBe(true);
-        expect(result.current.error).toBe(undefined);
-        expect(result.current.data).toBe(undefined);
-        expect(typeof result.current.refetch).toBe('function');
+        {
+          const result = await takeSnapshot();
 
-        await waitFor(
-          () => {
-            expect(result.current.loading).toBe(false);
-          },
-          { interval: 1 },
-        );
-        expect(result.current.error).toBeUndefined();
-        expect(result.current.data).toEqual({ primes: [2, 3, 5, 7, 11] });
+          expect(result).toEqualQueryResult({
+            data: undefined,
+            called: true,
+            loading: true,
+            networkStatus: NetworkStatus.loading,
+            previousData: undefined,
+            variables: { min: 0, max: 12 },
+          });
+        }
+
+        {
+          const result = await takeSnapshot();
+
+          expect(result).toEqualQueryResult({
+            data: { primes: [2, 3, 5, 7, 11] },
+            called: true,
+            loading: false,
+            networkStatus: NetworkStatus.ready,
+            previousData: undefined,
+            variables: { min: 0, max: 12 },
+          });
+        }
+
         expect(mergeParams).toEqual([[undefined, [2, 3, 5, 7, 11]]]);
 
-        const thenFn = jest.fn();
-        result.current.refetch({ min: 12, max: 30 }).then(thenFn);
-
-        await waitFor(
-          () => {
-            expect(result.current.loading).toBe(true);
-          },
-          { interval: 1 },
-        );
-        expect(result.current.error).toBe(undefined);
-        expect(result.current.data).toEqual({
-          // We get the stale data because we configured keyArgs: false.
-          primes: [2, 3, 5, 7, 11],
+        await expect(getCurrentSnapshot().refetch({ min: 12, max: 30 })).resolves.toEqualApolloQueryResult({
+          data: { primes: [2, 3, 5, 7, 11, 13, 17, 19, 23, 29] },
+          loading: false,
+          networkStatus: NetworkStatus.ready,
         });
-        // This networkStatus is setVariables instead of refetch because we
-        // called refetch with new variables.
-        expect(result.current.networkStatus).toBe(NetworkStatus.setVariables);
-        await waitFor(
-          () => {
-            expect(result.current.loading).toBe(false);
-          },
-          { interval: 1 },
-        );
 
-        expect(result.current.error).toBe(undefined);
-        expect(result.current.data).toEqual({
-          primes: [2, 3, 5, 7, 11, 13, 17, 19, 23, 29],
-        });
+        {
+          const result = await takeSnapshot();
+
+          expect(result).toEqualQueryResult({
+            // We get the stale data because we configured keyArgs: false.
+            data: { primes: [2, 3, 5, 7, 11] },
+            called: true,
+            loading: true,
+            // This networkStatus is setVariables instead of refetch because we
+            // called refetch with new variables.
+            networkStatus: NetworkStatus.setVariables,
+            previousData: { primes: [2, 3, 5, 7, 11] },
+            variables: { min: 12, max: 30 },
+          });
+        }
+
+        {
+          const result = await takeSnapshot();
+
+          expect(result).toEqualQueryResult({
+            data: { primes: [2, 3, 5, 7, 11, 13, 17, 19, 23, 29] },
+            called: true,
+            loading: false,
+            networkStatus: NetworkStatus.ready,
+            previousData: { primes: [2, 3, 5, 7, 11] },
+            variables: { min: 12, max: 30 },
+          });
+        }
+
         expect(mergeParams).toEqual([
-          [void 0, [2, 3, 5, 7, 11]],
+          [undefined, [2, 3, 5, 7, 11]],
           // This indicates concatenation happened.
           [
             [2, 3, 5, 7, 11],
             [13, 17, 19, 23, 29],
           ],
         ]);
-        expect(mergeParams).toEqual([
-          [undefined, [2, 3, 5, 7, 11]],
-          // Without refetchWritePolicy: "overwrite", this array will be
-          // all 10 primes (2 through 29) together.
-          [
-            [2, 3, 5, 7, 11],
-            [13, 17, 19, 23, 29],
-          ],
-        ]);
-
-        expect(thenFn).toHaveBeenCalledTimes(1);
-        expect(thenFn).toHaveBeenCalledWith({
-          loading: false,
-          networkStatus: NetworkStatus.ready,
-          data: { primes: [2, 3, 5, 7, 11, 13, 17, 19, 23, 29] },
-        });
       });
 
       // Hermes: keyArgs is not implemented, so refetches with new variables are stored separately instead of under one field
@@ -5362,64 +7553,83 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             {children}
           </MockedProvider>
         );
-        const ProfiledHook = profileHook(() =>
-          useQuery(query, {
-            variables: { min: 0, max: 12 },
-            notifyOnNetworkStatusChange: true,
-            // Intentionally not passing refetchWritePolicy.
-          }),
+        using _disabledAct = disableActEnvironment();
+        const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+          () =>
+            useQuery(query, {
+              variables: { min: 0, max: 12 },
+              notifyOnNetworkStatusChange: true,
+              // Intentionally not passing refetchWritePolicy.
+            }),
+          { wrapper },
         );
 
-        render(<ProfiledHook />, { wrapper });
-
         {
-          const result = await ProfiledHook.takeSnapshot();
-          expect(result.loading).toBe(true);
-          expect(result.error).toBe(undefined);
-          expect(result.data).toBe(undefined);
-          expect(typeof result.refetch).toBe('function');
+          const result = await takeSnapshot();
+
+          expect(result).toEqualQueryResult({
+            data: undefined,
+            called: true,
+            loading: true,
+            networkStatus: NetworkStatus.loading,
+            previousData: undefined,
+            variables: { min: 0, max: 12 },
+          });
         }
         {
-          const result = await ProfiledHook.takeSnapshot();
-          expect(result.loading).toBe(false);
-          expect(result.error).toBeUndefined();
-          expect(result.data).toEqual({ primes: [2, 3, 5, 7, 11] });
+          const result = await takeSnapshot();
+
+          expect(result).toEqualQueryResult({
+            data: { primes: [2, 3, 5, 7, 11] },
+            called: true,
+            loading: false,
+            networkStatus: NetworkStatus.ready,
+            previousData: undefined,
+            variables: { min: 0, max: 12 },
+          });
           expect(mergeParams.shift()).toEqual([void 0, [2, 3, 5, 7, 11]]);
         }
 
-        const thenFn = jest.fn();
-        ProfiledHook.getCurrentSnapshot().refetch({ min: 12, max: 30 }).then(thenFn);
+        await expect(getCurrentSnapshot().refetch({ min: 12, max: 30 })).resolves.toEqualApolloQueryResult({
+          data: { primes: [13, 17, 19, 23, 29] },
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+        });
 
         {
-          const result = await ProfiledHook.takeSnapshot();
-          expect(result.loading).toBe(true);
-          expect(result.error).toBe(undefined);
-          expect(result.data).toEqual({
-            // We get the stale data because we configured keyArgs: false.
-            primes: [2, 3, 5, 7, 11],
+          const result = await takeSnapshot();
+
+          expect(result).toEqualQueryResult({
+            data: {
+              // We get the stale data because we configured keyArgs: false.
+              primes: [2, 3, 5, 7, 11],
+            },
+            called: true,
+            loading: true,
+            // This networkStatus is setVariables instead of refetch because we
+            // called refetch with new variables.
+            networkStatus: NetworkStatus.setVariables,
+            previousData: { primes: [2, 3, 5, 7, 11] },
+            variables: { min: 12, max: 30 },
           });
-          // This networkStatus is setVariables instead of refetch because we
-          // called refetch with new variables.
-          expect(result.networkStatus).toBe(NetworkStatus.setVariables);
         }
 
         {
-          const result = await ProfiledHook.takeSnapshot();
-          expect(result.loading).toBe(false);
-          expect(result.error).toBe(undefined);
-          expect(result.data).toEqual({ primes: [13, 17, 19, 23, 29] });
+          const result = await takeSnapshot();
+
+          expect(result).toEqualQueryResult({
+            data: { primes: [13, 17, 19, 23, 29] },
+            called: true,
+            loading: false,
+            networkStatus: NetworkStatus.ready,
+            previousData: { primes: [2, 3, 5, 7, 11] },
+            variables: { min: 12, max: 30 },
+          });
           expect(mergeParams.shift()).toEqual(
             // Without refetchWritePolicy: "overwrite", this array will be
             // all 10 primes (2 through 29) together.
             [undefined, [13, 17, 19, 23, 29]],
           );
-
-          expect(thenFn).toHaveBeenCalledTimes(1);
-          expect(thenFn).toHaveBeenCalledWith({
-            loading: false,
-            networkStatus: NetworkStatus.ready,
-            data: { primes: [13, 17, 19, 23, 29] },
-          });
         }
       });
     });
@@ -5482,70 +7692,129 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
             }
           }),
       );
+      const client = new ApolloClient({ cache: new Hermes(), link });
 
-      const hookResponse = jest.fn().mockReturnValue(null);
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, rerender } = await renderHookToSnapshotStream(
+        ({ id }) =>
+          useQuery(CAR_QUERY_BY_ID, {
+            variables: { id },
+            notifyOnNetworkStatusChange: true,
+            fetchPolicy: 'network-only',
+          }),
+        {
+          initialProps: { id: 1 },
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        },
+      );
 
-      function Component({ children, id }: any) {
-        const result = useQuery(CAR_QUERY_BY_ID, {
-          variables: { id },
-          notifyOnNetworkStatusChange: true,
-          fetchPolicy: 'network-only',
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: { id: 1 },
         });
-        const client = useApolloClient();
-        const hasRefetchedRef = useRef(false);
-
-        useEffect(() => {
-          if (result.networkStatus === NetworkStatus.ready && !hasRefetchedRef.current) {
-            client.reFetchObservableQueries();
-            hasRefetchedRef.current = true;
-          }
-        }, [result.networkStatus]);
-
-        return children(result);
       }
 
-      const { rerender } = render(<Component id={1}>{hookResponse}</Component>, {
-        wrapper: ({ children }) => <MockedProvider link={link}>{children}</MockedProvider>,
-      });
+      {
+        const result = await takeSnapshot();
 
-      await waitFor(() => {
-        // Resolves as soon as reFetchObservableQueries is
-        // called, but before the result is returned
-        expect(hookResponse).toHaveBeenCalledTimes(3);
-      });
-
-      rerender(<Component id={2}>{hookResponse}</Component>);
-
-      await waitFor(() => {
-        // All results are returned
-        expect(hookResponse).toHaveBeenCalledTimes(5);
-      });
-
-      expect(hookResponse.mock.calls.map(call => call[0].data)).toEqual([
-        undefined,
-        {
-          car: {
-            __typename: 'Car',
-            make: 'Audi',
-            model: 'A4',
+        expect(result).toEqualQueryResult({
+          data: {
+            car: {
+              __typename: 'Car',
+              make: 'Audi',
+              model: 'A4',
+            },
           },
-        },
-        {
-          car: {
-            __typename: 'Car',
-            make: 'Audi',
-            model: 'A4',
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: { id: 1 },
+        });
+      }
+
+      void client.reFetchObservableQueries();
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: {
+            car: {
+              __typename: 'Car',
+              make: 'Audi',
+              model: 'A4',
+            },
           },
-        },
-        undefined,
-        {
-          car: {
-            __typename: 'Car',
-            make: 'Audi',
-            model: 'RS8',
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.refetch,
+          previousData: {
+            car: {
+              __typename: 'Car',
+              make: 'Audi',
+              model: 'A4',
+            },
           },
-        },
-      ]);
+          variables: { id: 1 },
+        });
+      }
+
+      // Rerender with new variables before the refetch request completes
+      await rerender({ id: 2 });
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.setVariables,
+          previousData: {
+            car: {
+              __typename: 'Car',
+              make: 'Audi',
+              model: 'A4',
+            },
+          },
+          variables: { id: 2 },
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: {
+            car: {
+              __typename: 'Car',
+              make: 'Audi',
+              model: 'RS8',
+            },
+          },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: {
+            car: {
+              __typename: 'Car',
+              make: 'Audi',
+              model: 'A4',
+            },
+          },
+          variables: { id: 2 },
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
   });
 
@@ -5570,7 +7839,9 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       );
 
       const onCompleted = jest.fn();
-      const { result } = renderHook(
+
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(
         () =>
           useQuery(query, {
             fetchPolicy: 'cache-only',
@@ -5579,31 +7850,21 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         { wrapper },
       );
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({ hello: 'world' });
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(onCompleted).toHaveBeenCalledTimes(1);
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(onCompleted).toHaveBeenCalledWith({ hello: 'world' });
-        },
-        { interval: 1 },
-      );
+      const result = await takeSnapshot();
+
+      expect(result).toEqualQueryResult({
+        data: { hello: 'world' },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
+
       expect(onCompleted).toHaveBeenCalledTimes(1);
+      expect(onCompleted).toHaveBeenCalledWith({ hello: 'world' });
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('onCompleted is called once despite state changes', async () => {
@@ -5627,34 +7888,60 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       );
 
       const onCompleted = jest.fn();
-      const { result, rerender } = renderHook(
-        () =>
-          useQuery(query, {
-            onCompleted,
-          }),
-        { wrapper },
-      );
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, rerender } = await renderHookToSnapshotStream(() => useQuery(query, { onCompleted }), {
+        wrapper,
+      });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
+      {
+        const result = await takeSnapshot();
 
-      expect(result.current.data).toEqual({ hello: 'world' });
+        expect(result).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
       expect(onCompleted).toHaveBeenCalledTimes(1);
       expect(onCompleted).toHaveBeenCalledWith({ hello: 'world' });
 
-      rerender();
-      expect(result.current.loading).toBe(false);
-      expect(result.current.data).toEqual({ hello: 'world' });
+      await rerender(undefined);
+
+      {
+        const result = await takeSnapshot();
+
+        expect(result).toEqualQueryResult({
+          data: { hello: 'world' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
       expect(onCompleted).toHaveBeenCalledTimes(1);
       expect(onCompleted).toHaveBeenCalledWith({ hello: 'world' });
-      expect(onCompleted).toHaveBeenCalledTimes(1);
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('should not call onCompleted if skip is true', async () => {
@@ -5678,7 +7965,9 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       );
 
       const onCompleted = jest.fn();
-      const { result } = renderHook(
+
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(
         () =>
           useQuery(query, {
             skip: true,
@@ -5687,20 +7976,18 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         { wrapper },
       );
 
-      expect(result.current.loading).toBe(false);
-      expect(result.current.data).toBe(undefined);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        error: undefined,
+        called: false,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
 
       expect(onCompleted).toHaveBeenCalledTimes(0);
-
-      await expect(
-        waitFor(
-          () => {
-            expect(onCompleted).toHaveBeenCalledTimes(1);
-          },
-          { interval: 1, timeout: 20 },
-        ),
-      ).rejects.toThrow();
-
+      await expect(takeSnapshot).not.toRerender();
       expect(onCompleted).toHaveBeenCalledTimes(0);
     });
 
@@ -5725,38 +8012,37 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       );
 
       const onCompleted = jest.fn();
-      let updates = 0;
-      const { result } = renderHook(
+
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(
         () => {
-          const pendingResult = useQuery(query, {
+          return useQuery(query, {
             fetchPolicy: 'network-only',
             onCompleted,
           });
-          updates++;
-
-          return pendingResult;
         },
         { wrapper },
       );
 
-      expect(result.current.loading).toBe(true);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
+      });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual({ hello: 'world' });
-      const previousUpdates = updates;
-      await expect(
-        waitFor(
-          () => {
-            expect(updates).not.toEqual(previousUpdates);
-          },
-          { interval: 1, timeout: 20 },
-        ),
-      ).rejects.toThrow();
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { hello: 'world' },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
+
+      await expect(takeSnapshot).not.toRerender();
       expect(onCompleted).toHaveBeenCalledTimes(1);
     });
 
@@ -5783,7 +8069,9 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       const cache = new Hermes();
       const onCompleted = jest.fn();
-      const { result } = renderHook(
+
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(
         () =>
           useQuery(query, {
             onCompleted,
@@ -5798,37 +8086,51 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         },
       );
 
-      expect(result.current.loading).toBe(true);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
+      });
 
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({ hello: 'world 1' });
-        },
-        { interval: 1 },
-      );
-      expect(result.current.loading).toBe(false);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { hello: 'world 1' },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
+
       expect(onCompleted).toHaveBeenCalledTimes(1);
 
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({ hello: 'world 2' });
-        },
-        { interval: 1 },
-      );
-      expect(result.current.loading).toBe(false);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { hello: 'world 2' },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: { hello: 'world 1' },
+        variables: {},
+      });
+
       expect(onCompleted).toHaveBeenCalledTimes(1);
 
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({ hello: 'world 3' });
-        },
-        { interval: 1 },
-      );
-      expect(result.current.loading).toBe(false);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { hello: 'world 3' },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: { hello: 'world 2' },
+        variables: {},
+      });
+
       expect(onCompleted).toHaveBeenCalledTimes(1);
     });
 
     it('onCompleted should fire when polling with notifyOnNetworkStatusChange: true', async () => {
+      jest.useFakeTimers();
       const query = gql`
         {
           hello
@@ -5838,72 +8140,145 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         {
           request: { query },
           result: { data: { hello: 'world 1' } },
-          delay: 3,
+          delay: 20,
         },
         {
           request: { query },
           result: { data: { hello: 'world 2' } },
-          delay: 3,
+          delay: 20,
         },
         {
           request: { query },
           result: { data: { hello: 'world 3' } },
-          delay: 3,
+          delay: 20,
         },
       ];
 
       const cache = new Hermes();
       const onCompleted = jest.fn();
-      const ProfiledHook = profileHook(() =>
-        useQuery(query, {
-          onCompleted,
-          notifyOnNetworkStatusChange: true,
-          pollInterval: 110,
-        }),
+
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(
+        () =>
+          useQuery(query, {
+            onCompleted,
+            notifyOnNetworkStatusChange: true,
+            pollInterval: 200,
+          }),
+        {
+          wrapper: ({ children }) => (
+            <MockedProvider mocks={mocks} cache={cache}>
+              {children}
+            </MockedProvider>
+          ),
+        },
       );
-      render(<ProfiledHook />, {
-        wrapper: ({ children }) => (
-          <MockedProvider mocks={mocks} cache={cache}>
-            {children}
-          </MockedProvider>
-        ),
-      });
 
       {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.data).toEqual(undefined);
-        expect(result.loading).toBe(true);
+        const promise = takeSnapshot();
+        await jest.advanceTimersByTimeAsync(0);
+
+        await expect(promise).resolves.toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
       }
+
+      expect(onCompleted).toHaveBeenCalledTimes(0);
+      jest.advanceTimersByTime(20);
+
       {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.data).toEqual({ hello: 'world 1' });
-        expect(result.loading).toBe(false);
-        expect(onCompleted).toHaveBeenCalledTimes(1);
+        const promise = takeSnapshot();
+        await jest.advanceTimersByTimeAsync(0);
+
+        await expect(promise).resolves.toEqualQueryResult({
+          data: { hello: 'world 1' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
       }
+
+      expect(onCompleted).toHaveBeenCalledTimes(1);
+      // Polling is started with the first request, so we only need to advance
+      // the timer by 180 (200 poll time - 20 result delay)
+      jest.advanceTimersByTime(180);
+
       {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.data).toEqual({ hello: 'world 1' });
-        expect(result.loading).toBe(true);
-        expect(onCompleted).toHaveBeenCalledTimes(1);
+        const promise = takeSnapshot();
+        await jest.advanceTimersByTimeAsync(0);
+
+        await expect(promise).resolves.toEqualQueryResult({
+          data: { hello: 'world 1' },
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.poll,
+          previousData: { hello: 'world 1' },
+          variables: {},
+        });
       }
+
+      expect(onCompleted).toHaveBeenCalledTimes(1);
+      jest.advanceTimersByTime(20);
+
       {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.data).toEqual({ hello: 'world 2' });
-        expect(result.loading).toBe(false);
-        expect(onCompleted).toHaveBeenCalledTimes(2);
+        const promise = takeSnapshot();
+        await jest.advanceTimersByTimeAsync(0);
+
+        await expect(promise).resolves.toEqualQueryResult({
+          data: { hello: 'world 2' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 1' },
+          variables: {},
+        });
       }
+
+      expect(onCompleted).toHaveBeenCalledTimes(2);
+      jest.advanceTimersByTime(200);
+
       {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.data).toEqual({ hello: 'world 2' });
-        expect(result.loading).toBe(true);
-        expect(onCompleted).toHaveBeenCalledTimes(2);
+        const promise = takeSnapshot();
+        await jest.advanceTimersByTimeAsync(0);
+
+        await expect(promise).resolves.toEqualQueryResult({
+          data: { hello: 'world 2' },
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.poll,
+          previousData: { hello: 'world 2' },
+          variables: {},
+        });
       }
+
+      expect(onCompleted).toHaveBeenCalledTimes(2);
+      jest.advanceTimersByTime(20);
+
       {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.data).toEqual({ hello: 'world 3' });
-        expect(result.loading).toBe(false);
-        expect(onCompleted).toHaveBeenCalledTimes(3);
+        const promise = takeSnapshot();
+        await jest.advanceTimersByTimeAsync(0);
+
+        await expect(promise).resolves.toEqualQueryResult({
+          data: { hello: 'world 3' },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: { hello: 'world 2' },
+          variables: {},
+        });
       }
+
+      expect(onCompleted).toHaveBeenCalledTimes(3);
+
+      jest.runOnlyPendingTimers();
+      jest.useRealTimers();
     });
 
     // This test was added for issue https://github.com/apollographql/apollo-client/issues/9794
@@ -5967,47 +8342,61 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           result: { data: { hello: 'bar' } },
         },
       ];
-      const link = new MockLink(mocks);
-      const cache = new Hermes();
+      const client = new ApolloClient({
+        cache: new Hermes(),
+        link: new MockLink(mocks),
+      });
       const onCompleted = jest.fn();
 
-      const ChildComponent: React.FC = () => {
-        const { data, client } = useQuery(query, { onCompleted });
-        function refetchQueries() {
-          client.refetchQueries({ include: 'active' });
-        }
-        function writeQuery() {
-          client.writeQuery({ query, data: { hello: 'baz' } });
-        }
-        return (
-          <div>
-            <span>Data: {data?.hello}</span>
-            <button onClick={() => refetchQueries()}>Refetch queries</button>
-            <button onClick={() => writeQuery()}>Update word</button>
-          </div>
-        );
-      };
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(() => useQuery(query, { onCompleted }), {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      });
 
-      const ParentComponent: React.FC = () => {
-        return (
-          <MockedProvider link={link} cache={cache}>
-            <div>
-              <ChildComponent />
-            </div>
-          </MockedProvider>
-        );
-      };
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
+      });
 
-      render(<ParentComponent />);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { hello: 'foo' },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
+      expect(onCompleted).toHaveBeenCalledTimes(1);
 
-      await screen.findByText('Data: foo');
-      await userEvent.click(screen.getByRole('button', { name: /refetch queries/i }));
+      void client.refetchQueries({ include: 'active' });
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { hello: 'bar' },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: { hello: 'foo' },
+        variables: {},
+      });
       expect(onCompleted).toHaveBeenCalledTimes(1);
-      await screen.findByText('Data: bar');
-      await userEvent.click(screen.getByRole('button', { name: /update word/i }));
+
+      client.writeQuery({ query, data: { hello: 'baz' } });
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { hello: 'baz' },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: { hello: 'bar' },
+        variables: {},
+      });
       expect(onCompleted).toHaveBeenCalledTimes(1);
-      await screen.findByText('Data: baz');
-      expect(onCompleted).toHaveBeenCalledTimes(1);
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('onCompleted should execute on cache writes after initial query execution with notifyOnNetworkStatusChange: true', async () => {
@@ -6020,64 +8409,91 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         {
           request: { query },
           result: { data: { hello: 'foo' } },
+          delay: 20,
         },
         {
           request: { query },
           result: { data: { hello: 'bar' } },
+          delay: 20,
         },
       ];
-      const link = new MockLink(mocks);
-      const cache = new Hermes();
+      const client = new ApolloClient({
+        cache: new Hermes(),
+        link: new MockLink(mocks),
+      });
       const onCompleted = jest.fn();
 
-      const ChildComponent: React.FC = () => {
-        const { data, client } = useQuery(query, {
-          onCompleted,
-          notifyOnNetworkStatusChange: true,
-        });
-        function refetchQueries() {
-          client.refetchQueries({ include: 'active' });
-        }
-        function writeQuery() {
-          client.writeQuery({ query, data: { hello: 'baz' } });
-        }
-        return (
-          <div>
-            <span>Data: {data?.hello}</span>
-            <button onClick={() => refetchQueries()}>Refetch queries</button>
-            <button onClick={() => writeQuery()}>Update word</button>
-          </div>
-        );
-      };
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(
+        () => useQuery(query, { onCompleted, notifyOnNetworkStatusChange: true }),
+        {
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        },
+      );
 
-      const ParentComponent: React.FC = () => {
-        return (
-          <MockedProvider link={link} cache={cache}>
-            <div>
-              <ChildComponent />
-            </div>
-          </MockedProvider>
-        );
-      };
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
+      });
 
-      render(<ParentComponent />);
-
-      await screen.findByText('Data: foo');
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { hello: 'foo' },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
       expect(onCompleted).toHaveBeenCalledTimes(1);
-      await userEvent.click(screen.getByRole('button', { name: /refetch queries/i }));
-      // onCompleted increments when refetch occurs since we're hitting the network...
+
+      void client.refetchQueries({ include: 'active' });
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { hello: 'foo' },
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.refetch,
+        previousData: { hello: 'foo' },
+        variables: {},
+      });
+      expect(onCompleted).toHaveBeenCalledTimes(1);
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { hello: 'bar' },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: { hello: 'foo' },
+        variables: {},
+      });
       expect(onCompleted).toHaveBeenCalledTimes(2);
-      await screen.findByText('Data: bar');
-      await userEvent.click(screen.getByRole('button', { name: /update word/i }));
-      // but not on direct cache write, since there's no network request to complete
+
+      client.writeQuery({ query, data: { hello: 'baz' } });
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { hello: 'baz' },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: { hello: 'bar' },
+        variables: {},
+      });
       expect(onCompleted).toHaveBeenCalledTimes(2);
-      await screen.findByText('Data: baz');
-      expect(onCompleted).toHaveBeenCalledTimes(2);
+
+      await expect(takeSnapshot).not.toRerender();
     });
   });
 
   describe('Optimistic data', () => {
     it('should display rolled back optimistic data when an error occurs', async () => {
+      if (IS_REACT_17) {
+        // this test is currently broken in React 17 with RTL 16 and needs further investigation
+        return;
+      }
       const query = gql`
         query AllCars {
           cars {
@@ -6140,86 +8556,123 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       );
 
       const onError = jest.fn();
-      const ProfiledHook = profileHook(() => ({
-        mutation: useMutation(mutation, {
-          optimisticResponse: { addCar: carData },
-          update(cache, { data }) {
-            cache.modify({
-              fields: {
-                cars(existing, { readField }) {
-                  const newCarRef = cache.writeFragment({
-                    data: data!.addCar,
-                    fragment: gql`
-                      fragment NewCar on Car {
-                        id
-                        make
-                        model
-                      }
-                    `,
-                  });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () => ({
+          mutation: useMutation(mutation, {
+            optimisticResponse: { addCar: carData },
+            update(cache, { data }) {
+              cache.modify({
+                fields: {
+                  cars(existing, { readField }) {
+                    const newCarRef = cache.writeFragment({
+                      data: data!.addCar,
+                      fragment: gql`
+                        fragment NewCar on Car {
+                          id
+                          make
+                          model
+                        }
+                      `,
+                    });
 
-                  if (existing.some((ref: Reference) => readField('id', ref) === data!.addCar.id)) {
-                    return existing;
-                  }
+                    if (existing.some((ref: Reference) => readField('id', ref) === data!.addCar.id)) {
+                      return existing;
+                    }
 
-                  return [...existing, newCarRef];
+                    return [...existing, newCarRef];
+                  },
                 },
-              },
-            });
-          },
-          onError,
+              });
+            },
+            onError,
+          }),
+          query: useQuery(query),
         }),
-        query: useQuery(query),
-      }));
-      render(<ProfiledHook />, { wrapper });
+        { wrapper },
+      );
 
       {
-        const { query } = await ProfiledHook.takeSnapshot();
-        expect(query.loading).toBe(true);
-      }
-      const mutate = ProfiledHook.getCurrentSnapshot().mutation[0];
-      {
-        const { query } = await ProfiledHook.takeSnapshot();
-        expect(query.loading).toBe(false);
-        expect(query.loading).toBe(false);
-        expect(query.data).toEqual(carsData);
+        const { query } = await takeSnapshot();
+
+        expect(query).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
       }
 
-      act(() => void mutate());
+      {
+        const { query } = await takeSnapshot();
+
+        expect(query).toEqualQueryResult({
+          data: carsData,
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      const mutate = getCurrentSnapshot().mutation[0];
+      void mutate();
 
       {
         // The mutation ran and is loading the result. The query stays at not
         // loading as nothing has changed for the query, but optimistic data is
         // rendered.
-        let { query, mutation } = await ProfiledHook.takeSnapshot();
+        let { query, mutation } = await takeSnapshot();
 
         while (!mutation[1].loading) {
           // useMutation seems to sometimes have an extra render
           // before it enters `loading` state - this test doesn't test
           // that part of that hook so we just work around it
-          ({ query, mutation } = await ProfiledHook.takeSnapshot());
+          ({ query, mutation } = await takeSnapshot());
         }
         expect(mutation[1].loading).toBe(true);
-        expect(query.loading).toBe(false);
-        expect(query.data).toEqual(allCarsData);
+        expect(query).toEqualQueryResult({
+          data: allCarsData,
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: carsData,
+          variables: {},
+        });
       }
 
       expect(onError).toHaveBeenCalledTimes(0);
       {
-        const { query, mutation } = await ProfiledHook.takeSnapshot();
+        const { query, mutation } = await takeSnapshot();
         // The mutation ran and is loading the result. The query stays at
         // not loading as nothing has changed for the query.
         expect(mutation[1].loading).toBe(true);
-        expect(query.loading).toBe(false);
+        expect(query).toEqualQueryResult({
+          data: carsData,
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: allCarsData,
+          variables: {},
+        });
       }
 
       {
-        const { query, mutation } = await ProfiledHook.takeSnapshot();
+        const { query, mutation } = await takeSnapshot();
         // The mutation has completely finished, leaving the query with access to
         // the original cache data.
         expect(mutation[1].loading).toBe(false);
-        expect(query.loading).toBe(false);
-        expect(query.data).toEqual(carsData);
+        expect(query).toEqualQueryResult({
+          data: carsData,
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: allCarsData,
+          variables: {},
+        });
       }
 
       expect(onError).toHaveBeenCalledTimes(1);
@@ -6362,7 +8815,6 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
     });
 
     it('should attempt a refetch when data is missing, partialRefetch is true and addTypename is false for the cache', async () => {
-      using _disabledActWarnings = disableActWarnings();
       using consoleSpy = spyOnConsole('error');
       const query = gql`
         {
@@ -6391,17 +8843,18 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       const wrapper = ({ children }: any) => <ApolloProvider client={client}>{children}</ApolloProvider>;
 
-      const ProfiledHook = profileHook(() =>
-        useQuery(query, {
-          partialRefetch: true,
-          notifyOnNetworkStatusChange: true,
-        }),
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(
+        () =>
+          useQuery(query, {
+            partialRefetch: true,
+            notifyOnNetworkStatusChange: true,
+          }),
+        { wrapper },
       );
 
-      render(<ProfiledHook />, { wrapper });
-
       {
-        const result = await ProfiledHook.takeSnapshot();
+        const result = await takeSnapshot();
         expect(result.loading).toBe(true);
         expect(result.data).toBe(undefined);
         expect(result.error).toBe(undefined);
@@ -6409,7 +8862,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       }
 
       {
-        const result = await ProfiledHook.takeSnapshot();
+        const result = await takeSnapshot();
         expect(result.networkStatus).toBe(NetworkStatus.refetch);
         expect(result.loading).toBe(true);
         expect(result.error).toBe(undefined);
@@ -6417,14 +8870,11 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       }
 
       const calls = consoleSpy.error.mock.calls;
-      if (!IS_REACT_17) {
-        // React 17 doesn't know `IS_REACT_ACT_ENVIRONMENT` yet, so it will log a warning that we don't care about.
-        expect(calls.length).toBe(1);
-      }
+      expect(calls.length).toBe(1);
       expect(calls[0][0]).toMatch('Missing field');
 
       {
-        const result = await ProfiledHook.takeSnapshot();
+        const result = await takeSnapshot();
         expect(result.networkStatus).toBe(NetworkStatus.ready);
         expect(result.loading).toBe(false);
         expect(result.data).toEqual({ hello: 'world' });
@@ -6490,7 +8940,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
       const entityId = 1;
       const shortTitle = 'Short';
       const longerTitle = 'A little longer';
-      client.mutate({
+      await client.mutate({
         mutation,
         variables: {
           id: entityId,
@@ -6500,49 +8950,69 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       const wrapper = ({ children }: any) => <ApolloProvider client={client}>{children}</ApolloProvider>;
 
-      const { result } = renderHook(() => useQuery(query, { variables: { id: entityId } }), { wrapper });
-
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(
+        () => useQuery(query, { variables: { id: entityId } }),
+        { wrapper },
       );
 
-      expect(result.current.data).toEqual({
-        clientEntity: {
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: { id: entityId },
+      });
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: {
+          clientEntity: {
+            id: entityId,
+            title: shortTitle,
+            titleLength: shortTitle.length,
+            __typename: 'ClientData',
+          },
+        },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: { id: entityId },
+      });
+
+      void client.mutate({
+        mutation,
+        variables: {
           id: entityId,
-          title: shortTitle,
-          titleLength: shortTitle.length,
-          __typename: 'ClientData',
+          title: longerTitle,
         },
       });
 
-      setTimeout(() => {
-        client.mutate({
-          mutation,
-          variables: {
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: {
+          clientEntity: {
             id: entityId,
             title: longerTitle,
+            titleLength: longerTitle.length,
+            __typename: 'ClientData',
           },
-        });
+        },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: {
+          clientEntity: {
+            id: entityId,
+            title: shortTitle,
+            titleLength: shortTitle.length,
+            __typename: 'ClientData',
+          },
+        },
+        variables: { id: entityId },
       });
 
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({
-            clientEntity: {
-              id: entityId,
-              title: longerTitle,
-              titleLength: longerTitle.length,
-              __typename: 'ClientData',
-            },
-          });
-        },
-        { interval: 1 },
-      );
+      await expect(takeSnapshot).not.toRerender();
     });
   });
 
@@ -6586,25 +9056,43 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const { result, rerender } = renderHook(({ skip }) => useQuery(query, { skip }), {
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, rerender } = await renderHookToSnapshotStream(({ skip }) => useQuery(query, { skip }), {
         wrapper,
         initialProps: { skip: true },
       });
 
-      expect(result.current.loading).toBe(false);
-      expect(result.current.data).toBe(undefined);
-      rerender({ skip: false });
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        error: undefined,
+        called: false,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
+      await rerender({ skip: false });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBeFalsy();
-        },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual({ hello: 'world' });
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
+      });
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { hello: 'world' },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('should not make network requests when `skip` is `true`', async () => {
@@ -6620,25 +9108,44 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       const wrapper = ({ children }: any) => <ApolloProvider client={client}>{children}</ApolloProvider>;
 
-      const { result, rerender } = renderHook(({ skip, variables }) => useQuery(query, { skip, variables }), {
-        wrapper,
-        initialProps: { skip: false, variables: undefined as any },
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, rerender } = await renderHookToSnapshotStream(
+        ({ skip, variables }) => useQuery(query, { skip, variables }),
+        { wrapper, initialProps: { skip: false, variables: undefined as any } },
+      );
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
       });
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { hello: 'world' },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual({ hello: 'world' });
+      await rerender({ skip: true, variables: { someVar: true } });
 
-      rerender({ skip: true, variables: { someVar: true } });
-      expect(result.current.loading).toBe(false);
-      expect(result.current.data).toBe(undefined);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        error: undefined,
+        // TODO: It seems odd to flip this back to false after it was already
+        // set to true
+        called: false,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: { hello: 'world' },
+        variables: { someVar: true },
+      });
+
       expect(linkFn).toHaveBeenCalledTimes(1);
     });
 
@@ -6672,33 +9179,47 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           result: { data: { hello: 'world' } },
         },
       ];
-      const { result, rerender } = renderHook(({ fetchPolicy }) => useQuery(query, { fetchPolicy }), {
-        wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
-        initialProps: { fetchPolicy: 'standby' as any },
+
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, rerender } = await renderHookToSnapshotStream(
+        ({ fetchPolicy }) => useQuery(query, { fetchPolicy }),
+        {
+          wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+          initialProps: { fetchPolicy: 'standby' as any },
+        },
+      );
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        error: undefined,
+        called: false,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
       });
 
-      expect(result.current.loading).toBe(false);
-      expect(result.current.data).toBe(undefined);
+      await rerender({ fetchPolicy: 'cache-first' });
 
-      await expect(
-        waitFor(
-          () => {
-            expect(result.current.loading).toBe(true);
-          },
-          { interval: 1, timeout: 20 },
-        ),
-      ).rejects.toThrow();
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
+      });
 
-      rerender({ fetchPolicy: 'cache-first' });
-      expect(result.current.data).toBe(undefined);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { hello: 'world' },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBeFalsy();
-        },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual({ hello: 'world' });
+      await expect(takeSnapshot).not.toRerender();
     });
 
     // Amusingly, #8270 thinks this is a bug, but #9101 thinks this is not.
@@ -6720,37 +9241,36 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         link,
       });
 
-      const { result } = renderHook(() => useQuery(query, { skip: true }), {
-        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
-      });
-
-      let promise;
-      await waitFor(async () => {
-        promise = result.current.refetch();
-      });
-
-      expect(result.current.loading).toBe(false);
-      await waitFor(
-        () => {
-          expect(result.current.data).toBe(undefined);
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () => useQuery(query, { skip: true }),
+        {
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
         },
-        { interval: 1 },
       );
 
-      expect(result.current.loading).toBe(false);
-      await waitFor(
-        () => {
-          expect(result.current.data).toBe(undefined);
-        },
-        { interval: 1 },
-      );
-      expect(requestSpy).toHaveBeenCalledTimes(1);
-      requestSpy.mockRestore();
-      expect(promise).resolves.toEqual({
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        error: undefined,
+        called: false,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
+
+      const refetchResult = await getCurrentSnapshot().refetch();
+
+      expect(refetchResult).toEqualApolloQueryResult({
         data: { hello: 'world' },
         loading: false,
-        networkStatus: 7,
+        networkStatus: NetworkStatus.ready,
       });
+
+      expect(requestSpy).toHaveBeenCalledTimes(1);
+      requestSpy.mockRestore();
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('should set correct initialFetchPolicy even if skip:true', async () => {
@@ -6773,13 +9293,9 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       const correctInitialFetchPolicy: WatchQueryFetchPolicy = 'cache-and-network';
 
-      const { result, rerender } = renderHook<
-        QueryResult,
-        {
-          skip: boolean;
-        }
-      >(
-        ({ skip = true }) =>
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot, rerender } = await renderHookToSnapshotStream(
+        ({ skip }) =>
           useQuery(query, {
             // Skipping equates to using a fetchPolicy of "standby", but that
             // should not mean we revert to standby whenever we want to go back to
@@ -6795,11 +9311,18 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         },
       );
 
-      expect(result.current.loading).toBe(false);
-      expect(result.current.data).toBeUndefined();
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        error: undefined,
+        called: false,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
 
       function check(expectedFetchPolicy: WatchQueryFetchPolicy, expectedInitialFetchPolicy: WatchQueryFetchPolicy) {
-        const { observable } = result.current;
+        const { observable } = getCurrentSnapshot();
         const { fetchPolicy, initialFetchPolicy } = observable.options;
 
         expect(fetchPolicy).toBe(expectedFetchPolicy);
@@ -6808,56 +9331,212 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       check('standby', correctInitialFetchPolicy);
 
-      rerender({
-        skip: false,
+      await rerender({ skip: false });
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
       });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-
-      expect(result.current.data).toEqual({
-        hello: 1,
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { hello: 1 },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
       });
 
       check(correctInitialFetchPolicy, correctInitialFetchPolicy);
 
       const reasons: string[] = [];
 
-      const reobservePromise = result.current.observable
-        .reobserve({
-          variables: {
-            newVar: true,
-          },
-          nextFetchPolicy(currentFetchPolicy, context) {
-            expect(currentFetchPolicy).toBe('cache-and-network');
-            expect(context.initialFetchPolicy).toBe('cache-and-network');
-            reasons.push(context.reason);
-            return currentFetchPolicy;
-          },
-        })
-        .then(result => {
-          expect(result.loading).toBe(false);
-          expect(result.data).toEqual({ hello: 2 });
-        });
-
-      expect(result.current.loading).toBe(false);
-
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({
-            hello: 2,
-          });
+      const result = await getCurrentSnapshot().observable.reobserve({
+        variables: {
+          newVar: true,
         },
-        { interval: 1 },
+        nextFetchPolicy(currentFetchPolicy, context) {
+          expect(currentFetchPolicy).toBe('cache-and-network');
+          expect(context.initialFetchPolicy).toBe('cache-and-network');
+          reasons.push(context.reason);
+          return currentFetchPolicy;
+        },
+      });
+
+      expect(result).toEqualApolloQueryResult({
+        data: { hello: 2 },
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+      });
+      expect(reasons).toEqual(['variables-changed', 'after-fetch']);
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { hello: 1 },
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.setVariables,
+        previousData: { hello: 1 },
+        variables: { newVar: true },
+      });
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { hello: 2 },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: { hello: 1 },
+        variables: { newVar: true },
+      });
+
+      await expect(takeSnapshot).not.toRerender();
+    });
+
+    it('should prioritize a `nextFetchPolicy` function over a `fetchPolicy` option when changing variables', async () => {
+      const query = gql`
+        {
+          hello
+        }
+      `;
+      const link = new MockLink([
+        {
+          request: { query, variables: { id: 1 } },
+          result: { data: { hello: 'from link' } },
+          delay: 10,
+        },
+        {
+          request: { query, variables: { id: 2 } },
+          result: { data: { hello: 'from link2' } },
+          delay: 10,
+        },
+      ]);
+
+      const client = new ApolloClient({
+        cache: new Hermes(),
+        link,
+      });
+
+      const mocks = mockFetchQuery(client['queryManager']);
+
+      const expectQueryTriggered = (nth: number, fetchPolicy: WatchQueryFetchPolicy) => {
+        expect(mocks.fetchQueryByPolicy).toHaveBeenCalledTimes(nth);
+        expect(mocks.fetchQueryByPolicy).toHaveBeenNthCalledWith(
+          nth,
+          expect.anything(),
+          expect.objectContaining({ fetchPolicy }),
+          expect.any(Number),
+        );
+      };
+      const nextFetchPolicy: WatchQueryOptions<OperationVariables, any>['nextFetchPolicy'] = jest.fn((_, context) => {
+        if (context.reason === 'variables-changed') {
+          return 'cache-and-network';
+        } else if (context.reason === 'after-fetch') {
+          return 'cache-only';
+        }
+        throw new Error('should never happen');
+      });
+
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot, rerender } = await renderHookToSnapshotStream(
+        ({ variables }) =>
+          useQuery(query, {
+            fetchPolicy: 'network-only',
+            variables,
+            notifyOnNetworkStatusChange: true,
+            nextFetchPolicy,
+          }),
+        {
+          initialProps: {
+            variables: { id: 1 },
+          },
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        },
       );
 
-      await reobservePromise;
+      await tick();
 
-      expect(reasons).toEqual(['variables-changed', 'after-fetch']);
+      // first network request triggers with initial fetchPolicy
+      expectQueryTriggered(1, 'network-only');
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: { id: 1 },
+      });
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { hello: 'from link' },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: { id: 1 },
+      });
+
+      expect(nextFetchPolicy).toHaveBeenCalledTimes(1);
+      expect(nextFetchPolicy).toHaveBeenNthCalledWith(
+        1,
+        'network-only',
+        expect.objectContaining({ reason: 'after-fetch' }),
+      );
+      // `nextFetchPolicy(..., {reason: "after-fetch"})` changed it to
+      // cache-only
+      expect(getCurrentSnapshot().observable.options.fetchPolicy).toBe('cache-only');
+
+      await rerender({
+        variables: { id: 2 },
+      });
+
+      expect(nextFetchPolicy).toHaveBeenNthCalledWith(
+        2,
+        // has been reset to the initial `fetchPolicy` of "network-only" because
+        // we changed variables, then `nextFetchPolicy` is called
+        'network-only',
+        expect.objectContaining({
+          reason: 'variables-changed',
+        }),
+      );
+      // the return value of `nextFetchPolicy(..., {reason: "variables-changed"})`
+      expectQueryTriggered(2, 'cache-and-network');
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        // TODO: Shouldn't this be undefined?
+        data: { hello: 'from link' },
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.setVariables,
+        previousData: { hello: 'from link' },
+        variables: { id: 2 },
+      });
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { hello: 'from link2' },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: { hello: 'from link' },
+        variables: { id: 2 },
+      });
+
+      expect(nextFetchPolicy).toHaveBeenCalledTimes(3);
+      expect(nextFetchPolicy).toHaveBeenNthCalledWith(
+        3,
+        'cache-and-network',
+        expect.objectContaining({
+          reason: 'after-fetch',
+        }),
+      );
+      // `nextFetchPolicy(..., {reason: "after-fetch"})` changed it to
+      // cache-only
+      expect(getCurrentSnapshot().observable.options.fetchPolicy).toBe('cache-only');
+
+      await expect(takeSnapshot).not.toRerender();
     });
   });
 
@@ -6903,19 +9582,28 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const { result } = renderHook(() => useQuery(carQuery, { variables: { id: 1 } }), { wrapper });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(() => useQuery(carQuery, { variables: { id: 1 } }), {
+        wrapper,
+      });
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-      expect(result.current.error).toBe(undefined);
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual(carData);
-      expect(result.current.error).toBeUndefined();
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: { id: 1 },
+      });
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: carData,
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: { id: 1 },
+      });
 
       expect(consoleSpy.error).toHaveBeenCalled();
       expect(consoleSpy.error).toHaveBeenLastCalledWith(`Missing field '%s' while writing result %o`, 'vin', {
@@ -6925,6 +9613,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         vine: 'DOLLADOLLABILL',
         __typename: 'Car',
       });
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('should return partial cache data when `returnPartialData` is true', async () => {
@@ -6979,27 +9669,38 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         }
       `;
 
-      const { result } = renderHook(() => useQuery(partialQuery, { returnPartialData: true }), {
-        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
-      });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(
+        () => useQuery(partialQuery, { returnPartialData: true }),
+        {
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        },
+      );
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toMatchObject({
-        cars: [
-          {
-            __typename: 'Car',
-            repairs: [
-              {
-                __typename: 'Repair',
-                date: '2019-05-08',
-              },
-            ],
-          },
-        ],
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        // Hermes: reads may return a superset of the selected fields (see README).
+        data: supersetOf({
+          cars: [
+            {
+              __typename: 'Car',
+              repairs: [
+                {
+                  __typename: 'Repair',
+                  date: '2019-05-08',
+                },
+              ],
+            },
+          ],
+        }),
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
       });
     });
 
-    it('should not return partial cache data when `returnPartialData` is false', () => {
+    it('should not return partial cache data when `returnPartialData` is false', async () => {
       const cache = new Hermes();
       const client = new ApolloClient({
         cache,
@@ -7051,12 +9752,22 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         }
       `;
 
-      const { result } = renderHook(() => useQuery(partialQuery, { returnPartialData: false }), {
-        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
-      });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(
+        () => useQuery(partialQuery, { returnPartialData: false }),
+        {
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        },
+      );
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
+      });
     });
 
     it('should not return partial cache data when `returnPartialData` is false and new variables are passed in', async () => {
@@ -7113,11 +9824,9 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         },
       });
 
-      let setId: any;
-      const { result } = renderHook(
-        () => {
-          const [id, setId1] = React.useState(2);
-          setId = setId1;
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, rerender } = await renderHookToSnapshotStream(
+        ({ id }) => {
           return useQuery(partialQuery, {
             variables: { id },
             returnPartialData: false,
@@ -7125,32 +9834,44 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
           });
         },
         {
+          initialProps: { id: 2 },
           wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
         },
       );
 
-      expect(result.current.loading).toBe(false);
-      expect(result.current.data).toEqual({
-        car: {
-          __typename: 'Car',
-          id: 2,
-          make: 'Ford',
-          model: 'Pinto',
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: {
+          car: {
+            __typename: 'Car',
+            id: 2,
+            make: 'Ford',
+            model: 'Pinto',
+          },
         },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: { id: 2 },
       });
 
-      setTimeout(() => {
-        setId(1);
-      });
+      await rerender({ id: 1 });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(true);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.setVariables,
+        previousData: {
+          car: {
+            __typename: 'Car',
+            id: 2,
+            make: 'Ford',
+            model: 'Pinto',
+          },
         },
-        { interval: 1 },
-      );
-
-      expect(result.current.data).toBe(undefined);
+        variables: { id: 1 },
+      });
     });
   });
 
@@ -7193,47 +9914,60 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const ProfiledHook = profileHook(() => useQuery(query, { notifyOnNetworkStatusChange: true }));
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () => useQuery(query, { notifyOnNetworkStatusChange: true }),
+        { wrapper },
+      );
 
-      render(<ProfiledHook />, { wrapper });
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
+      });
 
-      {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(true);
-        expect(result.data).toBe(undefined);
-        expect(result.previousData).toBe(undefined);
-      }
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: data1,
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
 
-      {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(false);
-        expect(result.data).toEqual(data1);
-        expect(result.previousData).toBe(undefined);
+      await getCurrentSnapshot().refetch();
 
-        result.refetch();
-      }
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: data1,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.refetch,
+        previousData: data1,
+        variables: {},
+      });
 
-      {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(true);
-        expect(result.data).toEqual(data1);
-        expect(result.previousData).toEqual(data1);
-      }
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: data2,
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: data1,
+        variables: {},
+      });
 
-      {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(false);
-        expect(result.data).toEqual(data2);
-        expect(result.previousData).toEqual(data1);
-      }
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('should persist result.previousData across multiple results', async () => {
       const query: TypedDocumentNode<
         {
           car: {
-            id: string;
+            id: number;
             make: string;
+            __typename: 'Car';
           };
         },
         {
@@ -7252,7 +9986,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         car: {
           id: 1,
           make: 'Venturi',
-          __typename: 'Car',
+          __typename: 'Car' as const,
         },
       };
 
@@ -7260,7 +9994,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         car: {
           id: 2,
           make: 'Wiesmann',
-          __typename: 'Car',
+          __typename: 'Car' as const,
         },
       };
 
@@ -7268,7 +10002,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         car: {
           id: 3,
           make: 'Beetle',
-          __typename: 'Car',
+          __typename: 'Car' as const,
         },
       };
 
@@ -7291,44 +10025,71 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const { result } = renderHook(() => useQuery(query, { notifyOnNetworkStatusChange: true }), { wrapper });
-
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-      expect(result.current.previousData).toBe(undefined);
-
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () => useQuery(query, { notifyOnNetworkStatusChange: true }),
+        { wrapper },
       );
-      expect(result.current.data).toEqual(data1);
-      expect(result.current.previousData).toBe(undefined);
 
-      setTimeout(() => result.current.refetch());
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(true);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual(data1);
-      expect(result.current.previousData).toEqual(data1);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
+      });
 
-      result.current.refetch({ vin: 'ABCDEFG0123456789' });
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toEqual(data1);
-      expect(result.current.previousData).toEqual(data1);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: data1,
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual(data3);
-      expect(result.current.previousData).toEqual(data1);
+      setTimeout(() => getCurrentSnapshot().refetch());
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: data1,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.refetch,
+        previousData: data1,
+        variables: {},
+      });
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: data2,
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: data1,
+        variables: {},
+      });
+
+      void getCurrentSnapshot().refetch({ vin: 'ABCDEFG0123456789' });
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.setVariables,
+        previousData: data2,
+        variables: { vin: 'ABCDEFG0123456789' },
+      });
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: data3,
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: data2,
+        variables: { vin: 'ABCDEFG0123456789' },
+      });
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('should persist result.previousData even if query changes', async () => {
@@ -7399,216 +10160,130 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         ),
       });
 
-      const { result } = renderHook(
-        () => {
-          const [query, setQuery] = useState<DocumentNode>(aQuery);
-          return {
-            query,
-            setQuery,
-            useQueryResult: useQuery(query, {
-              fetchPolicy: 'cache-and-network',
-              notifyOnNetworkStatusChange: true,
-            }),
-          };
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot, rerender } = await renderHookToSnapshotStream(
+        ({ query }) => {
+          return useQuery(query, {
+            fetchPolicy: 'cache-and-network',
+            notifyOnNetworkStatusChange: true,
+          });
         },
         {
+          initialProps: { query: aQuery as DocumentNode },
           wrapper: ({ children }: any) => <ApolloProvider client={client}>{children}</ApolloProvider>,
         },
       );
 
-      await waitFor(
-        () => {
-          const { loading } = result.current.useQueryResult;
-          expect(loading).toBe(true);
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          const { data } = result.current.useQueryResult;
-          expect(data).toEqual({ a: 'a' });
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          const { previousData } = result.current.useQueryResult;
-          expect(previousData).toBeUndefined();
-        },
-        { interval: 1 },
-      );
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
+      });
 
-      await waitFor(
-        () => {
-          const { loading } = result.current.useQueryResult;
-          expect(loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          const { data } = result.current.useQueryResult;
-          expect(data).toEqual({ a: 'a' });
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          const { previousData } = result.current.useQueryResult;
-          expect(previousData).toBe(undefined);
-        },
-        { interval: 1 },
-      );
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { a: 'a' },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
 
-      await expect(
-        await waitFor(
-          () => {
-            result.current.setQuery(abQuery);
-          },
-          { interval: 1 },
-        ),
-      );
+      await rerender({ query: abQuery });
 
-      await waitFor(
-        () => {
-          const { loading } = result.current.useQueryResult;
-          expect(loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          const { data } = result.current.useQueryResult;
-          expect(data).toEqual({ a: 'aa', b: 1 });
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          const { previousData } = result.current.useQueryResult;
-          expect(previousData).toEqual({ a: 'a' });
-        },
-        { interval: 1 },
-      );
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: { a: 'a' },
+        variables: {},
+      });
 
-      await waitFor(
-        () => {
-          const { loading } = result.current.useQueryResult;
-          expect(loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          const { data } = result.current.useQueryResult;
-          expect(data).toEqual({ a: 'aa', b: 1 });
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          const { previousData } = result.current.useQueryResult;
-          expect(previousData).toEqual({ a: 'a' });
-        },
-        { interval: 1 },
-      );
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { a: 'aa', b: 1 },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: { a: 'a' },
+        variables: {},
+      });
 
-      await waitFor(
-        () => {
-          result.current.useQueryResult.reobserve().then(result => {
-            expect(result.loading).toBe(false);
-            expect(result.data).toEqual({ a: 'aaa', b: 2 });
-          });
-        },
-        { interval: 1 },
-      );
+      const result = await getCurrentSnapshot().reobserve();
 
-      await waitFor(
-        () => {
-          const { loading } = result.current.useQueryResult;
-          expect(loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          const { data } = result.current.useQueryResult;
-          expect(data).toEqual({ a: 'aaa', b: 2 });
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          const { previousData } = result.current.useQueryResult;
-          expect(previousData).toEqual({ a: 'aa', b: 1 });
-        },
-        { interval: 1 },
-      );
+      expect(result).toEqualApolloQueryResult({
+        data: { a: 'aaa', b: 2 },
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+      });
 
-      await waitFor(
-        () => {
-          result.current.setQuery(bQuery);
-        },
-        { interval: 1 },
-      );
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { a: 'aa', b: 1 },
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: { a: 'aa', b: 1 },
+        variables: {},
+      });
 
-      await waitFor(
-        () => {
-          const { loading } = result.current.useQueryResult;
-          expect(loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          const { data } = result.current.useQueryResult;
-          expect(data).toMatchObject({ b: 3 });
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          const { previousData } = result.current.useQueryResult;
-          expect(previousData).toMatchObject({ b: 2 });
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          const { loading } = result.current.useQueryResult;
-          expect(loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          const { data } = result.current.useQueryResult;
-          expect(data).toMatchObject({ b: 3 });
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          const { previousData } = result.current.useQueryResult;
-          expect(previousData).toMatchObject({ b: 2 });
-        },
-        { interval: 1 },
-      );
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { a: 'aaa', b: 2 },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: { a: 'aa', b: 1 },
+        variables: {},
+      });
+
+      await rerender({ query: bQuery });
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        // Hermes: reads may return a superset of the selected fields (see README).
+        data: supersetOf({ b: 2 }),
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: { a: 'aaa', b: 2 },
+        variables: {},
+      });
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        // Hermes: reads may return a superset of the selected fields (see README).
+        data: supersetOf({ b: 3 }),
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: supersetOf({ b: 2 }),
+        variables: {},
+      });
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
+    // TODO: Determine if this test is needed or is already covered by other
+    // tests such as changing variables (since those tests check all returned
+    // hook properties)
     it('should be cleared when variables change causes cache miss', async () => {
       const peopleData = [
-        { id: 1, name: 'John Smith', gender: 'male' },
-        { id: 2, name: 'Sara Smith', gender: 'female' },
-        { id: 3, name: 'Budd Deey', gender: 'nonbinary' },
-        { id: 4, name: 'Johnny Appleseed', gender: 'male' },
-        { id: 5, name: 'Ada Lovelace', gender: 'female' },
+        { id: 1, name: 'John Smith', gender: 'male', __typename: 'Person' },
+        { id: 2, name: 'Sara Smith', gender: 'female', __typename: 'Person' },
+        { id: 3, name: 'Budd Deey', gender: 'nonbinary', __typename: 'Person' },
+        {
+          id: 4,
+          name: 'Johnny Appleseed',
+          gender: 'male',
+          __typename: 'Person',
+        },
+        { id: 5, name: 'Ada Lovelace', gender: 'female', __typename: 'Person' },
       ];
 
       const link = new ApolloLink(operation => {
         return new Observable(observer => {
           const { gender } = operation.variables;
-          new Promise(resolve => setTimeout(resolve, 300)).then(() => {
+          void wait(300).then(() => {
             observer.next({
               data: {
                 people:
@@ -7626,7 +10301,7 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       type Person = {
         __typename: string;
-        id: string;
+        id: number;
         name: string;
       };
 
@@ -7648,63 +10323,66 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         </MockedProvider>
       );
 
-      const ProfiledHook = profileHook(({ gender }: { gender: string }) =>
-        useQuery(query, {
-          variables: { gender },
-          fetchPolicy: 'network-only',
-        }),
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, rerender } = await renderHookToSnapshotStream(
+        ({ gender }: { gender: string }) =>
+          useQuery(query, {
+            variables: { gender },
+            fetchPolicy: 'network-only',
+          }),
+        { wrapper, initialProps: { gender: 'all' } },
       );
-      const { rerender } = render(<ProfiledHook gender='all' />, { wrapper });
 
-      {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(true);
-        expect(result.networkStatus).toBe(NetworkStatus.loading);
-        expect(result.data).toBe(undefined);
-      }
-      {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(false);
-        expect(result.networkStatus).toBe(NetworkStatus.ready);
-        expect(result.data).toMatchObject({
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: { gender: 'all' },
+      });
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        // Hermes: reads may return a superset of the selected fields (see README).
+        data: supersetOf({
           people: peopleData.map(({ gender, ...person }) => person),
-        });
-      }
+        }),
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: { gender: 'all' },
+      });
 
-      rerender(<ProfiledHook gender='female' />);
+      await rerender({ gender: 'female' });
 
-      {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(true);
-        expect(result.networkStatus).toBe(NetworkStatus.setVariables);
-        expect(result.data).toBe(undefined);
-      }
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.setVariables,
+        // Hermes: reads may return a superset of the selected fields (see README).
+        previousData: supersetOf({
+          people: peopleData.map(({ gender, ...person }) => person),
+        }),
+        variables: { gender: 'female' },
+      });
 
-      {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(false);
-        expect(result.networkStatus).toBe(NetworkStatus.ready);
-        expect(result.data).toMatchObject({
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        // Hermes: reads may return a superset of the selected fields (see README).
+        data: supersetOf({
           people: peopleData.filter(person => person.gender === 'female').map(({ gender, ...person }) => person),
-        });
-      }
+        }),
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: supersetOf({
+          people: peopleData.map(({ gender, ...person }) => person),
+        }),
+        variables: { gender: 'female' },
+      });
 
-      rerender(<ProfiledHook gender='nonbinary' />);
-
-      {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(true);
-        expect(result.networkStatus).toBe(NetworkStatus.setVariables);
-        expect(result.data).toBe(undefined);
-      }
-      {
-        const result = await ProfiledHook.takeSnapshot();
-        expect(result.loading).toBe(false);
-        expect(result.networkStatus).toBe(NetworkStatus.ready);
-        expect(result.data).toMatchObject({
-          people: peopleData.filter(person => person.gender === 'nonbinary').map(({ gender, ...person }) => person),
-        });
-      }
+      await expect(takeSnapshot).not.toRerender();
     });
   });
 
@@ -7741,58 +10419,53 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         link,
       });
 
-      const { result } = renderHook(() => useQuery(query), {
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(() => useQuery(query), {
         wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
       });
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
+      });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({ hello: 'world 1' });
-        },
-        { interval: 1 },
-      );
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { hello: 'world 1' },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({ hello: 'world 2' });
-        },
-        { interval: 1 },
-      );
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { hello: 'world 2' },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: { hello: 'world 1' },
+        variables: {},
+      });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({ hello: 'world 3' });
-        },
-        { interval: 1 },
-      );
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { hello: 'world 3' },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: { hello: 'world 2' },
+        variables: {},
+      });
     });
   });
 
   describe('canonical cache results', () => {
-    it('can be disabled via useQuery options', async () => {
-      const cache = new InMemoryCache({
-        canonizeResults: true,
+    // Hermes: canonizeResults (canonical result identity) is InMemoryCache-only.
+    it.skip('can be disabled via useQuery options', async () => {
+      const cache = new Hermes({
         typePolicies: {
           Result: {
             keyFields: false,
@@ -7824,7 +10497,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
 
       const wrapper = ({ children }: any) => <MockedProvider cache={cache}>{children}</MockedProvider>;
 
-      const { result, rerender } = renderHook(
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot, rerender } = await renderHookToSnapshotStream(
         ({ canonizeResults }) =>
           useQuery(query, {
             fetchPolicy: 'cache-only',
@@ -7833,59 +10507,93 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         { wrapper, initialProps: { canonizeResults: false } },
       );
 
-      expect(result.current.loading).toBe(false);
-      expect(result.current.data).toEqual({ results });
-      expect(result.current.data.results.length).toBe(6);
-      let resultSet = new Set(result.current.data.results);
-      // Since canonization is not happening, the duplicate 1 results are
-      // returned as distinct objects.
-      expect(resultSet.size).toBe(6);
-      let values: number[] = [];
-      resultSet.forEach((result: any) => values.push(result.value));
-      expect(values).toEqual([0, 1, 1, 2, 3, 5]);
-      rerender({ canonizeResults: true });
-      await waitFor(() => {
-        results.push({
-          __typename: 'Result',
-          value: 8,
-        });
-        // Append another element to the results array, invalidating the
-        // array itself, triggering another render (below).
-        cache.writeQuery({
-          query,
-          overwrite: true,
-          data: { results },
-        });
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { results },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
       });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({ results });
-        },
-        { interval: 1 },
-      );
-      expect(result.current.data.results.length).toBe(7);
-      resultSet = new Set(result.current.data.results);
-      // Since canonization is happening now, the duplicate 1 results are
-      // returned as identical (===) objects.
-      expect(resultSet.size).toBe(6);
-      values = [];
-      resultSet.forEach((result: any) => values.push(result.value));
-      expect(values).toEqual([0, 1, 2, 3, 5, 8]);
+      {
+        const { data } = getCurrentSnapshot();
+        const resultSet = new Set<(typeof results)[0]>(data.results);
+        const values = Array.from(resultSet).map(result => result.value);
+
+        expect(data.results.length).toBe(6);
+        // Since canonization is not happening, the duplicate 1 results are
+        // returned as distinct objects.
+        expect(resultSet.size).toBe(6);
+        expect(values).toEqual([0, 1, 1, 2, 3, 5]);
+      }
+
+      await rerender({ canonizeResults: true });
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { results },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: { results },
+        variables: {},
+      });
+
+      // Check that canonization takes place immediately
+      {
+        const { data } = getCurrentSnapshot();
+        const resultSet = new Set<(typeof results)[0]>(data.results);
+        const values = Array.from(resultSet).map(result => result.value);
+
+        expect(data.results.length).toBe(6);
+        // Since canonization is happening now, the duplicate 1 results are
+        // returned as identical (===) objects.
+        expect(resultSet.size).toBe(5);
+        expect(values).toEqual([0, 1, 2, 3, 5]);
+      }
+
+      const updatedResults = [...results, { __typename: 'Result', value: 8 }];
+
+      // Append another element to the results array, invalidating the
+      // array itself, triggering another render (below).
+      cache.writeQuery({
+        query,
+        overwrite: true,
+        data: { results: updatedResults },
+      });
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: { results: updatedResults },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: { results },
+        variables: {},
+      });
+
+      {
+        const { data } = getCurrentSnapshot();
+        const resultSet = new Set<(typeof results)[0]>(data.results);
+        const values = Array.from(resultSet).map(result => result.value);
+
+        expect(data.results.length).toBe(7);
+        // Since canonization is happening now, the duplicate 1 results are
+        // returned as identical (===) objects.
+        expect(resultSet.size).toBe(6);
+        expect(values).toEqual([0, 1, 2, 3, 5, 8]);
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
   });
 
+  // TODO: Delete this test after PR review since this is a duplicate of the
+  // previous one
   // eslint-disable-next-line jest/no-identical-title
   describe('canonical cache results', () => {
-    it('can be disabled via useQuery options', async () => {
-      const cache = new InMemoryCache({
-        canonizeResults: true,
+    // Hermes: canonizeResults (canonical result identity) is InMemoryCache-only.
+    it.skip('can be disabled via useQuery options', async () => {
+      const cache = new Hermes({
         typePolicies: {
           Result: {
             keyFields: false,
@@ -8055,21 +10763,49 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         },
       );
 
-      expect(result.current.a.loading).toBe(true);
-      expect(result.current.b.loading).toBe(true);
-      expect(result.current.a.data).toBe(undefined);
-      expect(result.current.b.data).toBe(undefined);
+      expect(result.current.a).toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
+      });
+      expect(result.current.b).toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
+      });
 
       await waitFor(() => {
         expect(result.current.a.loading).toBe(false);
-      });
-      await waitFor(() => {
         expect(result.current.b.loading).toBe(false);
       });
-      expect(result.current.a.data).toMatchObject(aData);
-      expect(result.current.b.data).toMatchObject(bData);
+
+      expect(result.current.a).toEqualQueryResult({
+        // Hermes: reads may return a superset of the selected fields (see README).
+        data: supersetOf(aData),
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
+      expect(result.current.b).toEqualQueryResult({
+        data: supersetOf(bData),
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
     }
 
+    // TODO: Eventually move the "check" code back into these test so we can
+    // check them render-by-render with renderHookToSnapshotStream
     it('cache-first for both', () => check('cache-first', 'cache-first'));
 
     it('cache-first first, cache-and-network second', () => check('cache-first', 'cache-and-network'));
@@ -8090,6 +10826,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
   });
 
   describe('regression test issue #9204', () => {
+    // TODO: See if we can rewrite this with renderHookToSnapshotStream and
+    // check output of hook to ensure its a stable object
     it('should handle a simple query', async () => {
       const query = gql`
         {
@@ -8193,14 +10931,28 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         },
       );
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBeUndefined();
+      expect(result.current).toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
+      });
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);
       });
 
-      expect(result.current.data).toEqual({ hello: 'hello 1' });
+      expect(result.current).toEqualQueryResult({
+        data: { hello: 'hello 1' },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
+
       expect(cache.readQuery({ query })).toEqual({ hello: 'hello 1' });
 
       act(() => {
@@ -8211,14 +10963,28 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         setShow(true);
       });
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBeUndefined();
+      expect(result.current).toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
+      });
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);
       });
 
-      expect(result.current.data).toEqual({ hello: 'hello 2' });
+      expect(result.current).toEqualQueryResult({
+        data: { hello: 'hello 2' },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
+
       expect(cache.readQuery({ query })).toEqual({ hello: 'hello 2' });
     });
   });
@@ -8245,12 +11011,20 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         cache: new Hermes(),
       });
 
-      const { result } = renderHook(() => useQuery(query), {
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(() => useQuery(query), {
         wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
       });
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
+      });
+
       setTimeout(() => {
         link.simulateResult({
           result: {
@@ -8265,20 +11039,19 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         });
       });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: {
+          greeting: {
+            message: 'Hello world',
+            __typename: 'Greeting',
+          },
         },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual({
-        greeting: {
-          message: 'Hello world',
-          __typename: 'Greeting',
-        },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
       });
-      // Jest 30's toContain rejects non-iterable values; this asserts the same thing.
-      expect(result.current).not.toMatchObject({ hasNext: true });
 
       setTimeout(() => {
         link.simulateResult({
@@ -8300,27 +11073,30 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         });
       });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({
-            greeting: {
-              message: 'Hello world',
-              __typename: 'Greeting',
-              recipient: {
-                name: 'Alice',
-                __typename: 'Person',
-              },
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: {
+          greeting: {
+            message: 'Hello world',
+            __typename: 'Greeting',
+            recipient: {
+              name: 'Alice',
+              __typename: 'Person',
             },
-          });
+          },
         },
-        { interval: 1 },
-      );
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: {
+          greeting: {
+            message: 'Hello world',
+            __typename: 'Greeting',
+          },
+        },
+        variables: {},
+      });
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('should handle deferred queries in lists', async () => {
@@ -8344,12 +11120,20 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         cache: new Hermes(),
       });
 
-      const { result } = renderHook(() => useQuery(query), {
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(() => useQuery(query), {
         wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
       });
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
+      });
+
       setTimeout(() => {
         link.simulateResult({
           result: {
@@ -8364,17 +11148,18 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         });
       });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: {
+          greetings: [
+            { message: 'Hello world', __typename: 'Greeting' },
+            { message: 'Hello again', __typename: 'Greeting' },
+          ],
         },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual({
-        greetings: [
-          { message: 'Hello world', __typename: 'Greeting' },
-          { message: 'Hello again', __typename: 'Greeting' },
-        ],
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
       });
 
       setTimeout(() => {
@@ -8397,27 +11182,28 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         });
       });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: {
+          greetings: [
+            {
+              message: 'Hello world',
+              __typename: 'Greeting',
+              recipient: { name: 'Alice', __typename: 'Person' },
+            },
+            { message: 'Hello again', __typename: 'Greeting' },
+          ],
         },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({
-            greetings: [
-              {
-                message: 'Hello world',
-                __typename: 'Greeting',
-                recipient: { name: 'Alice', __typename: 'Person' },
-              },
-              { message: 'Hello again', __typename: 'Greeting' },
-            ],
-          });
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: {
+          greetings: [
+            { message: 'Hello world', __typename: 'Greeting' },
+            { message: 'Hello again', __typename: 'Greeting' },
+          ],
         },
-        { interval: 1 },
-      );
+        variables: {},
+      });
 
       setTimeout(() => {
         link.simulateResult({
@@ -8439,31 +11225,38 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         });
       });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: {
+          greetings: [
+            {
+              message: 'Hello world',
+              __typename: 'Greeting',
+              recipient: { name: 'Alice', __typename: 'Person' },
+            },
+            {
+              message: 'Hello again',
+              __typename: 'Greeting',
+              recipient: { name: 'Bob', __typename: 'Person' },
+            },
+          ],
         },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({
-            greetings: [
-              {
-                message: 'Hello world',
-                __typename: 'Greeting',
-                recipient: { name: 'Alice', __typename: 'Person' },
-              },
-              {
-                message: 'Hello again',
-                __typename: 'Greeting',
-                recipient: { name: 'Bob', __typename: 'Person' },
-              },
-            ],
-          });
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: {
+          greetings: [
+            {
+              message: 'Hello world',
+              __typename: 'Greeting',
+              recipient: { name: 'Alice', __typename: 'Person' },
+            },
+            { message: 'Hello again', __typename: 'Greeting' },
+          ],
         },
-        { interval: 1 },
-      );
+        variables: {},
+      });
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('should handle deferred queries in lists, merging arrays', async () => {
@@ -8490,12 +11283,20 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         cache: new Hermes(),
       });
 
-      const { result } = renderHook(() => useQuery(query), {
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(() => useQuery(query), {
         wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
       });
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
+      });
+
       setTimeout(() => {
         link.simulateResult({
           result: {
@@ -8524,37 +11325,33 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         });
       });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({
-            allProducts: [
-              {
-                __typename: 'Product',
-                delivery: {
-                  __typename: 'DeliveryEstimates',
-                },
-                id: 'apollo-federation',
-                sku: 'federation',
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: {
+          allProducts: [
+            {
+              __typename: 'Product',
+              delivery: {
+                __typename: 'DeliveryEstimates',
               },
-              {
-                __typename: 'Product',
-                delivery: {
-                  __typename: 'DeliveryEstimates',
-                },
-                id: 'apollo-studio',
-                sku: 'studio',
+              id: 'apollo-federation',
+              sku: 'federation',
+            },
+            {
+              __typename: 'Product',
+              delivery: {
+                __typename: 'DeliveryEstimates',
               },
-            ],
-          });
+              id: 'apollo-studio',
+              sku: 'studio',
+            },
+          ],
         },
-        { interval: 1 },
-      );
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
 
       setTimeout(() => {
         link.simulateResult({
@@ -8582,41 +11379,56 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         });
       });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({
-            allProducts: [
-              {
-                __typename: 'Product',
-                delivery: {
-                  __typename: 'DeliveryEstimates',
-                  estimatedDelivery: '6/25/2021',
-                  fastestDelivery: '6/24/2021',
-                },
-                id: 'apollo-federation',
-                sku: 'federation',
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: {
+          allProducts: [
+            {
+              __typename: 'Product',
+              delivery: {
+                __typename: 'DeliveryEstimates',
+                estimatedDelivery: '6/25/2021',
+                fastestDelivery: '6/24/2021',
               },
-              {
-                __typename: 'Product',
-                delivery: {
-                  __typename: 'DeliveryEstimates',
-                  estimatedDelivery: '6/25/2021',
-                  fastestDelivery: '6/24/2021',
-                },
-                id: 'apollo-studio',
-                sku: 'studio',
+              id: 'apollo-federation',
+              sku: 'federation',
+            },
+            {
+              __typename: 'Product',
+              delivery: {
+                __typename: 'DeliveryEstimates',
+                estimatedDelivery: '6/25/2021',
+                fastestDelivery: '6/24/2021',
               },
-            ],
-          });
+              id: 'apollo-studio',
+              sku: 'studio',
+            },
+          ],
         },
-        { interval: 1 },
-      );
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: {
+          allProducts: [
+            {
+              __typename: 'Product',
+              delivery: {
+                __typename: 'DeliveryEstimates',
+              },
+              id: 'apollo-federation',
+              sku: 'federation',
+            },
+            {
+              __typename: 'Product',
+              delivery: {
+                __typename: 'DeliveryEstimates',
+              },
+              id: 'apollo-studio',
+              sku: 'studio',
+            },
+          ],
+        },
+        variables: {},
+      });
     });
 
     it('should handle deferred queries with fetch policy no-cache', async () => {
@@ -8640,12 +11452,20 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         cache: new Hermes(),
       });
 
-      const { result } = renderHook(() => useQuery(query, { fetchPolicy: 'no-cache' }), {
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(() => useQuery(query, { fetchPolicy: 'no-cache' }), {
         wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
       });
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
+      });
+
       setTimeout(() => {
         link.simulateResult({
           result: {
@@ -8660,23 +11480,19 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         });
       });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: {
+          greeting: {
+            message: 'Hello world',
+            __typename: 'Greeting',
+          },
         },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({
-            greeting: {
-              message: 'Hello world',
-              __typename: 'Greeting',
-            },
-          });
-        },
-        { interval: 1 },
-      );
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
 
       setTimeout(() => {
         link.simulateResult({
@@ -8698,27 +11514,30 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         });
       });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({
-            greeting: {
-              message: 'Hello world',
-              __typename: 'Greeting',
-              recipient: {
-                name: 'Alice',
-                __typename: 'Person',
-              },
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: {
+          greeting: {
+            message: 'Hello world',
+            __typename: 'Greeting',
+            recipient: {
+              name: 'Alice',
+              __typename: 'Person',
             },
-          });
+          },
         },
-        { interval: 1 },
-      );
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: {
+          greeting: {
+            message: 'Hello world',
+            __typename: 'Greeting',
+          },
+        },
+        variables: {},
+      });
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('should handle deferred queries with errors returned on the incremental batched result', async () => {
@@ -8744,12 +11563,20 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         cache: new Hermes(),
       });
 
-      const { result } = renderHook(() => useQuery(query), {
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(() => useQuery(query), {
         wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
       });
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
+      });
+
       setTimeout(() => {
         link.simulateResult({
           result: {
@@ -8773,32 +11600,28 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         });
       });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: {
+          hero: {
+            heroFriends: [
+              {
+                id: '1000',
+                name: 'Luke Skywalker',
+              },
+              {
+                id: '1003',
+                name: 'Leia Organa',
+              },
+            ],
+            name: 'R2-D2',
+          },
         },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({
-            hero: {
-              heroFriends: [
-                {
-                  id: '1000',
-                  name: 'Luke Skywalker',
-                },
-                {
-                  id: '1003',
-                  name: 'Leia Organa',
-                },
-              ],
-              name: 'R2-D2',
-            },
-          });
-        },
-        { interval: 1 },
-      );
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
 
       setTimeout(() => {
         link.simulateResult({
@@ -8827,45 +11650,52 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         });
       });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: {
+          hero: {
+            heroFriends: [
+              {
+                id: '1000',
+                name: 'Luke Skywalker',
+              },
+              {
+                id: '1003',
+                name: 'Leia Organa',
+              },
+            ],
+            name: 'R2-D2',
+          },
         },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.error).toBeInstanceOf(ApolloError);
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.error!.message).toBe('homeWorld for character with ID 1000 could not be fetched.');
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          // since default error policy is "none", we do *not* return partial results
-          expect(result.current.data).toEqual({
-            hero: {
-              heroFriends: [
-                {
-                  id: '1000',
-                  name: 'Luke Skywalker',
-                },
-                {
-                  id: '1003',
-                  name: 'Leia Organa',
-                },
-              ],
-              name: 'R2-D2',
+        error: new ApolloError({
+          graphQLErrors: [
+            {
+              message: 'homeWorld for character with ID 1000 could not be fetched.',
+              path: ['hero', 'heroFriends', 0, 'homeWorld'],
             },
-          });
+          ],
+        }),
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.error,
+        previousData: {
+          hero: {
+            heroFriends: [
+              {
+                id: '1000',
+                name: 'Luke Skywalker',
+              },
+              {
+                id: '1003',
+                name: 'Leia Organa',
+              },
+            ],
+            name: 'R2-D2',
+          },
         },
-        { interval: 1 },
-      );
+        variables: {},
+      });
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('should handle deferred queries with errors returned on the incremental batched result and errorPolicy "all"', async () => {
@@ -8891,12 +11721,20 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         cache: new Hermes(),
       });
 
-      const { result } = renderHook(() => useQuery(query, { errorPolicy: 'all' }), {
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(() => useQuery(query, { errorPolicy: 'all' }), {
         wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
       });
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: undefined,
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
+      });
+
       setTimeout(() => {
         link.simulateResult({
           result: {
@@ -8920,32 +11758,28 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         });
       });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: {
+          hero: {
+            name: 'R2-D2',
+            heroFriends: [
+              {
+                id: '1000',
+                name: 'Luke Skywalker',
+              },
+              {
+                id: '1003',
+                name: 'Leia Organa',
+              },
+            ],
+          },
         },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({
-            hero: {
-              heroFriends: [
-                {
-                  id: '1000',
-                  name: 'Luke Skywalker',
-                },
-                {
-                  id: '1003',
-                  name: 'Leia Organa',
-                },
-              ],
-              name: 'R2-D2',
-            },
-          });
-        },
-        { interval: 1 },
-      );
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
 
       setTimeout(() => {
         link.simulateResult({
@@ -8982,65 +11816,64 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         });
       });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: {
+          hero: {
+            heroFriends: [
+              {
+                // the only difference with the previous test
+                // is that homeWorld is populated since errorPolicy: all
+                // populates both partial data and error.graphQLErrors
+                homeWorld: null,
+                id: '1000',
+                name: 'Luke Skywalker',
+              },
+              {
+                // homeWorld is populated due to errorPolicy: all
+                homeWorld: 'Alderaan',
+                id: '1003',
+                name: 'Leia Organa',
+              },
+            ],
+            name: 'R2-D2',
+          },
         },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          // @ts-ignore
-          expect(result.current.label).toBe(undefined);
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          // @ts-ignore
-          expect(result.current.extensions).toBe(undefined);
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.error).toBeInstanceOf(ApolloError);
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.error!.message).toBe('homeWorld for character with ID 1000 could not be fetched.');
-        },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          // since default error policy is "all", we *do* return partial results
-          expect(result.current.data).toEqual({
-            hero: {
-              heroFriends: [
-                {
-                  // the only difference with the previous test
-                  // is that homeWorld is populated since errorPolicy: all
-                  // populates both partial data and error.graphQLErrors
-                  homeWorld: null,
-                  id: '1000',
-                  name: 'Luke Skywalker',
-                },
-                {
-                  // homeWorld is populated due to errorPolicy: all
-                  homeWorld: 'Alderaan',
-                  id: '1003',
-                  name: 'Leia Organa',
-                },
-              ],
-              name: 'R2-D2',
+        error: new ApolloError({
+          graphQLErrors: [
+            {
+              message: 'homeWorld for character with ID 1000 could not be fetched.',
+              path: ['hero', 'heroFriends', 0, 'homeWorld'],
             },
-          });
+          ],
+        }),
+        errors: [
+          {
+            message: 'homeWorld for character with ID 1000 could not be fetched.',
+            path: ['hero', 'heroFriends', 0, 'homeWorld'],
+          },
+        ],
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.error,
+        previousData: {
+          hero: {
+            heroFriends: [
+              {
+                id: '1000',
+                name: 'Luke Skywalker',
+              },
+              {
+                id: '1003',
+                name: 'Leia Organa',
+              },
+            ],
+            name: 'R2-D2',
+          },
         },
-        { interval: 1 },
-      );
+        variables: {},
+      });
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('returns eventually consistent data from deferred queries with data in the cache while using a "cache-and-network" fetch policy', async () => {
@@ -9072,18 +11905,27 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         },
       });
 
-      const { result } = renderHook(() => useQuery(query, { fetchPolicy: 'cache-and-network' }), {
-        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
-      });
-
-      expect(result.current.loading).toBe(true);
-      expect(result.current.networkStatus).toBe(NetworkStatus.loading);
-      expect(result.current.data).toEqual({
-        greeting: {
-          message: 'Hello cached',
-          __typename: 'Greeting',
-          recipient: { __typename: 'Person', name: 'Cached Alice' },
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(
+        () => useQuery(query, { fetchPolicy: 'cache-and-network' }),
+        {
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
         },
+      );
+
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: {
+          greeting: {
+            __typename: 'Greeting',
+            message: 'Hello cached',
+            recipient: { __typename: 'Person', name: 'Cached Alice' },
+          },
+        },
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
       });
 
       link.simulateResult({
@@ -9095,30 +11937,26 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         },
       });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: {
+          greeting: {
+            __typename: 'Greeting',
+            message: 'Hello world',
+            recipient: { __typename: 'Person', name: 'Cached Alice' },
+          },
         },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.networkStatus).toBe(NetworkStatus.ready);
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: {
+          greeting: {
+            __typename: 'Greeting',
+            message: 'Hello cached',
+            recipient: { __typename: 'Person', name: 'Cached Alice' },
+          },
         },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({
-            greeting: {
-              __typename: 'Greeting',
-              message: 'Hello world',
-              recipient: { __typename: 'Person', name: 'Cached Alice' },
-            },
-          });
-        },
-        { interval: 1 },
-      );
+        variables: {},
+      });
 
       link.simulateResult({
         result: {
@@ -9135,30 +11973,28 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         },
       });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: {
+          greeting: {
+            __typename: 'Greeting',
+            message: 'Hello world',
+            recipient: { __typename: 'Person', name: 'Alice' },
+          },
         },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.networkStatus).toBe(NetworkStatus.ready);
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: {
+          greeting: {
+            __typename: 'Greeting',
+            message: 'Hello world',
+            recipient: { __typename: 'Person', name: 'Cached Alice' },
+          },
         },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({
-            greeting: {
-              __typename: 'Greeting',
-              message: 'Hello world',
-              recipient: { __typename: 'Person', name: 'Alice' },
-            },
-          });
-        },
-        { interval: 1 },
-      );
+        variables: {},
+      });
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('returns eventually consistent data from deferred queries with partial data in the cache and using a "cache-first" fetch policy with `returnPartialData`', async () => {
@@ -9194,7 +12030,8 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         });
       }
 
-      const { result } = renderHook(
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot } = await renderHookToSnapshotStream(
         () =>
           useQuery(query, {
             fetchPolicy: 'cache-first',
@@ -9205,13 +12042,18 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         },
       );
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.networkStatus).toBe(NetworkStatus.loading);
-      expect(result.current.data).toEqual({
-        greeting: {
-          __typename: 'Greeting',
-          recipient: { __typename: 'Person', name: 'Cached Alice' },
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: {
+          greeting: {
+            __typename: 'Greeting',
+            recipient: { __typename: 'Person', name: 'Cached Alice' },
+          },
         },
+        called: true,
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        previousData: undefined,
+        variables: {},
       });
 
       link.simulateResult({
@@ -9223,30 +12065,25 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         },
       });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: {
+          greeting: {
+            __typename: 'Greeting',
+            message: 'Hello world',
+            recipient: { __typename: 'Person', name: 'Cached Alice' },
+          },
         },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.networkStatus).toBe(NetworkStatus.ready);
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: {
+          greeting: {
+            __typename: 'Greeting',
+            recipient: { __typename: 'Person', name: 'Cached Alice' },
+          },
         },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({
-            greeting: {
-              __typename: 'Greeting',
-              message: 'Hello world',
-              recipient: { __typename: 'Person', name: 'Cached Alice' },
-            },
-          });
-        },
-        { interval: 1 },
-      );
+        variables: {},
+      });
 
       link.simulateResult({
         result: {
@@ -9263,30 +12100,28 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         },
       });
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
+      await expect(takeSnapshot()).resolves.toEqualQueryResult({
+        data: {
+          greeting: {
+            __typename: 'Greeting',
+            message: 'Hello world',
+            recipient: { __typename: 'Person', name: 'Alice' },
+          },
         },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.networkStatus).toBe(NetworkStatus.ready);
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: {
+          greeting: {
+            __typename: 'Greeting',
+            message: 'Hello world',
+            recipient: { __typename: 'Person', name: 'Cached Alice' },
+          },
         },
-        { interval: 1 },
-      );
-      await waitFor(
-        () => {
-          expect(result.current.data).toEqual({
-            greeting: {
-              __typename: 'Greeting',
-              message: 'Hello world',
-              recipient: { __typename: 'Person', name: 'Alice' },
-            },
-          });
-        },
-        { interval: 1 },
-      );
+        variables: {},
+      });
+
+      await expect(takeSnapshot).not.toRerender();
     });
   });
 
@@ -9357,6 +12192,1124 @@ This is pure coincidence though, and the useQuery rewrite that doesn't break the
         expect(requestSpy).toHaveBeenCalledTimes(shouldFetchOnSecondRender ? 1 : 0);
       },
     );
+  });
+
+  it('calling `clearStore` while a query is running puts the hook into an error state', async () => {
+    const query = gql`
+      query {
+        hello
+      }
+    `;
+
+    const link = new MockSubscriptionLink();
+    let requests = 0;
+    link.onSetup(() => requests++);
+    const client = new ApolloClient({
+      link,
+      cache: new Hermes(),
+    });
+    using _disabledAct = disableActEnvironment();
+    const { takeSnapshot } = await renderHookToSnapshotStream(() => useQuery(query), {
+      wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+    });
+
+    await wait(10);
+    expect(requests).toBe(1);
+
+    await expect(takeSnapshot()).resolves.toEqualQueryResult({
+      data: undefined,
+      called: true,
+      loading: true,
+      networkStatus: NetworkStatus.loading,
+      previousData: undefined,
+      variables: {},
+    });
+
+    await client.clearStore();
+
+    await expect(takeSnapshot()).resolves.toEqualQueryResult({
+      data: undefined,
+      error: new ApolloError({
+        networkError: new InvariantError('Store reset while query was in flight (not completed in link chain)'),
+      }),
+      called: true,
+      loading: false,
+      networkStatus: NetworkStatus.error,
+      previousData: undefined,
+      variables: {},
+    });
+
+    link.simulateResult({ result: { data: { hello: 'Greetings' } } }, true);
+    await expect(takeSnapshot).not.toRerender({ timeout: 50 });
+    expect(requests).toBe(1);
+  });
+
+  // https://github.com/apollographql/apollo-client/issues/11938
+  it('does not emit `data` on previous fetch when a 2nd fetch is kicked off and the result returns an error when errorPolicy is none', async () => {
+    const query = gql`
+      query {
+        user {
+          id
+          name
+        }
+      }
+    `;
+
+    const graphQLError: GraphQLFormattedError = { message: 'Cannot get name' };
+
+    const mocks = [
+      {
+        request: { query },
+        result: {
+          data: { user: { __typename: 'User', id: '1', name: null } },
+          errors: [graphQLError],
+        },
+        delay: 10,
+        maxUsageCount: Number.POSITIVE_INFINITY,
+      },
+    ];
+
+    using _disabledAct = disableActEnvironment();
+    const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+      () => useQuery(query, { notifyOnNetworkStatusChange: true }),
+      {
+        wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+      },
+    );
+
+    await expect(takeSnapshot()).resolves.toEqualQueryResult({
+      data: undefined,
+      called: true,
+      loading: true,
+      networkStatus: NetworkStatus.loading,
+      previousData: undefined,
+      variables: {},
+    });
+
+    await expect(takeSnapshot()).resolves.toEqualQueryResult({
+      data: undefined,
+      error: new ApolloError({ graphQLErrors: [graphQLError] }),
+      called: true,
+      loading: false,
+      networkStatus: NetworkStatus.error,
+      previousData: undefined,
+      variables: {},
+    });
+
+    const { refetch } = getCurrentSnapshot();
+
+    refetch().catch(() => {});
+    refetch().catch(() => {});
+
+    await expect(takeSnapshot()).resolves.toEqualQueryResult({
+      data: undefined,
+      called: true,
+      loading: true,
+      networkStatus: NetworkStatus.refetch,
+      previousData: undefined,
+      variables: {},
+    });
+
+    await expect(takeSnapshot()).resolves.toEqualQueryResult({
+      data: undefined,
+      error: new ApolloError({ graphQLErrors: [graphQLError] }),
+      called: true,
+      loading: false,
+      networkStatus: NetworkStatus.error,
+      previousData: undefined,
+      variables: {},
+    });
+
+    await expect(takeSnapshot).not.toRerender({ timeout: 200 });
+  });
+
+  describe('data masking', () => {
+    it('masks queries when dataMasking is `true`', async () => {
+      type UserFieldsFragment = {
+        __typename: 'User';
+        age: number;
+      } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+      interface Query {
+        currentUser: {
+          __typename: 'User';
+          id: number;
+          name: string;
+        } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+      }
+
+      const query: TypedDocumentNode<Query, Record<string, never>> = gql`
+        query MaskedQuery {
+          currentUser {
+            id
+            name
+            ...UserFields
+          }
+        }
+
+        fragment UserFields on User {
+          age
+        }
+      `;
+
+      const mocks = [
+        {
+          request: { query },
+          result: {
+            data: {
+              currentUser: {
+                __typename: 'User',
+                id: 1,
+                name: 'Test User',
+                age: 30,
+              },
+            },
+          },
+        },
+      ];
+
+      const client = new ApolloClient({
+        dataMasking: true,
+        cache: new Hermes(),
+        link: new MockLink(mocks),
+      });
+
+      const renderStream = createRenderStream<QueryResult<Query, Record<string, never>>>();
+
+      function App() {
+        const result = useQuery(query);
+
+        renderStream.replaceSnapshot(result);
+
+        return null;
+      }
+
+      using _disabledAct = disableActEnvironment();
+      await renderStream.render(<App />, {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      });
+
+      {
+        const { snapshot } = await renderStream.takeRender();
+
+        expect(snapshot).toEqualQueryResult({
+          data: undefined,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const { snapshot } = await renderStream.takeRender();
+
+        expect(snapshot).toEqualQueryResult({
+          data: {
+            currentUser: {
+              __typename: 'User',
+              id: 1,
+              name: 'Test User',
+            },
+          },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      await expect(renderStream).not.toRerender();
+    });
+
+    it('does not mask query when dataMasking is `false`', async () => {
+      type UserFieldsFragment = {
+        __typename: 'User';
+        age: number;
+      } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+      interface Query {
+        currentUser: {
+          __typename: 'User';
+          id: number;
+          name: string;
+        } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+      }
+
+      // We have to use Unmasked here since the default is to preserve types
+      const query: TypedDocumentNode<Unmasked<Query>, Record<string, never>> = gql`
+        query MaskedQuery {
+          currentUser {
+            id
+            name
+            ...UserFields
+          }
+        }
+
+        fragment UserFields on User {
+          age
+        }
+      `;
+
+      const mocks = [
+        {
+          request: { query },
+          result: {
+            data: {
+              currentUser: {
+                __typename: 'User',
+                id: 1,
+                name: 'Test User',
+                age: 30,
+              },
+            },
+          },
+        },
+      ];
+
+      const client = new ApolloClient({
+        dataMasking: false,
+        cache: new Hermes(),
+        link: new MockLink(mocks),
+      });
+
+      const renderStream = createRenderStream<QueryResult<Unmasked<Query>, Record<string, never>>>();
+
+      function App() {
+        const result = useQuery(query);
+
+        renderStream.replaceSnapshot(result);
+
+        return null;
+      }
+
+      using _disabledAct = disableActEnvironment();
+      await renderStream.render(<App />, {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      });
+
+      // loading
+      await renderStream.takeRender();
+
+      const { snapshot } = await renderStream.takeRender();
+
+      expect(snapshot).toEqualQueryResult({
+        data: {
+          currentUser: {
+            __typename: 'User',
+            id: 1,
+            name: 'Test User',
+            age: 30,
+          },
+        },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
+
+      await expect(renderStream).not.toRerender();
+    });
+
+    it('does not mask query by default', async () => {
+      type UserFieldsFragment = {
+        __typename: 'User';
+        age: number;
+      } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+      interface Query {
+        currentUser: {
+          __typename: 'User';
+          id: number;
+          name: string;
+        } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+      }
+
+      const query: TypedDocumentNode<Unmasked<Query>, Record<string, never>> = gql`
+        query MaskedQuery {
+          currentUser {
+            id
+            name
+            ...UserFields
+          }
+        }
+
+        fragment UserFields on User {
+          age
+        }
+      `;
+
+      const mocks = [
+        {
+          request: { query },
+          result: {
+            data: {
+              currentUser: {
+                __typename: 'User',
+                id: 1,
+                name: 'Test User',
+                age: 30,
+              },
+            },
+          },
+        },
+      ];
+
+      const client = new ApolloClient({
+        cache: new Hermes(),
+        link: new MockLink(mocks),
+      });
+
+      const renderStream = createRenderStream<QueryResult<Unmasked<Query>, Record<string, never>>>();
+
+      function App() {
+        const result = useQuery(query);
+
+        renderStream.replaceSnapshot(result);
+
+        return null;
+      }
+
+      using _disabledAct = disableActEnvironment();
+      await renderStream.render(<App />, {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      });
+
+      // loading
+      await renderStream.takeRender();
+
+      const { snapshot } = await renderStream.takeRender();
+
+      expect(snapshot).toEqualQueryResult({
+        data: {
+          currentUser: {
+            __typename: 'User',
+            id: 1,
+            name: 'Test User',
+            age: 30,
+          },
+        },
+        called: true,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        previousData: undefined,
+        variables: {},
+      });
+    });
+
+    it('masks queries updated by the cache', async () => {
+      type UserFieldsFragment = {
+        __typename: 'User';
+        age: number;
+      } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+      interface Query {
+        currentUser: {
+          __typename: 'User';
+          id: number;
+          name: string;
+        } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+      }
+
+      const query: TypedDocumentNode<Query, Record<string, never>> = gql`
+        query MaskedQuery {
+          currentUser {
+            id
+            name
+            ...UserFields
+          }
+        }
+
+        fragment UserFields on User {
+          age
+        }
+      `;
+
+      const mocks = [
+        {
+          request: { query },
+          result: {
+            data: {
+              currentUser: {
+                __typename: 'User',
+                id: 1,
+                name: 'Test User',
+                age: 30,
+              },
+            },
+          },
+        },
+      ];
+
+      const client = new ApolloClient({
+        dataMasking: true,
+        cache: new Hermes(),
+        link: new MockLink(mocks),
+      });
+
+      const renderStream = createRenderStream<QueryResult<Query, Record<string, never>>>();
+
+      function App() {
+        const result = useQuery(query);
+
+        renderStream.replaceSnapshot(result);
+
+        return null;
+      }
+
+      using _disabledAct = disableActEnvironment();
+      await renderStream.render(<App />, {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      });
+
+      // loading
+      await renderStream.takeRender();
+
+      {
+        const { snapshot } = await renderStream.takeRender();
+
+        expect(snapshot).toEqualQueryResult({
+          data: {
+            currentUser: {
+              __typename: 'User',
+              id: 1,
+              name: 'Test User',
+            },
+          },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      client.writeQuery({
+        query,
+        data: {
+          currentUser: {
+            __typename: 'User',
+            id: 1,
+            name: 'Test User (updated)',
+            age: 35,
+          },
+        },
+      });
+
+      {
+        const { snapshot } = await renderStream.takeRender();
+
+        expect(snapshot).toEqualQueryResult({
+          data: {
+            currentUser: {
+              __typename: 'User',
+              id: 1,
+              name: 'Test User (updated)',
+            },
+          },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: {
+            currentUser: {
+              __typename: 'User',
+              id: 1,
+              name: 'Test User',
+            },
+          },
+          variables: {},
+        });
+      }
+    });
+
+    it('does not rerender when updating field in named fragment', async () => {
+      type UserFieldsFragment = {
+        __typename: 'User';
+        age: number;
+      } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+      interface Query {
+        currentUser: {
+          __typename: 'User';
+          id: number;
+          name: string;
+        } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+      }
+
+      const query: TypedDocumentNode<Query, Record<string, never>> = gql`
+        query MaskedQuery {
+          currentUser {
+            id
+            name
+            ...UserFields
+          }
+        }
+
+        fragment UserFields on User {
+          age
+        }
+      `;
+
+      const mocks = [
+        {
+          request: { query },
+          result: {
+            data: {
+              currentUser: {
+                __typename: 'User',
+                id: 1,
+                name: 'Test User',
+                age: 30,
+              },
+            },
+          },
+        },
+      ];
+
+      const client = new ApolloClient({
+        dataMasking: true,
+        cache: new Hermes(),
+        link: new MockLink(mocks),
+      });
+
+      const renderStream = createRenderStream<QueryResult<Query, Record<string, never>>>();
+
+      function App() {
+        const result = useQuery(query);
+
+        renderStream.replaceSnapshot(result);
+
+        return null;
+      }
+
+      using _disabledAct = disableActEnvironment();
+      await renderStream.render(<App />, {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      });
+
+      // loading
+      await renderStream.takeRender();
+
+      {
+        const { snapshot } = await renderStream.takeRender();
+
+        expect(snapshot).toEqualQueryResult({
+          data: {
+            currentUser: {
+              __typename: 'User',
+              id: 1,
+              name: 'Test User',
+            },
+          },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      client.writeQuery({
+        query,
+        data: {
+          currentUser: {
+            __typename: 'User',
+            id: 1,
+            name: 'Test User',
+            age: 35,
+          },
+        },
+      });
+
+      await expect(renderStream).not.toRerender();
+
+      expect(client.readQuery({ query })).toEqual({
+        currentUser: {
+          __typename: 'User',
+          id: 1,
+          name: 'Test User',
+          age: 35,
+        },
+      });
+    });
+
+    it.each(['cache-first', 'cache-only'] as FetchPolicy[])(
+      'masks result from cache when using with %s fetch policy',
+      async fetchPolicy => {
+        type UserFieldsFragment = {
+          __typename: 'User';
+          age: number;
+        } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+        interface Query {
+          currentUser: {
+            __typename: 'User';
+            id: number;
+            name: string;
+          } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+        }
+
+        const query: TypedDocumentNode<Query, Record<string, never>> = gql`
+          query MaskedQuery {
+            currentUser {
+              id
+              name
+              ...UserFields
+            }
+          }
+
+          fragment UserFields on User {
+            age
+          }
+        `;
+
+        const mocks = [
+          {
+            request: { query },
+            result: {
+              data: {
+                currentUser: {
+                  __typename: 'User',
+                  id: 1,
+                  name: 'Test User',
+                  age: 30,
+                },
+              },
+            },
+          },
+        ];
+
+        const client = new ApolloClient({
+          dataMasking: true,
+          cache: new Hermes(),
+          link: new MockLink(mocks),
+        });
+
+        client.writeQuery({
+          query,
+          data: {
+            currentUser: {
+              __typename: 'User',
+              id: 1,
+              name: 'Test User',
+              age: 30,
+            },
+          },
+        });
+
+        const renderStream = createRenderStream<QueryResult<Query, Record<string, never>>>();
+
+        function App() {
+          const result = useQuery(query, { fetchPolicy });
+
+          renderStream.replaceSnapshot(result);
+
+          return null;
+        }
+
+        using _disabledAct = disableActEnvironment();
+        await renderStream.render(<App />, {
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        });
+
+        const { snapshot } = await renderStream.takeRender();
+
+        expect(snapshot).toEqualQueryResult({
+          data: {
+            currentUser: {
+              __typename: 'User',
+              id: 1,
+              name: 'Test User',
+            },
+          },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+      },
+    );
+
+    it('masks cache and network result when using cache-and-network fetch policy', async () => {
+      type UserFieldsFragment = {
+        __typename: 'User';
+        age: number;
+      } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+      interface Query {
+        currentUser: {
+          __typename: 'User';
+          id: number;
+          name: string;
+        } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+      }
+
+      const query: TypedDocumentNode<Query, Record<string, never>> = gql`
+        query MaskedQuery {
+          currentUser {
+            id
+            name
+            ...UserFields
+          }
+        }
+
+        fragment UserFields on User {
+          age
+        }
+      `;
+
+      const mocks = [
+        {
+          request: { query },
+          result: {
+            data: {
+              currentUser: {
+                __typename: 'User',
+                id: 1,
+                name: 'Test User (server)',
+                age: 35,
+              },
+            },
+          },
+          delay: 20,
+        },
+      ];
+
+      const client = new ApolloClient({
+        dataMasking: true,
+        cache: new Hermes(),
+        link: new MockLink(mocks),
+      });
+
+      client.writeQuery({
+        query,
+        data: {
+          currentUser: {
+            __typename: 'User',
+            id: 1,
+            name: 'Test User',
+            age: 34,
+          },
+        },
+      });
+
+      const renderStream = createRenderStream<QueryResult<Query, Record<string, never>>>();
+
+      function App() {
+        const result = useQuery(query, { fetchPolicy: 'cache-and-network' });
+
+        renderStream.replaceSnapshot(result);
+
+        return null;
+      }
+
+      using _disabledAct = disableActEnvironment();
+      await renderStream.render(<App />, {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      });
+
+      {
+        const { snapshot } = await renderStream.takeRender();
+
+        expect(snapshot).toEqualQueryResult({
+          data: {
+            currentUser: {
+              __typename: 'User',
+              id: 1,
+              name: 'Test User',
+            },
+          },
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const { snapshot } = await renderStream.takeRender();
+
+        expect(snapshot).toEqualQueryResult({
+          data: {
+            currentUser: {
+              __typename: 'User',
+              id: 1,
+              name: 'Test User (server)',
+            },
+          },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: {
+            currentUser: {
+              __typename: 'User',
+              id: 1,
+              name: 'Test User',
+            },
+          },
+          variables: {},
+        });
+      }
+    });
+
+    it('masks partial cache data when returnPartialData is `true`', async () => {
+      type UserFieldsFragment = {
+        __typename: 'User';
+        age: number;
+      } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+      interface Query {
+        currentUser: {
+          __typename: 'User';
+          id: number;
+          name: string;
+        } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+      }
+
+      const query: TypedDocumentNode<Query, Record<string, never>> = gql`
+        query MaskedQuery {
+          currentUser {
+            id
+            name
+            ...UserFields
+          }
+        }
+
+        fragment UserFields on User {
+          age
+        }
+      `;
+
+      const mocks = [
+        {
+          request: { query },
+          result: {
+            data: {
+              currentUser: {
+                __typename: 'User',
+                id: 1,
+                name: 'Test User (server)',
+                age: 35,
+              },
+            },
+          },
+          delay: 20,
+        },
+      ];
+
+      const client = new ApolloClient({
+        dataMasking: true,
+        cache: new Hermes(),
+        link: new MockLink(mocks),
+      });
+
+      {
+        using _ = spyOnConsole('error');
+
+        client.writeQuery({
+          query,
+          data: {
+            // @ts-expect-error writing partial result
+            currentUser: {
+              __typename: 'User',
+              id: 1,
+              age: 34,
+            },
+          },
+        });
+      }
+
+      const renderStream = createRenderStream<QueryResult<Query, Record<string, never>>>();
+
+      function App() {
+        const result = useQuery(query, { returnPartialData: true });
+
+        renderStream.replaceSnapshot(result);
+
+        return null;
+      }
+
+      using _disabledAct = disableActEnvironment();
+      await renderStream.render(<App />, {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      });
+
+      {
+        const { snapshot } = await renderStream.takeRender();
+
+        expect(snapshot).toEqualQueryResult({
+          data: {
+            currentUser: {
+              __typename: 'User',
+              id: 1,
+            },
+          } as Query,
+          called: true,
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+
+      {
+        const { snapshot } = await renderStream.takeRender();
+
+        expect(snapshot).toEqualQueryResult({
+          data: {
+            currentUser: {
+              __typename: 'User',
+              id: 1,
+              name: 'Test User (server)',
+            },
+          },
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: {
+            currentUser: {
+              __typename: 'User',
+              id: 1,
+            },
+          } as Query,
+          variables: {},
+        });
+      }
+    });
+
+    it('masks partial data returned from data on errors with errorPolicy `all`', async () => {
+      type UserFieldsFragment = {
+        __typename: 'User';
+        age: number;
+      } & { ' $fragmentName'?: 'UserFieldsFragment' };
+
+      interface Query {
+        currentUser: {
+          __typename: 'User';
+          id: number;
+          name: string | null;
+        } & { ' $fragmentRefs'?: { UserFieldsFragment: UserFieldsFragment } };
+      }
+
+      const query: TypedDocumentNode<Query, Record<string, never>> = gql`
+        query MaskedQuery {
+          currentUser {
+            id
+            name
+            ...UserFields
+          }
+        }
+
+        fragment UserFields on User {
+          age
+        }
+      `;
+
+      const mocks = [
+        {
+          request: { query },
+          result: {
+            data: {
+              currentUser: {
+                __typename: 'User',
+                id: 1,
+                name: null,
+                age: 34,
+              },
+            },
+            errors: [new GraphQLError("Couldn't get name")],
+          },
+          delay: 20,
+        },
+      ];
+
+      const client = new ApolloClient({
+        dataMasking: true,
+        cache: new Hermes(),
+        link: new MockLink(mocks),
+      });
+
+      const renderStream = createRenderStream<QueryResult<Query, Record<string, never>>>();
+
+      function App() {
+        const result = useQuery(query, { errorPolicy: 'all' });
+
+        renderStream.replaceSnapshot(result);
+
+        return null;
+      }
+
+      using _disabledAct = disableActEnvironment();
+      await renderStream.render(<App />, {
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      });
+
+      // loading
+      await renderStream.takeRender();
+
+      {
+        const { snapshot } = await renderStream.takeRender();
+
+        expect(snapshot).toEqualQueryResult({
+          data: {
+            currentUser: {
+              __typename: 'User',
+              id: 1,
+              name: null,
+            },
+          },
+          error: new ApolloError({
+            graphQLErrors: [new GraphQLError("Couldn't get name")],
+          }),
+          errors: [{ message: "Couldn't get name" }],
+          called: true,
+          loading: false,
+          networkStatus: NetworkStatus.error,
+          previousData: undefined,
+          variables: {},
+        });
+      }
+    });
+  });
+});
+
+describe('deprecations', () => {
+  it('does not warn on deprecated options when deprecations are globally disabled', async () => {
+    using _ = spyOnConsole('warn');
+    using __ = withMutedDeprecations();
+
+    const query = gql`
+      query {
+        greeting
+      }
+    `;
+
+    const client = new ApolloClient({
+      cache: new Hermes(),
+      link: new ApolloLink(() => new Observable(() => {})),
+    });
+
+    using _disabledAct = disableActEnvironment();
+    const { takeSnapshot } = await renderHookToSnapshotStream(
+      () =>
+        useQuery(query, {
+          canonizeResults: true,
+          partialRefetch: true,
+          defaultOptions: {},
+          onCompleted: () => {},
+          onError: () => {},
+        }),
+      { wrapper: createClientWrapper(client) },
+    );
+
+    await expect(takeSnapshot).toRerender();
+
+    expect(console.warn).not.toHaveBeenCalled();
   });
 });
 

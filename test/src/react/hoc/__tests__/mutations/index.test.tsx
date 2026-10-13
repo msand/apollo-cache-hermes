@@ -3,12 +3,11 @@ import { render } from '@testing-library/react';
 import gql from 'graphql-tag';
 import { DocumentNode } from 'graphql';
 import { ApolloClient } from '@apollo/client';
-
-import { createMockClient, itAsync, MockedProvider } from '../../../../testing';
-import { NormalizedCacheObject } from '../../../../cache';
-import { ApolloProvider } from '../../../context';
-import { graphql } from '../../graphql';
-import { ChildProps } from '../../types';
+import { itAsync, createMockClient, MockedProvider } from '@apollo/client/testing';
+import { NormalizedCacheObject } from '@apollo/client/cache';
+import { ApolloProvider } from '@apollo/client/react/context';
+import { graphql } from '@apollo/client/react/hoc/graphql';
+import { ChildProps } from '@apollo/client/react/hoc/types';
 
 const query: DocumentNode = gql`
   mutation addPerson {

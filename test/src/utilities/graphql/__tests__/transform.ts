@@ -1,9 +1,5 @@
 import { DocumentNode, Kind, print } from 'graphql';
 import gql, { disableFragmentWarnings } from 'graphql-tag';
-
-// Turn off warnings for repeated fragment names
-disableFragmentWarnings();
-
 import {
   addTypenameToDocument,
   removeDirectivesFromDocument,
@@ -11,8 +7,11 @@ import {
   removeArgumentsFromDocument,
   removeFragmentSpreadFromDocument,
   removeClientSetsFromDocument,
-} from '../transform';
-import { getQueryDefinition } from '../getFromAST';
+} from '@apollo/client/utilities/graphql/transform';
+import { getQueryDefinition } from '@apollo/client/utilities/graphql/getFromAST';
+
+// Turn off warnings for repeated fragment names
+disableFragmentWarnings();
 
 describe('removeArgumentsFromDocument', () => {
   it('should remove a single variable', () => {

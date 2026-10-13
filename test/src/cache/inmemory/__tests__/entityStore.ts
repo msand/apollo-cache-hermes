@@ -3,13 +3,13 @@ import { DocumentNode } from 'graphql';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { InvariantError } from 'ts-invariant';
 import { ApolloCache } from '@apollo/client';
+import { EntityStore } from '@apollo/client/cache/inmemory/entityStore';
+import { StoreObject } from '@apollo/client/cache/inmemory/types';
+import { Cache } from '@apollo/client/cache/core/types/Cache';
+import { Reference, makeReference, isReference, StoreValue, stringifyForDisplay } from '@apollo/client/utilities';
+import { MissingFieldError } from '@apollo/client/cache';
+import { spyOnConsole } from '@apollo/client/testing/internal';
 
-import { EntityStore } from '../entityStore';
-import { StoreObject } from '../types';
-import { Cache } from '../../core/types/Cache';
-import { Reference, makeReference, isReference, StoreValue, stringifyForDisplay } from '../../../utilities';
-import { MissingFieldError } from '../..';
-import { spyOnConsole } from '../../../testing/internal';
 import { Hermes } from '../../../../../src';
 
 describe('EntityStore', () => {

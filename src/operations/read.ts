@@ -272,9 +272,10 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
     return newSnapshot;
   };
 
-  const mergeIntoEntity = (entityId: NodeId, value: StoreObject) => {
+  const mergeIntoEntity = (entityId: NodeId, value: StoreObject, valueIsOlder = false) => {
     const nodeSnapshot = ensureNewSnapshot(entityId);
-    nodeSnapshot.data = { ...(nodeSnapshot.data as {}), ...value } as JsonObject;
+    const data = nodeSnapshot.data as {};
+    nodeSnapshot.data = (valueIsOlder ? { ...value, ...data } : { ...data, ...value }) as JsonObject;
   };
 
   const fieldFunctions = new FieldFunctions(
@@ -288,7 +289,7 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
       if (entityId && mergeIntoStore) mergeIntoEntity(entityId, value as StoreObject);
       return entityId ? makeRef(entityId) : undefined;
     },
-    (ref, value) => mergeIntoEntity(ref.__ref, value),
+    (ref, value, valueIsOlder) => mergeIntoEntity(ref.__ref, value, valueIsOlder),
   );
 
   // Replaces References (returned by read functions) with the data of the
@@ -451,8 +452,8 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
       if (child !== undefined) {
         value[key] = child;
       } else if (key === '__typename' && typeName && selectsRootTypename(query.info)) {
-        // Like InMemoryCache, the root __typename is only read when selected
-        // explicitly (not added by addTypename).
+        // Like InMemoryCache, the root __typename is only read when the document
+        // the caller passed in selects it (not when Hermes' addTypename adds it).
         value.__typename = typeName;
       }
     }
@@ -561,7 +562,8 @@ const rootTypenameSelections = new WeakMap<QueryInfo<any>, boolean>();
 
 /**
  * Whether the root selection set of an operation selects __typename itself,
- * rather than through the __typename fields added by addTypenameToDocument.
+ * rather than through the __typename fields Hermes added with
+ * addTypenameToDocument (those added before the document reached Hermes count).
  */
 function selectsRootTypename(info: QueryInfo<any>): boolean {
   let selects = rootTypenameSelections.get(info);
@@ -573,7 +575,12 @@ function selectsRootTypename(info: QueryInfo<any>): boolean {
       visited.add(selectionSet);
       for (const selection of selectionSet.selections) {
         if (selection.kind === 'Field') {
-          if (selection.name.value === '__typename' && !addTypenameToDocument.added(selection)) selects = true;
+          if (
+            selection.name.value === '__typename' &&
+            (info.pretransformed || !addTypenameToDocument.added(selection))
+          ) {
+            selects = true;
+          }
         } else if (selection.kind === 'InlineFragment') {
           visit(selection.selectionSet);
         } else {

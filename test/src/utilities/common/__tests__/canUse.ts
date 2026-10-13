@@ -1,4 +1,4 @@
-import { canUseDOM, canUseLayoutEffect } from '../canUse';
+import { canUseDOM, canUseLayoutEffect } from '@apollo/client/utilities/common/canUse';
 
 describe('canUse* boolean constants', () => {
   // https://github.com/apollographql/apollo-client/pull/9675

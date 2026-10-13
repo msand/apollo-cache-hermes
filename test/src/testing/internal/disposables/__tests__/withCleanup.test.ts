@@ -1,4 +1,4 @@
-import { withCleanup } from '../index';
+import { withCleanup } from '@apollo/client/testing/internal/disposables';
 describe('withCleanup', () => {
   it('calls cleanup', () => {
     let cleanedUp = false;

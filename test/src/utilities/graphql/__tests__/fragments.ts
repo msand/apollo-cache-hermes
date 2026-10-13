@@ -1,11 +1,15 @@
 import { print } from 'graphql';
 import gql, { disableFragmentWarnings } from 'graphql-tag';
+import { getFragmentQueryDocument, createFragmentMap, FragmentMap } from '@apollo/client/utilities/graphql/fragments';
+import { getFragmentDefinitions } from '@apollo/client/utilities/graphql/getFromAST';
+import { loadErrorMessages } from '@apollo/client/dev';
 
 // Turn off warnings for repeated fragment names
 disableFragmentWarnings();
 
-import { getFragmentQueryDocument, createFragmentMap, FragmentMap } from '../fragments';
-import { getFragmentDefinitions } from '../getFromAST';
+// Hermes: the published @apollo/client package replaces invariant messages with error
+// codes. Load the messages so errors read as they do in Apollo's source tests.
+loadErrorMessages();
 
 describe('getFragmentQueryDocument', () => {
   it('will throw an error if there is an operation', () => {

@@ -1,13 +1,17 @@
 import { print, FragmentDefinitionNode, OperationDefinitionNode } from 'graphql';
 import gql from 'graphql-tag';
-
 import {
   checkDocument,
   getFragmentDefinitions,
   getQueryDefinition,
   getDefaultValues,
   getOperationName,
-} from '../getFromAST';
+} from '@apollo/client/utilities/graphql/getFromAST';
+import { loadErrorMessages } from '@apollo/client/dev';
+
+// Hermes: the published @apollo/client package replaces invariant messages with error
+// codes. Load the messages so errors read as they do in Apollo's source tests.
+loadErrorMessages();
 
 describe('AST utility functions', () => {
   it('should correctly check a document for correctness', () => {

@@ -8,11 +8,12 @@ import { DocumentNode } from 'graphql';
 import { ApolloClient, ApolloProvider } from '@apollo/client';
 import { ChildProps, DataValue } from '@apollo/client/react/hoc';
 import { Query } from '@apollo/client/react/components';
+import { TypedDocumentNode } from '@apollo/client/core';
+import { mockSingleLink } from '@apollo/client/testing';
+import { getDataFromTree, getMarkupFromTree } from '@apollo/client/react/ssr';
+import { graphql } from '@apollo/client/react/hoc/graphql';
 
 import { Hermes } from '../../../../../../src';
-import { itAsync, mockSingleLink } from '../../../../testing';
-import { getDataFromTree, getMarkupFromTree } from '../../../ssr';
-import { graphql } from '../../graphql';
 
 describe('SSR', () => {
   describe('`getDataFromTree`', () => {
@@ -495,11 +496,12 @@ describe('SSR', () => {
       return getDataFromTree(app).then(() => {
         const initialState = cache.extract();
         expect(initialState).toBeTruthy();
+        // Hermes: fields with arguments are stored in parameterized nodes.
         expect((initialState as any)['ROOT_QUERY❖["currentUser"]❖{"id":"1"}']).toBeTruthy();
       });
     });
 
-    itAsync('should allow for setting state in a component', (resolve, reject) => {
+    it('should allow for setting state in a component', async () => {
       const query = gql`
         query user($id: ID) {
           currentUser(id: $id) {
@@ -556,14 +558,12 @@ describe('SSR', () => {
         </ApolloProvider>
       );
 
-      getDataFromTree(app)
-        .then(() => {
-          const initialState = cache.extract();
-          expect(initialState).toBeTruthy();
-          expect((initialState as any)['ROOT_QUERY❖["currentUser"]❖{"id":"1"}']).toBeTruthy();
-          resolve();
-        })
-        .catch(reject);
+      await getDataFromTree(app);
+
+      const initialState = cache.extract();
+      expect(initialState).toBeTruthy();
+      // Hermes: fields with arguments are stored in parameterized nodes.
+      expect((initialState as any)['ROOT_QUERY❖["currentUser"]❖{"id":"1"}']).toBeTruthy();
     });
 
     it('should correctly initialize an empty state to null', () => {
@@ -593,7 +593,7 @@ describe('SSR', () => {
       return getDataFromTree(<Element />);
     });
 
-    itAsync('should allow prepping state from props', (resolve, reject) => {
+    it('should allow prepping state from props', async () => {
       const query = gql`
         query user($id: ID) {
           currentUser(id: $id) {
@@ -663,14 +663,12 @@ describe('SSR', () => {
         </ApolloProvider>
       );
 
-      getDataFromTree(app)
-        .then(() => {
-          const initialState = apolloClient.cache.extract();
-          expect(initialState).toBeTruthy();
-          expect((initialState as any)['ROOT_QUERY❖["currentUser"]❖{"id":"1"}']).toBeTruthy();
-          resolve();
-        })
-        .catch(reject);
+      await getDataFromTree(app);
+
+      const initialState = apolloClient.cache.extract();
+      expect(initialState).toBeTruthy();
+      // Hermes: fields with arguments are stored in parameterized nodes.
+      expect((initialState as any)['ROOT_QUERY❖["currentUser"]❖{"id":"1"}']).toBeTruthy();
     });
 
     it("shouldn't run queries if ssr is turned to off", () => {
@@ -732,7 +730,7 @@ describe('SSR', () => {
     });
 
     it("shouldn't run queries (via Query component) if ssr is turned to off", () => {
-      const query = gql`
+      const query: TypedDocumentNode<Data> = gql`
         query user($id: ID) {
           currentUser(id: $id) {
             firstName
@@ -760,9 +758,7 @@ describe('SSR', () => {
 
       const Element = (props: { id: string }) => (
         <Query query={query} ssr={false} variables={props}>
-          {({ data, loading }: { data: Data; loading: boolean }) => (
-            <div>{loading || !data ? 'loading' : data.currentUser!.firstName}</div>
-          )}
+          {({ data, loading }) => <div>{loading || !data ? 'loading' : data.currentUser!.firstName}</div>}
         </Query>
       );
 

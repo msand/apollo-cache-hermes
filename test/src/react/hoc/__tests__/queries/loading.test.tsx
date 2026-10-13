@@ -4,12 +4,12 @@ import gql from 'graphql-tag';
 import { DocumentNode } from 'graphql';
 import { ApolloClient, ApolloProvider } from '@apollo/client';
 import { graphql, ChildProps } from '@apollo/client/react/hoc';
+import { NetworkStatus, WatchQueryFetchPolicy } from '@apollo/client/core';
+import { itAsync, mockSingleLink } from '@apollo/client/testing';
+import { DataValue } from '@apollo/client/react/hoc/types';
+import { createRenderStream, disableActEnvironment } from '@testing-library/react-render-stream';
 
 import { Hermes } from '../../../../../../src';
-import { NetworkStatus, WatchQueryFetchPolicy } from '../../../../core';
-import { itAsync, mockSingleLink } from '../../../../testing';
-import { DataValue } from '../../types';
-import { profile } from '../../../../testing/internal';
 
 describe('[queries] loading', () => {
   // networkStatus / loading
@@ -302,7 +302,7 @@ describe('[queries] loading', () => {
               expect(data!.networkStatus).toBe(7);
               // this isn't reloading fully
               setTimeout(() => {
-                data!.refetch();
+                void data!.refetch();
               });
               break;
             case 1:
@@ -386,13 +386,18 @@ describe('[queries] loading', () => {
     })(
       class extends React.Component<ChildProps<{}, Data>> {
         render() {
-          ProfiledContainer.replaceSnapshot(this.props.data!);
+          replaceSnapshot(this.props.data!);
           return null;
         }
       },
     );
 
-    const ProfiledContainer = profile<
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <ApolloProvider client={client}>{children}</ApolloProvider>
+    );
+
+    using _disabledAct = disableActEnvironment();
+    const { takeRender, replaceSnapshot, render } = createRenderStream<
       DataValue<{
         allPeople: {
           people: {
@@ -400,43 +405,39 @@ describe('[queries] loading', () => {
           }[];
         };
       }>
-    >({
-      Component: Container,
+    >();
+
+    await render(<Container />, {
+      wrapper,
     });
 
-    const App = (
-      <ApolloProvider client={client}>
-        <ProfiledContainer />
-      </ApolloProvider>
-    );
-
-    render(App);
-
     {
-      const { snapshot } = await ProfiledContainer.takeRender();
+      const { snapshot } = await takeRender();
       expect(snapshot.loading).toBe(true);
       expect(snapshot.allPeople).toBeUndefined();
     }
     {
-      const { snapshot } = await ProfiledContainer.takeRender();
+      const { snapshot } = await takeRender();
       expect(snapshot.loading).toBe(false);
       expect(snapshot.allPeople?.people[0].name).toMatch(/Darth Skywalker - /);
     }
-    render(App);
+    await render(<Container />, {
+      wrapper,
+    });
     // Loading after remount
     {
-      const { snapshot } = await ProfiledContainer.takeRender();
+      const { snapshot } = await takeRender();
       expect(snapshot.loading).toBe(true);
       expect(snapshot.allPeople).toBeUndefined();
     }
     {
-      const { snapshot } = await ProfiledContainer.takeRender();
+      const { snapshot } = await takeRender();
       // Fetched data loading after remount
       expect(snapshot.loading).toBe(false);
       expect(snapshot.allPeople!.people[0].name).toMatch(/Darth Skywalker - /);
     }
 
-    await expect(ProfiledContainer).toRenderExactlyTimes(5, {
+    await expect(takeRender).toRenderExactlyTimes(5, {
       timeout: 100,
     });
 

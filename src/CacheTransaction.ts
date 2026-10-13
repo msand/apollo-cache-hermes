@@ -28,6 +28,7 @@ import * as nodes from './nodes';
 import * as util from './util';
 import { nodeIdForParameterizedValue } from './operations/SnapshotEditor';
 import { checkWrite } from './operations/checkWrite';
+import { storageFieldName } from './operations/fieldFunctions';
 
 const isEqual = equality.equal;
 const makeRef = makeReference;
@@ -603,7 +604,9 @@ export class CacheTransaction<TSerialized> implements Queryable {
       },
       fieldName: '',
       isReference,
-      storage: node,
+      // Like the options of read and merge functions, the storage of the field
+      // being modified (see the getter below).
+      storage: undefined as any,
       storeFieldName: '',
       toReference: (value, mergeIntoStore) => {
         const entityId = this._context.entityIdForValue(value);
@@ -615,6 +618,18 @@ export class CacheTransaction<TSerialized> implements Queryable {
         return entityId ? makeRef(entityId) : undefined;
       },
     };
+
+    const fieldStorage = this._context.fieldStorage;
+    Object.defineProperty(details, 'storage', {
+      get() {
+        const { fieldName, storeFieldName } = details;
+        // Parameterized fields' store field names end with their arguments.
+        const args = storeFieldName.includes('❖')
+          ? (JSON.parse(storeFieldName.slice(storeFieldName.lastIndexOf('❖') + 1)) as JsonObject)
+          : null;
+        return fieldStorage.get([id, storageFieldName(fieldName, args)]);
+      },
+    });
 
     const data = node.data ?? {};
     const keys = Object.keys(data);

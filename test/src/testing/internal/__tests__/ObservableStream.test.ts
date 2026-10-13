@@ -1,5 +1,5 @@
-import { Observable } from '../../../utilities';
-import { ObservableStream } from '../ObservableStream';
+import { Observable } from '@apollo/client/utilities';
+import { ObservableStream } from '@apollo/client/testing/internal/ObservableStream';
 
 it('allows to step through an observable until completion', async () => {
   const stream = new ObservableStream(

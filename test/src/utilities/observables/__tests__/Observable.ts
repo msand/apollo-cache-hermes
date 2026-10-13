@@ -1,4 +1,4 @@
-import { Observable, Subscriber } from '../Observable';
+import { Observable, Subscriber } from '@apollo/client/utilities/observables/Observable';
 
 describe('Observable', () => {
   describe('subclassing by non-class constructor functions', () => {

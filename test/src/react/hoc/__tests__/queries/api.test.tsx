@@ -4,8 +4,8 @@ import gql from 'graphql-tag';
 import { DocumentNode } from 'graphql';
 import { ApolloClient, ApolloProvider } from '@apollo/client';
 import { graphql, ChildProps } from '@apollo/client/react/hoc';
+import { itAsync, mockSingleLink } from '@apollo/client/testing';
 
-import { itAsync, mockSingleLink } from '../../../../testing';
 import { Hermes } from '../../../../../../src';
 
 describe('[queries] api', () => {

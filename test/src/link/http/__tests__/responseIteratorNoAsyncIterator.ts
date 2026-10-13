@@ -1,12 +1,10 @@
 import gql from 'graphql-tag';
-import type { Observable } from 'zen-observable-ts';
+import { execute } from '@apollo/client/link/core/execute';
+import { HttpLink } from '@apollo/client/link/http/HttpLink';
 import { TextEncoder, TextDecoder } from 'util';
 import { ReadableStream } from 'web-streams-polyfill';
 import { Readable } from 'stream';
-
-import { itAsync, subscribeAndCount } from '../../../testing';
-import { HttpLink } from '../HttpLink';
-import { execute } from '../../core/execute';
+import { ObservableStream } from '@apollo/client/testing/internal';
 
 // As of Jest 26 there is no way to mock/unmock a module that is used indirectly
 // via a single test file.
@@ -16,9 +14,9 @@ import { execute } from '../../core/execute';
 // which do not execute when isAsyncIterableIterator is true
 // See: https://github.com/facebook/jest/issues/2582#issuecomment-655110424
 
-jest.mock('../../../utilities/index.js', () => ({
+jest.mock('@apollo/client/utilities', () => ({
   __esModule: true,
-  ...jest.requireActual('../../../utilities/index.js'),
+  ...jest.requireActual('@apollo/client/utilities'),
   canUseAsyncIteratorSymbol: false,
 }));
 
@@ -34,28 +32,6 @@ const sampleDeferredQuery = gql`
 `;
 
 const BOUNDARY = 'gc0p4Jq0M2Yt08jU534c0p';
-
-function matchesResults<T>(
-  resolve: () => void,
-  reject: (err: any) => void,
-  observable: Observable<T>,
-  results: Array<T>,
-) {
-  // TODO: adding a second observer to the observable will consume the
-  // observable. I want to test completion, but the subscribeAndCount API
-  // doesn’t have anything like that.
-  subscribeAndCount(reject, observable, (count, result) => {
-    // subscribeAndCount is 1-indexed for some terrible reason.
-    if (count <= 0 || count > results.length) {
-      reject(new Error('Unexpected result'));
-    }
-
-    expect(result).toEqual(results[count - 1]);
-    if (count === results.length) {
-      resolve();
-    }
-  });
-}
 
 describe('multipart responses', () => {
   let originalTextDecoder: any;
@@ -181,7 +157,7 @@ describe('multipart responses', () => {
     },
   ];
 
-  itAsync('can handle whatwg stream bodies', (resolve, reject) => {
+  it('can handle whatwg stream bodies', async () => {
     const stream = new ReadableStream({
       async start(controller) {
         const lines = bodyCustomBoundary.split('\r\n');
@@ -208,10 +184,16 @@ describe('multipart responses', () => {
     });
 
     const observable = execute(link, { query: sampleDeferredQuery });
-    matchesResults(resolve, reject, observable, results);
+    const observableStream = new ObservableStream(observable);
+
+    for (const result of results) {
+      await expect(observableStream).toEmitValue(result);
+    }
+
+    await expect(observableStream).toComplete();
   });
 
-  itAsync('can handle whatwg stream bodies with arbitrary splits', (resolve, reject) => {
+  it('can handle whatwg stream bodies with arbitrary splits', async () => {
     const stream = new ReadableStream({
       async start(controller) {
         const chunks: Array<string> = [];
@@ -243,10 +225,16 @@ describe('multipart responses', () => {
     });
 
     const observable = execute(link, { query: sampleDeferredQuery });
-    matchesResults(resolve, reject, observable, results);
+    const observableStream = new ObservableStream(observable);
+
+    for (const result of results) {
+      await expect(observableStream).toEmitValue(result);
+    }
+
+    await expect(observableStream).toComplete();
   });
 
-  itAsync('can handle node stream bodies (strings) with default boundary', (resolve, reject) => {
+  it('can handle node stream bodies (strings) with default boundary', async () => {
     const stream = Readable.from(bodyDefaultBoundary.split('\r\n').map(line => `${line}\r\n`));
 
     const fetch = jest.fn(async () => ({
@@ -262,10 +250,16 @@ describe('multipart responses', () => {
     });
 
     const observable = execute(link, { query: sampleDeferredQuery });
-    matchesResults(resolve, reject, observable, results);
+    const observableStream = new ObservableStream(observable);
+
+    for (const result of results) {
+      await expect(observableStream).toEmitValue(result);
+    }
+
+    await expect(observableStream).toComplete();
   });
 
-  itAsync('can handle node stream bodies (strings) with arbitrary splits', (resolve, reject) => {
+  it('can handle node stream bodies (strings) with arbitrary splits', async () => {
     const chunks: Array<string> = [];
     const chunkSize = 15;
     for (let i = 0; i < bodyCustomBoundary.length; i += chunkSize) {
@@ -285,10 +279,16 @@ describe('multipart responses', () => {
     });
 
     const observable = execute(link, { query: sampleDeferredQuery });
-    matchesResults(resolve, reject, observable, results);
+    const observableStream = new ObservableStream(observable);
+
+    for (const result of results) {
+      await expect(observableStream).toEmitValue(result);
+    }
+
+    await expect(observableStream).toComplete();
   });
 
-  itAsync('can handle node stream bodies (array buffers)', (resolve, reject) => {
+  it('can handle node stream bodies (array buffers)', async () => {
     const stream = Readable.from(
       bodyDefaultBoundary.split('\r\n').map(line => new TextEncoder().encode(`${line}\r\n`)),
     );
@@ -306,10 +306,16 @@ describe('multipart responses', () => {
     });
 
     const observable = execute(link, { query: sampleDeferredQuery });
-    matchesResults(resolve, reject, observable, results);
+    const observableStream = new ObservableStream(observable);
+
+    for (const result of results) {
+      await expect(observableStream).toEmitValue(result);
+    }
+
+    await expect(observableStream).toComplete();
   });
 
-  itAsync('can handle node stream bodies (array buffers) with batched results', (resolve, reject) => {
+  it('can handle node stream bodies (array buffers) with batched results', async () => {
     const stream = Readable.from(bodyBatchedResults.split('\r\n').map(line => new TextEncoder().encode(`${line}\r\n`)));
 
     const fetch = jest.fn(async () => ({
@@ -325,6 +331,12 @@ describe('multipart responses', () => {
     });
 
     const observable = execute(link, { query: sampleDeferredQuery });
-    matchesResults(resolve, reject, observable, batchedResults);
+    const observableStream = new ObservableStream(observable);
+
+    for (const result of batchedResults) {
+      await expect(observableStream).toEmitValue(result);
+    }
+
+    await expect(observableStream).toComplete();
   });
 });
