@@ -46,9 +46,19 @@ export abstract class ApolloQueryable extends ApolloCache {
     // incremental info, even when undefined) get the result's dataState, with
     // @defer/@stream boundaries that are still streaming taken into account.
     if (Object.prototype.hasOwnProperty.call(options, handleIncrementalSymbol)) {
+      const document = this._queryable.transformDocument(rawOperation.document);
+      // (Most reads need no more than the document: the operation is only
+      // described for reads of @defer/@stream boundaries that are streaming.)
       return incrementalDiff<TData>(
         queryResult,
-        this._incrementalDiffOperation(rawOperation.document, options.variables as JsonObject | undefined, options.id),
+        document,
+        () =>
+          this._incrementalDiffOperation(
+            rawOperation.document,
+            document,
+            options.variables as JsonObject | undefined,
+            options.id,
+          ),
         options.returnPartialData,
         options[handleIncrementalSymbol],
       );
@@ -58,14 +68,14 @@ export abstract class ApolloQueryable extends ApolloCache {
     return toDiffResult<TData>(queryResult, options.returnPartialData);
   }
 
-  /** What incrementalDiff needs to know about a read of `document`. */
+  /** What incrementalDiff needs to know about a read of `document` (transformed: `transformed`). */
   private _incrementalDiffOperation(
     document: DocumentNode,
+    transformed: DocumentNode,
     variables: JsonObject | undefined,
     rootId: string | undefined,
   ): IncrementalDiffOperation {
     const queryable = this._queryable;
-    const transformed = queryable.transformDocument(document);
     // Like the read itself, custom scalar variables are serialized, and
     // variables default to their declared default values.
     const serialized = queryable.scalars.serializeVariables(document, variables);

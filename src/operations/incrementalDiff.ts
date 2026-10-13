@@ -1,9 +1,7 @@
 import type { Cache, DiffIncrementalInfo } from '@apollo/client/cache';
-import { addTypenameToDocument } from '@apollo/client/utilities';
 import {
   DeepMerger,
   getDirectiveArgValue,
-  getFragmentDefinitions,
   getMainDefinition,
   hasDirectives,
   isDeferredFragment,
@@ -23,7 +21,9 @@ import type {
   SelectionSetNode,
 } from 'graphql';
 
-import type { JsonObject, PathPart } from '../primitive';
+import type { JsonObject, JsonValue, PathPart } from '../primitive';
+import { fragmentMapForDocument, isSelectedByCaller, someSelection } from '../util';
+import type { FragmentMap } from '../util';
 
 import type { QueryResult } from './read';
 import { toDiffResult } from './read';
@@ -96,7 +96,7 @@ interface ExecResult {
 
 /** The result of pruning (part of) a result. */
 interface PruneResult {
-  result: any;
+  result: JsonValue | undefined;
   dataState: DataState;
   /**
    * Checks that the incremental info consulted while pruning (stream positions
@@ -119,7 +119,14 @@ interface ReadContext {
   freeze: boolean;
 }
 
+/**
+ * Kind.STRING (Hermes uses graphql for its types only: Apollo Client, its
+ * peer dependency, brings it).
+ */
+const STRING_VALUE = 'StringValue' as Kind.STRING;
+
 const incrementalDirectives = new WeakMap<DocumentNode, boolean>();
+const fragmentMaps = new WeakMap<DocumentNode, FragmentMap>();
 
 /** Whether a document uses @defer or @stream. */
 function hasIncrementalDirectives(document: DocumentNode): boolean {
@@ -135,15 +142,18 @@ function hasIncrementalDirectives(document: DocumentNode): boolean {
  * The diff of a Hermes read for ApolloCache#diff called with Apollo Client's
  * `[handleIncrementalSymbol]` option, with its `dataState` (like
  * InMemoryCache's).
+ *
+ * `document` is the (transformed) document read; `getOperation` describes
+ * the rest of the operation, when its @defer/@stream boundaries need a look.
  */
 export function incrementalDiff<TData>(
   queryResult: QueryResult,
-  operation: IncrementalDiffOperation,
+  document: DocumentNode,
+  getOperation: () => IncrementalDiffOperation,
   returnPartialData = true,
   incrementalInfo: DiffIncrementalInfo | undefined,
 ): Cache.InternalDiffResultWithDataState<TData> {
   const { streamInfo, deferInfo } = incrementalInfo ?? {};
-  const { document } = operation;
   const needsWalk = hasIncrementalDirectives(document) && (!queryResult.complete || !!streamInfo || !!deferInfo);
   if (!needsWalk) {
     // Without @defer/@stream boundaries (or with all their data present), the
@@ -154,13 +164,14 @@ export function incrementalDiff<TData>(
     return Object.assign(diff, { dataState }) as Cache.InternalDiffResultWithDataState<TData>;
   }
 
+  const operation = getOperation();
   const data = queryResult.result ?? {};
-  const fragmentMap: Record<string, FragmentDefinitionNode> = Object.create(null);
-  for (const fragment of getFragmentDefinitions(document)) fragmentMap[fragment.name.value] = fragment;
+  let fragmentMap = fragmentMaps.get(document);
+  if (!fragmentMap) fragmentMaps.set(document, (fragmentMap = fragmentMapForDocument(document)));
   const context: ReadContext = {
     operation,
     lookupFragment(fragmentName) {
-      const fragment = fragmentMap[fragmentName] ?? operation.lookupFragment(fragmentName);
+      const fragment = fragmentMap![fragmentName] ?? operation.lookupFragment(fragmentName);
       if (!fragment) throw new InvariantError(`No fragment named ${fragmentName}`);
       return fragment;
     },
@@ -178,40 +189,53 @@ export function incrementalDiff<TData>(
   // an incomplete read as complete.
   if (!queryResult.complete && dataState === 'complete') dataState = 'partial';
   let result: JsonObject = data;
-  let missing = queryResult.missing;
+  let pruned = false;
 
+  const scope = rootScope(document, selectionSet);
   if (shouldPrune(dataState, incrementalInfo)) {
-    const pruned = prunePartialBoundaries(selectionSet, data, exec.boundaries, rootScope(selectionSet), [], context);
+    const prunedResult = prunePartialBoundaries(selectionSet, data, exec.boundaries, scope, [], context);
     // Like InMemoryCache: if pruning dropped data while partial data is
     // requested, keep the partial result. Otherwise the pruned result (which
     // does not report missing fields) stands.
-    if (pruned.result === data || !returnPartialData) {
-      result = pruned.result;
-      dataState = pruned.dataState;
-      missing = undefined;
+    if (prunedResult.result === data || !returnPartialData) {
+      result = prunedResult.result as JsonObject;
+      dataState = prunedResult.dataState;
+      pruned = true;
     }
   }
 
   // Missing fields inside @defer boundaries are expected while streaming.
-  const includeMissing = !!missing && dataState !== 'streaming';
+  const includeMissing = !pruned && dataState !== 'streaming';
 
+  // Like InMemoryCache's results (which only hold selected fields), a result
+  // without any of the fields selected at its root is empty. (Hermes' results
+  // can hold other fields of the root object.)
+  const hasData = selectsAnyKey(scope, result, context);
   // If all root @defer boundaries are empty, the result is empty.
-  if (dataState === 'streaming' && Object.keys(result).length === 0) dataState = 'empty';
+  if (dataState === 'streaming' && !hasData) dataState = 'empty';
   if (dataState === 'deferPartial' || dataState === 'streamPartial') dataState = 'partial';
   if (dataState === 'partial' && !returnPartialData) dataState = 'empty';
 
   const complete = dataState === 'complete';
-  const keepResult = complete || dataState === 'streaming' || (returnPartialData && Object.keys(result).length > 0);
+  const keepResult = complete || dataState === 'streaming' || (returnPartialData && hasData);
 
   return {
     result: keepResult ? (result as any) : null,
     complete,
-    // Like InMemoryCache, missing is a getter.
+    // Like InMemoryCache, missing is a getter (and the error is built lazily).
     get missing() {
-      return includeMissing ? missing : undefined;
+      return includeMissing ? queryResult.missing : undefined;
     },
     dataState,
   } as Cache.InternalDiffResultWithDataState<TData>;
+}
+
+/** Whether a result has a value for any field that the selection sets of `scope` select. */
+function selectsAnyKey(scope: Scope, result: JsonObject, context: ReadContext): boolean {
+  for (const key of selectedKeys(scope, context).responseKeys) {
+    if (Object.prototype.hasOwnProperty.call(result, key)) return true;
+  }
+  return false;
 }
 
 function shouldPrune(dataState: DataState, incrementalInfo: DiffIncrementalInfo | undefined): boolean {
@@ -256,9 +280,13 @@ function memoNode<T>(memo: Memo<T>, keys: readonly unknown[]): Memo<T> {
 
 /**
  * Memoized classifications, by document, result object, selection set (or
- * list field) and variables. Hermes' reads share unchanged objects between
- * results, so this keeps their PartialBoundaries (and so their pruned results)
- * stable.
+ * list field), variables and (for the object read from, which may have no
+ * __typename of its own) root __typename. Hermes' reads share unchanged
+ * objects between results, so this keeps their PartialBoundaries (and so their
+ * pruned results) stable.
+ *
+ * (Like InMemoryCache's, these are not invalidated when possibleTypes or the
+ * fragment registry change at runtime.)
  */
 const execMemo: Memo<ExecResult> = {};
 
@@ -266,9 +294,10 @@ function cachedExec(
   context: ReadContext,
   value: object,
   node: SelectionSetNode | FieldNode,
+  rootTypename: string | undefined,
   compute: () => ExecResult,
 ): ExecResult {
-  const memo = memoNode(execMemo, [context.operation.document, value, node, context.varKey]);
+  const memo = memoNode(execMemo, [context.operation.document, value, node, context.varKey, rootTypename]);
   return (memo.value ??= compute());
 }
 
@@ -278,7 +307,7 @@ function executeSelectionSet(
   rootTypename: string | undefined,
   context: ReadContext,
 ): ExecResult {
-  return cachedExec(context, value, selectionSet, () =>
+  return cachedExec(context, value, selectionSet, rootTypename, () =>
     execSelectionSetImpl(selectionSet, value, rootTypename, context),
   );
 }
@@ -301,6 +330,11 @@ function fragmentOf(selection: SelectionNode, context: ReadContext) {
   return undefined;
 }
 
+/** The selection set of a fragment (by name), for someSelection. */
+function fragmentSelectionSet(context: ReadContext) {
+  return (fragmentName: string) => context.lookupFragment(fragmentName).selectionSet;
+}
+
 function execSelectionSetImpl(
   selectionSet: SelectionSetNode,
   value: JsonObject,
@@ -320,7 +354,7 @@ function execSelectionSetImpl(
       const resultName = resultKeyNameFromField(selection);
       const fieldValue = value[resultName];
       // The __typename fields added by addTypename do not count.
-      const counts = !addTypenameToDocument.added(selection);
+      const counts = isSelectedByCaller(selection);
 
       if (fieldValue === undefined) {
         // Like Hermes' reads (and InMemoryCache), a missing __typename the
@@ -377,7 +411,7 @@ function execSelectionSetImpl(
 }
 
 function executeSubSelectedArray(field: FieldNode, array: readonly unknown[], context: ReadContext): ExecResult {
-  return cachedExec(context, array, field, () => execSubSelectedArrayImpl(field, array, context));
+  return cachedExec(context, array, field, undefined, () => execSubSelectedArrayImpl(field, array, context));
 }
 
 function execSubSelectedArrayImpl(field: FieldNode, array: readonly unknown[], context: ReadContext): ExecResult {
@@ -394,7 +428,7 @@ function execSubSelectedArrayImpl(field: FieldNode, array: readonly unknown[], c
       exec = executeSubSelectedArray(field, item, context);
     } else if (field.selectionSet) {
       exec =
-        item !== null && typeof item === 'object'
+        typeof item === 'object'
           ? executeSelectionSet(field.selectionSet, item as JsonObject, undefined, context)
           : { dataState: 'empty', boundaries: new PartialBoundaries() };
     }
@@ -416,15 +450,22 @@ const NO_INFO = {};
  * The selection sets that select fields of the same object of a result (the
  * root, or the fields with the same response key under a set of selection
  * sets), memoized so that they can key pruned results.
+ *
+ * Scopes resolve fragment spreads through the document's fragments, so root
+ * scopes are memoized per document (documents can share operation nodes, e.g.
+ * after document transforms that add fragment definitions); child scopes are
+ * then memoized per scope.
  */
 type Scope = readonly SelectionSetNode[];
 
-const rootScopes = new WeakMap<SelectionSetNode, Scope>();
+const rootScopes = new WeakMap<DocumentNode, WeakMap<SelectionSetNode, Scope>>();
 const childScopes = new WeakMap<Scope, Map<string, Scope>>();
 
-function rootScope(selectionSet: SelectionSetNode): Scope {
-  let scope = rootScopes.get(selectionSet);
-  if (!scope) rootScopes.set(selectionSet, (scope = [selectionSet]));
+function rootScope(document: DocumentNode, selectionSet: SelectionSetNode): Scope {
+  let bySelectionSet = rootScopes.get(document);
+  if (!bySelectionSet) rootScopes.set(document, (bySelectionSet = new WeakMap()));
+  let scope = bySelectionSet.get(selectionSet);
+  if (!scope) bySelectionSet.set(selectionSet, (scope = [selectionSet]));
   return scope;
 }
 
@@ -434,33 +475,45 @@ function childScope(scope: Scope, resultName: string, context: ReadContext): Sco
   let child = byName.get(resultName);
   if (!child) {
     const selectionSets: SelectionSetNode[] = [];
-    forEachField(scope, context, field => {
-      if (field.selectionSet && resultKeyNameFromField(field) === resultName) selectionSets.push(field.selectionSet);
+    someSelection(scope, fragmentSelectionSet(context), field => {
+      if (field.kind === 'Field' && field.selectionSet && resultKeyNameFromField(field) === resultName) {
+        selectionSets.push(field.selectionSet);
+      }
     });
     byName.set(resultName, (child = selectionSets));
   }
   return child;
 }
 
+/** The fields the selection sets of a scope select (directly or through fragments, whether or not they apply). */
+interface SelectedKeys {
+  /** Their response keys. */
+  responseKeys: Set<string>;
+}
+
+const scopeKeys = new WeakMap<Scope, SelectedKeys>();
+
+function selectedKeys(scope: Scope, context: ReadContext): SelectedKeys {
+  let keys = scopeKeys.get(scope);
+  if (!keys) {
+    const responseKeys = new Set<string>();
+    someSelection(scope, fragmentSelectionSet(context), field => {
+      if (field.kind === 'Field') responseKeys.add(resultKeyNameFromField(field));
+    });
+    scopeKeys.set(scope, (keys = { responseKeys }));
+  }
+  return keys;
+}
+
 /**
- * Calls `callback` for each field selected by the selection sets (directly or
- * through fragments, whether or not they apply).
+ * The schema names of the aliased fields a (pruned) fragment selects: the
+ * results being pruned can hold their stored values under those names too.
  */
-function forEachField(selectionSets: Scope, context: ReadContext, callback: (field: FieldNode) => void) {
-  const visited = new Set<SelectionSetNode>();
-  const visit = (selectionSet: SelectionSetNode) => {
-    if (visited.has(selectionSet)) return;
-    visited.add(selectionSet);
-    for (const selection of selectionSet.selections) {
-      if (selection.kind === 'Field') {
-        callback(selection);
-      } else {
-        const fragment = fragmentOf(selection, context);
-        if (fragment) visit(fragment.selectionSet);
-      }
-    }
-  };
-  selectionSets.forEach(visit);
+function aliasedFieldNames(fragment: SelectionSetNode, context: ReadContext, names = new Set<string>()) {
+  someSelection([fragment], fragmentSelectionSet(context), field => {
+    if (field.kind === 'Field' && field.alias) names.add(field.name.value);
+  });
+  return names;
 }
 
 /**
@@ -487,7 +540,7 @@ function cachedPrune(
 
 function prunePartialBoundaries(
   selectionSet: SelectionSetNode,
-  data: any,
+  data: JsonValue | undefined,
   boundaries: PartialBoundaries | undefined,
   scope: Scope,
   path: PathPart[],
@@ -495,7 +548,7 @@ function prunePartialBoundaries(
 ): PruneResult {
   if (data == null || typeof data !== 'object' || !boundaries) return { result: data, dataState: 'complete', deps: [] };
   return cachedPrune(boundaries, selectionSet, scope, path, context, () =>
-    prunePartialBoundariesImpl(selectionSet, data, boundaries, scope, path, context),
+    prunePartialBoundariesImpl(selectionSet, data as JsonObject, boundaries, scope, path, context),
   );
 }
 
@@ -513,6 +566,10 @@ function prunePartialBoundariesImpl(
   let changed = false;
   let dataState: DataState = 'complete';
   const result: Record<string, any> = {};
+  // The schema names of aliased fields in pruned boundaries, and of the fields
+  // selected outside them.
+  let prunedNames: Set<string> | undefined;
+  const keptNames = new Set<string>();
 
   // __typename might not be part of the selection set, so preserve it.
   if (Object.prototype.hasOwnProperty.call(data, '__typename')) result.__typename = data.__typename;
@@ -522,6 +579,7 @@ function prunePartialBoundariesImpl(
     if (!shouldInclude(selection, variables)) continue;
 
     if (selection.kind === 'Field') {
+      keptNames.add(selection.name.value);
       const resultName = resultKeyNameFromField(selection);
       if (!Object.prototype.hasOwnProperty.call(data, resultName)) continue;
       const fieldValue = data[resultName];
@@ -569,7 +627,7 @@ function prunePartialBoundariesImpl(
     let prune = false;
     if (deferInfo && isDeferredFragment(selection as InlineFragmentNode, variables)) {
       const directive = selection.directives?.find(d => d.name.value === 'defer');
-      const label = directive && getDirectiveArgValue(directive, 'label', 'StringValue' as Kind.STRING);
+      const label = directive && getDirectiveArgValue(directive, 'label', STRING_VALUE);
       const key = [...path, ...(label ? [label] : [])];
       const pending = !!deferInfo.peekArray(key);
       deps.push(() => !!deferInfo.peekArray(key) === pending);
@@ -582,6 +640,7 @@ function prunePartialBoundariesImpl(
     ) {
       if (boundaries.has(selection) || prune) {
         dataState = mergeDataState(dataState, 'streaming');
+        prunedNames = aliasedFieldNames(fragment.selectionSet, context, prunedNames);
       } else {
         for (const child of fragment.selectionSet.selections) workSet.add(child);
       }
@@ -589,11 +648,13 @@ function prunePartialBoundariesImpl(
   }
 
   // Hermes' results can be supersets of the selection: keep the fields that
-  // the selection set does not select.
-  const selected = new Set<string>();
-  forEachField(scope, context, field => selected.add(resultKeyNameFromField(field)));
+  // the selection set does not select (but not the stored values of aliased
+  // fields that only pruned boundaries select).
+  const selected = selectedKeys(scope, context).responseKeys;
   for (const key of Object.keys(data)) {
-    if (!(key in result) && !selected.has(key)) result[key] = data[key];
+    if (key in result || selected.has(key)) continue;
+    if (prunedNames?.has(key) && !keptNames.has(key)) continue;
+    result[key] = data[key];
   }
 
   if (Object.keys(result).length !== Object.keys(data).length) {
@@ -611,7 +672,7 @@ function prunePartialBoundariesImpl(
 
 function prunePartialStreamArray(
   field: FieldNode,
-  array: unknown[],
+  array: JsonValue[],
   boundaries: PartialBoundaries | undefined,
   scope: Scope,
   path: PathPart[],
@@ -625,7 +686,7 @@ function prunePartialStreamArray(
 
 function prunePartialStreamArrayImpl(
   field: FieldNode,
-  array: unknown[],
+  array: JsonValue[],
   boundaries: PartialBoundaries,
   scope: Scope,
   path: PathPart[],
@@ -635,9 +696,9 @@ function prunePartialStreamArrayImpl(
   const deps: (() => boolean)[] = [];
   let changed = false;
   let dataState: DataState = 'complete';
-  let pruned: unknown[] = [];
+  let pruned: JsonValue[] = [];
 
-  const state = streamInfo?.peekArray(path as any[])?.state;
+  const state = streamInfo?.peekArray(path)?.state;
   const length = Math.min(array.length, state?.truncate ? state.streamPosition : Number.MAX_SAFE_INTEGER);
 
   for (let i = 0; i < length; i++) {
@@ -666,7 +727,7 @@ function prunePartialStreamArrayImpl(
     }
 
     deps.push(...prunedItem.deps);
-    pruned.push(prunedItem.result);
+    pruned.push(prunedItem.result!);
     changed ||= prunedItem.result !== item;
     dataState = mergeDataState(dataState, prunedItem.dataState);
   }
@@ -676,7 +737,7 @@ function prunePartialStreamArrayImpl(
     const truncate = state?.truncate;
     const position = state?.streamPosition;
     deps.push(() => {
-      const current = streamInfo.peekArray(path as any[])?.state;
+      const current = streamInfo.peekArray(path)?.state;
       return current === state && current?.truncate === truncate && current?.streamPosition === position;
     });
   }
