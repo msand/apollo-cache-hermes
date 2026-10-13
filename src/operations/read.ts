@@ -659,10 +659,15 @@ export function _visitSelection<TSerialized>(
     resultPath: PathPart[],
   ) {
     const danglingFieldIds = danglingFields?.get(value);
+    // Like the read walk, treat the query root as a Query.
+    let typeName = value.__typename;
+    if (!typeName && containerId === StaticNodeId.QueryRoot && containerPath.length === 0) {
+      typeName = 'Query';
+    }
     for (const key in parsed) {
       const node = parsed[key];
       // Fields of fragments that don't match the type are not selected.
-      if (node.conditions && !context.conditionsMatch(node.conditions, value.__typename)) continue;
+      if (node.conditions && !context.conditionsMatch(node.conditions, typeName)) continue;
       const fieldValue = value[key];
       const danglingId = danglingFieldIds?.get(key);
 
