@@ -150,6 +150,12 @@ export function checkWrite<TSerialized>(
           fieldMap.set(selection, { clientOnly, deferred });
         } else {
           const fragment = getFragmentFromSelection(selection, lookupFragment);
+          if (!fragment && selection.kind === 'FragmentSpread') {
+            // Like InMemoryCache, writing with an undefined fragment fails.
+            const error = new InvariantError(`No fragment named ${selection.name.value}`);
+            uncaughtErrors.add(error);
+            throw error;
+          }
           if (fragment && fragmentMatches(fragment.typeCondition?.name.value, typename)) {
             flatten(fragment.selectionSet, { clientOnly, deferred });
           }

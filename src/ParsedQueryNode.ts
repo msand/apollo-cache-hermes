@@ -223,7 +223,8 @@ function _buildNodeMap<TSerialized>(
     } else if (selection.kind === 'FragmentSpread' || selection.kind === 'InlineFragment') {
       const fragment = selection.kind === 'FragmentSpread' ? fragments[selection.name.value] : selection;
       if (!fragment) {
-        throw new Error(`Expected fragment ${(selection as FragmentSpreadNode).name.value} to be defined`);
+        // Same message as InMemoryCache.
+        throw new Error(`No fragment named ${(selection as FragmentSpreadNode).name.value}`);
       }
 
       // Fields of fragments with a type condition only apply to objects whose

@@ -363,7 +363,10 @@ export class CacheContext<TSerialized = GraphSnapshot> {
     // It appears like Apollo or someone upstream is cloning or otherwise
     // modifying the queries that are passed down.  Thus, the operation source
     // is a more reliable cache key…
-    const cacheKey = operationCacheKey(raw.document, raw.fragmentName);
+    // ApolloClient passes documents it already transformed with transformDocument.
+    // Their __typename fields are part of the query as the client sees it.
+    const pretransformed = !!raw.document.hasBeenTransformed;
+    const cacheKey = `${operationCacheKey(raw.document, raw.fragmentName)}${pretransformed ? '❖transformed' : ''}`;
     let operationInstances = this._operationMap.get(cacheKey);
     if (!operationInstances) {
       operationInstances = [];
@@ -386,7 +389,7 @@ export class CacheContext<TSerialized = GraphSnapshot> {
       policy => Object.keys(policy?.fields ?? {}).length > 0,
     );
 
-    const info = this._queryInfo(cacheKey, updateRaw);
+    const info = this._queryInfo(cacheKey, updateRaw, pretransformed);
     const fullVariables = { ...info.variableDefaults, ...updateRaw.variables } as JsonObject;
     // Like InMemoryCache, treat variables without a value as undefined (e.g. @export variables before they are resolved).
     for (const name of info.variables) {
@@ -408,9 +411,9 @@ export class CacheContext<TSerialized = GraphSnapshot> {
   /**
    * Retrieves a memoized QueryInfo for a given GraphQL document.
    */
-  private _queryInfo(cacheKey: string, raw: RawOperation): QueryInfo<TSerialized> {
+  private _queryInfo(cacheKey: string, raw: RawOperation, pretransformed: boolean): QueryInfo<TSerialized> {
     if (!this._queryInfoMap.has(cacheKey)) {
-      this._queryInfoMap.set(cacheKey, new QueryInfo(this, raw));
+      this._queryInfoMap.set(cacheKey, new QueryInfo(this, raw, pretransformed));
     }
     return this._queryInfoMap.get(cacheKey)!;
   }
