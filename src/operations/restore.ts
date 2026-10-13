@@ -1,3 +1,5 @@
+import type { NormalizedCacheObject } from '@apollo/client/cache';
+
 import { CacheSnapshot } from '../CacheSnapshot';
 import { CacheContext } from '../context';
 import { fieldNameFromStoreName, parseStoreFieldName } from '../context/storeFieldNames';
@@ -13,6 +15,53 @@ import { nodeIdForParameterizedValue, nodeIdForStoreKey } from './SnapshotEditor
 const { getInbound, getOutbound, getParameterized, isNumber, isObject, isReference, isScalar, iterRefs, refToInKey } =
   util;
 
+/** The keys of a node snapshot serialized by extract(). */
+const nodeSnapshotKeys = new Set(['type', 'data', 'inbound', 'outbound', 'parameterized']);
+
+/**
+ * Whether a serialized node is one of Hermes' (from extract()): an object with
+ * a numeric `type` and only the keys extract() writes. InMemoryCache store
+ * objects (which may well have a `type` field) have other fields too.
+ */
+function isSerializedNodeSnapshot(state: unknown): state is Serializable.NodeSnapshot {
+  return (
+    isObject(state) && typeof state.type === 'number' && Object.keys(state).every(key => nodeSnapshotKeys.has(key))
+  );
+}
+
+/**
+ * A copy of an InMemoryCache store value (found at `path`) with null in place
+ * of each Reference within it, as Hermes stores the slots of references
+ * (restoreEntityReferences fills them in), calling `onReference` for each.
+ */
+function withoutReferences(
+  value: unknown,
+  path: PathPart[],
+  onReference: (id: NodeId, path: PathPart[]) => void,
+): JsonValue {
+  if (isReference(value)) {
+    onReference(value.__ref, path);
+    return null;
+  }
+  if (Array.isArray(value)) {
+    let copy: JsonValue[] | undefined;
+    value.forEach((item, index) => {
+      const newItem = withoutReferences(item, [...path, index], onReference);
+      if (newItem !== item) (copy ??= value.slice())[index] = newItem;
+    });
+    return copy ?? (value as JsonValue[]);
+  }
+  if (isObject(value)) {
+    let copy: JsonObject | undefined;
+    for (const key of Object.keys(value)) {
+      const newValue = withoutReferences(value[key], [...path, key], onReference);
+      if (newValue !== value[key]) (copy ??= { ...value })[key] = newValue;
+    }
+    return copy ?? value;
+  }
+  return value as JsonValue;
+}
+
 /**
  * Restore GraphSnapshot from serializable representation.
  *
@@ -26,32 +75,36 @@ const { getInbound, getOutbound, getParameterized, isNumber, isObject, isReferen
  * @throws Will throw an error if there is undefined in sparse array
  */
 export function restore<TSerialized>(
-  serializedState: Serializable.GraphSnapshot,
+  serializedState: Serializable.GraphSnapshot | NormalizedCacheObject,
   cacheContext: CacheContext<TSerialized>,
 ) {
-  const { nodesMap, editedNodeIds } = createGraphSnapshotNodes(serializedState, cacheContext);
+  const { nodesMap, editedNodeIds, extraRootIds } = createGraphSnapshotNodes(serializedState, cacheContext);
   const graphSnapshot = new GraphSnapshot(nodesMap);
 
   return {
     cacheSnapshot: new CacheSnapshot(graphSnapshot, graphSnapshot, new OptimisticUpdateQueue()),
     editedNodeIds,
+    /** The ids InMemoryCache had retained (from its extract()'s __META), which the cache should retain. */
+    extraRootIds,
   };
 }
 
 function createGraphSnapshotNodes<TSerialized>(
-  serializedState: Serializable.GraphSnapshot,
+  serializedState: Serializable.GraphSnapshot | NormalizedCacheObject,
   cacheContext: CacheContext<TSerialized>,
 ) {
   const nodesMap: NodeSnapshotMap = Object.create(null);
   const editedNodeIds = new Set<NodeId>();
+  let extraRootIds: string[] = [];
 
   const missingPointers = new Map<NodeId, NodeReference[]>();
   // Adds a reference from (the `path` of) node `fromId` to node `id`.
   const addReference = (fromId: NodeId, id: NodeId, path: PathPart[], outbound: NodeReference[]) => {
     outbound.push({ id, path });
     const reverse: NodeReference = { id: fromId, path };
-    if (id in nodesMap) {
-      nodesMap[id]?.inbound?.set(refToInKey(reverse), reverse);
+    const target = nodesMap[id];
+    if (target) {
+      (target.inbound ??= new Map()).set(refToInKey(reverse), reverse);
     } else {
       const references = missingPointers.get(id);
       if (references === undefined) {
@@ -65,7 +118,15 @@ function createGraphSnapshotNodes<TSerialized>(
   // Create entity nodes in the GraphSnapshot
   for (const nodeId in serializedState) {
     const state = serializedState[nodeId];
-    const { type, data, inbound, outbound, parameterized } = state;
+    if (state === undefined) continue;
+    if (nodeId === '__META' && !isSerializedNodeSnapshot(state)) {
+      // InMemoryCache's extract() lists the ids it retained.
+      extraRootIds = (state as NonNullable<NormalizedCacheObject['__META']>).extraRootIds ?? [];
+      continue;
+    }
+    const { type, data, inbound, outbound, parameterized } = isSerializedNodeSnapshot(state)
+      ? state
+      : ({} as Serializable.NodeSnapshot);
 
     let nodeSnapshot;
     switch (type) {
@@ -86,57 +147,62 @@ function createGraphSnapshotNodes<TSerialized>(
         );
         break;
       case undefined: {
+        // An InMemoryCache store object.
         const parsed: JsonObject = {};
-        const parsedIn: NodeReference[] = missingPointers.get(nodeId) ?? [];
+        const parsedIn = missingPointers.get(nodeId);
         const parsedOut: NodeReference[] = [];
         const parsedParameterized: NodeReference[] = [];
-        for (const [key, val] of Object.entries(state)) {
+        // A parameterized value node for the field `fieldName`, whose value
+        // (and the references within it) is `val`.
+        const addParameterizedValue = (fieldId: NodeId, fieldName: string, val: unknown) => {
+          const path = [fieldName];
+          const fieldOut: NodeReference[] = [];
+          const fieldData = withoutReferences(val, [], (id, refPath) => addReference(fieldId, id, refPath, fieldOut));
+          nodesMap[fieldId] = new ParameterizedValueSnapshot(
+            fieldData,
+            [{ id: nodeId, path }],
+            fieldOut.length ? fieldOut : undefined,
+          );
+          editedNodeIds.add(fieldId);
+          parsedParameterized.push({ id: fieldId, path });
+        };
+        // Hermes stores fields with custom directives (e.g. `lastName@upperCase`)
+        // like the same fields without them; so a field without directives
+        // takes precedence (and otherwise the first one found).
+        const entries = Object.entries(state as Record<string, unknown>).sort(
+          ([a], [b]) => Number(a.includes('@')) - Number(b.includes('@')),
+        );
+        for (const [key, val] of entries) {
           const fieldName = fieldNameFromStoreName(key);
           if (key.charAt(fieldName.length) === ':') {
             // A field stored per its keyArgs policy (or @connection directive),
             // under InMemoryCache's store field name (e.g. `feed:{"type":"news"}`).
-            const fieldId = nodeIdForStoreKey(nodeId, [fieldName], key);
-            const path = [fieldName];
-            nodesMap[fieldId] = new ParameterizedValueSnapshot(
-              val as JsonValue,
-              [...(missingPointers.get(nodeId) ?? []), { id: nodeId, path }],
-              [],
-            );
-            editedNodeIds.add(fieldId);
-            parsedParameterized.push({ id: fieldId, path });
+            addParameterizedValue(nodeIdForStoreKey(nodeId, [fieldName], key), fieldName, val);
             continue;
           }
           // Other InMemoryCache store field names (from getStoreKeyName): fields
-          // with arguments are parameterized value nodes, and Hermes stores
-          // fields with custom directives (e.g. `lastName@upperCase`) like the
-          // same fields without them.
+          // with arguments are parameterized value nodes.
           const storeFieldName = parseStoreFieldName(key);
           if (storeFieldName?.args && Object.keys(storeFieldName.args).length) {
             const path = [storeFieldName.fieldName];
-            const fieldId = nodeIdForParameterizedValue(nodeId, path, storeFieldName.args);
-            const fieldOut: NodeReference[] = [];
-            if (isReference(val)) addReference(fieldId, val.__ref, [], fieldOut);
-            nodesMap[fieldId] = new ParameterizedValueSnapshot(
-              isReference(val) ? null : (val as JsonValue),
-              [{ id: nodeId, path }],
-              fieldOut,
+            addParameterizedValue(
+              nodeIdForParameterizedValue(nodeId, path, storeFieldName.args),
+              storeFieldName.fieldName,
+              val,
             );
-            editedNodeIds.add(fieldId);
-            parsedParameterized.push({ id: fieldId, path });
             continue;
           }
           const fieldKey = storeFieldName ? storeFieldName.fieldName : key;
-          if (isReference(val)) {
-            addReference(nodeId, val.__ref, [fieldKey], parsedOut);
-          } else {
-            parsed[fieldKey] = val;
-          }
+          if (fieldKey !== key && (fieldKey in parsed || parsedOut.some(ref => ref.path[0] === fieldKey))) continue;
+          parsed[fieldKey] = withoutReferences(val, [fieldKey], (id, path) =>
+            addReference(nodeId, id, path, parsedOut),
+          );
         }
         nodeSnapshot = new EntitySnapshot(
           parsed as JsonObject,
-          getInbound(parsedIn),
-          getOutbound(parsedOut),
-          getParameterized(parsedParameterized),
+          parsedIn,
+          parsedOut.length ? parsedOut : undefined,
+          parsedParameterized.length ? parsedParameterized : undefined,
         );
         break;
       }
@@ -151,7 +217,7 @@ function createGraphSnapshotNodes<TSerialized>(
   // Patch data property and reconstruct references
   restoreEntityReferences(nodesMap, cacheContext);
 
-  return { nodesMap, editedNodeIds };
+  return { nodesMap, editedNodeIds, extraRootIds };
 }
 
 /**

@@ -1,5 +1,5 @@
 import { cacheSlot } from '@apollo/client/cache';
-import type { Cache as CacheInterface } from '@apollo/client/cache';
+import type { Cache as CacheInterface, NormalizedCacheObject } from '@apollo/client/cache';
 import type { FragmentDefinitionNode, InlineFragmentNode } from 'graphql';
 import type { Reference, StoreObject } from '@apollo/client/utilities';
 
@@ -169,14 +169,34 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     return this._context.fragments?.lookup(fragmentName) ?? null;
   }
 
-  restore(data: Serializable.GraphSnapshot, migrationMap?: MigrationMap, verifyQuery?: RawOperation) {
-    const { cacheSnapshot, editedNodeIds } = restore(data, this._context);
+  /**
+   * Restores a snapshot from extract(), or a normalized cache object extracted
+   * from an InMemoryCache. Like InMemoryCache, only the baseline is replaced:
+   * optimistic updates are re-applied on top of it.
+   */
+  restore(
+    data: Serializable.GraphSnapshot | NormalizedCacheObject,
+    migrationMap?: MigrationMap,
+    verifyQuery?: RawOperation,
+  ) {
+    const { cacheSnapshot, editedNodeIds, extraRootIds } = restore(data, this._context);
     const migrated = migrate(cacheSnapshot, migrationMap);
     if (verifyQuery && !read(this._context, verifyQuery, migrated.baseline, Object.create(null), false).complete) {
       throw new UnsatisfiedCacheError(`Restored cache cannot satisfy the verification query`);
     }
+    // Like InMemoryCache, the ids it had retained are retained.
+    extraRootIds.forEach(id => this.retain(id));
+
+    let snapshot = migrated;
+    const { optimistic, optimisticQueue } = this._snapshot;
+    if (optimisticQueue.hasUpdates()) {
+      addToSet(editedNodeIds, optimistic.allNodeIds());
+      const applied = optimisticQueue.apply(this._context, migrated.baseline);
+      addToSet(editedNodeIds, applied.editedNodeIds);
+      snapshot = new CacheSnapshot(migrated.baseline, applied.snapshot, optimisticQueue);
+    }
     this._fieldsUntracked = true;
-    this._setSnapshot(migrated, editedNodeIds);
+    this._setSnapshot(snapshot, editedNodeIds);
   }
 
   extract(optimistic: boolean, pruneQuery?: RawOperation): Serializable.GraphSnapshot {

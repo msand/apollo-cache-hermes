@@ -44,8 +44,7 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable {
     verifyOptions?: CacheInterface.ReadOptions,
   ): this {
     const verifyQuery = verifyOptions && buildRawOperationFromQuery(verifyOptions.query, verifyOptions.variables);
-    // restore() reads nodes without a `type` as InMemoryCache store objects.
-    this._queryable.restore(data as Serializable.GraphSnapshot, migrationMap, verifyQuery);
+    this._queryable.restore(data, migrationMap, verifyQuery);
     return this;
   }
 
