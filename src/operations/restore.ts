@@ -12,8 +12,18 @@ import * as util from '../util';
 
 import { nodeIdForParameterizedValue, nodeIdForStoreKey } from './SnapshotEditor';
 
-const { getInbound, getOutbound, getParameterized, isNumber, isObject, isReference, isScalar, iterRefs, refToInKey } =
-  util;
+const {
+  getInbound,
+  getOutbound,
+  getParameterized,
+  isNumber,
+  isObject,
+  isReference,
+  isScalar,
+  iterRefs,
+  lazyImmutableDeepSet,
+  refToInKey,
+} = util;
 
 /** The keys of a node snapshot serialized by extract(). */
 const nodeSnapshotKeys = new Set(['type', 'data', 'inbound', 'outbound', 'parameterized']);
@@ -24,9 +34,11 @@ const nodeSnapshotKeys = new Set(['type', 'data', 'inbound', 'outbound', 'parame
  * objects (which may well have a `type` field) have other fields too.
  */
 function isSerializedNodeSnapshot(state: unknown): state is Serializable.NodeSnapshot {
-  return (
-    isObject(state) && typeof state.type === 'number' && Object.keys(state).every(key => nodeSnapshotKeys.has(key))
-  );
+  if (!isObject(state) || typeof state.type !== 'number') return false;
+  for (const key in state) {
+    if (!nodeSnapshotKeys.has(key)) return false;
+  }
+  return true;
 }
 
 /**
@@ -79,7 +91,8 @@ export function restore<TSerialized>(
   cacheContext: CacheContext<TSerialized>,
 ) {
   const { nodesMap, editedNodeIds, extraRootIds } = createGraphSnapshotNodes(serializedState, cacheContext);
-  const graphSnapshot = new GraphSnapshot(nodesMap);
+  // (Every node created is an edited node.)
+  const graphSnapshot = new GraphSnapshot(nodesMap, undefined, undefined, editedNodeIds.size);
 
   return {
     cacheSnapshot: new CacheSnapshot(graphSnapshot, graphSnapshot, new OptimisticUpdateQueue()),
@@ -94,6 +107,15 @@ function createGraphSnapshotNodes<TSerialized>(
   cacheContext: CacheContext<TSerialized>,
 ) {
   const nodesMap: NodeSnapshotMap = Object.create(null);
+  // The serialized data of the nodes whose references are filled in below,
+  // which is copied (along their paths) rather than changed.
+  const originals = new Map<NodeId, unknown>();
+  // (Entity transformers change data in place, so it is copied for them.)
+  const ownData = (nodeId: NodeId, data: unknown) => {
+    if (cacheContext.entityTransformer) return cloneJson(data);
+    originals.set(nodeId, data);
+    return data;
+  };
   const editedNodeIds = new Set<NodeId>();
   let extraRootIds: string[] = [];
 
@@ -132,7 +154,7 @@ function createGraphSnapshotNodes<TSerialized>(
     switch (type) {
       case Serializable.NodeSnapshotType.EntitySnapshot:
         nodeSnapshot = new EntitySnapshot(
-          (outbound || parameterized ? cloneJson(data) : data) as JsonObject,
+          (outbound || parameterized ? ownData(nodeId, data) : data) as JsonObject,
           getInbound(inbound),
           getOutbound(outbound),
           getParameterized(parameterized),
@@ -140,7 +162,7 @@ function createGraphSnapshotNodes<TSerialized>(
         break;
       case Serializable.NodeSnapshotType.ParameterizedValueSnapshot:
         nodeSnapshot = new ParameterizedValueSnapshot(
-          (outbound || parameterized ? cloneJson(data) : data) as JsonValue,
+          (outbound || parameterized ? ownData(nodeId, data) : data) as JsonValue,
           getInbound(inbound),
           getOutbound(outbound),
           getParameterized(parameterized),
@@ -215,7 +237,7 @@ function createGraphSnapshotNodes<TSerialized>(
   }
 
   // Patch data property and reconstruct references
-  restoreEntityReferences(nodesMap, cacheContext);
+  restoreEntityReferences(nodesMap, cacheContext, originals);
 
   return { nodesMap, editedNodeIds, extraRootIds };
 }
@@ -238,24 +260,30 @@ function cloneJson<T>(value: T): T {
   return value;
 }
 
-function set(data: NestedArray<JsonScalar> | NestedObject<JsonScalar>, path: PathPart[], value: JsonValue | undefined) {
-  let obj = data;
-  const l = path.length - 1;
-  for (let i = 0; i < l; i++) {
-    const key = path[i];
-    if (!(key in obj)) {
-      obj[key] = typeof key === 'string' ? {} : [];
-    }
-    obj = obj[key];
-  }
-  obj[path[l]] = value;
+/** Calls `callback` with each reference, in the order of iterRefs (without its generator). */
+function forEachRef(
+  outbound: Map<string, NodeReference> | undefined,
+  parameterized: Map<string, NodeReference[]> | undefined,
+  callback: (reference: NodeReference) => void,
+) {
+  parameterized?.forEach(references => references.forEach(callback));
+  outbound?.forEach(callback);
 }
 
-function restoreEntityReferences<TSerialized>(nodesMap: NodeSnapshotMap, cacheContext: CacheContext<TSerialized>) {
+function restoreEntityReferences<TSerialized>(
+  nodesMap: NodeSnapshotMap,
+  cacheContext: CacheContext<TSerialized>,
+  originals: Map<NodeId, unknown>,
+) {
   const { entityTransformer, entityIdForValue } = cacheContext;
 
+  // First, copy the data of the nodes (from the serialized data, which is left
+  // as it is) along the paths that change: the data objects that nodes
+  // reference are then final, so the references filled in below hold the data
+  // in its final form (in place of the nulls that serialized references are).
   for (const nodeId in nodesMap) {
-    const { data, outbound, parameterized } = nodesMap[nodeId];
+    const node = nodesMap[nodeId];
+    const { data, outbound, parameterized } = node;
     if (entityTransformer && isObject(data) && entityIdForValue(data)) {
       entityTransformer(data);
     }
@@ -267,73 +295,70 @@ function restoreEntityReferences<TSerialized>(nodesMap: NodeSnapshotMap, cacheCo
       continue;
     }
 
-    for (const { id: referenceId, path } of iterRefs(outbound, parameterized)) {
+    const original = originals.get(nodeId) as JsonValue | undefined;
+    const isContainer = Array.isArray(data) || isObject(data);
+    forEachRef(outbound, parameterized, ({ id: referenceId, path }) => {
       const referenceNode = nodesMap[referenceId];
       if (!referenceNode) {
         // A dangling reference (to a deleted entity) has no data.
         if (!path.length) {
-          nodesMap[nodeId].data = undefined;
-        } else if (Array.isArray(data) || isObject(data)) {
-          set(data, path, undefined);
+          node.data = undefined;
+        } else if (isContainer) {
+          node.data = lazyImmutableDeepSet(node.data, original, path, undefined);
         }
-      } else if (referenceNode instanceof EntitySnapshot && data === null) {
-        // data is a reference.
-        nodesMap[nodeId].data = referenceNode.data;
       } else if (referenceNode instanceof ParameterizedValueSnapshot) {
         // This is specifically to handle a sparse array which happen
         // when each element in the array reference data in a
         // ParameterizedValueSnapshot.
         // (see: parameterizedFields/nestedParameterizedReferenceInArray.ts)
         // We only want to try walking if its data contains an array
-        const hasArrayIndex = path.some(part => isNumber(part));
-        if (hasArrayIndex) {
-          tryRestoreSparseArray(data, path, 0);
+        if (path.some(part => isNumber(part))) {
+          const end = sparseItemIndex(node.data, path);
+          if (end >= 0) node.data = lazyImmutableDeepSet(node.data, original, path.slice(0, end + 1), undefined, true);
         }
-      } else if (Array.isArray(data) || isObject(data)) {
-        set(data, path, referenceNode.data);
+      } else if (path.length && isContainer) {
+        node.data = lazyImmutableDeepSet(node.data, original, path, null);
       }
-    }
+    });
+  }
+
+  // Then fill in the references to entities (in the copies made above).
+  for (const nodeId in nodesMap) {
+    const node = nodesMap[nodeId];
+    const { outbound, parameterized } = node;
+    const data = originals.get(nodeId) ?? node.data;
+    if ((!outbound && !parameterized) || node.data === undefined) continue;
+    const isContainer = Array.isArray(data) || isObject(data);
+    forEachRef(outbound, parameterized, ({ id: referenceId, path }) => {
+      const referenceNode = nodesMap[referenceId];
+      if (!(referenceNode instanceof EntitySnapshot)) return;
+      if (!path.length) {
+        // data is a reference.
+        if (data === null) node.data = referenceNode.data;
+      } else if (isContainer) {
+        let container = node.data as Record<PathPart, unknown>;
+        for (let i = 0; i < path.length - 1; i++) container = container[path[i]] as Record<PathPart, unknown>;
+        container[path[path.length - 1]] = referenceNode.data;
+      }
+    });
   }
 }
 
 /**
- * Helper function to walk 'data' according to the given path
- * and try to recreate sparse array when encounter 'null' in array along
- * the path.
- *
- * The function assumes that the given data already has the shape of the path
- * For example:
- *    path -> ['one', 0, 'two', 1] will be with
- *    data ->
- *    { one: [
- *        two: [null, <some data>]
- *    ]}
- *
- * This is garunteed to be such a case because when we extract sparse array,
- * we will set 'undefined' as value of an array which will then be
- * JSON.stringify to 'null' and will preserve the structure along the path
- *
+ * The index in `path` of the first list item along it that is null (whose
+ * value is a parameterized node's, so the list is truly sparse there), or -1.
  */
-function tryRestoreSparseArray(
-  data: NestedValue<JsonValue | undefined>,
-  possibleSparseArrayPaths: PathPart[],
-  idx: number,
-) {
-  if (data === undefined) {
-    // There should never be 'undefined'
-    throw new Error(`Unexpected 'undefined' in the path [${possibleSparseArrayPaths}] at index ${idx}`);
+function sparseItemIndex(data: unknown, path: PathPart[]): number {
+  let value = data;
+  for (let i = 0; i < path.length; i++) {
+    if (value === undefined) {
+      // There should never be 'undefined'
+      throw new Error(`Unexpected 'undefined' in the path [${path}] at index ${i}`);
+    }
+    if (value === null || isScalar(value)) return -1;
+    const prop = path[i];
+    if (Array.isArray(value) && typeof prop === 'number' && value[prop] === null) return i;
+    value = (value as JsonObject)[prop];
   }
-
-  if (idx >= possibleSparseArrayPaths.length || data === null || isScalar(data)) {
-    return;
-  }
-
-  const prop = possibleSparseArrayPaths[idx];
-  if (Array.isArray(data) && typeof prop === 'number' && data[prop] === null) {
-    // truely make it sparse rather than just set "undefined'"
-    delete data[prop];
-    return;
-  }
-
-  tryRestoreSparseArray((data as JsonObject)[prop], possibleSparseArrayPaths, idx + 1);
+  return -1;
 }
