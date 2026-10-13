@@ -21,6 +21,7 @@ import { FieldStorage } from '../operations/fieldFunctions';
 import { ConsoleTracer } from './ConsoleTracer';
 import { QueryInfo } from './QueryInfo';
 import { ScalarConfig } from './scalars';
+import { StoreFieldNames } from './storeFieldNames';
 import { Tracer } from './Tracer';
 
 export namespace CacheContext {
@@ -253,6 +254,9 @@ export class CacheContext<TSerialized = GraphSnapshot> {
   /** The options.storage objects of read and merge functions. */
   public readonly fieldStorage = new FieldStorage();
 
+  /** The storage identities of fields (per their keyArgs policies). */
+  public readonly storeFieldNames: StoreFieldNames;
+
   constructor(config: CacheContext.Configuration<TSerialized> = {}) {
     // Infer dev mode from NODE_ENV, by convention.
     const nodeEnv = typeof process !== 'undefined' ? process.env.NODE_ENV : 'development';
@@ -273,6 +277,7 @@ export class CacheContext<TSerialized = GraphSnapshot> {
       this.fragmentMatches(supertype, typename),
     );
     this.typePolicies = this.scalars.withScalarReads(config.typePolicies);
+    this.storeFieldNames = new StoreFieldNames(config.typePolicies);
     this.fragments = config.fragments;
     if (config.possibleTypes) {
       this.addPossibleTypes(config.possibleTypes);
@@ -491,6 +496,8 @@ export function _makeEntityIdMapper(
           const { __typename } = node;
           if (typeof __typename === 'string' && __typename in typePolicies) {
             const keyFields = typePolicies[__typename].keyFields;
+            // Like InMemoryCache, keyFields: false disables normalization.
+            if (keyFields === false) return undefined;
             if (Array.isArray(keyFields)) {
               const keys: Record<string, unknown> = {};
               for (const key of keyFields) {

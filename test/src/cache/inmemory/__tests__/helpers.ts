@@ -57,7 +57,10 @@ export function defaultNormalizedCacheFactory(
 /** The inverse of toNormalizedCacheObject (for entity references only). */
 function fromNormalizedCacheObject(normalized: NormalizedCacheObject) {
   type Edge = { id: string; path: (string | number)[] };
-  const serialized: Record<string, { type: 0; data: any; outbound?: Edge[]; inbound?: Edge[] }> = {};
+  const serialized: Record<
+    string,
+    { type: 0 | 1; data: any; outbound?: Edge[]; inbound?: Edge[]; parameterized?: Edge[] }
+  > = {};
   const inbound: Record<string, Edge[]> = {};
   for (const [id, entity] of Object.entries(normalized)) {
     const outbound: Edge[] = [];
@@ -75,8 +78,21 @@ function fromNormalizedCacheObject(normalized: NormalizedCacheObject) {
       }
       return value;
     };
-    serialized[id] = { type: 0, data: strip(entity, []) };
+    // Fields stored per their keyArgs policies (InMemoryCache's `field:...`
+    // store field names) are Hermes' parameterized value nodes.
+    const data = strip(entity, []);
+    const parameterized: Edge[] = [];
+    for (const key of Object.keys(data ?? {})) {
+      const fieldName = /^[_a-z][_0-9a-z]*/i.exec(key)?.[0];
+      if (!fieldName || key.charAt(fieldName.length) !== ':') continue;
+      const nodeId = `${id}❖${JSON.stringify([fieldName])}❖${key}`;
+      serialized[nodeId] = { type: 1, data: data[key], inbound: [{ id, path: [fieldName] }] };
+      parameterized.push({ id: nodeId, path: [fieldName] });
+      delete data[key];
+    }
+    serialized[id] = { type: 0, data };
     if (outbound.length) serialized[id].outbound = outbound;
+    if (parameterized.length) serialized[id].parameterized = parameterized;
   }
   for (const [id, edges] of Object.entries(inbound)) {
     if (serialized[id]) serialized[id].inbound = edges;

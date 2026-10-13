@@ -4,10 +4,11 @@ import type { Reference, TypePolicy } from '@apollo/client/cache';
 import type { StoreObject } from '@apollo/client/utilities';
 
 import type { CacheContext } from '../context';
+import { storeFieldNameOf } from '../context/storeFieldNames';
 import type { GraphSnapshot as GraphSnapshotType } from '../GraphSnapshot';
 import type { NodeReference, EntitySnapshot as EntitySnapshotType, NodeSnapshot } from '../nodes';
 import { fieldNodeOf } from '../ParsedQueryNode';
-import type { FieldArguments, ParsedQuery } from '../ParsedQueryNode';
+import type { ParsedQuery } from '../ParsedQueryNode';
 import type { JsonArray, JsonObject, JsonScalar, JsonValue, NestedObject, Nil, PathPart } from '../primitive';
 import type { NodeId, OperationInstance, RawOperation } from '../schema';
 import * as graphSnapshot from '../GraphSnapshot';
@@ -16,7 +17,7 @@ import * as errors from '../errors';
 import * as nodes from '../nodes';
 import * as util from '../util';
 
-import { FieldFunctions, getFieldPolicy, storageFieldName, withReferences } from './fieldFunctions';
+import { FieldFunctions, getFieldPolicy, withReferences } from './fieldFunctions';
 
 // Ensure typescript doesn't emit (0, fn)(...args)
 const isEqual = equality.equal;
@@ -434,8 +435,17 @@ export class SnapshotEditor<TSerialized> {
       return payloadId;
     }
 
+    // The (unidentified) value of a parameterized field, which is its node's
+    // data (rather than an entity).
+    const isParameterizedValue =
+      payloadId === containerId &&
+      path.length === 0 &&
+      this._getNodeSnapshot(containerId) instanceof ParameterizedValueSnapshot;
+    const unidentified = !payloadId || isParameterizedValue;
+
     // Unidentified objects replaced by a merge policy lose their other fields.
-    const replacedValue = !payloadId && !previousId && mode === 'replace' ? previousValue : undefined;
+    const replacedValue =
+      unidentified && (!previousId || isParameterizedValue) && mode === 'replace' ? previousValue : undefined;
     const writtenFields = replacedValue ? new Set<string>() : undefined;
 
     // If we've entered a new node; it becomes our container.
@@ -533,14 +543,21 @@ export class SnapshotEditor<TSerialized> {
       let fieldPrefixPath = prefixPath;
       let fieldPath = [...path, schemaName];
 
-      if (node.args) {
+      // Fields are stored under their arguments, or as their keyArgs policies
+      // (or @connection directives) say, like InMemoryCache's store field names.
+      const args = (node.args as JsonObject | undefined) ?? null;
+      const field = fieldNodeOf(node);
+      const storeKey = this._context.storeFieldNames.storeKey(typename, schemaName, args, field, this._variables);
+      const storeFieldName = storeFieldNameOf(schemaName, storeKey, args);
+
+      if (storeKey !== undefined) {
         if (fieldValue === null && prune) {
           this._setValue(containerIdForField, path, null);
           continue;
         }
         // The values of a parameterized field are explicit nodes in the graph;
         // so we set up a new container & path.
-        containerIdForField = this._ensureParameterizedValueSnapshot(containerId, fieldPath, node.args);
+        containerIdForField = this._ensureParameterizedValueSnapshot(containerId, fieldPath, storeKey);
         fieldPrefixPath = [...prefixPath, ...fieldPath];
         fieldPath = [];
       }
@@ -573,20 +590,19 @@ export class SnapshotEditor<TSerialized> {
               node.propMap,
             )
           : fieldValue;
-        const args = (node.args as JsonObject | undefined) ?? null;
-        const storageKeys = [containerId, ...path, storageFieldName(schemaName, args)];
+        const storageKeys = [containerId, ...path, storeFieldName];
         fieldValue = merge(
           // Like InMemoryCache, overwriting writes call merge functions without existing data.
           this._overwrite ? undefined : existing,
           incoming,
           this._fieldFunctions().mergeOptions(
             schemaName,
-            payloadName,
+            storeFieldName,
             args,
             storageKeys,
             this._extensions,
             existing,
-            fieldNodeOf(node),
+            field,
           ),
         ) as JsonValue | undefined;
         fieldMode = 'replace';
@@ -600,7 +616,7 @@ export class SnapshotEditor<TSerialized> {
           }
           continue;
         }
-      } else if (!fieldMode && mode === 'replace' && !payloadId) {
+      } else if (!fieldMode && mode === 'replace' && unidentified) {
         // Nested values of a replaced unidentified object are replaced too.
         fieldMode = 'replace';
       }
@@ -1592,8 +1608,8 @@ export class SnapshotEditor<TSerialized> {
    * Ensures that there is a ParameterizedValueSnapshot for the given node with
    * arguments
    */
-  private _ensureParameterizedValueSnapshot(containerId: NodeId, path: PathPart[], args: FieldArguments) {
-    const fieldId = nodeIdForParameterizedValue(containerId, path, args);
+  private _ensureParameterizedValueSnapshot(containerId: NodeId, path: PathPart[], storeKey: string) {
+    const fieldId = nodeIdForStoreKey(containerId, path, storeKey);
 
     // We're careful to not edit the container unless we absolutely have to.
     // (There may be no changes for this parameterized value).
@@ -1617,5 +1633,14 @@ export class SnapshotEditor<TSerialized> {
  * Generate a stable id for a parameterized value.
  */
 export function nodeIdForParameterizedValue(containerId: NodeId, path: PathPart[], args?: JsonObject) {
-  return `${containerId}❖${JSON.stringify(path)}❖${JSON.stringify(args)}`;
+  return nodeIdForStoreKey(containerId, path, JSON.stringify(args));
+}
+
+/**
+ * The id of the parameterized value node holding the field at `path` within
+ * the container, stored under `storeKey` (see StoreKey): the JSON of its
+ * arguments, or its keyArgs-derived store field name.
+ */
+export function nodeIdForStoreKey(containerId: NodeId, path: PathPart[], storeKey: string) {
+  return `${containerId}❖${JSON.stringify(path)}❖${storeKey}`;
 }

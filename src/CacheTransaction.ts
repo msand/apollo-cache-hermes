@@ -18,6 +18,7 @@ import type { GraphSnapshot, NodeSnapshotMap } from './GraphSnapshot';
 import type { JsonObject, JsonValue } from './primitive';
 import type { CacheContext } from './context';
 import type { ScalarConfig } from './context/scalars';
+import { fieldNameFromStoreName, isStoreFieldNameKey, storeFieldNameOf } from './context/storeFieldNames';
 import type { OptimisticUpdate } from './OptimisticUpdateQueue';
 import { applyDeltas } from './OptimisticUpdateQueue';
 import type { Queryable } from './Queryable';
@@ -29,9 +30,9 @@ import * as operations from './operations';
 import * as schema from './schema';
 import * as nodes from './nodes';
 import * as util from './util';
-import { nodeIdForParameterizedValue } from './operations/SnapshotEditor';
+import { nodeIdForParameterizedValue, nodeIdForStoreKey } from './operations/SnapshotEditor';
 import { checkWrite, checkWriteDocument } from './operations/checkWrite';
-import { getReadFunction, storageFieldName } from './operations/fieldFunctions';
+import { entityTypename, getReadFunction } from './operations/fieldFunctions';
 
 const isEqual = equality.equal;
 const makeRef = makeReference;
@@ -47,6 +48,32 @@ type InvalidateModifier = ModifierDetails['INVALIDATE'];
 
 const DELETE: DeleteModifier = Object.create(null);
 const INVALIDATE: InvalidateModifier = Object.create(null);
+
+/**
+ * The storeFieldName passed to modifiers for a field stored at `storeFieldName`
+ * (a field name, or a parameterized value's node id): like InMemoryCache's,
+ * for fields stored per their keyArgs policies (e.g. `feed:{"type":"news"}`).
+ */
+function modifierStoreFieldName(storeFieldName: string): string {
+  const index = storeFieldName.lastIndexOf('❖');
+  if (index < 0) return storeFieldName;
+  const storeKey = storeFieldName.slice(index + 1);
+  return isStoreFieldNameKey(storeKey) ? storeKey : storeFieldName;
+}
+
+/**
+ * A copy of a stored list for a modifier function: frozen, like InMemoryCache's
+ * store values, if the stored list is.
+ */
+function copyList<T>(list: readonly T[]): T[] {
+  const copy = list.slice();
+  return Object.isFrozen(list) ? (Object.freeze(copy) as T[]) : copy;
+}
+
+/** The (InMemoryCache) store field name of the parameterized value node `nodeId`. */
+function storeFieldNameOfNode(fieldName: string, nodeId: string): string {
+  return storeFieldNameOf(fieldName, nodeId.slice(nodeId.lastIndexOf('❖') + 1));
+}
 
 function isDeleteModifier(value: any): value is DeleteModifier {
   return value === DELETE;
@@ -493,10 +520,12 @@ export class CacheTransaction<TSerialized> implements Queryable {
     function readFromSnapshot(obj: Readonly<NodeSnapshot>, key: string) {
       const data = obj.data;
       const datum = data && typeof data === 'object' && key in data ? (data as JsonObject)[key] : undefined;
+      const nodes: { d: any; k: string | null }[] = obj.parameterized?.get(key)?.map(nodeRefToMatch) ?? [];
       if (datum != null) {
-        return [{ d: datum, k: null }];
+        // Like InMemoryCache, each stored variant of the field (e.g. with
+        // keyArgs, `field` and `field:{"arg":1}`) is modified.
+        return [{ d: datum, k: null }, ...nodes];
       }
-      const nodes: { d: any; k: string }[] = obj.parameterized?.get(key)?.map(nodeRefToMatch) ?? [];
       const out = obj.outbound?.get(key);
       if (out) {
         const k = out.id;
@@ -652,11 +681,13 @@ export class CacheTransaction<TSerialized> implements Queryable {
     Object.defineProperty(details, 'storage', {
       get() {
         const { fieldName, storeFieldName } = details;
-        // Parameterized fields' store field names end with their arguments.
-        const args = storeFieldName.includes('❖')
-          ? (JSON.parse(storeFieldName.slice(storeFieldName.lastIndexOf('❖') + 1)) as JsonObject)
-          : null;
-        return fieldStorage.get([id, storageFieldName(fieldName, args)]);
+        // Parameterized fields' node ids end with their store keys.
+        const storeKey = storeFieldName.includes('❖')
+          ? storeFieldName.slice(storeFieldName.lastIndexOf('❖') + 1)
+          : storeFieldName === fieldName
+            ? undefined
+            : storeFieldName;
+        return fieldStorage.get([id, storeFieldNameOf(fieldName, storeKey)]);
       },
     });
 
@@ -696,14 +727,14 @@ export class CacheTransaction<TSerialized> implements Queryable {
           const storeFieldName = k ?? key;
           const useRef = k?.includes('❖');
           const copyOrCurrent = Array.isArray(d)
-            ? Array.prototype.slice.call(d)
+            ? copyList(d)
             : useRef
               ? parameterizedFieldValue(k!, d)
               : typeof d === 'object'
                 ? { ...d }
                 : d;
           details.fieldName = key;
-          details.storeFieldName = storeFieldName;
+          details.storeFieldName = modifierStoreFieldName(storeFieldName);
           const value = field(copyOrCurrent, details);
           if (isDeleteModifier(value)) {
             deleted.add(storeFieldName);
@@ -729,21 +760,29 @@ export class CacheTransaction<TSerialized> implements Queryable {
         modified = true;
       }
     } else {
-      for (const key of Object.keys(options.fields) as (string & keyof Entity)[]) {
-        const field = options.fields[key];
+      for (const fieldKey of Object.keys(options.fields) as (string & keyof Entity)[]) {
+        const field = options.fields[fieldKey];
         if (!field) continue;
-        for (const { d, k } of readFromSnapshot(node, key)) {
+        // Like InMemoryCache, a modifier may be given for a field name (to modify
+        // every stored variant of the field) or for a store field name (e.g.
+        // `feed:{"type":"news"}`, to modify just that variant).
+        const key = fieldNameFromStoreName(fieldKey);
+        let variants = readFromSnapshot(node, key);
+        if (key !== fieldKey) {
+          variants = variants.filter(({ k }) => k?.includes('❖') && storeFieldNameOfNode(key, k) === fieldKey);
+        }
+        for (const { d, k } of variants) {
           const storeFieldName = k ?? key;
           const useRef = k?.includes('❖');
           const copyOrCurrent = Array.isArray(d)
-            ? Array.prototype.slice.call(d)
+            ? copyList(d)
             : useRef
               ? parameterizedFieldValue(k!, d)
               : typeof d === 'object'
                 ? { ...d }
                 : d;
           details.fieldName = key;
-          details.storeFieldName = storeFieldName;
+          details.storeFieldName = modifierStoreFieldName(storeFieldName);
           const value = field(copyOrCurrent, details);
           if (isDeleteModifier(value)) {
             deleted.add(storeFieldName);
@@ -863,8 +902,21 @@ export class CacheTransaction<TSerialized> implements Queryable {
     if ('id' in options && !options.id) return false;
     // Evicting one argument variant of a field removes just that stored value.
     if (options.fieldName && options.args) {
-      const nodeId = nodeIdForParameterizedValue(options.id ?? 'ROOT_QUERY', [options.fieldName], options.args);
-      return this.batchEvict([nodeId]);
+      // The variant is identified as the field's keyArgs policy says.
+      const id = options.id ?? 'ROOT_QUERY';
+      const node = this._snapshot.baseline.getNodeSnapshot(id) ?? this._snapshot.optimistic.getNodeSnapshot(id);
+      const typename = entityTypename(id, node);
+      const { storeFieldNames } = this._context;
+      const args = options.args as JsonObject;
+      if (!storeFieldNames.hasKeyArgsFor(typename, options.fieldName)) {
+        return this.batchEvict([nodeIdForParameterizedValue(id, [options.fieldName], args)]);
+      }
+      const storeKey = storeFieldNames.storeKey(typename, options.fieldName, args, undefined, undefined);
+      if (storeKey !== undefined) {
+        return this.batchEvict([nodeIdForStoreKey(id, [options.fieldName], storeKey)]);
+      }
+      // Stored under the field name itself (e.g. keyArgs: false).
+      options = { ...options, args: undefined };
     }
     const modifier: Modifier<any> = (_current, details) => {
       return details.DELETE;

@@ -21,7 +21,7 @@ import * as util from '../util';
 
 import * as snapshotEditor from './SnapshotEditor';
 
-const { deepGet, hasOwn, isReference, lazyImmutableDeepSet, pathBeginsWith, toOutKey } = util;
+const { deepFreeze, deepGet, hasOwn, isReference, lazyImmutableDeepSet, pathBeginsWith, toOutKey } = util;
 
 type ObjectOrReference = StoreObject | Reference;
 type ToReference = FieldFunctionOptions['toReference'];
@@ -59,14 +59,6 @@ export function fragmentMatches(
 export function getReadFunction(typePolicies: TypePolicies | undefined, typename: unknown, fieldName: string) {
   const policy = getFieldPolicy(typePolicies, typename, fieldName);
   return typeof policy === 'function' ? policy : policy?.read;
-}
-
-/**
- * The key identifying a field (with its arguments) within its parent object,
- * for the purposes of options.storage.
- */
-export function storageFieldName(fieldName: string, args?: JsonObject | null) {
-  return args && Object.keys(args).length ? `${fieldName}(${JSON.stringify(args)})` : fieldName;
 }
 
 /**
@@ -131,7 +123,17 @@ export function withReferences(snapshot: Readonly<NodeSnapshot> | undefined, pat
       result = lazyImmutableDeepSet(result, value, relativePath, makeReference(id));
     }
   }
-  return result;
+  // Like InMemoryCache's (frozen) store values, the copy is frozen if the
+  // stored value is.
+  return result !== value && Object.isFrozen(value) ? deepFreeze(result) : result;
+}
+
+/** The __typename of an entity (as its node holds it), like InMemoryCache's. */
+export function entityTypename(id: NodeId, snapshot: Readonly<NodeSnapshot> | undefined): unknown {
+  const data = snapshot?.data;
+  const typename = data && typeof data === 'object' ? (data as JsonObject).__typename : undefined;
+  if (typename !== undefined) return typename;
+  return id === 'ROOT_QUERY' ? 'Query' : id === 'ROOT_MUTATION' ? 'Mutation' : undefined;
 }
 
 function isUntypedObject(value: unknown) {
@@ -195,15 +197,24 @@ export class FieldFunctions<TSerialized> {
   /**
    * Reads the stored value of a field (with References for any entities).
    */
-  getFieldValue(from: ObjectOrReference, fieldName: string, args?: JsonObject | null): StoreValue {
+  getFieldValue(
+    from: ObjectOrReference,
+    fieldName: string,
+    args?: JsonObject | null,
+    typename?: unknown,
+    field?: FieldNode | null,
+  ): StoreValue {
     if (!isReference(from)) return from[fieldName];
 
     const id = from.__ref;
     const snapshot = this._getNodeSnapshot(id);
     if (!snapshot) return undefined;
 
-    if (args && Object.keys(args).length) {
-      const fieldId = snapshotEditor.nodeIdForParameterizedValue(id, [fieldName], args);
+    // Fields are stored as their keyArgs policies say (by default, under all
+    // their arguments).
+    const storeKey = this.storeKey(id, snapshot, fieldName, args, typename, field);
+    if (storeKey !== undefined) {
+      const fieldId = snapshotEditor.nodeIdForStoreKey(id, [fieldName], storeKey);
       const fieldSnapshot = this._getNodeSnapshot(fieldId);
       return fieldSnapshot && withReferences(fieldSnapshot, [], fieldSnapshot.data);
     }
@@ -222,6 +233,21 @@ export class FieldFunctions<TSerialized> {
     }
     if (id === 'ROOT_QUERY' && fieldName === '__typename') return 'Query';
     return undefined;
+  }
+
+  /**
+   * The store key (see StoreKey) of a field of the entity `id`.
+   */
+  storeKey(
+    id: NodeId,
+    snapshot: Readonly<NodeSnapshot> | undefined,
+    fieldName: string,
+    args: JsonObject | null | undefined,
+    typename?: unknown,
+    field?: FieldNode | null,
+  ) {
+    if (typename === undefined) typename = entityTypename(id, snapshot);
+    return this._context.storeFieldNames.storeKey(typename, fieldName, args, field, this._variables);
   }
 
   /**
@@ -252,14 +278,22 @@ export class FieldFunctions<TSerialized> {
 
     const typename = options.typename ?? this.getFieldValue(objectOrRef, '__typename');
     const args = (options.args as JsonObject | undefined) ?? null;
-    const existing = this.getFieldValue(objectOrRef, fieldName, args);
+    const field = options.field ?? null;
+    const existing = this.getFieldValue(objectOrRef, fieldName, args, typename, field);
     const read = getReadFunction(this._context.typePolicies, typename, fieldName);
     if (!read) return existing;
 
+    const storeFieldName = this._context.storeFieldNames.storeFieldName(
+      typename,
+      fieldName,
+      args,
+      field,
+      this._variables,
+    );
     const storageKey = isReference(objectOrRef) ? objectOrRef.__ref : objectOrRef;
     return read(
       existing,
-      this.options(objectOrRef, fieldName, fieldName, args, [storageKey, storageFieldName(fieldName, args)]),
+      this.options(objectOrRef, fieldName, storeFieldName, args, [storageKey, storeFieldName], field),
     );
   }
 

@@ -6,6 +6,8 @@ import { addTypenameToDocument } from '@apollo/client/utilities';
 import type { DocumentNode, SelectionSetNode } from 'graphql';
 
 import type { CacheContext, QueryInfo } from '../context';
+import { storeFieldNameOf } from '../context/storeFieldNames';
+import type { StoreKey } from '../context/storeFieldNames';
 import type { GraphSnapshot, NodeSnapshotMap } from '../GraphSnapshot';
 import { fieldNodeOf } from '../ParsedQueryNode';
 import type { ParsedQuery, ParsedQueryNode } from '../ParsedQueryNode';
@@ -17,12 +19,12 @@ import * as util from '../util';
 import * as nodes from '../nodes';
 
 import * as snapshotEditor from './SnapshotEditor';
-import { FieldFunctions, storageFieldName, withReferences } from './fieldFunctions';
+import { FieldFunctions, withReferences } from './fieldFunctions';
 
 const makeRef = makeReference;
 const { StaticNodeId } = schema;
 const { cloneNodeSnapshot, EntitySnapshot, ParameterizedValueSnapshot } = nodes;
-const { nodeIdForParameterizedValue } = snapshotEditor;
+const { nodeIdForStoreKey } = snapshotEditor;
 const { deepGet, isNil, isObject, isReference, lazyImmutableDeepSet, safeStringify } = util;
 
 export { MissingFieldError };
@@ -336,13 +338,14 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
       existing: StoreValue,
       fieldName: string,
       node: ParsedQueryNode,
-      key: string,
+      storeKey: StoreKey,
     ) => {
       const args = (node.args as JsonObject | undefined) ?? null;
-      const storageKeys = [containerId, ...path, storageFieldName(fieldName, args)];
+      const storeFieldName = storeFieldNameOf(fieldName, storeKey, args);
+      const storageKeys = [containerId, ...path, storeFieldName];
       const readResult = readFn(
         existing,
-        fieldFunctions.options(currentObject, fieldName, key, args, storageKeys, fieldNodeOf(node)),
+        fieldFunctions.options(currentObject, fieldName, storeFieldName, args, storageKeys, fieldNodeOf(node)),
       );
       danglingResult =
         isReference(readResult) && !getSnapshot(readResult.__ref) && !isRootId(readResult.__ref)
@@ -365,14 +368,24 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
       let nextContainerId = containerId;
       let nextPath = path;
 
-      if (node.args) {
-        let childId = nodeIdForParameterizedValue(containerId, [...path, fieldName], node.args);
+      // Fields are stored under their arguments, or as their keyArgs policies
+      // (or @connection directives) say.
+      const storeKey = context.storeFieldNames.storeKey(
+        typeName,
+        fieldName,
+        node.args as JsonObject | undefined,
+        fieldNodeOf(node),
+        query.variables,
+      );
+
+      if (storeKey !== undefined) {
+        let childId = nodeIdForStoreKey(containerId, [...path, fieldName], storeKey);
         let childSnapshot: Readonly<NodeSnapshot> | undefined = getSnapshot(childId);
 
         if (readFn) {
           dynamicNodeIds.add(childId);
           const existing = childSnapshot && withReferences(childSnapshot, [], childSnapshot.data);
-          child = callReadFunction(readFn, existing, fieldName, node, key);
+          child = callReadFunction(readFn, existing, fieldName, node, storeKey);
           if (danglingResult !== undefined) {
             markDangling(value, key, danglingResult);
             continue;
@@ -384,7 +397,7 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
               typeName,
               fieldName,
             ]) as any;
-            if (redirect) {
+            if (redirect && node.args) {
               childId = redirect(node.args);
               if (!isNil(childId)) {
                 childSnapshot = snapshot.getNodeSnapshot(childId);
@@ -408,7 +421,7 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
         child = value[fieldName];
         if (readFn) {
           const existing = withReferences(containerSnapshot, nextPath, child);
-          child = callReadFunction(readFn, existing, fieldName, node, key);
+          child = callReadFunction(readFn, existing, fieldName, node, storeKey);
           if (danglingResult !== undefined) {
             markDangling(value, key, danglingResult);
             continue;
@@ -703,13 +716,21 @@ export function _visitSelection<TSerialized>(
 
       const fieldName = node.schemaName ?? key;
       const fieldPath = [...containerPath, fieldName];
+      const storeKey = context.storeFieldNames.storeKey(
+        typeName,
+        fieldName,
+        node.args as JsonObject | undefined,
+        fieldNodeOf(node),
+        query.variables,
+      );
       if (fieldValue === undefined) {
         if (key === '__typename') continue;
         let target;
         if (snapshot) {
-          target = node.args
-            ? missingTarget(nodeIdForParameterizedValue(containerId, fieldPath, node.args), [])
-            : missingTarget(containerId, fieldPath);
+          target =
+            storeKey !== undefined
+              ? missingTarget(nodeIdForStoreKey(containerId, fieldPath, storeKey), [])
+              : missingTarget(containerId, fieldPath);
         }
         let message;
         if (target !== undefined) {
@@ -729,8 +750,8 @@ export function _visitSelection<TSerialized>(
       }
       if (!node.children) continue;
 
-      if (node.args) {
-        const fieldId = nodeIdForParameterizedValue(containerId, fieldPath, node.args);
+      if (storeKey !== undefined) {
+        const fieldId = nodeIdForStoreKey(containerId, fieldPath, storeKey);
         visitValue(fieldValue, node.children, fieldId, [], [...resultPath, key]);
       } else {
         visitValue(fieldValue, node.children, containerId, fieldPath, [...resultPath, key]);

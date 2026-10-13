@@ -1,5 +1,6 @@
 import { CacheSnapshot } from '../CacheSnapshot';
 import { CacheContext } from '../context';
+import { fieldNameFromStoreName } from '../context/storeFieldNames';
 import { GraphSnapshot, NodeSnapshotMap } from '../GraphSnapshot';
 import { EntitySnapshot, NodeReference, ParameterizedValueSnapshot } from '../nodes';
 import { OptimisticUpdateQueue } from '../OptimisticUpdateQueue';
@@ -7,7 +8,7 @@ import { JsonObject, JsonScalar, JsonValue, NestedArray, NestedObject, NestedVal
 import { NodeId, Serializable } from '../schema';
 import * as util from '../util';
 
-import { nodeIdForParameterizedValue } from './SnapshotEditor';
+import { nodeIdForParameterizedValue, nodeIdForStoreKey } from './SnapshotEditor';
 
 const { getInbound, getOutbound, getParameterized, isNumber, isObject, isReference, isScalar, iterRefs, refToInKey } =
   util;
@@ -75,6 +76,21 @@ function createGraphSnapshotNodes<TSerialized>(
         const parsedOut: NodeReference[] = [];
         const parsedParameterized: NodeReference[] = [];
         for (const [key, val] of Object.entries(state)) {
+          const fieldName = fieldNameFromStoreName(key);
+          if (key.charAt(fieldName.length) === ':') {
+            // A field stored per its keyArgs policy (or @connection directive),
+            // under InMemoryCache's store field name (e.g. `feed:{"type":"news"}`).
+            const fieldId = nodeIdForStoreKey(nodeId, [fieldName], key);
+            const path = [fieldName];
+            nodesMap[fieldId] = new ParameterizedValueSnapshot(
+              val as JsonValue,
+              [...(missingPointers.get(nodeId) ?? []), { id: nodeId, path }],
+              [],
+            );
+            editedNodeIds.add(fieldId);
+            parsedParameterized.push({ id: fieldId, path });
+            continue;
+          }
           const result = /(.+)\((.+)\)/.exec(key);
           if (result) {
             const fieldId = nodeIdForParameterizedValue(nodeId, [result[1]], JSON.parse(result[2]));
