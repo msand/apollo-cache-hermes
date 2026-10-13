@@ -1,44 +1,35 @@
-import { loadErrorMessages } from '@apollo/client/dev';
+import type { ASTNode, DefinitionNode, DocumentNode, FieldNode, OperationDefinitionNode, SelectionNode } from 'graphql';
+import { gql } from 'graphql-tag';
 import { assign, omit } from 'lodash';
-import { SelectionNode, FieldNode, DefinitionNode, OperationDefinitionNode, ASTNode, DocumentNode } from 'graphql';
-import gql from 'graphql-tag';
+import type { TypedDocumentNode } from '@apollo/client';
+import type { Reference, StoreObject } from '@apollo/client/utilities';
+import { addTypenameToDocument, isReference } from '@apollo/client/utilities';
+import type { ExtensionsWithStreamInfo } from '@apollo/client/utilities/internal';
 import {
-  storeKeyNameFromField,
-  makeReference,
-  isReference,
-  Reference,
-  StoreObject,
-  addTypenameToDocument,
   cloneDeep,
   getMainDefinition,
-} from '@apollo/client/utilities';
-import type { StoreWriter } from '@apollo/client/cache/inmemory/writeToStore';
-import { TypedDocumentNode } from '@apollo/client/core';
+  makeReference,
+  makeStreamInfoTrie,
+  storeKeyNameFromField,
+  streamInfoSymbol,
+} from '@apollo/client/utilities/internal';
+import { invariant, InvariantError } from '@apollo/client/utilities/invariant';
+// not exported
+// eslint-disable-next-line import/no-unresolved
 import { extractFragmentContext } from '@apollo/client/cache/inmemory/helpers';
+
 import { spyOnConsole } from '@apollo/client/testing/internal';
 
 import { Hermes } from '../../../../../src';
-import { CacheContext } from '../../../../../src/context';
+import type { CacheContext } from '../../../../../src/context';
 import { toNormalizedCacheObject } from '../../../../helpers';
 
 import { defaultNormalizedCacheFactory, HermesWriter, writeQueryToStore } from './helpers';
 
-// These tests assert the @apollo/client error text rather than its production placeholder.
-loadErrorMessages();
-
-// Hermes: dataIdFromObject is also called for the written root object, whose id
-// (if any) need not be a string, so this does not assert that id is a string.
-const getIdField = ({ id }: any): string | undefined => (typeof id === 'string' ? id : undefined);
-
-/**
- * Hermes: a written root object that dataIdFromObject identifies is stored as
- * that entity, which ROOT_QUERY references; InMemoryCache stores its fields in
- * ROOT_QUERY itself. Converts an expected InMemoryCache store to that shape.
- */
-function rootAsEntity(id: string, store: Record<string, any>) {
-  const { __typename, ...fields } = store.ROOT_QUERY;
-  return { ...store, ROOT_QUERY: { __typename, __ref: id }, [id]: { ...store[id], ...fields } };
-}
+const getIdField = ({ id }: any): string => {
+  invariant(typeof id === 'string', 'id is not a string');
+  return id;
+};
 
 describe('writing to the store', () => {
   const cacheConfig: CacheContext.Configuration = {
@@ -304,23 +295,20 @@ describe('writing to the store', () => {
       dataIdFromObject: getIdField,
     });
 
-    // Hermes: the root result has an id (see rootAsEntity).
     expect(
       writeQueryToStore({
         writer,
         query,
         result: cloneDeep(result),
       }).toObject(),
-    ).toEqual(
-      rootAsEntity('abcd', {
-        ROOT_QUERY: {
-          __typename: 'Query',
-          ...result,
-          nestedObj: makeReference(result.nestedObj.id),
-        },
-        [result.nestedObj.id]: result.nestedObj,
-      }),
-    );
+    ).toEqual({
+      ROOT_QUERY: {
+        __typename: 'Query',
+        ...result,
+        nestedObj: makeReference(result.nestedObj.id),
+      },
+      [result.nestedObj.id]: result.nestedObj,
+    });
   });
 
   it('properly normalizes a nested object without an ID', () => {
@@ -446,23 +434,20 @@ describe('writing to the store', () => {
       dataIdFromObject: getIdField,
     });
 
-    // Hermes: the root result has an id (see rootAsEntity).
     expect(
       writeQueryToStore({
         writer,
         query,
         result: cloneDeep(result),
       }).toObject(),
-    ).toEqual(
-      rootAsEntity('abcd', {
-        ROOT_QUERY: assign({}, assign({}, omit(result, 'nestedArray')), {
-          __typename: 'Query',
-          nestedArray: result.nestedArray.map((obj: any) => makeReference(obj.id)),
-        }),
-        [result.nestedArray[0].id]: result.nestedArray[0],
-        [result.nestedArray[1].id]: result.nestedArray[1],
+    ).toEqual({
+      ROOT_QUERY: assign({}, assign({}, omit(result, 'nestedArray')), {
+        __typename: 'Query',
+        nestedArray: result.nestedArray.map((obj: any) => makeReference(obj.id)),
       }),
-    );
+      [result.nestedArray[0].id]: result.nestedArray[0],
+      [result.nestedArray[1].id]: result.nestedArray[1],
+    });
   });
 
   it('properly normalizes a nested array with IDs and a null', () => {
@@ -501,22 +486,19 @@ describe('writing to the store', () => {
       dataIdFromObject: getIdField,
     });
 
-    // Hermes: the root result has an id (see rootAsEntity).
     expect(
       writeQueryToStore({
         writer,
         query,
         result: cloneDeep(result),
       }).toObject(),
-    ).toEqual(
-      rootAsEntity('abcd', {
-        ROOT_QUERY: assign({}, assign({}, omit(result, 'nestedArray')), {
-          __typename: 'Query',
-          nestedArray: [makeReference(result.nestedArray[0].id), null],
-        }),
-        [result.nestedArray[0].id]: result.nestedArray[0],
+    ).toEqual({
+      ROOT_QUERY: assign({}, assign({}, omit(result, 'nestedArray')), {
+        __typename: 'Query',
+        nestedArray: [makeReference(result.nestedArray[0].id), null],
       }),
-    );
+      [result.nestedArray[0].id]: result.nestedArray[0],
+    });
   });
 
   it('properly normalizes a nested array without IDs', () => {
@@ -640,15 +622,12 @@ describe('writing to the store', () => {
       result: cloneDeep(result),
     });
 
-    // Hermes: the root result has an id (see rootAsEntity).
-    expect(normalized.toObject()).toEqual(
-      rootAsEntity('abcd', {
-        ROOT_QUERY: {
-          __typename: 'Query',
-          ...result,
-        },
-      }),
-    );
+    expect(normalized.toObject()).toEqual({
+      ROOT_QUERY: {
+        __typename: 'Query',
+        ...result,
+      },
+    });
   });
 
   it('properly normalizes an array of non-objects with null', () => {
@@ -920,22 +899,19 @@ describe('writing to the store', () => {
       result: cloneDeep(result),
     });
 
-    // Hermes: the root result has an id (see rootAsEntity).
-    expect(normalized.toObject()).toEqual(
-      rootAsEntity('a', {
-        ROOT_QUERY: {
-          __typename: 'Query',
-          id: 'a',
-          object1: makeReference('aa'),
-          object2: makeReference('aa'),
-        },
-        aa: {
-          id: 'aa',
-          stringField: 'string',
-          numberField: 1,
-        },
-      }),
-    );
+    expect(normalized.toObject()).toEqual({
+      ROOT_QUERY: {
+        __typename: 'Query',
+        id: 'a',
+        object1: makeReference('aa'),
+        object2: makeReference('aa'),
+      },
+      aa: {
+        id: 'aa',
+        stringField: 'string',
+        numberField: 1,
+      },
+    });
   });
 
   it('properly normalizes an object occurring in different graphql array paths twice', () => {
@@ -995,32 +971,29 @@ describe('writing to the store', () => {
       result: cloneDeep(result),
     });
 
-    // Hermes: the root result has an id (see rootAsEntity).
-    expect(normalized.toObject()).toEqual(
-      rootAsEntity('a', {
-        ROOT_QUERY: {
-          __typename: 'Query',
-          id: 'a',
-          array1: [makeReference('aa')],
-          array2: [makeReference('ab')],
-        },
-        aa: {
-          id: 'aa',
-          stringField: 'string',
-          obj: makeReference('aaa'),
-        },
-        ab: {
-          id: 'ab',
-          stringField: 'string2',
-          obj: makeReference('aaa'),
-        },
-        aaa: {
-          id: 'aaa',
-          stringField: 'string',
-          numberField: 1,
-        },
-      }),
-    );
+    expect(normalized.toObject()).toEqual({
+      ROOT_QUERY: {
+        __typename: 'Query',
+        id: 'a',
+        array1: [makeReference('aa')],
+        array2: [makeReference('ab')],
+      },
+      aa: {
+        id: 'aa',
+        stringField: 'string',
+        obj: makeReference('aaa'),
+      },
+      ab: {
+        id: 'ab',
+        stringField: 'string2',
+        obj: makeReference('aaa'),
+      },
+      aaa: {
+        id: 'aaa',
+        stringField: 'string',
+        numberField: 1,
+      },
+    });
   });
 
   it('properly normalizes an object occurring in the same graphql array path twice', () => {
@@ -1073,32 +1046,29 @@ describe('writing to the store', () => {
       result: cloneDeep(result),
     });
 
-    // Hermes: the root result has an id (see rootAsEntity).
-    expect(normalized.toObject()).toEqual(
-      rootAsEntity('a', {
-        ROOT_QUERY: {
-          __typename: 'Query',
-          id: 'a',
-          array1: [makeReference('aa'), makeReference('ab')],
-        },
-        aa: {
-          id: 'aa',
-          stringField: 'string',
-          obj: makeReference('aaa'),
-        },
-        ab: {
-          id: 'ab',
-          stringField: 'string2',
-          obj: makeReference('aaa'),
-        },
-        // Hermes: later occurrences of an entity in a result are written over earlier ones.
-        aaa: {
-          id: 'aaa',
-          stringField: 'should not be written',
-          numberField: 2,
-        },
-      }),
-    );
+    expect(normalized.toObject()).toEqual({
+      ROOT_QUERY: {
+        __typename: 'Query',
+        id: 'a',
+        array1: [makeReference('aa'), makeReference('ab')],
+      },
+      aa: {
+        id: 'aa',
+        stringField: 'string',
+        obj: makeReference('aaa'),
+      },
+      ab: {
+        id: 'ab',
+        stringField: 'string2',
+        obj: makeReference('aaa'),
+      },
+      // Hermes: later occurrences of an entity in a result are written over earlier ones.
+      aaa: {
+        id: 'aaa',
+        stringField: 'should not be written',
+        numberField: 2,
+      },
+    });
   });
 
   it('merges nodes', () => {
@@ -1147,16 +1117,13 @@ describe('writing to the store', () => {
       result: result2,
     });
 
-    // Hermes: the root result has an id (see rootAsEntity).
-    expect(store2.toObject()).toEqual(
-      rootAsEntity('abcd', {
-        ROOT_QUERY: {
-          __typename: 'Query',
-          ...result,
-          ...result2,
-        },
-      }),
-    );
+    expect(store2.toObject()).toEqual({
+      ROOT_QUERY: {
+        __typename: 'Query',
+        ...result,
+        ...result2,
+      },
+    });
   });
 
   it('properly normalizes a nested object that returns null', () => {
@@ -1784,8 +1751,7 @@ describe('writing to the store', () => {
         __typename: 'Country',
         id: 123,
         biggestCity: { __ref: 'City:234' },
-        // Hermes: keyArgs are not supported, so the field is stored under all its arguments.
-        'cities({"size":"SMALL"})': [{ __ref: 'City:345' }],
+        'cities:{"size":"SMALL"}': [{ __ref: 'City:345' }],
       },
       ROOT_QUERY: {
         __typename: 'Query',
@@ -2273,9 +2239,9 @@ describe('writing to the store', () => {
       });
     });
 
-    it('should not warn if a field is defered', () => {
+    it('should not warn if a field is deferred', () => {
       using _consoleSpy = spyOnConsole.takeSnapshots('error');
-      const defered = gql`
+      const deferred = gql`
         query LazyLoad {
           id
           expensive @defer
@@ -2291,7 +2257,7 @@ describe('writing to the store', () => {
 
       const newStore = writeQueryToStore({
         writer,
-        query: defered,
+        query: deferred,
         result,
       });
 
@@ -2303,8 +2269,7 @@ describe('writing to the store', () => {
     });
   });
 
-  // Hermes: keyArgs (and @connection keys) are not supported
-  it.skip('properly handles the @connection directive', () => {
+  it('properly handles the @connection directive', () => {
     const store = defaultNormalizedCacheFactory();
 
     writeQueryToStore({
@@ -2357,9 +2322,7 @@ describe('writing to the store', () => {
     });
   });
 
-  // Hermes: keyArgs are not supported
-  it.skip('can use keyArgs function instead of @connection directive', () => {
-    const store = defaultNormalizedCacheFactory();
+  it('can use keyArgs function instead of @connection directive', () => {
     const writer = new HermesWriter({
       typePolicies: {
         Query: {
@@ -2371,6 +2334,8 @@ describe('writing to the store', () => {
         },
       },
     });
+    // Hermes: the store is a cache, configured with the writer's typePolicies.
+    const store = defaultNormalizedCacheFactory(undefined, writer.config);
 
     writeQueryToStore({
       writer,
@@ -2809,7 +2774,7 @@ describe('writing to the store', () => {
       },
     });
 
-    const mergeCounts: Record<string, number> = Object.create(null);
+    const mergeCounts: Record<string, number> = {};
 
     const query = gql`
       query {
@@ -2884,7 +2849,14 @@ describe('writing to the store', () => {
       },
     });
 
-    const query = gql`
+    type Data = {
+      counter: {
+        __typename: 'Counter';
+        count: number;
+      };
+    };
+
+    const query: TypedDocumentNode<Data> = gql`
       query {
         counter {
           count
@@ -2892,14 +2864,14 @@ describe('writing to the store', () => {
       }
     `;
 
-    const results: number[] = [];
+    const results: Data[] = [];
 
     const promise = new Promise<void>(resolve => {
       cache.watch({
         query,
         optimistic: true,
         callback(diff) {
-          results.push(diff.result);
+          results.push(diff.result as Data);
           expect(diff.result).toEqual({
             counter: {
               __typename: 'Counter',
@@ -3106,8 +3078,7 @@ describe('writing to the store', () => {
     });
   });
 
-  // Hermes: nested keyFields are not supported
-  it.skip('user objects should be able to have { __typename: "Mutation" }', () => {
+  it('user objects should be able to have { __typename: "Mutation" }', () => {
     const cache = new Hermes({
       typePolicies: {
         Mutation: {
@@ -3155,7 +3126,36 @@ describe('writing to the store', () => {
       },
     });
 
-    expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
+    // Hermes: InMemoryCache also merges the key fields it reads through the
+    // gene references into the stored objects (so its snapshot has
+    // gene: { __ref, id }); Hermes stores just the references.
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
+      'Gene:{"id":"SLC45A2"}': {
+        __typename: 'Gene',
+        id: 'SLC45A2',
+      },
+      'Gene:{"id":"SNAI2"}': {
+        __typename: 'Gene',
+        id: 'SNAI2',
+      },
+      'Mutation:{"gene":{"id":"SLC45A2"},"name":"albinism"}': {
+        __typename: 'Mutation',
+        gene: { __ref: 'Gene:{"id":"SLC45A2"}' },
+        name: 'albinism',
+      },
+      'Mutation:{"gene":{"id":"SNAI2"},"name":"piebaldism"}': {
+        __typename: 'Mutation',
+        gene: { __ref: 'Gene:{"id":"SNAI2"}' },
+        name: 'piebaldism',
+      },
+      ROOT_QUERY: {
+        __typename: 'Query',
+        mutations: [
+          { __ref: 'Mutation:{"gene":{"id":"SLC45A2"},"name":"albinism"}' },
+          { __ref: 'Mutation:{"gene":{"id":"SNAI2"},"name":"piebaldism"}' },
+        ],
+      },
+    });
     expect(cache.readQuery({ query })).toEqual({
       mutations: [
         {
@@ -3174,7 +3174,8 @@ describe('writing to the store', () => {
 
   // Hermes: tests InMemoryCache's StoreWriter internals (flattenFields)
   describe.skip('StoreWriter', () => {
-    const writer = {} as StoreWriter;
+    // Hermes: there is no StoreWriter to construct.
+    const writer = {} as any;
 
     function check(
       query: TypedDocumentNode<{
@@ -3934,7 +3935,6 @@ describe('writing to the store', () => {
       );
     });
   });
-
   it('prevent that a crafted query can overwrite Post:1 with what should be User:5', () => {
     const postFragment = gql`
       fragment PostFragment on Post {
@@ -3972,20 +3972,26 @@ describe('writing to the store', () => {
         }
       }
     `;
-    cache.write({
-      query: injectingQuery,
-      variables: { id: 5 },
-      dataId: 'ROOT_QUERY',
-      result: {
-        user: {
-          __typename: 'Post',
-          id: '1',
-          title: 'Incorrect!',
-          ignore: 'User',
-          ignore2: '5',
+    expect(() =>
+      cache.write({
+        query: injectingQuery,
+        variables: { id: 5 },
+        dataId: 'ROOT_QUERY',
+        result: {
+          user: {
+            __typename: 'Post',
+            id: '1',
+            title: 'Incorrect!',
+            ignore: 'User',
+            ignore2: '5',
+          },
         },
-      },
-    });
+      }),
+    ).toThrow(
+      new InvariantError(
+        '`__typename` is a forbidden field alias name in the selection set for field `user.firstName` in query "(anonymous)".',
+      ),
+    );
 
     expect(toNormalizedCacheObject(cache.extract())['Post:1']).toMatchInlineSnapshot(`
       Object {
@@ -3995,14 +4001,51 @@ describe('writing to the store', () => {
       }
     `);
 
-    expect(toNormalizedCacheObject(cache.extract())['User:5']).toMatchInlineSnapshot(`
-      Object {
-        "__typename": "User",
-        "firstName": "Post",
-        "id": "5",
-        "lastName": "1",
-        "title": "Incorrect!",
-      }
-    `);
+    expect(toNormalizedCacheObject(cache.extract())['User:5']).toBeUndefined();
+  });
+
+  describe('@stream', () => {
+    it('applies the default stream merge strategy only to fields with @stream on the field itself', () => {
+      using _ = spyOnConsole('warn');
+      const cache = new Hermes();
+      const query = gql`
+        query {
+          list {
+            id
+            nested @stream {
+              id
+            }
+          }
+        }
+      `;
+
+      const extensions: ExtensionsWithStreamInfo = {
+        [streamInfoSymbol]: new WeakRef(makeStreamInfoTrie()),
+      };
+
+      const item = (id: string) => ({
+        __typename: 'Item',
+        id,
+        nested: [],
+      });
+
+      cache.writeQuery({
+        query,
+        data: { list: [item('1'), item('2'), item('3')] },
+        extensions,
+      });
+
+      cache.writeQuery({
+        query,
+        data: { list: [item('1'), item('2')] },
+        extensions,
+      });
+
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract()).ROOT_QUERY).toEqual({
+        __typename: 'Query',
+        list: [{ __ref: 'Item:1' }, { __ref: 'Item:2' }],
+      });
+    });
   });
 });

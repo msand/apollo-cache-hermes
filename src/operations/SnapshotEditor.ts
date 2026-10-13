@@ -1,13 +1,15 @@
 import * as equality from '@wry/equality';
-import { makeReference } from '@apollo/client';
-import type { TypePolicy } from '@apollo/client/cache/inmemory/policies';
-import type { Reference } from '@apollo/client';
+import { isPlainObject, makeReference } from '@apollo/client/utilities/internal';
+import type { Reference } from '@apollo/client/cache';
 import type { StoreObject } from '@apollo/client/utilities';
 
 import type { CacheContext } from '../context';
+import { isRootNodeId, makeToReference, missingKeyFieldError, typenameOf } from '../context/helpers';
+import { argsStoreKey, storeFieldNameOf } from '../context/storeFieldNames';
 import type { GraphSnapshot as GraphSnapshotType } from '../GraphSnapshot';
 import type { NodeReference, EntitySnapshot as EntitySnapshotType, NodeSnapshot } from '../nodes';
-import type { FieldArguments, ParsedQuery } from '../ParsedQueryNode';
+import { alternativeForType, childrenForType, fieldNodeOf, selectionSetOf } from '../ParsedQueryNode';
+import type { ParsedQuery, ParsedQueryNode } from '../ParsedQueryNode';
 import type { JsonArray, JsonObject, JsonScalar, JsonValue, NestedObject, Nil, PathPart } from '../primitive';
 import type { NodeId, OperationInstance, RawOperation } from '../schema';
 import * as graphSnapshot from '../GraphSnapshot';
@@ -15,8 +17,12 @@ import * as schema from '../schema';
 import * as errors from '../errors';
 import * as nodes from '../nodes';
 import * as util from '../util';
+import type { FragmentMap } from '../util';
 
-import { FieldFunctions, getFieldPolicy, storageFieldName, withReferences } from './fieldFunctions';
+import { uncaughtWriteError } from './checkWrite';
+import { FieldFunctions, withReferences } from './fieldFunctions';
+import type { StreamInfoRef } from './streamFields';
+import { defaultStreamFieldMergeFn, runStreamAwareMerge, streamInfoOf, usesDefaultStreamMerge } from './streamFields';
 
 // Ensure typescript doesn't emit (0, fn)(...args)
 const isEqual = equality.equal;
@@ -46,6 +52,14 @@ const {
   toOutKey,
 } = util;
 const makeRef = makeReference;
+
+/**
+ * How many nodes the backward searches of _removeUnreachableNodes may visit
+ * (in total, plus a number per candidate) before it marks the reachable nodes
+ * of the whole graph instead.
+ */
+const UNREACHABLE_SEARCH_BUDGET = 1000;
+const UNREACHABLE_SEARCH_BUDGET_PER_CANDIDATE = 8;
 
 const ensureIdConstistencyMsg = `Ensure id is included (or not included) consistently across multiple requests.`;
 /**
@@ -82,6 +96,9 @@ interface ReferenceEdit {
  * deep-merging them), and 'merge' also merges them with entities.
  */
 type MergeMode = 'replace' | 'merge';
+
+/** Whether a node is retained (see the SnapshotEditor constructor). */
+export type IsRetained = (id: NodeId) => boolean;
 
 // https://github.com/nzakas/eslint-plugin-typescript/issues/69
 export type NodeSnapshotMap = { [Key in NodeId]?: NodeSnapshot };
@@ -129,6 +146,78 @@ function getPayloadProxy(value: JsonValue | undefined | null, map: { [prop: stri
 }
 
 /**
+ * The fields of a written object by their schema names (rather than the
+ * response keys of its payload), like InMemoryCache's store objects: the
+ * context.storeObject of keyFields functions.
+ */
+function toStoreObject(
+  payload: JsonObject,
+  parsed: ParsedQuery,
+  fieldForType: (node: ParsedQueryNode, typename: unknown) => ParsedQueryNode,
+): JsonObject {
+  const storeObject: JsonObject = {};
+  for (const key in parsed) {
+    const value = payload[key];
+    if (value === undefined) continue;
+    const node = fieldForType(parsed[key], payload.__typename);
+    const name = node.schemaName ?? key;
+    if (hasOwn.call(storeObject, name)) continue;
+    storeObject[name] = node.children ? toStoreValue(value, node.children, fieldForType) : value;
+  }
+  // Like InMemoryCache, fields in the payload that are not selected count too.
+  for (const key of Object.keys(payload)) {
+    if (!hasOwn.call(parsed, key) && !hasOwn.call(storeObject, key)) storeObject[key] = payload[key];
+  }
+  return storeObject;
+}
+
+function toStoreValue(
+  value: JsonValue,
+  parsed: ParsedQuery,
+  fieldForType: (node: ParsedQueryNode, typename: unknown) => ParsedQueryNode,
+): JsonValue {
+  if (Array.isArray(value)) return value.map(item => toStoreValue(item, parsed, fieldForType));
+  if (isObject(value) && !isReference(value)) return toStoreObject(value, parsed, fieldForType);
+  return value;
+}
+
+/**
+ * A copy of `value` (found at `path`) with null in place of each Reference
+ * within it (as Hermes stores the slots of references, before filling them in
+ * with the referenced data), collecting their paths and ids in `references`.
+ */
+function withoutReferences(value: unknown, path: PathPart[], references: [PathPart[], NodeId][]): JsonValue {
+  if (isReference(value)) {
+    references.push([path, value.__ref]);
+    return null;
+  }
+  if (Array.isArray(value)) {
+    let copy: JsonValue[] | undefined;
+    value.forEach((item, index) => {
+      const newItem = withoutReferences(item, [...path, index], references);
+      if (newItem !== item) (copy ??= value.slice())[index] = newItem;
+    });
+    return copy ?? (value as JsonValue[]);
+  }
+  if (isPlainObject(value)) {
+    let copy: JsonObject | undefined;
+    for (const key of Object.keys(value)) {
+      const newValue = withoutReferences(value[key], [...path, key], references);
+      if (newValue !== value[key]) (copy ??= { ...(value as JsonObject) })[key] = newValue;
+    }
+    return copy ?? (value as JsonObject);
+  }
+  return value as JsonValue;
+}
+
+/** Whether two values are objects with different __typenames (like InMemoryCache's mergeObjects checks). */
+function typenamesDiffer(a: unknown, b: unknown): boolean {
+  const aTypename = typenameOf(a);
+  const bTypename = typenameOf(b);
+  return !!aTypename && !!bTypename && aTypename !== bTypename;
+}
+
+/**
  * Builds a set of changes to apply on top of an existing `GraphSnapshot`.
  *
  * Performs the minimal set of edits to generate new immutable versions of each
@@ -139,6 +228,12 @@ export class SnapshotEditor<TSerialized> {
    * Tracks all node snapshots that have changed vs the parent snapshot.
    */
   private _newNodes: NodeSnapshotMap = Object.create(null);
+
+  /**
+   * The data objects of new node snapshots that this edit made (by node id),
+   * which it can therefore change in place (see _setValue).
+   */
+  private _ownedData: { [id: string]: object } = Object.create(null);
 
   /**
    * Tracks the nodes that have new _values_ vs the parent snapshot.
@@ -160,13 +255,32 @@ export class SnapshotEditor<TSerialized> {
 
   /** The variables of the operation being merged, for merge functions. */
   private _variables: JsonObject | undefined;
+  /** The extensions of the write being merged, for merge functions. */
+  private _extensions: Record<string, unknown> | undefined;
+  /** Apollo's `@stream` info for the write being merged (incremental results). */
+  private _streamInfo: StreamInfoRef | undefined;
+  /** Whether the write being merged overwrites existing values (for merge functions). */
+  private _overwrite = false;
   private _fieldFunctionsInstance: FieldFunctions<TSerialized> | undefined;
+  /** The fragments of the operation being merged, for keyFields functions. */
+  private _fragmentMap: FragmentMap | undefined;
+  /** Whether the payload being merged is pruned (see mergePayload). */
+  private _prune = false;
+  /** The reference edits of the payload being merged (see mergePayload). */
+  private _referenceEdits: ReferenceEdit[] | undefined;
 
   constructor(
     /** The configuration/context to use when editing snapshots. */
     private _context: CacheContext<TSerialized>,
     /** The snapshot to base edits off of. */
     private _parent: GraphSnapshotType,
+    /**
+     * Whether a node is retained (e.g. by cache.retain, or as the root of a
+     * watch), so that it (and what it references) is kept, like root nodes,
+     * when unreachable reference cycles are removed. (Required, so that no
+     * editor of the cache's snapshots leaves it out by accident.)
+     */
+    private _isRetained: IsRetained | undefined,
   ) {}
 
   /**
@@ -180,7 +294,15 @@ export class SnapshotEditor<TSerialized> {
   ): { warnings?: string[]; ref: NodeId | undefined } {
     const parsed = this._context.parseOperation(query);
     this._variables = parsed.variables;
+    // Like InMemoryCache, merge functions see the write's extensions without
+    // Apollo's internal @stream info (kept under a symbol key).
+    const extensions = query.extensions && Object.entries(query.extensions);
+    this._extensions = extensions?.length ? Object.fromEntries(extensions) : undefined;
+    this._streamInfo = streamInfoOf(query.extensions);
+    this._overwrite = !!query.overwrite;
     this._fieldFunctionsInstance = undefined;
+    this._fragmentMap = parsed.info.fragmentMap;
+    this._prune = prune;
 
     // We collect all warnings associated with this operation to avoid
     // overwhelming the log for particularly nasty payloads.
@@ -191,6 +313,7 @@ export class SnapshotEditor<TSerialized> {
     // once all new nodes have been built (and we can guarantee that we're
     // referencing the correct version).
     const referenceEdits: ReferenceEdit[] = [];
+    this._referenceEdits = referenceEdits;
     const ref = this._mergeSubgraph(
       referenceEdits,
       warnings,
@@ -207,11 +330,18 @@ export class SnapshotEditor<TSerialized> {
     // edited references to the correct nodes.
     //
     // In addition, this performs bookkeeping the inboundReferences of affected
-    // nodes, and collects all newly orphaned nodes.
-    const orphanedNodeIds = this._mergeReferenceEdits(referenceEdits);
+    // nodes, and collects all newly orphaned nodes (and the nodes that lost
+    // some, but not all, of their inbound references).
+    const unreachableCandidates = new Set<NodeId>();
+    this._referenceEdits = undefined;
+    const orphanedNodeIds = this._mergeReferenceEdits(referenceEdits, unreachableCandidates);
 
     // Remove (garbage collect) orphaned subgraphs.
-    this._removeOrphanedNodes(orphanedNodeIds);
+    this._removeOrphanedNodes(orphanedNodeIds, unreachableCandidates);
+
+    // Remove the reference cycles that are no longer reachable (whose nodes
+    // still reference each other, and so are not orphaned).
+    this._removeUnreachableNodes(unreachableCandidates, parsed.rootId);
 
     // The query should now be considered complete for future reads.
     this._writtenQueries.add(parsed);
@@ -252,38 +382,15 @@ export class SnapshotEditor<TSerialized> {
     const previousValue = this._getPreviousValue(containerId, path);
 
     const isRoot = containerId === StaticNodeId.QueryRoot;
-    const typename =
-      isRoot && path.length === 0
-        ? 'Query'
-        : payload && typeof payload === 'object' && '__typename' in payload
-          ? payload.__typename
-          : previousValue && typeof previousValue === 'object' && '__typename' in previousValue
-            ? previousValue.__typename
-            : undefined;
-    // The type that fragments' type conditions are matched against (values
-    // nested within the root are not of the Query type).
-    const fragmentTypename =
-      payload && typeof payload === 'object' && '__typename' in payload
-        ? payload.__typename
-        : isRoot && path.length === 0
-          ? 'Query'
-          : previousValue && typeof previousValue === 'object' && '__typename' in previousValue
-            ? previousValue.__typename
-            : undefined;
-
-    const typePolicy: TypePolicy | undefined =
-      typeof typename === 'string' ? this._context.typePolicies?.[typename] : undefined;
-    // Values of fields with merge functions (which also apply their type's merge
-    // function) have been merged already; like InMemoryCache, writing an entity
-    // itself does not apply its type's merge function.
-    if (typeof typePolicy?.merge === 'function' && mode !== 'replace' && path.length) {
-      const fieldName = String([...prefixPath, ...path].filter(part => typeof part === 'string').pop() ?? '');
-      payload = typePolicy.merge(
-        withReferences(this._getNodeSnapshot(containerId), path, previousValue),
-        payload,
-        this._fieldFunctions().options(undefined, fieldName, fieldName, null, [containerId, ...path, fieldName]),
-      ) as JsonObject;
-    }
+    // Like InMemoryCache, root objects have their root type's __typename.
+    const rootTypename = path.length === 0 ? this._context.rootTypename(containerId) : undefined;
+    const payloadTypename = typenameOf(payload);
+    const storedTypename = rootTypename ?? typenameOf(previousValue);
+    // The type whose field policies apply to the value's fields...
+    const typename = (isRoot && rootTypename) || payloadTypename || storedTypename;
+    // ...and the type that fragments' type conditions are matched against
+    // (values nested within the root are not of the Query type).
+    const fragmentTypename = payloadTypename || storedTypename || rootTypename;
 
     // Recurse into arrays.
     if (Array.isArray(payload) || Array.isArray(previousValue)) {
@@ -323,19 +430,34 @@ export class SnapshotEditor<TSerialized> {
     }
 
     const ref = isReference(payload) ? payload.__ref : undefined;
+    // Root objects are never identified by their data (see isRootNodeId).
+    const isRootObject = path.length === 0 && isRootNodeId(containerId);
     let payloadId =
       ref ??
-      this._context.entityIdForValue(getPayloadProxy(payload, propMap)) ??
-      (path.length === 0 && !isRoot ? containerId : undefined);
+      (isRootObject ? undefined : this._identifyPayload(payload, parsed, propMap)) ??
+      // A null value of a parameterized field (whose node is the container) is
+      // not the container itself.
+      (path.length === 0 && !isRoot && !isNil(payload) ? containerId : undefined);
     const previousId =
-      this._context.entityIdForValue(getVisibleProxy(previousValue, propMap)) ??
+      (isRootObject ? undefined : this._identifyPrevious(previousValue, propMap, containerId, path)) ??
       (path.length === 0 && !isRoot
         ? containerId
         : (ifString(deepGet(this._pathToId[containerId], path)) ?? this._danglingReferenceId(containerId, path)));
 
-    // Like InMemoryCache's mergeObjects, merge:true policies merge unidentified
-    // objects and entities together.
-    if (payloadId !== previousId && mode === 'merge' && !isNil(payload) && !isNil(previousValue) && !ref) {
+    // Like InMemoryCache's mergeObjects, merge:true policies merge an
+    // unidentified object into an entity (or an entity into the unidentified
+    // object it replaces); objects whose __typenames differ are not merged.
+    // Two different entities are not merged either: the incoming one replaces
+    // the existing one.
+    if (mode === 'merge' && typenamesDiffer(payload, previousValue)) mode = 'replace';
+    if (
+      payloadId !== previousId &&
+      (!payloadId || !previousId) &&
+      mode === 'merge' &&
+      !isNil(payload) &&
+      !isNil(previousValue) &&
+      !ref
+    ) {
       if (!payloadId) {
         payloadId = previousId;
       } else {
@@ -383,15 +505,11 @@ export class SnapshotEditor<TSerialized> {
           this._pathToId[containerId] = Object.create(null);
         }
         lazyImmutableDeepSet(this._pathToId[containerId], undefined, path, payloadId);
-        referenceEdits.push({
-          containerId,
-          path,
-          prevNodeId: previousId,
-          nextNodeId: payloadId,
-          // An unidentified value replacing the entity is written below.
-          ...(replacesEntity && { noWrite: true as const }),
-          ...(ref ? { reference: true } : undefined),
-        });
+        const edit: ReferenceEdit = { containerId, path, prevNodeId: previousId, nextNodeId: payloadId };
+        // An unidentified value replacing the entity is written below.
+        if (replacesEntity) edit.noWrite = true;
+        if (ref) edit.reference = true;
+        referenceEdits.push(edit);
       }
       if (replacesEntity) {
         this._setValue(containerId, path, {});
@@ -414,8 +532,17 @@ export class SnapshotEditor<TSerialized> {
       return payloadId;
     }
 
+    // The (unidentified) value of a parameterized field, which is its node's
+    // data (rather than an entity).
+    const isParameterizedValue =
+      payloadId === containerId &&
+      path.length === 0 &&
+      this._getNodeSnapshot(containerId) instanceof ParameterizedValueSnapshot;
+    const unidentified = !payloadId || isParameterizedValue;
+
     // Unidentified objects replaced by a merge policy lose their other fields.
-    const replacedValue = !payloadId && !previousId && mode === 'replace' ? previousValue : undefined;
+    const replacedValue =
+      unidentified && (!previousId || isParameterizedValue) && mode === 'replace' ? previousValue : undefined;
     const writtenFields = replacedValue ? new Set<string>() : undefined;
 
     // If we've entered a new node; it becomes our container.
@@ -425,17 +552,54 @@ export class SnapshotEditor<TSerialized> {
       path = [];
     }
 
+    // An entity that is new (neither in the cache nor written earlier in this
+    // write) has nothing to merge its fields with: without field policies that
+    // change where or how fields are written, its leaf fields are set in new
+    // data directly (see below).
+    const isNewEntity =
+      !unidentified &&
+      !this._context.policies.hasKeyArgs &&
+      !this._context.policies.hasMergePolicies &&
+      !this._streamInfo &&
+      !(containerId in this._newNodes) &&
+      !this._parent.getNodeSnapshot(containerId);
+    let newData: JsonObject | undefined;
+
+    // Like InMemoryCache, an empty unidentified object (e.g. the `{}` a merge
+    // function returns) is stored, rather than left missing.
+    if (
+      !prune &&
+      !payloadId &&
+      isNil(previousValue) &&
+      path.length &&
+      isObject(payload) &&
+      !Object.keys(payload).length
+    ) {
+      this._setValue(containerId, path, {});
+    }
+
+    const { policies } = this._context;
+    // The schema names of the fields selected under aliases (written from their
+    // response keys rather than as unselected fields; see below).
+    let aliasedNames: Set<string> | undefined;
+
     // Finally, we can walk into individual values.
     for (const payloadName in parsed) {
-      const node = parsed[payloadName];
+      let node = parsed[payloadName];
       let fieldValue = deepGet(payload, [payloadName]) as JsonValue | undefined;
       // Like InMemoryCache, skip fields of fragments that don't match the type.
       // (Fuzzy subtypes were inferred from the whole result by checkWrite.)
-      if (node.conditions && !this._context.conditionsMatch(node.conditions, fragmentTypename)) {
+      if (node.alternatives) {
+        // The field selected under this key for objects of this type.
+        const alternative = alternativeForType(this._context, node, fragmentTypename);
+        if (!alternative) continue;
+        node = alternative;
+      } else if (node.conditions && !this._context.conditionsMatch(node.conditions, fragmentTypename)) {
         continue;
       }
       // Having a schemaName on the node implies that payloadName is an alias.
       const schemaName = node.schemaName ? node.schemaName : payloadName;
+      if (schemaName !== payloadName) (aliasedNames ??= new Set()).add(schemaName);
       // Don't trust our inputs.
       if (fieldValue === undefined) {
         // If it was explicitly undefined, that likely indicates a malformed
@@ -447,7 +611,16 @@ export class SnapshotEditor<TSerialized> {
         continue;
       }
 
+      if (isNewEntity && !node.children && !node.args) {
+        newData ??= this._newEntityData(containerId);
+        // Custom scalar values are stored serialized (and parsed when read).
+        newData[schemaName] = this._context.scalars.serializeField(typename, schemaName, fieldValue) as JsonValue;
+        continue;
+      }
+
       let containerIdForField = containerId;
+      // Only the child selections of fragments that match the type apply.
+      const children = node.variants ? childrenForType(this._context, node, fragmentTypename) : node.children;
 
       // For static fields, we append the current cacheKey to create a new path
       // to the field.
@@ -500,14 +673,26 @@ export class SnapshotEditor<TSerialized> {
       let fieldPrefixPath = prefixPath;
       let fieldPath = [...path, schemaName];
 
-      if (node.args) {
+      // Fields are stored under their arguments, or as their keyArgs policies
+      // (or @connection directives) say, like InMemoryCache's store field names.
+      const args = (node.args as JsonObject | undefined) ?? null;
+      // (Only store keys, merge functions and @stream need the field's node.)
+      const field =
+        args || policies.hasKeyArgs || policies.hasMergePolicies || this._streamInfo ? fieldNodeOf(node) : undefined;
+      // (Without arguments or keyArgs policies, fields are stored under their names.)
+      const storeKey =
+        args || policies.hasKeyArgs
+          ? this._context.storeFieldNames.storeKey(typename, schemaName, args, field, this._variables)
+          : undefined;
+
+      if (storeKey !== undefined) {
         if (fieldValue === null && prune) {
           this._setValue(containerIdForField, path, null);
           continue;
         }
         // The values of a parameterized field are explicit nodes in the graph;
         // so we set up a new container & path.
-        containerIdForField = this._ensureParameterizedValueSnapshot(containerId, fieldPath, node.args);
+        containerIdForField = this._ensureParameterizedValueSnapshot(containerId, fieldPath, storeKey);
         fieldPrefixPath = [...prefixPath, ...fieldPath];
         fieldPath = [];
       }
@@ -518,10 +703,17 @@ export class SnapshotEditor<TSerialized> {
       writtenFields?.add(schemaName);
 
       // Like InMemoryCache, fall back to the merge policy of the child's type.
-      const fieldPolicy = getFieldPolicy(this._context.typePolicies, typename, schemaName);
-      let merge = typeof fieldPolicy === 'object' ? fieldPolicy.merge : undefined;
-      if (merge === undefined && node.children && isObject(fieldValue)) {
-        merge = this._context.typePolicies?.[fieldValue.__typename as string]?.merge;
+      let merge = policies.hasMergePolicies
+        ? policies.getMergeFunction(
+            typename,
+            schemaName,
+            node.children && isObject(fieldValue) ? fieldValue.__typename : undefined,
+          )
+        : undefined;
+      // Like InMemoryCache, the chunks of `@stream` lists without a merge
+      // policy are merged into the cached list by its default stream merge.
+      if (merge === undefined && usesDefaultStreamMerge(this._streamInfo, field, fieldValue, this._variables)) {
+        merge = defaultStreamFieldMergeFn;
       }
       let fieldMode: MergeMode | undefined = merge === true ? 'merge' : merge === false ? 'replace' : undefined;
       if (typeof merge === 'function') {
@@ -529,24 +721,33 @@ export class SnapshotEditor<TSerialized> {
         // entities (which are written first), and their result replaces the
         // existing value.
         const existing = withReferences(this._getNodeSnapshot(containerIdForField), fieldPath, previousFieldValue);
-        const incoming = node.children
-          ? this._normalizeIncoming(
-              referenceEdits,
-              warnings,
-              fieldPrefixPath,
-              node.children,
-              fieldValue,
-              prune,
-              node.propMap,
-            )
+        // The field-name path (with list indices) from the root of the write,
+        // which locates the field's `@stream` chunk info (like InMemoryCache's).
+        const writePath = [...prefixPath, ...path, schemaName];
+        const incoming = children
+          ? this._normalizeIncoming(referenceEdits, warnings, writePath, children, fieldValue, prune, node.propMap)
           : fieldValue;
-        const args = (node.args as JsonObject | undefined) ?? null;
-        const storageKeys = [containerId, ...path, storageFieldName(schemaName, args)];
-        fieldValue = merge(
-          existing,
-          incoming,
-          this._fieldFunctions().options(undefined, schemaName, payloadName, args, storageKeys),
+        const storeFieldName = storeFieldNameOf(schemaName, storeKey, args);
+        const storageKeys = [containerId, ...path, storeFieldName];
+        const fieldMerge = merge;
+        fieldValue = runStreamAwareMerge(this._streamInfo, writePath, incoming, streamFieldInfo =>
+          fieldMerge(
+            // Like InMemoryCache, overwriting writes call merge functions without existing data.
+            this._overwrite ? undefined : existing,
+            incoming,
+            this._fieldFunctions().mergeOptions(
+              schemaName,
+              storeFieldName,
+              args,
+              storageKeys,
+              this._extensions,
+              existing,
+              field,
+              streamFieldInfo,
+            ),
+          ),
         ) as JsonValue | undefined;
+        if (children) fieldValue = this._withResponseKeys(fieldValue, children);
         fieldMode = 'replace';
 
         // Fields merged into undefined are not stored.
@@ -558,9 +759,14 @@ export class SnapshotEditor<TSerialized> {
           }
           continue;
         }
-      } else if (!fieldMode && mode === 'replace' && !payloadId) {
+      } else if (!fieldMode && mode === 'replace' && unidentified) {
         // Nested values of a replaced unidentified object are replaced too.
         fieldMode = 'replace';
+      }
+
+      // Custom scalar values are stored serialized (and parsed when read).
+      if (!node.children) {
+        fieldValue = this._context.scalars.serializeField(typename, schemaName, fieldValue) as JsonValue | undefined;
       }
 
       // For fields with sub selections, we walk into them; only leaf fields are
@@ -573,7 +779,7 @@ export class SnapshotEditor<TSerialized> {
           containerIdForField,
           fieldPrefixPath,
           fieldPath,
-          node.children,
+          children ?? {},
           fieldValue,
           prune,
           node.propMap,
@@ -596,8 +802,12 @@ export class SnapshotEditor<TSerialized> {
       }
     }
     if (payload && !prune) {
+      // Unselected fields of the payload are stored too, unless they are named
+      // like a field selected under an alias: like InMemoryCache, which only
+      // stores selected fields, the aliased value wins (e.g. when Apollo Client
+      // writes back a cache diff's result, which has both).
       for (const payloadName of Object.keys(payload)) {
-        if (!hasOwn.call(parsed, payloadName)) {
+        if (!hasOwn.call(parsed, payloadName) && !aliasedNames?.has(payloadName)) {
           const value = payload[payloadName];
           const fieldPath = [...path, payloadName];
           writtenFields?.add(payloadName);
@@ -618,49 +828,172 @@ export class SnapshotEditor<TSerialized> {
   /**
    * Like InMemoryCache, writes the entities within an incoming field value
    * (for a merge function), returning the value with References in their place.
+   * `path` is the value's field-name path (with list indices) from the root of
+   * the write.
    */
   private _normalizeIncoming(
     referenceEdits: ReferenceEdit[],
     warnings: string[],
-    prefixPath: PathPart[],
+    path: PathPart[],
     parsed: ParsedQuery,
     value: JsonValue | undefined,
     prune: boolean,
     propMap: { [prop: string]: string } | undefined,
   ): any {
     if (Array.isArray(value)) {
-      return value.map(item =>
-        this._normalizeIncoming(referenceEdits, warnings, prefixPath, parsed, item, prune, propMap),
+      return value.map((item, i) =>
+        this._normalizeIncoming(referenceEdits, warnings, [...path, i], parsed, item, prune, propMap),
       );
     }
     if (!isObject(value) || isReference(value)) return value;
 
-    const entityId = this._context.entityIdForValue(getPayloadProxy(value, propMap));
+    const entityId = this._identifyPayload(value, parsed, propMap);
     if (entityId) {
-      this._mergeSubgraph(referenceEdits, warnings, entityId, prefixPath, [], parsed, value, prune, propMap);
+      this._mergeSubgraph(referenceEdits, warnings, entityId, path, [], parsed, value, prune, propMap);
       return makeRef(entityId);
     }
 
+    // Like InMemoryCache's store objects, fields selected under aliases are
+    // keyed by their names.
+    const renamed = this._aliasedFields(parsed, value.__typename);
     let normalized = value;
     for (const payloadName in parsed) {
-      const { children, propMap: childPropMap } = parsed[payloadName];
+      const { children, propMap: childPropMap, schemaName } = this._fieldForType(parsed[payloadName], value.__typename);
       const child = value[payloadName];
-      if (!children || child === undefined) continue;
-      const normalizedChild = this._normalizeIncoming(
-        referenceEdits,
-        warnings,
-        prefixPath,
-        children,
-        child,
-        prune,
-        childPropMap,
-      );
-      if (normalizedChild !== child) {
+      if (child === undefined) continue;
+      const normalizedChild = children
+        ? this._normalizeIncoming(
+            referenceEdits,
+            warnings,
+            [...path, schemaName ?? payloadName],
+            children,
+            child,
+            prune,
+            childPropMap,
+          )
+        : child;
+      // (Unless the object has a key of that name too.)
+      const name = renamed?.get(payloadName);
+      if (name !== undefined && hasOwn.call(value, name)) continue;
+      if (normalizedChild !== child || name) {
         normalized = normalized === value ? { ...value } : normalized;
-        normalized[payloadName] = normalizedChild;
+        if (name) delete normalized[payloadName];
+        normalized[name ?? payloadName] = normalizedChild;
       }
     }
     return normalized;
+  }
+
+  /**
+   * The inverse of _normalizeIncoming's renaming: a merge function's result
+   * (whose objects have the fields selected under aliases by their names),
+   * with those fields under their response keys again, for writing.
+   */
+  private _withResponseKeys(value: unknown, parsed: ParsedQuery): any {
+    if (Array.isArray(value)) {
+      let copy: unknown[] | undefined;
+      value.forEach((item, index) => {
+        const newItem = this._withResponseKeys(item, parsed);
+        if (newItem !== item) (copy ??= value.slice())[index] = newItem;
+      });
+      return copy ?? value;
+    }
+    if (!isObject(value) || isReference(value)) return value;
+
+    const renamed = this._aliasedFields(parsed, value.__typename);
+    let result = value;
+    for (const payloadName in parsed) {
+      const { children } = this._fieldForType(parsed[payloadName], value.__typename);
+      const name = renamed?.get(payloadName);
+      const fromName = name !== undefined && !hasOwn.call(value, payloadName);
+      const child = fromName ? value[name] : value[payloadName];
+      if (child === undefined) continue;
+      const newChild = children ? this._withResponseKeys(child, children) : child;
+      if (newChild !== child || fromName) {
+        result = result === value ? { ...value } : result;
+        if (fromName) delete result[name];
+        result[payloadName] = newChild as JsonValue;
+      }
+    }
+    return result;
+  }
+
+  /**
+   * The fields selected under aliases (by response key) for objects of type
+   * `typename`, with their names: those that can be keyed by their names, as
+   * no other field is selected under (or with) the same name.
+   */
+  private _aliasedFields(parsed: ParsedQuery, typename: unknown): Map<string, string> | undefined {
+    let aliased: Map<string, string> | undefined;
+    const names = new Set<string>();
+    for (const payloadName in parsed) {
+      const name = this._fieldForType(parsed[payloadName], typename).schemaName ?? payloadName;
+      if (names.has(name) || (name !== payloadName && hasOwn.call(parsed, name))) {
+        aliased?.forEach((other, key) => other === name && aliased!.delete(key));
+        continue;
+      }
+      names.add(name);
+      if (name !== payloadName) (aliased ??= new Map()).set(payloadName, name);
+    }
+    return aliased?.size ? aliased : undefined;
+  }
+
+  /**
+   * The id of a written object (with the given selections), like
+   * InMemoryCache's policies.identify: keyFields functions see the object's
+   * fields by their schema names, its selection set, and the fragments of the
+   * operation.
+   */
+  private _identifyPayload(
+    payload: JsonValue | undefined,
+    parsed: ParsedQuery,
+    propMap: { [prop: string]: string } | undefined,
+  ): NodeId | undefined {
+    if (!isObject(payload)) return undefined;
+    const { policies } = this._context;
+    const object = getPayloadProxy(payload, propMap) as JsonObject;
+    // Without keyFields or dataIdFromObject, ids don't depend on the context.
+    if (!policies.identifiesWithContext) return policies.identify(object)[0];
+
+    const [id, missingKeyField] = policies.identify(
+      object,
+      { selectionSet: selectionSetOf(parsed), fragmentMap: this._fragmentMap },
+      () => toStoreObject(payload, parsed, (node, typename) => this._fieldForType(node, typename)),
+    );
+    // Like InMemoryCache, writing an object without all of its keyFields
+    // fails (rather than just leaving it unidentified). Pruned reads of the
+    // cache may be partial, though.
+    if (id === undefined && missingKeyField !== undefined && !this._prune) {
+      throw uncaughtWriteError(missingKeyFieldError(missingKeyField, payload));
+    }
+    return id;
+  }
+
+  /**
+   * The field selected under a response key (whose node is `node`) for
+   * objects of the given type: the node, unless it has alternatives.
+   */
+  private _fieldForType(node: ParsedQueryNode, typename: unknown): ParsedQueryNode {
+    return node.alternatives ? (alternativeForType(this._context, node, typename) ?? node) : node;
+  }
+
+  /**
+   * The id of the entity previously stored at `path` of a node (whose data is
+   * `previousValue`).  Like InMemoryCache, keyFields functions only identify
+   * written objects, so for their types the id is found in the graph.
+   */
+  private _identifyPrevious(
+    previousValue: JsonValue | undefined,
+    propMap: { [prop: string]: string } | undefined,
+    containerId: NodeId,
+    path: PathPart[],
+  ): NodeId | undefined {
+    if (!isObject(previousValue)) return undefined;
+    if (this._context.policies.hasKeyFieldsFunction(previousValue.__typename)) {
+      const reference = this._getNodeSnapshot(containerId)?.outbound?.get(toOutKey(path));
+      return reference && this._getNodeSnapshot(reference.id) ? reference.id : undefined;
+    }
+    return this._context.entityIdForValue(getVisibleProxy(previousValue, propMap));
   }
 
   /**
@@ -696,23 +1029,41 @@ export class SnapshotEditor<TSerialized> {
       this._context,
       id => this._getNodeSnapshot(id),
       this._variables,
-      (value, mergeIntoStore) => {
-        if (typeof value === 'string') return makeRef(value);
-        if (isReference(value)) return value;
-        const entityId = this._context.entityIdForValue(value);
-        if (entityId && mergeIntoStore) this._mergeIntoEntity(entityId, value as StoreObject);
-        return entityId ? makeRef(entityId) : undefined;
-      },
+      makeToReference(this._context.entityIdForValue, (entityId, value) => this._mergeIntoEntity(entityId, value)),
       (ref, value, valueIsOlder) => this._mergeIntoEntity(ref.__ref, value, valueIsOlder),
     ));
   }
 
   /**
-   * Shallowly merges `value` into the data of an entity (creating it if needed).
+   * Shallowly merges `value` (a store object, from toReference or
+   * mergeObjects) into the data of an entity, creating it if needed. With
+   * `valueIsOlder`, the entity's own fields take precedence.
+   *
+   * The References within `value` become references of the entity (so, like
+   * any other, they keep what they reference from being garbage collected).
    */
   private _mergeIntoEntity(entityId: NodeId, value: StoreObject, valueIsOlder = false) {
-    const data = isObject(this._getNodeData(entityId)) ? (this._getNodeData(entityId) as JsonObject) : {};
-    this._setValue(entityId, [], valueIsOlder ? { ...value, ...data } : { ...data, ...value });
+    // Custom scalar values are stored serialized.
+    value = this._context.scalars.serializeStoreObject(value);
+    const node = this._getNodeSnapshot(entityId);
+    const data = isObject(node?.data) ? (node!.data as JsonObject) : undefined;
+    // Outside of mergePayload, the edits are applied right away.
+    const referenceEdits = this._referenceEdits ?? [];
+
+    if (!data) this._setValue(entityId, [], {});
+    for (const key of Object.keys(value)) {
+      const hasField = (data && hasOwn.call(data, key)) || node?.outbound?.has(key);
+      if (valueIsOlder && hasField) continue;
+      const references: [PathPart[], NodeId][] = [];
+      const fieldValue = withoutReferences(value[key], [key], references);
+      if (hasField) this._removeReferencesWithin(referenceEdits, entityId, [key], true);
+      this._setValue(entityId, [key], fieldValue);
+      for (const [path, id] of references) {
+        referenceEdits.push({ containerId: entityId, path, prevNodeId: undefined, nextNodeId: id, reference: true });
+      }
+    }
+
+    if (!this._referenceEdits) this._mergeReferenceEdits(referenceEdits);
   }
 
   /**
@@ -935,10 +1286,14 @@ export class SnapshotEditor<TSerialized> {
     }
 
     const reference = isReference(payload) ? payload.__ref : null;
+    // Root objects are never identified by their data (see isRootNodeId).
+    const isRootObject = path.length === 0 && isRootNodeId(containerId);
     const payloadId = reference
       ? reference
-      : this._context.entityIdForValue({ ...(previousValue as JsonObject), ...payload });
-    const previousId = this._context.entityIdForValue(previousValue);
+      : isRootObject
+        ? undefined
+        : this._context.entityIdForValue({ ...(previousValue as JsonObject), ...payload });
+    const previousId = isRootObject ? undefined : this._identifyPrevious(previousValue, undefined, containerId, path);
 
     // Is this an identity change?
     if (payloadId !== previousId) {
@@ -1092,8 +1447,8 @@ export class SnapshotEditor<TSerialized> {
 
       // For fields with sub selections, we walk into them; only leaf fields are
       // directly written via _setValue.  This allows us to perform minimal
-      // edits to the graph.
-      if (typeof node === 'object') {
+      // edits to the graph.  (Values like Dates or Maps are leaf values.)
+      if (typeof node === 'object' && (node === null || Array.isArray(node) || isPlainObject(node))) {
         this._modifySubgraph(
           referenceEdits,
           warnings,
@@ -1174,12 +1529,13 @@ export class SnapshotEditor<TSerialized> {
     const node = this._getNodeSnapshot(containerId);
     const value = deepGet(node?.data, path);
     if (value === undefined) {
-      if (node) {
+      // (A value that isn't in the data can only be a reference's.)
+      if (node && (node.outbound || node.parameterized)) {
         const out = node.outbound?.get(toOutKey(path));
         if (out !== undefined) {
           return this._getNodeData(out.id);
         }
-        const key = path.at(0);
+        const key = path[0];
         if (key === undefined) {
           return value;
         }
@@ -1321,9 +1677,11 @@ export class SnapshotEditor<TSerialized> {
    * Update all nodes with edited references, and ensure that the bookkeeping of
    * the new and _past_ references are properly updated.
    *
-   * Returns the set of node ids that are newly orphaned by these edits.
+   * Returns the set of node ids that are newly orphaned by these edits, and
+   * adds the nodes that lost inbound references but still have some to
+   * `unreachableCandidates` (see _removeUnreachableNodes).
    */
-  private _mergeReferenceEdits(referenceEdits: ReferenceEdit[]) {
+  private _mergeReferenceEdits(referenceEdits: ReferenceEdit[], unreachableCandidates?: Set<NodeId>) {
     const orphanedNodeIds: Set<NodeId> = new Set();
 
     for (const { containerId, path, prevNodeId, nextNodeId, noWrite, reference } of referenceEdits) {
@@ -1349,8 +1707,11 @@ export class SnapshotEditor<TSerialized> {
           removeOutboundReference(container, path);
         }
         removeInboundReference(prevTarget, containerId, path);
-        if (!prevTarget.inbound) {
+        // (Root objects, which objects of the root query type reference, are never orphaned.)
+        if (!prevTarget.inbound && !isRootNodeId(prevNodeId)) {
           orphanedNodeIds.add(prevNodeId);
+        } else {
+          unreachableCandidates?.add(prevNodeId);
         }
       }
 
@@ -1386,7 +1747,10 @@ export class SnapshotEditor<TSerialized> {
     // references to point to the new version.
     this._rebuildInboundReferences();
 
-    const snapshot = this._buildNewSnapshot();
+    // When nothing changed (e.g. the same values were written again), keep the
+    // snapshot, along with its cached reads (so their results keep their identity).
+    const unchanged = !this._editedNodeIds.size && !Object.keys(this._newNodes).length;
+    const snapshot = unchanged ? this._parent : this._buildNewSnapshot();
     if (this._context.freezeSnapshots) {
       snapshot.freeze();
     }
@@ -1404,24 +1768,16 @@ export class SnapshotEditor<TSerialized> {
    */
   _buildNewSnapshot() {
     const { entityTransformer } = this._context;
-    const snapshots = { ...this._parent._values };
-
-    for (const id in this._newNodes) {
-      const newSnapshot = this._newNodes[id];
-      // Drop snapshots that were garbage collected.
-      if (newSnapshot === undefined) {
-        delete snapshots[id];
-      } else {
+    if (entityTransformer) {
+      for (const id in this._newNodes) {
         // TODO: This should not be run for ParameterizedValueSnapshots
-        if (entityTransformer) {
-          const { data } = this._newNodes[id] as EntitySnapshotType;
-          if (data) entityTransformer(data);
-        }
-        snapshots[id] = newSnapshot;
+        const data = (this._newNodes[id] as EntitySnapshotType | undefined)?.data;
+        if (data) entityTransformer(data);
       }
     }
 
-    return new GraphSnapshot(snapshots);
+    // (Snapshots that were garbage collected are undefined, and dropped.)
+    return GraphSnapshot.withChanges(this._parent, this._newNodes);
   }
 
   /**
@@ -1450,8 +1806,11 @@ export class SnapshotEditor<TSerialized> {
 
   /**
    * Transitively removes all orphaned nodes from the graph.
+   *
+   * The nodes that lose inbound references but still have some are added to
+   * `unreachableCandidates` (see _removeUnreachableNodes).
    */
-  private _removeOrphanedNodes(nodeIds: Set<NodeId>) {
+  private _removeOrphanedNodes(nodeIds: Iterable<NodeId>, unreachableCandidates: Set<NodeId>) {
     const queue = Array.from(nodeIds);
     while (queue.length) {
       const nodeId = queue.pop()!;
@@ -1463,24 +1822,163 @@ export class SnapshotEditor<TSerialized> {
 
       const { outbound, parameterized } = node;
       if (outbound) {
-        this.removeInbound(outbound.values(), nodeId, queue);
+        this.removeInbound(outbound.values(), nodeId, queue, unreachableCandidates);
       }
       if (parameterized) {
-        this.removeInbound(iterParameterized(parameterized), nodeId, queue);
+        this.removeInbound(iterParameterized(parameterized), nodeId, queue, unreachableCandidates);
       }
     }
   }
 
-  private removeInbound(refs: Iterable<NodeReference>, nodeId: string, queue: string[]) {
+  private removeInbound(
+    refs: Iterable<NodeReference>,
+    nodeId: string,
+    queue: string[],
+    unreachableCandidates: Set<NodeId>,
+  ) {
     for (const { id, path } of refs) {
       // Dangling references have no target to update.
       if (!this._getNodeSnapshot(id)) continue;
       const reference = this._ensureNewSnapshot(id);
       removeInboundReference(reference, nodeId, path);
       if (reference.inbound === undefined) {
-        queue.push(id);
+        if (!isRootNodeId(id)) queue.push(id);
+      } else {
+        unreachableCandidates.add(id);
       }
     }
+  }
+
+  /**
+   * Removes the nodes that lost inbound references (`candidates`), but are
+   * still referenced, if they are no longer reachable from any root: the
+   * reference cycles that orphan removal can't collect, since their nodes
+   * still reference each other.
+   *
+   * Roots are the root nodes (ROOT_QUERY etc), the nodes nothing references
+   * (which Hermes keeps, e.g. those written by writeFragment), retained nodes,
+   * and the root of the write.
+   *
+   * Each candidate is first checked by searching backwards (through inbound
+   * references) from it for a root or a node already known to be reachable;
+   * when one is found, every node on the path to it is reachable too. If there
+   * is none, all the nodes found are unreachable, and are removed (along with
+   * what they alone reference).
+   *
+   * Those searches share a budget of visited nodes. Should it run out (many
+   * candidates, in large reference graphs), reachability is instead marked
+   * forwards from the roots, once, over the whole graph; then the candidates
+   * that are not marked are removed with what references them.
+   */
+  private _removeUnreachableNodes(candidates: Set<NodeId>, writeRootId: NodeId) {
+    if (!candidates.size) return;
+    const reachable = new Set<NodeId>();
+    const isRoot = (id: NodeId, node: NodeSnapshot) =>
+      !node.inbound || id === writeRootId || isRootNodeId(id) || !!this._isRetained?.(id);
+    const isKnownReachable = (id: NodeId, node: NodeSnapshot) => reachable.has(id) || isRoot(id, node);
+
+    // The nodes the backward searches may visit, in total.
+    let budget = UNREACHABLE_SEARCH_BUDGET + UNREACHABLE_SEARCH_BUDGET_PER_CANDIDATE * candidates.size;
+    // Once the budget runs out: the nodes reachable from the roots.
+    let marked: Set<NodeId> | undefined;
+
+    for (const candidate of candidates) {
+      const candidateNode = this._getNodeSnapshot(candidate);
+      if (!candidateNode || reachable.has(candidate)) continue;
+      if (marked) {
+        if (!marked.has(candidate)) this._removeOrphanedNodes(this._referrersOf(candidate), candidates);
+        continue;
+      }
+      if (isKnownReachable(candidate, candidateNode)) {
+        reachable.add(candidate);
+        continue;
+      }
+
+      // Depth-first, one referrer at a time: entities are usually a few
+      // references away from a root, but can have many referrers (each of
+      // which leads to one). `via` maps each node found to the node it
+      // references on the way to the candidate.
+      const found = [candidate];
+      const via = new Map<NodeId, NodeId | undefined>([[candidate, undefined]]);
+      const stack = [{ id: candidate, referrers: candidateNode.inbound!.values() }];
+      let reachedFrom: NodeId | undefined;
+      while (stack.length && budget > 0) {
+        const top = stack[stack.length - 1];
+        const next = top.referrers.next();
+        if (next.done) {
+          stack.pop();
+          continue;
+        }
+        budget--;
+        const referrerId = next.value.id;
+        if (via.has(referrerId)) continue;
+        const referrer = this._getNodeSnapshot(referrerId);
+        if (!referrer) continue;
+        via.set(referrerId, top.id);
+        if (isKnownReachable(referrerId, referrer)) {
+          reachedFrom = top.id;
+          break;
+        }
+        found.push(referrerId);
+        // (Nodes without referrers are roots: known to be reachable.)
+        stack.push({ id: referrerId, referrers: referrer.inbound!.values() });
+      }
+
+      if (reachedFrom !== undefined) {
+        // Everything on the path from the candidate to the root is reachable.
+        for (let id: NodeId | undefined = reachedFrom; id !== undefined; id = via.get(id)) reachable.add(id);
+      } else if (!stack.length) {
+        // Nothing that references these nodes (even indirectly) is reachable.
+        // Removing them may leave more candidates (e.g. a cycle that one of
+        // them referenced), which this loop visits too.
+        this._removeOrphanedNodes(found, candidates);
+      } else {
+        marked = this._markReachableNodes(isRoot);
+        if (!marked.has(candidate)) this._removeOrphanedNodes(this._referrersOf(candidate), candidates);
+      }
+    }
+  }
+
+  /**
+   * The nodes reachable from the roots (see _removeUnreachableNodes), marked
+   * forwards through references.
+   */
+  private _markReachableNodes(isRoot: (id: NodeId, node: NodeSnapshot) => boolean): Set<NodeId> {
+    const marked = new Set<NodeId>();
+    const queue: NodeId[] = [];
+    const visit = (id: NodeId) => {
+      if (marked.has(id) || !this._getNodeSnapshot(id)) return;
+      marked.add(id);
+      queue.push(id);
+    };
+    for (const id of this._parent.allNodeIds()) {
+      const node = this._getNodeSnapshot(id);
+      if (node && isRoot(id, node)) visit(id);
+    }
+    for (const id in this._newNodes) {
+      const node = this._newNodes[id];
+      if (node && isRoot(id, node)) visit(id);
+    }
+    while (queue.length) {
+      const node = this._getNodeSnapshot(queue.pop()!)!;
+      for (const { id } of iterRefs(node.outbound, node.parameterized)) visit(id);
+    }
+    return marked;
+  }
+
+  /** The node and every node that (directly or indirectly) references it. */
+  private _referrersOf(nodeId: NodeId): NodeId[] {
+    const found = [nodeId];
+    const seen = new Set(found);
+    for (let i = 0; i < found.length; i++) {
+      for (const { id } of this._getNodeSnapshot(found[i])?.inbound?.values() ?? []) {
+        if (!seen.has(id) && this._getNodeSnapshot(id)) {
+          seen.add(id);
+          found.push(id);
+        }
+      }
+    }
+    return found;
   }
 
   /**
@@ -1510,9 +2008,34 @@ export class SnapshotEditor<TSerialized> {
       this._editedNodeIds.add(id);
     }
 
+    // Fields of data this edit made are set in place.
+    const existing = this._newNodes[id];
+    const data = existing?.data;
+    if (path.length === 1 && !isDelete && data !== undefined && this._ownedData[id] === data) {
+      (data as Record<string, unknown>)[path[0]] = newValue;
+      return;
+    }
+
     const parent = this._parent.getNodeSnapshot(id);
-    const current = this._ensureNewSnapshot(id);
+    const current = existing ?? this._ensureNewSnapshot(id);
     current.data = lazyImmutableDeepSet(current.data, parent && parent.data, path, newValue, isDelete);
+    // (Setting a value at a path copies the data, unless this edit made it.)
+    if (path.length && isObject(current.data)) this._ownedData[id] = current.data;
+  }
+
+  /**
+   * The data of a new entity node, which this edit made (and can change in
+   * place; see _setValue): empty, unless fields of it were set already (e.g.
+   * those of an object selected before its leaf fields).
+   */
+  private _newEntityData(id: NodeId): JsonObject {
+    this._editedNodeIds.add(id);
+    const snapshot = this._ensureNewSnapshot(id);
+    if (snapshot.data === undefined) {
+      snapshot.data = {};
+      this._ownedData[id] = snapshot.data;
+    }
+    return snapshot.data as JsonObject;
   }
 
   /**
@@ -1542,8 +2065,8 @@ export class SnapshotEditor<TSerialized> {
    * Ensures that there is a ParameterizedValueSnapshot for the given node with
    * arguments
    */
-  private _ensureParameterizedValueSnapshot(containerId: NodeId, path: PathPart[], args: FieldArguments) {
-    const fieldId = nodeIdForParameterizedValue(containerId, path, args);
+  private _ensureParameterizedValueSnapshot(containerId: NodeId, path: PathPart[], storeKey: string) {
+    const fieldId = nodeIdForStoreKey(containerId, path, storeKey);
 
     // We're careful to not edit the container unless we absolutely have to.
     // (There may be no changes for this parameterized value).
@@ -1567,5 +2090,24 @@ export class SnapshotEditor<TSerialized> {
  * Generate a stable id for a parameterized value.
  */
 export function nodeIdForParameterizedValue(containerId: NodeId, path: PathPart[], args?: JsonObject) {
-  return `${containerId}❖${JSON.stringify(path)}❖${JSON.stringify(args)}`;
+  return nodeIdForStoreKey(containerId, path, args ? argsStoreKey(args) : JSON.stringify(args));
+}
+
+/**
+ * The id of the parameterized value node holding the field at `path` within
+ * the container, stored under `storeKey` (see StoreKey): the JSON of its
+ * arguments, or its keyArgs-derived store field name.
+ */
+export function nodeIdForStoreKey(containerId: NodeId, path: PathPart[], storeKey: string) {
+  return `${containerId}❖${JSON.stringify(path)}❖${storeKey}`;
+}
+
+/**
+ * The store key (see StoreKey) of the parameterized value node `nodeId`, which
+ * holds the field at `path` within the container: the inverse of
+ * nodeIdForStoreKey (whose keys may contain ❖ themselves).
+ */
+export function storeKeyOfNode(containerId: NodeId, path: PathPart[], nodeId: NodeId): string | undefined {
+  const prefix = nodeIdForStoreKey(containerId, path, '');
+  return nodeId.startsWith(prefix) ? nodeId.slice(prefix.length) : undefined;
 }

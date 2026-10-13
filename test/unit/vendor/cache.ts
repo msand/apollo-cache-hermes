@@ -2,7 +2,8 @@
 
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import gql, { disableFragmentWarnings } from 'graphql-tag';
-import { Cache, isReference, makeReference, Reference, TypePolicies } from '@apollo/client';
+import { Cache, isReference, Reference, TypePolicies } from '@apollo/client';
+import { makeReference } from '@apollo/client/utilities/internal';
 import { expectTypeOf } from 'expect-type';
 import { DocumentNode } from 'graphql';
 
@@ -1386,7 +1387,7 @@ describe('Cache', () => {
         query,
         optimistic: true,
         callback(diff) {
-          results.push(diff.result!);
+          results.push(diff.result as QueryData);
         },
       });
 
@@ -1459,7 +1460,7 @@ describe('Cache', () => {
         name: 'Ben Newman',
       });
 
-      cache.updateFragment(
+      cache.updateFragment<any>(
         {
           id: bnId,
           fragment: usernameFragment,
@@ -2321,7 +2322,7 @@ describe('Hermes#broadcastWatches', () => {
       optimistic: true,
       immediate: true,
       callback(diff: Diff) {
-        addDiff(diff.result!.object.name, diff);
+        addDiff(diff.result!.object!.name!, diff);
       },
     };
 
@@ -2347,7 +2348,7 @@ describe('Hermes#broadcastWatches', () => {
       nonCanonicalCache.watch({
         ...commonWatchOptions,
         variables: { name: 'canonicalByChoice' },
-        canonizeResults: true, // Override the default.
+        // Apollo Client 4 removed the canonizeResults option.
       }),
     );
 
@@ -2355,7 +2356,7 @@ describe('Hermes#broadcastWatches', () => {
       canonicalCache.watch({
         ...commonWatchOptions,
         variables: { name: 'nonCanonicalByChoice' },
-        canonizeResults: false, // Override the default.
+        // Apollo Client 4 removed the canonizeResults option.
       }),
     );
 
@@ -2789,7 +2790,7 @@ describe('Hermes#modify', () => {
     });
 
     const snapshotWithoutYOB = cache.extract();
-    expect(snapshotWithoutYOB[authorId]!.yearOfBirth).toBeUndefined();
+    expect((snapshotWithoutYOB[authorId] as unknown as Record<string, unknown>).yearOfBirth).toBeUndefined();
     expect('yearOfBirth' in snapshotWithoutYOB[authorId]!).toBe(false);
     expect(snapshotWithoutYOB).toEqual({
       'Author:{"name":"Ezra Klein"}': {
@@ -2986,8 +2987,8 @@ describe('Hermes#modify', () => {
         },
         inbound: [
           {
-            id: 'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}',
-            path: [0],
+            id: 'Thread:{"tid":123}',
+            path: ['comments', 0],
           },
         ],
         type: 0,
@@ -3000,8 +3001,8 @@ describe('Hermes#modify', () => {
         },
         inbound: [
           {
-            id: 'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}',
-            path: [1],
+            id: 'Thread:{"tid":123}',
+            path: ['comments', 1],
           },
         ],
         type: 0,
@@ -3014,8 +3015,8 @@ describe('Hermes#modify', () => {
         },
         inbound: [
           {
-            id: 'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}',
-            path: [2],
+            id: 'Thread:{"tid":123}',
+            path: ['comments', 2],
           },
         ],
         type: 0,
@@ -3036,6 +3037,7 @@ describe('Hermes#modify', () => {
         data: {
           __typename: 'Thread',
           tid: 123,
+          comments: [undefined, undefined, undefined],
         },
         inbound: [
           {
@@ -3043,44 +3045,28 @@ describe('Hermes#modify', () => {
             path: ['thread'],
           },
         ],
-        parameterized: [
-          {
-            id: 'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}',
-            path: ['comments'],
-          },
-        ],
-        type: 0,
-      },
-      'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}': {
-        data: [undefined, undefined, undefined],
-        inbound: [
-          {
-            id: 'Thread:{"tid":123}',
-            path: ['comments'],
-          },
-        ],
         outbound: [
           {
             id: 'Comment:{"id":"c1"}',
-            path: [0],
+            path: ['comments', 0],
           },
           {
             id: 'Comment:{"id":"c2"}',
-            path: [1],
+            path: ['comments', 1],
           },
           {
             id: 'Comment:{"id":"c3"}',
-            path: [2],
+            path: ['comments', 2],
           },
         ],
-        type: 1,
+        type: 0,
       },
     });
 
     cache.modify({
       fields: {
         comments(comments: readonly Reference[], { readField }) {
-          // expect(Object.isFrozen(comments)).toBe(true); TODO
+          expect(Object.isFrozen(comments)).toBe(true);
           expect(comments.length).toBe(3);
           const filtered = comments.filter(comment => {
             return readField('id', comment) !== 'c1';
@@ -3107,8 +3093,8 @@ describe('Hermes#modify', () => {
         },
         inbound: [
           {
-            id: 'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}',
-            path: [0],
+            id: 'Thread:{"tid":123}',
+            path: ['comments', 0],
           },
         ],
         type: 0,
@@ -3121,8 +3107,8 @@ describe('Hermes#modify', () => {
         },
         inbound: [
           {
-            id: 'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}',
-            path: [1],
+            id: 'Thread:{"tid":123}',
+            path: ['comments', 1],
           },
         ],
         type: 0,
@@ -3141,6 +3127,7 @@ describe('Hermes#modify', () => {
         data: {
           __typename: 'Thread',
           tid: 123,
+          comments: [undefined, undefined],
         },
         inbound: [
           {
@@ -3148,33 +3135,17 @@ describe('Hermes#modify', () => {
             path: ['thread'],
           },
         ],
-        parameterized: [
-          {
-            id: 'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}',
-            path: ['comments'],
-          },
-        ],
-        type: 0,
-      },
-      'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}': {
-        data: [undefined, undefined],
-        inbound: [
-          {
-            id: 'Thread:{"tid":123}',
-            path: ['comments'],
-          },
-        ],
         outbound: [
           {
             id: 'Comment:{"id":"c2"}',
-            path: [0],
+            path: ['comments', 0],
           },
           {
             id: 'Comment:{"id":"c3"}',
-            path: [1],
+            path: ['comments', 1],
           },
         ],
-        type: 1,
+        type: 0,
       },
     });
   });
@@ -3450,7 +3421,7 @@ describe('Hermes#modify', () => {
         },
         inbound: [
           {
-            id: 'ROOT_QUERY❖["book"]❖{"isbn":"0735211280"}',
+            id: 'ROOT_QUERY❖["book"]❖book:{"isbn":"0735211280"}',
             path: [],
           },
         ],
@@ -3464,7 +3435,7 @@ describe('Hermes#modify', () => {
         },
         inbound: [
           {
-            id: 'ROOT_QUERY❖["book"]❖{"isbn":"147670032X"}',
+            id: 'ROOT_QUERY❖["book"]❖book:{"isbn":"147670032X"}',
             path: [],
           },
         ],
@@ -3478,7 +3449,7 @@ describe('Hermes#modify', () => {
         },
         inbound: [
           {
-            id: 'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
+            id: 'ROOT_QUERY❖["book"]❖book:{"isbn":"1760641790"}',
             path: [],
           },
         ],
@@ -3487,15 +3458,15 @@ describe('Hermes#modify', () => {
       ROOT_QUERY: {
         parameterized: [
           {
-            id: 'ROOT_QUERY❖["book"]❖{"isbn":"147670032X"}',
+            id: 'ROOT_QUERY❖["book"]❖book:{"isbn":"147670032X"}',
             path: ['book'],
           },
           {
-            id: 'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
+            id: 'ROOT_QUERY❖["book"]❖book:{"isbn":"1760641790"}',
             path: ['book'],
           },
           {
-            id: 'ROOT_QUERY❖["book"]❖{"isbn":"0735211280"}',
+            id: 'ROOT_QUERY❖["book"]❖book:{"isbn":"0735211280"}',
             path: ['book'],
           },
         ],
@@ -3526,9 +3497,9 @@ describe('Hermes#modify', () => {
               }),
             ).toBe('Book');
 
-            const parts = storeFieldName.split('❖');
-            expect(parts.shift()).toBe('ROOT_QUERY');
-            expect(parts.shift()).toBe('["book"]');
+            // Like InMemoryCache's, the store field name follows the keyArgs.
+            const parts = storeFieldName.split(':');
+            expect(parts.shift()).toBe('book');
             const keyArgs = JSON.parse(parts.join(':'));
             expect(typeof keyArgs.isbn).toBe('string');
             expect(Object.keys(keyArgs)).toEqual(['isbn']);
@@ -3585,7 +3556,7 @@ describe('Hermes#modify', () => {
         },
         inbound: [
           {
-            id: 'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
+            id: 'ROOT_QUERY❖["book"]❖book:{"isbn":"1760641790"}',
             path: [],
           },
         ],
@@ -3594,13 +3565,13 @@ describe('Hermes#modify', () => {
       ROOT_QUERY: {
         parameterized: [
           {
-            id: 'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
+            id: 'ROOT_QUERY❖["book"]❖book:{"isbn":"1760641790"}',
             path: ['book'],
           },
         ],
         type: 0,
       },
-      'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}': {
+      'ROOT_QUERY❖["book"]❖book:{"isbn":"1760641790"}': {
         data: null,
         inbound: [
           {
@@ -3629,7 +3600,7 @@ describe('Hermes#modify', () => {
         },
         inbound: [
           {
-            id: 'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
+            id: 'ROOT_QUERY❖["book"]❖book:{"isbn":"1760641790"}',
             path: [],
           },
         ],
@@ -3638,13 +3609,13 @@ describe('Hermes#modify', () => {
       ROOT_QUERY: {
         parameterized: [
           {
-            id: 'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
+            id: 'ROOT_QUERY❖["book"]❖book:{"isbn":"1760641790"}',
             path: ['book'],
           },
         ],
         type: 0,
       },
-      'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}': {
+      'ROOT_QUERY❖["book"]❖book:{"isbn":"1760641790"}': {
         data: null,
         inbound: [
           {

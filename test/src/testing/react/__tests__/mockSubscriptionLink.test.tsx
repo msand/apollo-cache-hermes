@@ -1,9 +1,9 @@
-import * as React from 'react';
 import { render, waitFor } from '@testing-library/react';
-import gql from 'graphql-tag';
-import { ApolloClient, ApolloProvider } from '@apollo/client';
-import { MockSubscriptionLink } from '@apollo/client/testing/core';
-import { useSubscription } from '@apollo/client/react/hooks';
+import { gql } from 'graphql-tag';
+import React from 'react';
+import { ApolloClient } from '@apollo/client';
+import { ApolloProvider, useSubscription } from '@apollo/client/react';
+import { MockSubscriptionLink } from '@apollo/client/testing';
 
 import { Hermes } from '../../../../../src';
 
@@ -20,7 +20,7 @@ describe('mockSubscriptionLink', () => {
     const link = new MockSubscriptionLink();
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Hermes(),
     });
 
     let renderCountA = 0;

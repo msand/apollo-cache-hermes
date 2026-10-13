@@ -1,26 +1,40 @@
-import { addTypenameToDocument, print } from '@apollo/client/utilities';
-import { invariant } from '@apollo/client/utilities/globals';
-import isEqual from '@wry/equality';
-import { TypePolicies } from '@apollo/client';
-import type { FragmentRegistryAPI, PossibleTypesMap } from '@apollo/client/cache';
+import { addTypenameToDocument, canonicalStringify, print } from '@apollo/client/utilities';
+import type {
+  FragmentRegistryAPI,
+  InputObjectsOption,
+  PossibleTypesMap,
+  Scalar,
+  TypePolicies,
+} from '@apollo/client/cache';
 
 import { ApolloTransaction } from '../apollo/Transaction';
 import { CacheSnapshot } from '../CacheSnapshot';
-import { areChildrenDynamic, expandVariables, SelectionCondition } from '../ParsedQueryNode';
+import { areChildrenDynamic, expandVariables, SelectionCondition, setSelectionSetOf } from '../ParsedQueryNode';
 import { JsonObject } from '../primitive';
 import { EntityId, NodeId, OperationInstance, RawOperation } from '../schema';
 import { DocumentNode, isObject } from '../util';
+import type { SelectionSetNode } from '../util';
 import { GraphSnapshot } from '../GraphSnapshot';
 import { FieldStorage } from '../operations/fieldFunctions';
+import type { CheckedSubtrees, OverlaidEntities } from '../operations/read';
 
 import { ConsoleTracer } from './ConsoleTracer';
 import { QueryInfo } from './QueryInfo';
+import { Policies } from './policies';
+import { ScalarConfig } from './scalars';
+import { StoreFieldNames } from './storeFieldNames';
+import type { KeyFieldsContext } from './storeFieldNames';
 import { Tracer } from './Tracer';
 
 export namespace CacheContext {
   export type EntityIdForNode = (node: JsonObject) => EntityId | undefined;
-  export type EntityIdForValue = (value: any) => EntityId | undefined;
-  export type EntityIdMapper = (node: JsonObject) => string | number | undefined;
+  export type EntityIdForValue = (
+    value: any,
+    partialContext?: Partial<KeyFieldsContext>,
+    getStoreObject?: () => JsonObject,
+  ) => EntityId | undefined;
+  /** Like InMemoryCache's dataIdFromObject, which is also passed the KeyFieldsContext. */
+  export type EntityIdMapper = (node: JsonObject, context?: KeyFieldsContext) => string | number | undefined;
   export type EntityTransformer = (node: JsonObject) => void;
   export type OnChangeCallback = (newCacheShapshot: CacheSnapshot, editedNodeIds: Set<String>) => void;
 
@@ -55,7 +69,25 @@ export namespace CacheContext {
   export interface Configuration<TSerialized = GraphSnapshot> {
     typePolicies?: TypePolicies;
 
-    /** Whether __typename should be injected into nodes in queries. */
+    /**
+     * Custom scalar implementations, by scalar type name (like InMemoryCache's
+     * option); fields use them through `scalar` field policies.
+     */
+    scalars?: Record<string, Scalar<any, any>>;
+
+    /**
+     * The scalar types of input object fields, for serializing variables (like
+     * InMemoryCache's option).
+     */
+    inputObjects?: InputObjectsOption;
+
+    /**
+     * Whether __typename should be injected into nodes in queries.
+     *
+     * Defaults to true, matching InMemoryCache in @apollo/client 4, which
+     * always adds __typename (and no longer has this option). Passing false is
+     * still supported for backwards compatibility.
+     */
     addTypename?: boolean;
 
     /** Fragments that operations may spread without defining them (like InMemoryCache's option). */
@@ -158,8 +190,14 @@ export namespace CacheContext {
  * Configuration and shared state used throughout the cache's operation.
  */
 export class CacheContext<TSerialized = GraphSnapshot> {
-  /** Retrieve the EntityId for a given node, if any. */
-  readonly entityIdForValue: CacheContext.EntityIdForValue;
+  /**
+   * Retrieve the EntityId for a given node, if any (see Policies#identify for
+   * the optional arguments).
+   */
+  readonly entityIdForValue: CacheContext.EntityIdForValue = (value, partialContext, getStoreObject) => {
+    if (!isObject(value)) return undefined;
+    return this.policies.identify(value as JsonObject, partialContext, getStoreObject)[0];
+  };
 
   /** Run transformation on changed entity node, if any. */
   readonly entityTransformer: CacheContext.EntityTransformer | undefined;
@@ -188,7 +226,6 @@ export class CacheContext<TSerialized = GraphSnapshot> {
   /** Whether __typename should be injected into nodes in queries. */
   readonly addTypename: boolean;
 
-  /** All currently known & processed GraphQL documents. */
   /** Transformed documents by input; @apollo/client matches documents by identity (e.g. refetchQueries). */
   private readonly _transformedDocuments = new WeakMap<DocumentNode, DocumentNode>();
   /**
@@ -201,35 +238,53 @@ export class CacheContext<TSerialized = GraphSnapshot> {
    */
   private readonly _transformedOutputs = new WeakSet<DocumentNode>();
 
-  private readonly _queryInfoMap = new Map<string, QueryInfo<TSerialized>>();
-  /** All currently known & parsed queries, for identity mapping. */
-  private readonly _operationMap = new Map<string, OperationInstance<TSerialized>[]>();
+  /** The parsed operations of each known document (by its cache key; see parseOperation). */
+  private readonly _documentOperations = new Map<string, DocumentOperations<TSerialized>>();
+
+  /** The parsed operations of each document object (by fragment name), to skip computing its cache key. */
+  private readonly _operationsByDocument = new WeakMap<
+    DocumentNode,
+    Map<string | undefined, DocumentOperations<TSerialized>>
+  >();
 
   public readonly dirty = new Map<NodeId, Set<string>>();
 
-  public readonly typePolicies: TypePolicies | undefined;
+  /** The type policies and possibleTypes (like InMemoryCache's policies). */
+  public readonly policies: Policies;
+
+  /** Custom scalar support. */
+  public readonly scalars: ScalarConfig;
 
   public readonly fragments: FragmentRegistryAPI | undefined;
 
-  /** The (transitive, once matched) supertypes of each type in possibleTypes. */
-  private readonly _supertypeMap = new Map<string, Set<string>>();
+  /** Called when type policies or possibleTypes are added to the cache. */
+  private readonly _policiesListeners = new Set<() => void>();
 
-  /** possibleTypes subtypes that are regular expressions, by their source. */
-  private readonly _fuzzySubtypes = new Map<string, RegExp>();
+  /** What reads found checking entity data against static selections (see CheckedSubtree). */
+  public checkedSubtrees: CheckedSubtrees = new WeakMap();
 
-  /** Whether possibleTypes has (fuzzy) regular expression subtypes. */
-  get hasFuzzySubtypes(): boolean {
-    return this._fuzzySubtypes.size > 0;
-  }
+  /** What reads made of entities' data, with the values of read functions overlaid (see OverlaidEntity). */
+  public overlaidEntities: OverlaidEntities = new WeakMap();
 
   /** The options.storage objects of read and merge functions. */
   public readonly fieldStorage = new FieldStorage();
+
+  /** The storage identities of fields (per their keyArgs policies). */
+  public readonly storeFieldNames: StoreFieldNames;
 
   constructor(config: CacheContext.Configuration<TSerialized> = {}) {
     // Infer dev mode from NODE_ENV, by convention.
     const nodeEnv = typeof process !== 'undefined' ? process.env.NODE_ENV : 'development';
 
-    this.entityIdForValue = _makeEntityIdMapper(config.entityIdForNode ?? config.dataIdFromObject, config.typePolicies);
+    this.policies = new Policies(
+      {
+        dataIdFromObject: config.entityIdForNode ?? config.dataIdFromObject,
+        possibleTypes: config.possibleTypes,
+        typePolicies: config.typePolicies,
+        scalars: !!config.scalars,
+      },
+      () => this._policiesListeners.forEach(listener => listener()),
+    );
     this.entityTransformer = config.entityTransformer;
     this.freezeSnapshots = 'freeze' in config ? !!config.freeze : nodeEnv !== 'production';
 
@@ -241,30 +296,36 @@ export class CacheContext<TSerialized = GraphSnapshot> {
     this.tracer = config.tracer || new ConsoleTracer(!!config.verbose, config.logger);
 
     this.addTypename = config.addTypename ?? true;
-    this.typePolicies = config.typePolicies;
+    this.scalars = new ScalarConfig(config.scalars, config.inputObjects, this.policies);
+    this.storeFieldNames = new StoreFieldNames((typename, fieldName) =>
+      this.policies.getKeyArgsFunction(typename, fieldName),
+    );
     this.fragments = config.fragments;
-    if (config.possibleTypes) {
-      this.addPossibleTypes(config.possibleTypes);
-    }
+    // Policies (e.g. keyFields and possibleTypes) decide what data satisfies a selection.
+    this.onPoliciesChange(() => {
+      this.checkedSubtrees = new WeakMap();
+      this._conditionMatches = new WeakMap();
+      this.forgetOverlaidEntities();
+    });
   }
 
   /**
-   * Registers subtypes of abstract types (like InMemoryCache's
-   * policies.addPossibleTypes).
+   * Forgets what reads made of entities with read functions' values, when
+   * those may have changed without the data they read changing (e.g. when
+   * reactive variables change).
    */
-  addPossibleTypes(possibleTypes: PossibleTypesMap) {
-    for (const supertype of Object.keys(possibleTypes)) {
-      // Make sure all supertypes have an entry, so that fragmentMatches can
-      // return false immediately for unknown supertypes.
-      this._getSupertypeSet(supertype);
-      for (const subtype of possibleTypes[supertype]) {
-        this._getSupertypeSet(subtype).add(supertype);
-        const match = subtype.match(TypeOrFieldNameRegExp);
-        if (!match || match[0] !== subtype) {
-          this._fuzzySubtypes.set(subtype, new RegExp(subtype));
-        }
-      }
-    }
+  forgetOverlaidEntities(): void {
+    this.overlaidEntities = new WeakMap();
+  }
+
+  /** Calls `listener` whenever type policies or possibleTypes are added to the cache. */
+  onPoliciesChange(listener: () => void): void {
+    this._policiesListeners.add(listener);
+  }
+
+  /** The __typename of the root object `id` (e.g. ROOT_QUERY's is Query, unless renamed by queryType). */
+  rootTypename(id: NodeId): string | undefined {
+    return this.policies.rootTypename(id);
   }
 
   /**
@@ -281,11 +342,25 @@ export class CacheContext<TSerialized = GraphSnapshot> {
     hasValue?: boolean | (() => boolean),
   ) {
     if (!conditions || typeof typename !== 'string') return true;
-    return conditions.some(
+    // (Without fuzzy subtypes, which are inferred from values, the result only
+    // depends on the conditions and the typename.)
+    const memoize = !this.policies.hasFuzzySubtypes;
+    let byTypename = memoize ? this._conditionMatches.get(conditions) : undefined;
+    const known = byTypename?.get(typename);
+    if (known !== undefined) return known;
+    const matches = conditions.some(
       ({ typeConditions }) =>
         !typeConditions || typeConditions.every(supertype => this.fragmentMatches(supertype, typename, hasValue)),
     );
+    if (memoize) {
+      if (!byTypename) this._conditionMatches.set(conditions, (byTypename = new Map()));
+      byTypename.set(typename, matches);
+    }
+    return matches;
   }
+
+  /** What conditionsMatch found, by conditions and typename (forgotten when policies change). */
+  private _conditionMatches = new WeakMap<readonly SelectionCondition[], Map<string, boolean>>();
 
   /**
    * Whether a fragment with the type condition `supertype` applies to objects
@@ -297,59 +372,7 @@ export class CacheContext<TSerialized = GraphSnapshot> {
    * matches are remembered.
    */
   fragmentMatches(supertype: string, typename: string, checkFuzzySubtypes?: boolean | (() => boolean)): boolean {
-    // Common case: the type condition and __typename are the same.
-    if (typename === supertype) return true;
-    if (!this._supertypeMap.has(supertype)) return false;
-
-    const typenameSupertypeSet = this._getSupertypeSet(typename);
-    const workQueue = [typenameSupertypeSet];
-    const maybeEnqueue = (subtype: string) => {
-      const supertypeSet = this._supertypeMap.get(subtype);
-      if (supertypeSet && supertypeSet.size && workQueue.indexOf(supertypeSet) < 0) {
-        workQueue.push(supertypeSet);
-      }
-    };
-
-    let needToCheckFuzzySubtypes = !!checkFuzzySubtypes && this._fuzzySubtypes.size > 0;
-    let checkingFuzzySubtypes = false;
-    // Note that workQueue can grow while we're iterating over it.
-    for (let i = 0; i < workQueue.length; ++i) {
-      const supertypeSet = workQueue[i];
-      if (supertypeSet.has(supertype)) {
-        // Like InMemoryCache, report subtypes inferred from fuzzy possibleTypes.
-        if (checkingFuzzySubtypes) invariant.warn('Inferring subtype %s of supertype %s', typename, supertype);
-        // Record positive results for faster future lookup.
-        typenameSupertypeSet.add(supertype);
-        return true;
-      }
-      supertypeSet.forEach(maybeEnqueue);
-
-      // Check fuzzy subtypes only after exhausting all non-fuzzy subtypes.
-      if (
-        needToCheckFuzzySubtypes &&
-        i === workQueue.length - 1 &&
-        (typeof checkFuzzySubtypes !== 'function' || checkFuzzySubtypes())
-      ) {
-        needToCheckFuzzySubtypes = false;
-        checkingFuzzySubtypes = true;
-        this._fuzzySubtypes.forEach((regExp, fuzzyString) => {
-          const match = typename.match(regExp);
-          if (match && match[0] === typename) {
-            maybeEnqueue(fuzzyString);
-          }
-        });
-      }
-    }
-
-    return false;
-  }
-
-  private _getSupertypeSet(subtype: string) {
-    let supertypeSet = this._supertypeMap.get(subtype);
-    if (!supertypeSet) {
-      this._supertypeMap.set(subtype, (supertypeSet = new Set()));
-    }
-    return supertypeSet;
+    return this.policies.fragmentMatches(supertype, typename, checkFuzzySubtypes);
   }
 
   /**
@@ -376,7 +399,9 @@ export class CacheContext<TSerialized = GraphSnapshot> {
    * Returns a memoized & parsed operation.
    *
    * To aid in various cache lookups, the result is memoized by all of its
-   * values, and can be used as an identity for a specific operation.
+   * values, and can be used as an identity for a specific operation. (The
+   * operations of a document are kept like an LRU cache: those not used
+   * recently are eventually dropped, and parsed again when next used.)
    */
   parseOperation(raw: RawOperation): OperationInstance<TSerialized> {
     // It appears like Apollo or someone upstream is cloning or otherwise
@@ -385,30 +410,36 @@ export class CacheContext<TSerialized = GraphSnapshot> {
     // ApolloClient passes documents it already transformed with transformDocument.
     // Their __typename fields are part of the query as the client sees it.
     const pretransformed = this._transformedOutputs.has(raw.document);
-    const cacheKey = `${operationCacheKey(raw.document, raw.fragmentName)}${pretransformed ? '❖transformed' : ''}`;
-    let operationInstances = this._operationMap.get(cacheKey);
-    if (!operationInstances) {
-      operationInstances = [];
-      this._operationMap.set(cacheKey, operationInstances);
+    let byFragment = this._operationsByDocument.get(raw.document);
+    let operations = byFragment?.get(raw.fragmentName);
+    if (!operations) {
+      const cacheKey = `${operationCacheKey(raw.document, raw.fragmentName)}${pretransformed ? '❖transformed' : ''}`;
+      operations = this._documentOperations.get(cacheKey);
+      if (!operations) {
+        operations = new DocumentOperations();
+        this._documentOperations.set(cacheKey, operations);
+      }
+      if (!byFragment) this._operationsByDocument.set(raw.document, (byFragment = new Map()));
+      byFragment.set(raw.fragmentName, operations);
     }
 
+    // Like InMemoryCache, custom scalar variables are serialized.
+    const { variables, key: variablesKey } = operations.variablesOf(raw.variables, () =>
+      this.scalars.serializeVariables(raw.document, raw.variables),
+    );
     // Do we already have a copy of this guy?
-    for (const instance of operationInstances) {
-      if (instance.rootId !== raw.rootId) continue;
-      if (!isEqual(instance.variables, raw.variables)) continue;
-      return instance;
-    }
+    const key = `${raw.rootId}\u0000${variablesKey}`;
+    const existing = operations.get(key);
+    if (existing) return existing;
 
     const updateRaw: RawOperation = {
       ...raw,
+      variables,
       document: this.transformDocument(raw.document),
     };
 
-    const rootHasReadPolicy = Object.values(this.typePolicies ?? {}).some(
-      policy => Object.keys(policy?.fields ?? {}).length > 0,
-    );
-
-    const info = this._queryInfo(cacheKey, updateRaw, pretransformed);
+    operations.info ??= new QueryInfo(this, updateRaw, pretransformed);
+    const { info } = operations;
     const fullVariables = { ...info.variableDefaults, ...updateRaw.variables } as JsonObject;
     // Like InMemoryCache, treat variables without a value as undefined (e.g. @export variables before they are resolved).
     for (const name of info.variables) {
@@ -416,92 +447,83 @@ export class CacheContext<TSerialized = GraphSnapshot> {
     }
     const operation = {
       info,
+      document: raw.document,
       rootId: updateRaw.rootId,
-      parsedQuery: expandVariables(info.parsed, fullVariables),
-      isStatic: !areChildrenDynamic(info.parsed) && !rootHasReadPolicy,
+      parsedQuery: withSelectionSet(expandVariables(info.parsed, fullVariables), info.operation.selectionSet),
+      // (Field policies, which may be added later, make reads dynamic too.)
+      isStatic: !areChildrenDynamic(info.parsed),
       variables: updateRaw.variables,
       propMap: info.propMap,
     };
-    operationInstances.push(operation);
+    operations.set(key, operation);
 
     return operation;
-  }
-
-  /**
-   * Retrieves a memoized QueryInfo for a given GraphQL document.
-   */
-  private _queryInfo(cacheKey: string, raw: RawOperation, pretransformed: boolean): QueryInfo<TSerialized> {
-    if (!this._queryInfoMap.has(cacheKey)) {
-      this._queryInfoMap.set(cacheKey, new QueryInfo(this, raw, pretransformed));
-    }
-    return this._queryInfoMap.get(cacheKey)!;
   }
 }
 
 /**
- * Wrap entityIdForNode so that it coerces all values to strings.
+ * The parsed operations of a document (its QueryInfo, and the operation
+ * instances for the root ids and variables it was read or written with).
+ *
+ * Instances are kept in two generations, like an LRU cache: when the current
+ * generation is full, it becomes the previous one (dropping the one before),
+ * and instances still in use move back to the current generation.
  */
-export function _makeEntityIdMapper(
-  idForNode: CacheContext.EntityIdMapper | undefined,
-  typePolicies: TypePolicies | undefined,
-): CacheContext.EntityIdForValue {
-  const mapper =
-    idForNode ||
-    (!typePolicies
-      ? defaultEntityIdMapper
-      : (node: JsonObject): string | number | undefined => {
-          if (!node) {
-            return undefined;
-          }
-          const { __typename } = node;
-          if (typeof __typename === 'string' && __typename in typePolicies) {
-            const keyFields = typePolicies[__typename].keyFields;
-            if (Array.isArray(keyFields)) {
-              const keys: Record<string, unknown> = {};
-              for (const key of keyFields) {
-                const value = node[key];
-                if (value === undefined) {
-                  return undefined;
-                }
-                keys[key] = value;
-              }
-              return `${__typename}:${JSON.stringify(keys)}`;
-            }
-          }
-          const { id } = node;
-          const idType = typeof id;
-          if (idType !== 'string' && idType !== 'number') {
-            return undefined;
-          }
-          // Like InMemoryCache, objects without a __typename are not normalized.
-          return __typename ? `${__typename}:${id}` : undefined;
-        });
-  return function entityIdForNode(node: JsonObject) {
-    if (!isObject(node)) return undefined;
+class DocumentOperations<TSerialized> {
+  /** The number of instances in a generation. */
+  static readonly generationSize = 1000;
 
-    // We don't trust upstream implementations.
-    const entityId = mapper(node);
-    if (typeof entityId === 'string') return entityId;
-    if (typeof entityId === 'number') return String(entityId);
-    return undefined;
-  };
+  info: QueryInfo<TSerialized> | undefined;
+
+  private _current = new Map<string, OperationInstance<TSerialized>>();
+  private _previous = new Map<string, OperationInstance<TSerialized>>();
+
+  /**
+   * The (serialized) variables objects of the operations, and their keys, by
+   * the variables objects passed in: like Apollo Client, Hermes treats
+   * variables objects as immutable.
+   */
+  private readonly _variables = new WeakMap<JsonObject, { variables: JsonObject | undefined; key: string }>();
+
+  get(key: string): OperationInstance<TSerialized> | undefined {
+    const current = this._current.get(key);
+    if (current) return current;
+    const previous = this._previous.get(key);
+    if (previous) {
+      this._previous.delete(key);
+      this.set(key, previous);
+    }
+    return previous;
+  }
+
+  set(key: string, operation: OperationInstance<TSerialized>) {
+    if (this._current.size >= DocumentOperations.generationSize) {
+      this._previous = this._current;
+      this._current = new Map();
+    }
+    this._current.set(key, operation);
+  }
+
+  /** The serialized variables of an operation (see `serialize`), and a key for them. */
+  variablesOf(
+    raw: JsonObject | undefined,
+    serialize: () => JsonObject | undefined,
+  ): { variables: JsonObject | undefined; key: string } {
+    if (!raw) return { variables: raw, key: '' };
+    let entry = this._variables.get(raw);
+    if (!entry) {
+      const variables = serialize();
+      entry = { variables, key: canonicalStringify(variables) };
+      this._variables.set(raw, entry);
+    }
+    return entry;
+  }
 }
 
-export function defaultEntityIdMapper({ __typename, _id, id = _id }: { __typename?: any; _id?: any; id?: any }) {
-  if (id == null) {
-    return undefined;
-  }
-  const idType = typeof id;
-  const numberOrString = idType === 'number' || idType === 'string';
-  // Like InMemoryCache, objects without a __typename are not normalized.
-  if (typeof __typename !== 'string') {
-    return undefined;
-  }
-  return `${__typename}:${numberOrString ? id : JSON.stringify(id)}`;
+function withSelectionSet<T extends object>(parsed: T, selectionSet: SelectionSetNode): T {
+  setSelectionSetOf(parsed, selectionSet);
+  return parsed;
 }
-
-// Matches valid GraphQL type names (like InMemoryCache's).
-const TypeOrFieldNameRegExp = /^[_a-z][_0-9a-z]*/i;
 
 export function operationCacheKey(document: DocumentNode, fragmentName?: string) {
   if (fragmentName) {
@@ -510,10 +532,11 @@ export function operationCacheKey(document: DocumentNode, fragmentName?: string)
   return documentSource(document);
 }
 
-// Documents built without a parser (e.g. by hand) have no location.
+// Documents are keyed by their printed form, not by loc.source.body: documents built by visit()
+// (document transforms, directive removal) keep the original document's loc, so its source body
+// would make a transformed document share the original's parsed operation.
 const printedDocuments = new WeakMap<DocumentNode, string>();
 function documentSource(document: DocumentNode): string {
-  if (document.loc) return document.loc.source.body;
   let printed = printedDocuments.get(document);
   if (printed === undefined) printedDocuments.set(document, (printed = print(document)));
   return printed;

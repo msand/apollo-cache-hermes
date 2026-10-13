@@ -1,0 +1,39 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`real-life kitchen sink use case with prerender and \`useSuspenseQuery\` 1`] = `"<!DOCTYPE html><html><head><meta charSet=\\"utf-8\\"/><meta name=\\"viewport\\" content=\\"width=device-width, initial-scale=1\\"/><link rel=\\"preload\\" as=\\"script\\" fetchPriority=\\"low\\" href=\\"/main.js\\"/><title>My app</title><link rel=\\"stylesheet\\" href=\\"/styles.css\\"/></head><body><!--$--><div><p>Hello <!-- -->world<!-- -->!</p><!--$--><p>My name is <!-- -->Apollo<!-- -->!</p><!--$--><p>Current time is <!-- -->2025-03-26T14:40:53.118Z<!-- -->!</p><!--/$--><!--/$--></div><!--/$--><script id=\\"_R_\\">window.__APOLLO_CLIENT_INIT__ = {\\"ROOT_QUERY\\":{\\"type\\":0,\\"data\\":{\\"hello\\":\\"world\\",\\"whoami\\":{\\"name\\":\\"Apollo\\"},\\"currentTime\\":\\"2025-03-26T14:40:53.118Z\\"}}}</script><script src=\\"/main.js\\" async=\\"\\"></script></body></html>"`;
+
+exports[`real-life kitchen sink use case with prerender and \`useSuspenseQuery\` 2`] = `
+Object {
+  "ROOT_QUERY": Object {
+    "data": Object {
+      "currentTime": "2025-03-26T14:40:53.118Z",
+      "hello": "world",
+      "whoami": Object {
+        "name": "Apollo",
+      },
+    },
+    "type": 0,
+  },
+}
+`;
+
+exports[`real-life kitchen sink use case with prerenderToNodeStream and \`useSuspenseQuery\` 1`] = `"<!DOCTYPE html><html><head><meta charSet=\\"utf-8\\"/><meta name=\\"viewport\\" content=\\"width=device-width, initial-scale=1\\"/><link rel=\\"preload\\" as=\\"script\\" fetchPriority=\\"low\\" href=\\"/main.js\\"/><title>My app</title><link rel=\\"stylesheet\\" href=\\"/styles.css\\"/></head><body><!--$--><div><p>Hello <!-- -->world<!-- -->!</p><!--$--><p>My name is <!-- -->Apollo<!-- -->!</p><!--$--><p>Current time is <!-- -->2025-03-26T14:40:53.118Z<!-- -->!</p><!--/$--><!--/$--></div><!--/$--><script id=\\"_R_\\">window.__APOLLO_CLIENT_INIT__ = {\\"ROOT_QUERY\\":{\\"type\\":0,\\"data\\":{\\"hello\\":\\"world\\",\\"whoami\\":{\\"name\\":\\"Apollo\\"},\\"currentTime\\":\\"2025-03-26T14:40:53.118Z\\"}}}</script><script src=\\"/main.js\\" async=\\"\\"></script></body></html>"`;
+
+exports[`real-life kitchen sink use case with prerenderToNodeStream and \`useSuspenseQuery\` 2`] = `
+Object {
+  "ROOT_QUERY": Object {
+    "data": Object {
+      "currentTime": "2025-03-26T14:40:53.118Z",
+      "hello": "world",
+      "whoami": Object {
+        "name": "Apollo",
+      },
+    },
+    "type": 0,
+  },
+}
+`;
+
+exports[`renderToStaticMarkup: AbortSignal times out during render - stops rerendering, returns partial result 1`] = `"<div><p>Hello world!</p><p>My name is Apollo!</p><div>loading...</div></div>"`;
+
+exports[`renderToString: AbortSignal times out during render - stops rerendering, returns partial result 1`] = `"<div><p>Hello <!-- -->world<!-- -->!</p><p>My name is <!-- -->Apollo<!-- -->!</p><div>loading...</div></div>"`;

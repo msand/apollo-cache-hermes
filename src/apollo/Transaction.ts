@@ -1,25 +1,46 @@
-import { Cache, Transaction } from '@apollo/client';
+import type { Cache, Transaction } from '@apollo/client/cache';
 
 import { CacheTransaction } from '../CacheTransaction';
+import { fieldNameFromStoreName, isStoreFieldNameKey } from '../context/storeFieldNames';
+import { storeKeyOfNode } from '../operations/SnapshotEditor';
 import { PathPart, JsonValue } from '../primitive';
 import { NodeId } from '../schema';
 import { DocumentNode, verboseTypeof, deepGet, iterParameterized } from '../util';
 
 import { ApolloQueryable } from './Queryable';
 
-function getOriginalFieldArguments(id: NodeId): { [argName: string]: string } | undefined {
-  // Split `${containerId}❖${JSON.stringify(path)}❖${JSON.stringify(args)}`
-  const idComponents = id.split('❖');
-  if (idComponents.length < 3) {
+/**
+ * The arguments of the field whose parameterized value node `id` is at `path`
+ * within the node `containerId`: those its id was made from (see
+ * nodeIdForStoreKey). For a field stored per its keyArgs (or @connection
+ * directive), these are the arguments in its store field name (e.g. `type`
+ * of `feed:{"type":"news"}`), if it has them as JSON.
+ */
+function getOriginalFieldArguments(
+  containerId: NodeId,
+  path: PathPart[],
+  id: NodeId,
+): { [argName: string]: string } | undefined {
+  const storeKey = storeKeyOfNode(containerId, path, id);
+  if (storeKey === undefined) return undefined;
+  let json = storeKey;
+  if (isStoreFieldNameKey(storeKey)) {
+    const fieldName = fieldNameFromStoreName(storeKey);
+    if (storeKey.charAt(fieldName.length) !== ':') return undefined;
+    json = storeKey.slice(fieldName.length + 1);
+  }
+  try {
+    const args = JSON.parse(json);
+    return args !== null && typeof args === 'object' && !Array.isArray(args) ? args : undefined;
+  } catch {
     return undefined;
   }
-  return JSON.parse(idComponents[2]);
 }
 
 /**
  * Apollo-specific transaction interface.
  */
-export class ApolloTransaction<TSerialized> extends ApolloQueryable<TSerialized> {
+export class ApolloTransaction<TSerialized> extends ApolloQueryable {
   constructor(
     /** The underlying transaction. */
     protected _queryable: CacheTransaction<TSerialized>,
@@ -35,23 +56,23 @@ export class ApolloTransaction<TSerialized> extends ApolloQueryable<TSerialized>
     throw new Error(`removeOptimistic() is not allowed within a transaction`);
   }
 
-  performTransaction(transaction: Transaction<TSerialized>): void {
+  performTransaction(transaction: Transaction): void {
     transaction(this);
   }
 
-  recordOptimisticTransaction(_transaction: Transaction<TSerialized>, _id: string): void {
+  recordOptimisticTransaction(_transaction: Transaction, _id: string): void {
     throw new Error(`recordOptimisticTransaction() is not allowed within a transaction`);
   }
 
-  watch(_query: Cache.WatchOptions): () => void {
+  watch(_query: Cache.WatchOptions<any, any>): () => void {
     throw new Error(`watch() is not allowed within a transaction`);
   }
 
-  restore(): any {
+  restore(): this {
     throw new Error(`restore() is not allowed within a transaction`);
   }
 
-  extract(): any {
+  extract(): never {
     throw new Error(`extract() is not allowed within a transaction`);
   }
 
@@ -88,7 +109,7 @@ export class ApolloTransaction<TSerialized> extends ApolloQueryable<TSerialized>
 
     for (const { id: outboundId, path } of iterParameterized(currentContainerNode.parameterized)) {
       if (pathToParameterizedField.every((part, i) => part === path[i])) {
-        const fieldArguments = getOriginalFieldArguments(outboundId);
+        const fieldArguments = getOriginalFieldArguments(containerId, path, outboundId);
         if (fieldArguments) {
           let cacheResult: any;
           try {

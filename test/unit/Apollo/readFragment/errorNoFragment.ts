@@ -38,6 +38,6 @@ describe(`readFragment when no fragment is provided`, () => {
           }
         `),
       });
-    }).to.throw(/An error occurred! For more details, see the full error text at /i);
+    }).to.throw(/No operations are allowed when using a fragment as a query/);
   });
 });

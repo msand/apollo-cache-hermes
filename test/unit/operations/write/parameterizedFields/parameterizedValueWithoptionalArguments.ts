@@ -28,7 +28,9 @@ describe(`operations.write`, () => {
         { one: 1 },
       );
 
-      parameterizedId = nodeIdForParameterizedValue(QueryRootId, ['foo'], { a: 1, b: null });
+      // Like InMemoryCache, optional variables that aren't passed are undefined
+      // (and left out of the field's store key), not null.
+      parameterizedId = nodeIdForParameterizedValue(QueryRootId, ['foo'], { a: 1 });
 
       const result = write(context, empty, parameterizedQuery, { foo: 'hello' });
       snapshot = result.snapshot;

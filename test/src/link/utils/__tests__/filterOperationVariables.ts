@@ -1,5 +1,5 @@
-import gql from 'graphql-tag';
-import { filterOperationVariables } from '@apollo/client/link/utils/filterOperationVariables';
+import { gql } from 'graphql-tag';
+import { filterOperationVariables } from '@apollo/client/link/utils';
 
 const sampleQueryWithVariables = gql`
   query MyQuery($a: Int!) {

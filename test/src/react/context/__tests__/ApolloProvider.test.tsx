@@ -1,26 +1,22 @@
-import { loadErrorMessages } from '@apollo/client/dev';
-import * as React from 'react';
 import { render, screen } from '@testing-library/react';
-import { ApolloClient, ApolloLink, ApolloProvider } from '@apollo/client';
-import { useContext } from 'react';
-import { ApolloContextValue, getApolloContext } from '@apollo/client/react/context/ApolloContext';
+import React, { useContext } from 'react';
+import { EMPTY } from 'rxjs';
+import { ApolloClient } from '@apollo/client';
+import { ApolloLink } from '@apollo/client/link';
+import type { ApolloContextValue } from '@apollo/client/react';
+import { ApolloProvider, getApolloContext } from '@apollo/client/react';
 
 import { Hermes } from '../../../../../src';
-
-// These tests assert the @apollo/client error text rather than its production placeholder.
-loadErrorMessages();
-
-type ApolloProviderProps = Parameters<typeof ApolloProvider>[0];
 
 describe('<ApolloProvider /> Component', () => {
   const client = new ApolloClient({
     cache: new Hermes(),
-    link: new ApolloLink((o, f) => (f ? f(o) : null)),
+    link: new ApolloLink((o, f) => (f ? f(o) : EMPTY)),
   });
 
   const anotherClient = new ApolloClient({
     cache: new Hermes(),
-    link: new ApolloLink((o, f) => (f ? f(o) : null)),
+    link: new ApolloLink((o, f) => (f ? f(o) : EMPTY)),
   });
 
   it('should render children components', () => {
@@ -35,7 +31,7 @@ describe('<ApolloProvider /> Component', () => {
 
   it('should support the 2.0', () => {
     render(
-      <ApolloProvider client={{} as ApolloClient<any>}>
+      <ApolloProvider client={{} as ApolloClient}>
         <div className='unique'>Test</div>
       </ApolloProvider>,
     );
@@ -104,7 +100,7 @@ describe('<ApolloProvider /> Component', () => {
 
     const newClient = new ApolloClient({
       cache: new Hermes(),
-      link: new ApolloLink((o, f) => (f ? f(o) : null)),
+      link: new ApolloLink((o, f) => (f ? f(o) : EMPTY)),
     });
     clientToCheck = newClient;
     rerender(
@@ -114,7 +110,7 @@ describe('<ApolloProvider /> Component', () => {
     );
   });
 
-  describe.each<[string, Omit<ApolloProviderProps, 'children'>, Omit<ApolloProviderProps, 'children'>]>([
+  describe.each<[string, Omit<ApolloProvider.Props, 'children'>, Omit<ApolloProvider.Props, 'children'>]>([
     ['client', { client }, { client: anotherClient }],
   ])('context value stability, %s prop', (prop, value, childValue) => {
     it(`should not recreate the context value if the ${prop} prop didn't change`, () => {

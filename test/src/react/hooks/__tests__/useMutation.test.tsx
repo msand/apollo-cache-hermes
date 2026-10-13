@@ -1,36 +1,31 @@
-import * as React from 'react';
-import { useEffect } from 'react';
-import { GraphQLError } from 'graphql';
-import gql from 'graphql-tag';
-import { act, render, waitFor, screen, renderHook } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import fetchMock from 'fetch-mock';
-import { ApolloClient, ApolloProvider, ApolloLink, ObservableQuery } from '@apollo/client';
-import { BatchHttpLink } from '@apollo/client/link/batch-http';
+import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
 import {
-  ApolloError,
-  ApolloQueryResult,
-  Cache,
-  NetworkStatus,
-  Observable,
-  TypedDocumentNode,
-} from '@apollo/client/core';
-import { MockedProvider, MockSubscriptionLink, mockSingleLink, MockedResponse, MockLink } from '@apollo/client/testing';
-import { useQuery } from '@apollo/client/react/hooks/useQuery';
-import { useMutation } from '@apollo/client/react/hooks/useMutation';
-import { FetchResult } from '@apollo/client/link/core';
-import { spyOnConsole } from '@apollo/client/testing/internal';
-import { expectTypeOf } from 'expect-type';
-import { Masked } from '@apollo/client/masking';
-import {
-  disableActEnvironment,
   createRenderStream,
+  disableActEnvironment,
   renderHookToSnapshotStream,
 } from '@testing-library/react-render-stream';
-import { MutationTuple, QueryResult } from '@apollo/client/react/types/types';
-import { invariant } from '@apollo/client/utilities/globals';
+import { userEvent } from '@testing-library/user-event';
+import fetchMock from 'fetch-mock';
+import { GraphQLError } from 'graphql';
+import { gql } from 'graphql-tag';
+import React, { useEffect } from 'react';
+import { Observable } from 'rxjs';
+import type { Cache, ObservableQuery, TypedDocumentNode } from '@apollo/client';
+import { ApolloClient, ApolloLink, CombinedGraphQLErrors, NetworkStatus } from '@apollo/client';
+import { BatchHttpLink } from '@apollo/client/link/batch-http';
+import { ApolloProvider, useMutation, useQuery } from '@apollo/client/react';
+import { MockLink } from '@apollo/client/testing';
+import { MockedProvider } from '@apollo/client/testing/react';
+import { invariant } from '@apollo/client/utilities/invariant';
+
+import { spyOnConsole, wait } from '@apollo/client/testing/internal';
 
 import { Hermes } from '../../../../../src';
+import { toNormalizedCacheObject } from '../../../../helpers/serialization';
+
+const IS_REACT_17 = React.version.startsWith('17');
+const IS_REACT_18 = React.version.startsWith('18');
+const IS_REACT_19 = React.version.startsWith('19');
 
 describe('useMutation Hook', () => {
   interface Todo {
@@ -60,166 +55,306 @@ describe('useMutation Hook', () => {
 
   const CREATE_TODO_ERROR = 'Failed to create item';
 
-  describe('General use', () => {
-    it('should handle a simple mutation properly', async () => {
-      const variables = {
-        description: 'Get milk!',
-      };
+  it('should handle a simple mutation properly', async () => {
+    const variables = {
+      description: 'Get milk!',
+    };
 
-      const mocks = [
-        {
-          request: {
-            query: CREATE_TODO_MUTATION,
-            variables,
-          },
-          result: { data: CREATE_TODO_RESULT },
+    const mocks = [
+      {
+        request: {
+          query: CREATE_TODO_MUTATION,
+          variables,
         },
-      ];
+        result: { data: CREATE_TODO_RESULT },
+        delay: 20,
+      },
+    ];
 
-      const { result } = renderHook(() => useMutation(CREATE_TODO_MUTATION), {
+    using _disabledAct = disableActEnvironment();
+    const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+      () => useMutation(CREATE_TODO_MUTATION),
+      {
         wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+      },
+    );
+
+    {
+      const [, result] = await takeSnapshot();
+
+      expect(result).toStrictEqualTyped({
+        data: undefined,
+        error: undefined,
+        loading: false,
+        called: false,
       });
+    }
 
-      expect(result.current[1].loading).toBe(false);
-      expect(result.current[1].data).toBe(undefined);
-      const createTodo = result.current[0];
-      act(() => void createTodo({ variables }));
-      expect(result.current[1].loading).toBe(true);
-      expect(result.current[1].data).toBe(undefined);
+    const [createTodo] = getCurrentSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current[1].loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current[1].data).toEqual(CREATE_TODO_RESULT);
+    await expect(createTodo({ variables })).resolves.toStrictEqualTyped({
+      data: CREATE_TODO_RESULT,
     });
 
-    it('should be able to call mutations as an effect', async () => {
-      const variables = {
-        description: 'Get milk!',
-      };
+    {
+      const [, result] = await takeSnapshot();
 
-      const mocks = [
-        {
-          request: {
-            query: CREATE_TODO_MUTATION,
-            variables,
-          },
-          result: { data: CREATE_TODO_RESULT },
-        },
-      ];
-
-      const useCreateTodo = () => {
-        const [createTodo, { loading, data }] = useMutation(CREATE_TODO_MUTATION);
-        useEffect(() => {
-          void createTodo({ variables });
-        }, [variables]);
-
-        return { loading, data };
-      };
-
-      const { result } = renderHook(() => useCreateTodo(), {
-        wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+      expect(result).toStrictEqualTyped({
+        data: undefined,
+        // TODO: Remove error field when there is no error
+        error: undefined,
+        loading: true,
+        called: true,
       });
+    }
 
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
+    {
+      const [, result] = await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
+      expect(result).toStrictEqualTyped({
+        data: CREATE_TODO_RESULT,
+        error: undefined,
+        loading: false,
+        called: true,
+      });
+    }
+
+    await expect(takeSnapshot).not.toRerender();
+  });
+
+  it('should be able to call mutations as an effect', async () => {
+    const variables = {
+      description: 'Get milk!',
+    };
+
+    const mocks = [
+      {
+        request: {
+          query: CREATE_TODO_MUTATION,
+          variables,
         },
-        { interval: 1 },
-      );
-      expect(result.current.data).toEqual(CREATE_TODO_RESULT);
+        result: { data: CREATE_TODO_RESULT },
+        delay: 20,
+      },
+    ];
+
+    const useCreateTodo = () => {
+      const [createTodo, { loading, data }] = useMutation(CREATE_TODO_MUTATION);
+      useEffect(() => {
+        void createTodo({ variables });
+      }, [variables]);
+
+      return { loading, data };
+    };
+
+    using _disabledAct = disableActEnvironment();
+    const { takeSnapshot } = await renderHookToSnapshotStream(() => useCreateTodo(), {
+      wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
     });
 
-    it('should ensure the mutation callback function has a stable identity no matter what', async () => {
-      const variables1 = {
-        description: 'Get milk',
-      };
+    await expect(takeSnapshot()).resolves.toStrictEqualTyped({
+      data: undefined,
+      loading: false,
+    });
 
-      const data1 = {
-        createTodo: {
-          id: 1,
-          description: 'Get milk!',
-          priority: 'High',
-          __typename: 'Todo',
-        },
-      };
+    await expect(takeSnapshot()).resolves.toStrictEqualTyped({
+      data: undefined,
+      loading: true,
+    });
 
-      const variables2 = {
+    await expect(takeSnapshot()).resolves.toStrictEqualTyped({
+      data: CREATE_TODO_RESULT,
+      loading: false,
+    });
+
+    await expect(takeSnapshot).not.toRerender();
+  });
+
+  it('should ensure the mutation callback function has a stable identity no matter what', async () => {
+    const variables1 = {
+      description: 'Get milk',
+    };
+
+    const data1 = {
+      createTodo: {
+        id: 1,
+        description: 'Get milk!',
+        priority: 'High',
+        __typename: 'Todo',
+      },
+    };
+
+    const variables2 = {
+      description: 'Write blog post',
+    };
+
+    const data2 = {
+      createTodo: {
+        id: 1,
         description: 'Write blog post',
-      };
+        priority: 'High',
+        __typename: 'Todo',
+      },
+    };
 
-      const data2 = {
-        createTodo: {
-          id: 1,
-          description: 'Write blog post',
-          priority: 'High',
-          __typename: 'Todo',
+    const mocks = [
+      {
+        request: {
+          query: CREATE_TODO_MUTATION,
+          variables: variables1,
         },
-      };
+        result: { data: data1 },
+        delay: 20,
+      },
+      {
+        request: {
+          query: CREATE_TODO_MUTATION,
+          variables: variables2,
+        },
+        result: { data: data2 },
+        delay: 20,
+      },
+    ];
 
-      const mocks = [
-        {
-          request: {
-            query: CREATE_TODO_MUTATION,
-            variables: variables1,
-          },
-          result: { data: data1 },
-        },
-        {
-          request: {
-            query: CREATE_TODO_MUTATION,
-            variables: variables2,
-          },
-          result: { data: data2 },
-        },
-      ];
-
-      const { result, rerender } = renderHook(({ variables }) => useMutation(CREATE_TODO_MUTATION, { variables }), {
+    using _disabledAct = disableActEnvironment();
+    const { takeSnapshot, rerender, getCurrentSnapshot } = await renderHookToSnapshotStream(
+      ({ variables }) => useMutation(CREATE_TODO_MUTATION, { variables }),
+      {
         wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
         initialProps: {
           variables: variables1,
         },
+      },
+    );
+
+    {
+      const [, result] = await takeSnapshot();
+
+      expect(result).toStrictEqualTyped({
+        data: undefined,
+        error: undefined,
+        loading: false,
+        called: false,
       });
+    }
 
-      const createTodo = result.current[0];
-      expect(result.current[1].loading).toBe(false);
-      expect(result.current[1].data).toBe(undefined);
+    const [createTodo] = getCurrentSnapshot();
 
-      act(() => void createTodo());
-      expect(createTodo).toBe(result.current[0]);
-      expect(result.current[1].loading).toBe(true);
-      expect(result.current[1].data).toBe(undefined);
-
-      await waitFor(
-        () => {
-          expect(result.current[1].loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current[0]).toBe(createTodo);
-      expect(result.current[1].data).toEqual(data1);
-
-      rerender({ variables: variables2 });
-      act(() => void createTodo());
-
-      await waitFor(
-        () => {
-          expect(result.current[1].loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current[0]).toBe(createTodo);
-      expect(result.current[1].data).toEqual(data2);
+    await expect(createTodo()).resolves.toStrictEqualTyped({
+      data: data1,
     });
 
-    it('should not call setResult on an unmounted component', async () => {
-      using consoleSpies = spyOnConsole('error');
+    {
+      const [, result] = await takeSnapshot();
+
+      expect(result).toStrictEqualTyped({
+        data: undefined,
+        error: undefined,
+        loading: true,
+        called: true,
+      });
+    }
+
+    expect(getCurrentSnapshot()[0]).toBe(createTodo);
+
+    {
+      const [, result] = await takeSnapshot();
+
+      expect(result).toStrictEqualTyped({
+        data: data1,
+        error: undefined,
+        loading: false,
+        called: true,
+      });
+    }
+
+    expect(getCurrentSnapshot()[0]).toBe(createTodo);
+
+    await rerender({ variables: variables2 });
+
+    {
+      const [, result] = await takeSnapshot();
+
+      expect(result).toStrictEqualTyped({
+        data: data1,
+        error: undefined,
+        loading: false,
+        called: true,
+      });
+    }
+
+    expect(getCurrentSnapshot()[0]).toBe(createTodo);
+
+    await expect(createTodo()).resolves.toStrictEqualTyped({
+      data: data2,
+    });
+
+    {
+      const [, result] = await takeSnapshot();
+
+      expect(result).toStrictEqualTyped({
+        data: undefined,
+        error: undefined,
+        loading: true,
+        called: true,
+      });
+    }
+
+    expect(getCurrentSnapshot()[0]).toBe(createTodo);
+
+    {
+      const [, result] = await takeSnapshot();
+
+      expect(result).toStrictEqualTyped({
+        data: data2,
+        error: undefined,
+        loading: false,
+        called: true,
+      });
+    }
+
+    expect(getCurrentSnapshot()[0]).toBe(createTodo);
+
+    await expect(takeSnapshot).not.toRerender();
+  });
+
+  it('should not call setResult on an unmounted component', async () => {
+    using consoleSpies = spyOnConsole('error');
+    const variables = {
+      description: 'Get milk!',
+    };
+
+    const mocks = [
+      {
+        request: {
+          query: CREATE_TODO_MUTATION,
+          variables,
+        },
+        result: { data: CREATE_TODO_RESULT },
+      },
+    ];
+
+    const useCreateTodo = () => {
+      const [createTodo, { reset }] = useMutation(CREATE_TODO_MUTATION);
+      return { reset, createTodo };
+    };
+
+    const { result, unmount } = renderHook(() => useCreateTodo(), {
+      wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+    });
+
+    unmount();
+
+    await act(async () => {
+      await result.current.createTodo({ variables });
+      result.current.reset();
+    });
+
+    expect(consoleSpies.error).not.toHaveBeenCalled();
+  });
+
+  describe('mutate function upon error', () => {
+    it('resolves with the resulting data and errors', async () => {
       const variables = {
         description: 'Get milk!',
       };
@@ -230,517 +365,888 @@ describe('useMutation Hook', () => {
             query: CREATE_TODO_MUTATION,
             variables,
           },
-          result: { data: CREATE_TODO_RESULT },
-        },
-      ];
-
-      const useCreateTodo = () => {
-        const [createTodo, { reset }] = useMutation(CREATE_TODO_MUTATION);
-        return { reset, createTodo };
-      };
-
-      const { result, unmount } = renderHook(() => useCreateTodo(), {
-        wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
-      });
-
-      unmount();
-
-      await act(async () => {
-        await result.current.createTodo({ variables });
-        await result.current.reset();
-      });
-
-      expect(consoleSpies.error).not.toHaveBeenCalled();
-    });
-
-    it('should resolve mutate function promise with mutation results', async () => {
-      const variables = {
-        description: 'Get milk!',
-      };
-
-      const mocks = [
-        {
-          request: {
-            query: CREATE_TODO_MUTATION,
-            variables,
+          result: {
+            data: CREATE_TODO_RESULT,
+            errors: [{ message: CREATE_TODO_ERROR }],
           },
-          result: { data: CREATE_TODO_RESULT },
+          delay: 20,
         },
       ];
 
-      const { result } = renderHook(() => useMutation(CREATE_TODO_MUTATION), {
-        wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
-      });
+      const onError = jest.fn();
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () => useMutation(CREATE_TODO_MUTATION, { onError }),
+        {
+          wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+        },
+      );
 
-      await act(async () => {
-        await expect(result.current[0]({ variables })).resolves.toEqual({
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
+      }
+
+      const [createTodo] = getCurrentSnapshot();
+
+      await expect(createTodo({ variables })).rejects.toThrow(
+        new CombinedGraphQLErrors({
           data: CREATE_TODO_RESULT,
-        });
-      });
-    });
-
-    describe('mutate function upon error', () => {
-      it('resolves with the resulting data and errors', async () => {
-        const variables = {
-          description: 'Get milk!',
-        };
-
-        const mocks = [
-          {
-            request: {
-              query: CREATE_TODO_MUTATION,
-              variables,
-            },
-            result: {
-              data: CREATE_TODO_RESULT,
-              errors: [new GraphQLError(CREATE_TODO_ERROR)],
-            },
-          },
-        ];
-
-        const onError = jest.fn();
-        const { result } = renderHook(() => useMutation(CREATE_TODO_MUTATION, { onError }), {
-          wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
-        });
-
-        const createTodo = result.current[0];
-        let fetchResult: any;
-        await act(async () => {
-          fetchResult = await createTodo({ variables });
-        });
-
-        expect(fetchResult.data).toBe(undefined);
-        expect(fetchResult.errors.message).toBe(CREATE_TODO_ERROR);
-        expect(onError).toHaveBeenCalledTimes(1);
-        expect(onError.mock.calls[0][0].message).toBe(CREATE_TODO_ERROR);
-      });
-
-      it('should reject when there’s only an error and no error policy is set', async () => {
-        const variables = {
-          description: 'Get milk!',
-        };
-
-        const mocks = [
-          {
-            request: {
-              query: CREATE_TODO_MUTATION,
-              variables,
-            },
-            result: {
-              errors: [{ message: CREATE_TODO_ERROR }],
-            },
-          },
-        ];
-
-        const { result } = renderHook(() => useMutation(CREATE_TODO_MUTATION), {
-          wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
-        });
-
-        const createTodo = result.current[0];
-        let fetchError: any;
-        await act(async () => {
-          // need to call createTodo this way to get “act” warnings to go away.
-          try {
-            await createTodo({ variables });
-          } catch (err) {
-            fetchError = err;
-            return;
-          }
-
-          throw new Error('function did not error');
-        });
-
-        expect(fetchError).toEqual(new ApolloError({ graphQLErrors: [{ message: CREATE_TODO_ERROR }] }));
-      });
-
-      it(`should reject when errorPolicy is 'none'`, async () => {
-        const variables = {
-          description: 'Get milk!',
-        };
-
-        const mocks = [
-          {
-            request: {
-              query: CREATE_TODO_MUTATION,
-              variables,
-            },
-            result: {
-              data: CREATE_TODO_RESULT,
-              errors: [new GraphQLError(CREATE_TODO_ERROR)],
-            },
-          },
-        ];
-
-        const { result } = renderHook(() => useMutation(CREATE_TODO_MUTATION, { errorPolicy: 'none' }), {
-          wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
-        });
-
-        const createTodo = result.current[0];
-        await act(async () => {
-          await expect(createTodo({ variables })).rejects.toThrow(CREATE_TODO_ERROR);
-        });
-      });
-
-      it(`should resolve with 'data' and 'error' properties when errorPolicy is 'all'`, async () => {
-        const variables = {
-          description: 'Get milk!',
-        };
-
-        const mocks = [
-          {
-            request: {
-              query: CREATE_TODO_MUTATION,
-              variables,
-            },
-            result: {
-              data: CREATE_TODO_RESULT,
-              errors: [new GraphQLError(CREATE_TODO_ERROR)],
-            },
-          },
-        ];
-
-        const { result } = renderHook(() => useMutation(CREATE_TODO_MUTATION, { errorPolicy: 'all' }), {
-          wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
-        });
-
-        const createTodo = result.current[0];
-
-        let fetchResult: any;
-        await act(async () => {
-          fetchResult = await createTodo({ variables });
-        });
-
-        expect(fetchResult.data).toEqual(CREATE_TODO_RESULT);
-        expect(fetchResult.errors[0].message).toEqual(CREATE_TODO_ERROR);
-      });
-
-      it(`should call onError when errorPolicy is 'all'`, async () => {
-        const variables = {
-          description: 'Get milk!',
-        };
-
-        const mocks = [
-          {
-            request: {
-              query: CREATE_TODO_MUTATION,
-              variables,
-            },
-            result: {
-              data: CREATE_TODO_RESULT,
-              errors: [new GraphQLError(CREATE_TODO_ERROR)],
-            },
-          },
-        ];
-
-        const onError = jest.fn();
-        const onCompleted = jest.fn();
-
-        const { result } = renderHook(
-          () =>
-            useMutation(CREATE_TODO_MUTATION, {
-              errorPolicy: 'all',
-              onError,
-              onCompleted,
-            }),
-          {
-            wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
-          },
-        );
-
-        const createTodo = result.current[0];
-
-        let fetchResult: any;
-        await act(async () => {
-          fetchResult = await createTodo({ variables });
-        });
-
-        expect(fetchResult.data).toEqual(CREATE_TODO_RESULT);
-        expect(fetchResult.errors[0].message).toEqual(CREATE_TODO_ERROR);
-        expect(onError).toHaveBeenCalledTimes(1);
-        expect(onError.mock.calls[0][0].message).toBe(CREATE_TODO_ERROR);
-        expect(onCompleted).not.toHaveBeenCalled();
-      });
-
-      it(`should ignore errors when errorPolicy is 'ignore'`, async () => {
-        using consoleSpy = spyOnConsole('error');
-        const variables = {
-          description: 'Get milk!',
-        };
-
-        const mocks = [
-          {
-            request: {
-              query: CREATE_TODO_MUTATION,
-              variables,
-            },
-            result: {
-              errors: [new GraphQLError(CREATE_TODO_ERROR)],
-            },
-          },
-        ];
-
-        const { result } = renderHook(() => useMutation(CREATE_TODO_MUTATION, { errorPolicy: 'ignore' }), {
-          wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
-        });
-
-        const createTodo = result.current[0];
-        let fetchResult: any;
-        await act(async () => {
-          fetchResult = await createTodo({ variables });
-        });
-
-        expect(fetchResult).toEqual({});
-        // Hermes: does not emit InMemoryCache's "Missing field ... while writing result" warning.
-        expect(consoleSpy.error).not.toHaveBeenCalled();
-      });
-
-      it(`should not call onError when errorPolicy is 'ignore'`, async () => {
-        const variables = {
-          description: 'Get milk!',
-        };
-
-        const mocks = [
-          {
-            request: {
-              query: CREATE_TODO_MUTATION,
-              variables,
-            },
-            result: {
-              errors: [new GraphQLError(CREATE_TODO_ERROR)],
-            },
-          },
-        ];
-
-        const onError = jest.fn();
-
-        const { result } = renderHook(
-          () =>
-            useMutation(CREATE_TODO_MUTATION, {
-              errorPolicy: 'ignore',
-              onError,
-            }),
-          {
-            wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
-          },
-        );
-
-        const createTodo = result.current[0];
-        let fetchResult: any;
-        await act(async () => {
-          fetchResult = await createTodo({ variables });
-        });
-
-        expect(fetchResult).toEqual({});
-        expect(onError).not.toHaveBeenCalled();
-      });
-    });
-
-    it('should return the current client instance in the result object', async () => {
-      const { result } = renderHook(() => useMutation(CREATE_TODO_MUTATION), {
-        wrapper: ({ children }) => <MockedProvider>{children}</MockedProvider>,
-      });
-      expect(result.current[1].client).toBeInstanceOf(ApolloClient);
-    });
-
-    it('should call client passed to execute function', async () => {
-      const { result } = renderHook(() => useMutation(CREATE_TODO_MUTATION), {
-        wrapper: ({ children }) => <MockedProvider>{children}</MockedProvider>,
-      });
-
-      const link = mockSingleLink();
-      const cache = new Hermes();
-      const client = new ApolloClient({
-        cache,
-        link,
-      });
-
-      const mutateSpy = jest.spyOn(client, 'mutate').mockImplementation(
-        () =>
-          new Promise(resolve => {
-            resolve({ data: CREATE_TODO_RESULT });
-          }),
+          errors: [{ message: CREATE_TODO_ERROR }],
+        }),
       );
 
-      const createTodo = result.current[0];
-      await act(async () => {
-        await createTodo({ client });
-      });
-
-      expect(mutateSpy).toHaveBeenCalledTimes(1);
-    });
-
-    it('should merge provided variables', async () => {
-      const CREATE_TODO_DATA = {
-        createTodo: {
-          id: 1,
-          description: 'Get milk!',
-          priority: 'Low',
-          __typename: 'Todo',
-        },
-      };
-      const mocks = [
-        {
-          request: {
-            query: CREATE_TODO_MUTATION,
-            variables: {
-              priority: 'Low',
-              description: 'Get milk.',
-            },
-          },
-          result: {
-            data: CREATE_TODO_DATA,
-          },
-        },
-      ];
-
-      const { result } = renderHook(
-        () =>
-          useMutation<{ createTodo: Todo }, { priority?: string; description?: string }>(CREATE_TODO_MUTATION, {
-            variables: { priority: 'Low' },
-          }),
-        {
-          wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
-        },
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenLastCalledWith(
+        new CombinedGraphQLErrors({
+          data: CREATE_TODO_RESULT,
+          errors: [{ message: CREATE_TODO_ERROR }],
+        }),
+        expect.anything(),
       );
-
-      const createTodo = result.current[0];
-      let fetchResult: any;
-      await act(async () => {
-        fetchResult = await createTodo({
-          variables: { description: 'Get milk.' },
-        });
-      });
-
-      expect(fetchResult).toEqual({ data: CREATE_TODO_DATA });
     });
 
-    it('should be possible to reset the mutation', async () => {
-      const CREATE_TODO_DATA = {
-        createTodo: {
-          id: 1,
-          priority: 'Low',
-          description: 'Get milk!',
-          __typename: 'Todo',
-        },
+    it('should reject when there’s an error and no error policy is set', async () => {
+      const variables = {
+        description: 'Get milk!',
       };
 
       const mocks = [
         {
           request: {
             query: CREATE_TODO_MUTATION,
-            variables: {
-              priority: 'Low',
-              description: 'Get milk.',
-            },
+            variables,
           },
           result: {
-            data: CREATE_TODO_DATA,
-          },
-        },
-      ];
-
-      const { result } = renderHook(
-        () => useMutation<{ createTodo: Todo }, { priority: string; description: string }>(CREATE_TODO_MUTATION),
-        {
-          wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
-        },
-      );
-
-      const createTodo = result.current[0];
-      let fetchResult: any;
-      await act(async () => {
-        fetchResult = await createTodo({
-          variables: { priority: 'Low', description: 'Get milk.' },
-        });
-      });
-
-      expect(fetchResult).toEqual({ data: CREATE_TODO_DATA });
-      expect(result.current[1].data).toEqual(CREATE_TODO_DATA);
-      setTimeout(() => {
-        result.current[1].reset();
-      });
-
-      await waitFor(
-        () => {
-          expect(result.current[1].data).toBe(undefined);
-        },
-        { interval: 1 },
-      );
-    });
-
-    it("resetting while a mutation is running: ensure that the result doesn't end up in the hook", async () => {
-      const CREATE_TODO_DATA = {
-        createTodo: {
-          id: 1,
-          priority: 'Low',
-          description: 'Get milk!',
-          __typename: 'Todo',
-        },
-      };
-
-      const mocks: MockedResponse[] = [
-        {
-          request: {
-            query: CREATE_TODO_MUTATION,
-            variables: {
-              priority: 'Low',
-              description: 'Get milk.',
-            },
-          },
-          result: {
-            data: CREATE_TODO_DATA,
+            errors: [{ message: CREATE_TODO_ERROR }],
           },
           delay: 20,
         },
       ];
 
       using _disabledAct = disableActEnvironment();
-      const { takeSnapshot } = await renderHookToSnapshotStream(
-        () => useMutation<{ createTodo: Todo }, { priority: string; description: string }>(CREATE_TODO_MUTATION),
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () => useMutation(CREATE_TODO_MUTATION),
         {
           wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
         },
       );
 
-      let createTodo: Awaited<ReturnType<typeof takeSnapshot>>[0];
-      let reset: Awaited<ReturnType<typeof takeSnapshot>>[1]['reset'];
-
       {
-        const [mutate, result] = await takeSnapshot();
-        createTodo = mutate;
-        reset = result.reset;
-        // initial value
-        expect(result.data).toBe(undefined);
-        expect(result.loading).toBe(false);
-        expect(result.called).toBe(false);
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
       }
 
-      const fetchResult = createTodo({
-        variables: { priority: 'Low', description: 'Get milk.' },
+      const [createTodo] = getCurrentSnapshot();
+
+      await expect(createTodo({ variables })).rejects.toThrow(
+        new CombinedGraphQLErrors({ errors: [{ message: CREATE_TODO_ERROR }] }),
+      );
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: true,
+          called: true,
+        });
+      }
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: new CombinedGraphQLErrors({
+            errors: [{ message: CREATE_TODO_ERROR }],
+          }),
+          loading: false,
+          called: true,
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
+    });
+
+    it('does not cause unhandled rejections', async () => {
+      const variables = {
+        description: 'Get milk!',
+      };
+
+      const mocks = [
+        {
+          request: {
+            query: CREATE_TODO_MUTATION,
+            variables,
+          },
+          result: {
+            errors: [{ message: CREATE_TODO_ERROR }],
+          },
+          delay: 10,
+        },
+      ];
+
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () => useMutation(CREATE_TODO_MUTATION, { variables }),
+        {
+          wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+        },
+      );
+
+      await takeSnapshot();
+
+      const [createTodo] = getCurrentSnapshot();
+
+      // Intentionally don't await this to ensure we don't get unhandled rejections
+      createTodo();
+      await wait(15);
+
+      // No assertions needed. This test fails if the promise throws an
+      // unhandled rection
+    });
+
+    it(`should reject when errorPolicy is 'none'`, async () => {
+      const variables = {
+        description: 'Get milk!',
+      };
+
+      const mocks = [
+        {
+          request: {
+            query: CREATE_TODO_MUTATION,
+            variables,
+          },
+          result: {
+            data: CREATE_TODO_RESULT,
+            errors: [{ message: CREATE_TODO_ERROR }],
+          },
+          delay: 20,
+        },
+      ];
+
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () => useMutation(CREATE_TODO_MUTATION, { errorPolicy: 'none' }),
+        {
+          wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+        },
+      );
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
+      }
+
+      const [createTodo] = getCurrentSnapshot();
+
+      await expect(createTodo({ variables })).rejects.toThrow(
+        new CombinedGraphQLErrors({ errors: [{ message: CREATE_TODO_ERROR }] }),
+      );
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: true,
+          called: true,
+        });
+      }
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: new CombinedGraphQLErrors({
+            data: CREATE_TODO_RESULT,
+            errors: [{ message: CREATE_TODO_ERROR }],
+          }),
+          loading: false,
+          called: true,
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
+    });
+
+    it(`should resolve with 'data' and 'error' properties when errorPolicy is 'all'`, async () => {
+      const variables = {
+        description: 'Get milk!',
+      };
+
+      const mocks = [
+        {
+          request: {
+            query: CREATE_TODO_MUTATION,
+            variables,
+          },
+          result: {
+            data: CREATE_TODO_RESULT,
+            errors: [{ message: CREATE_TODO_ERROR }],
+          },
+          delay: 20,
+        },
+      ];
+
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () => useMutation(CREATE_TODO_MUTATION, { errorPolicy: 'all' }),
+        {
+          wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+        },
+      );
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
+      }
+
+      const [createTodo] = getCurrentSnapshot();
+
+      await expect(createTodo({ variables })).resolves.toStrictEqualTyped({
+        data: CREATE_TODO_RESULT,
+        error: new CombinedGraphQLErrors({
+          data: CREATE_TODO_RESULT,
+          errors: [{ message: CREATE_TODO_ERROR }],
+        }),
       });
 
       {
         const [, result] = await takeSnapshot();
-        // started loading
-        expect(result.data).toBe(undefined);
-        expect(result.loading).toBe(true);
-        expect(result.called).toBe(true);
-      }
 
-      reset();
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: true,
+          called: true,
+        });
+      }
 
       {
         const [, result] = await takeSnapshot();
-        // reset to initial value
-        expect(result.data).toBe(undefined);
-        expect(result.loading).toBe(false);
-        expect(result.called).toBe(false);
-      }
 
-      expect(await fetchResult).toEqual({ data: CREATE_TODO_DATA });
+        expect(result).toStrictEqualTyped({
+          data: CREATE_TODO_RESULT,
+          error: new CombinedGraphQLErrors({
+            data: CREATE_TODO_RESULT,
+            errors: [{ message: CREATE_TODO_ERROR }],
+          }),
+          loading: false,
+          called: true,
+        });
+      }
 
       await expect(takeSnapshot).not.toRerender();
     });
+
+    it(`should call onError when errorPolicy is 'all'`, async () => {
+      const variables = {
+        description: 'Get milk!',
+      };
+
+      const mocks = [
+        {
+          request: {
+            query: CREATE_TODO_MUTATION,
+            variables,
+          },
+          result: {
+            data: CREATE_TODO_RESULT,
+            errors: [{ message: CREATE_TODO_ERROR }],
+          },
+          delay: 20,
+        },
+      ];
+
+      const onError = jest.fn();
+      const onCompleted = jest.fn();
+
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () =>
+          useMutation(CREATE_TODO_MUTATION, {
+            errorPolicy: 'all',
+            onError,
+            onCompleted,
+          }),
+        {
+          wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+        },
+      );
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
+      }
+
+      const [createTodo] = getCurrentSnapshot();
+
+      await expect(createTodo({ variables })).resolves.toStrictEqualTyped({
+        data: CREATE_TODO_RESULT,
+        error: new CombinedGraphQLErrors({
+          data: CREATE_TODO_RESULT,
+          errors: [{ message: CREATE_TODO_ERROR }],
+        }),
+      });
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: true,
+          called: true,
+        });
+      }
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: CREATE_TODO_RESULT,
+          error: new CombinedGraphQLErrors({
+            data: CREATE_TODO_RESULT,
+            errors: [{ message: CREATE_TODO_ERROR }],
+          }),
+          loading: false,
+          called: true,
+        });
+      }
+
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenLastCalledWith(
+        new CombinedGraphQLErrors({
+          data: CREATE_TODO_RESULT,
+          errors: [{ message: CREATE_TODO_ERROR }],
+        }),
+        expect.anything(),
+      );
+      expect(onCompleted).not.toHaveBeenCalled();
+    });
+
+    it(`should ignore errors when errorPolicy is 'ignore'`, async () => {
+      using consoleSpy = spyOnConsole('error');
+      const variables = {
+        description: 'Get milk!',
+      };
+
+      const mocks = [
+        {
+          request: {
+            query: CREATE_TODO_MUTATION,
+            variables,
+          },
+          result: {
+            errors: [{ message: CREATE_TODO_ERROR }],
+          },
+          delay: 20,
+        },
+      ];
+
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () => useMutation(CREATE_TODO_MUTATION, { errorPolicy: 'ignore' }),
+        {
+          wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+        },
+      );
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
+      }
+
+      const [createTodo] = getCurrentSnapshot();
+
+      await expect(createTodo({ variables })).resolves.toStrictEqualTyped({
+        data: undefined,
+      });
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: true,
+          called: true,
+        });
+      }
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: true,
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
+
+      // Hermes: does not emit InMemoryCache's "Missing field ... while writing result" warning.
+      expect(consoleSpy.error).not.toHaveBeenCalled();
+    });
+
+    it(`should not call onError when errorPolicy is 'ignore'`, async () => {
+      const variables = {
+        description: 'Get milk!',
+      };
+
+      const mocks = [
+        {
+          request: {
+            query: CREATE_TODO_MUTATION,
+            variables,
+          },
+          result: {
+            errors: [{ message: CREATE_TODO_ERROR }],
+          },
+          delay: 20,
+        },
+      ];
+
+      const onError = jest.fn();
+
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () =>
+          useMutation(CREATE_TODO_MUTATION, {
+            errorPolicy: 'ignore',
+            onError,
+          }),
+        {
+          wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+        },
+      );
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
+      }
+
+      const [createTodo] = getCurrentSnapshot();
+
+      await expect(createTodo({ variables })).resolves.toStrictEqualTyped({
+        data: undefined,
+      });
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: true,
+          called: true,
+        });
+      }
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: true,
+        });
+      }
+
+      expect(onError).not.toHaveBeenCalled();
+    });
+  });
+
+  it('should return the current client instance in the result object', async () => {
+    const client = new ApolloClient({
+      cache: new Hermes(),
+      link: ApolloLink.empty(),
+    });
+
+    const { result } = renderHook(() => useMutation(CREATE_TODO_MUTATION), {
+      wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+    });
+    expect(result.current[1].client).toBe(client);
+  });
+
+  it('should call client passed to execute function', async () => {
+    using _disabledAct = disableActEnvironment();
+
+    const defaultClient = new ApolloClient({
+      cache: new Hermes(),
+      link: new MockLink([
+        {
+          request: { query: CREATE_TODO_MUTATION },
+          result: { errors: [{ message: 'Oops wrong client' }] },
+          delay: 20,
+        },
+      ]),
+    });
+
+    const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+      () => useMutation(CREATE_TODO_MUTATION),
+      {
+        wrapper: ({ children }) => <ApolloProvider client={defaultClient}>{children}</ApolloProvider>,
+      },
+    );
+
+    const cache = new Hermes();
+    const client = new ApolloClient({
+      cache,
+      link: new MockLink([
+        {
+          request: { query: CREATE_TODO_MUTATION },
+          result: { data: CREATE_TODO_RESULT },
+          delay: 20,
+        },
+      ]),
+    });
+
+    {
+      const [, result] = await takeSnapshot();
+
+      expect(result).toStrictEqualTyped({
+        data: undefined,
+        error: undefined,
+        loading: false,
+        called: false,
+      });
+    }
+
+    const [createTodo] = getCurrentSnapshot();
+
+    await expect(createTodo({ client })).resolves.toStrictEqualTyped({
+      data: CREATE_TODO_RESULT,
+    });
+
+    {
+      const [, result] = await takeSnapshot();
+
+      expect(result).toStrictEqualTyped({
+        data: undefined,
+        error: undefined,
+        loading: true,
+        called: true,
+      });
+    }
+
+    {
+      const [, result] = await takeSnapshot();
+
+      expect(result).toStrictEqualTyped({
+        data: CREATE_TODO_RESULT,
+        error: undefined,
+        loading: false,
+        called: true,
+      });
+    }
+
+    await expect(takeSnapshot).not.toRerender();
+  });
+
+  // TODO: Do we want to keep this variable merge behavior?
+  it('should merge provided variables', async () => {
+    const CREATE_TODO_DATA = {
+      createTodo: {
+        id: 1,
+        description: 'Get milk!',
+        priority: 'Low',
+        __typename: 'Todo',
+      },
+    };
+    const mocks = [
+      {
+        request: {
+          query: CREATE_TODO_MUTATION,
+          variables: {
+            priority: 'Low',
+            description: 'Get milk.',
+          },
+        },
+        result: {
+          data: CREATE_TODO_DATA,
+        },
+        delay: 20,
+      },
+    ];
+
+    using _disabledAct = disableActEnvironment();
+    const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+      () =>
+        useMutation<{ createTodo: Todo }, { priority?: string; description?: string }>(CREATE_TODO_MUTATION, {
+          variables: { priority: 'Low' },
+        }),
+      {
+        wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+      },
+    );
+
+    {
+      const [, result] = await takeSnapshot();
+
+      expect(result).toStrictEqualTyped({
+        data: undefined,
+        error: undefined,
+        loading: false,
+        called: false,
+      });
+    }
+
+    const [createTodo] = getCurrentSnapshot();
+
+    await expect(createTodo({ variables: { description: 'Get milk.' } })).resolves.toStrictEqualTyped({
+      data: CREATE_TODO_DATA,
+    });
+
+    {
+      const [, result] = await takeSnapshot();
+
+      expect(result).toStrictEqualTyped({
+        data: undefined,
+        error: undefined,
+        loading: true,
+        called: true,
+      });
+    }
+
+    {
+      const [, result] = await takeSnapshot();
+
+      expect(result).toStrictEqualTyped({
+        data: CREATE_TODO_DATA,
+        error: undefined,
+        loading: false,
+        called: true,
+      });
+    }
+
+    await expect(takeSnapshot).not.toRerender();
+  });
+
+  it('should be possible to reset the mutation', async () => {
+    const CREATE_TODO_DATA = {
+      createTodo: {
+        id: 1,
+        priority: 'Low',
+        description: 'Get milk!',
+        __typename: 'Todo',
+      },
+    };
+
+    const mocks = [
+      {
+        request: {
+          query: CREATE_TODO_MUTATION,
+          variables: {
+            priority: 'Low',
+            description: 'Get milk.',
+          },
+        },
+        result: {
+          data: CREATE_TODO_DATA,
+        },
+        delay: 20,
+      },
+    ];
+
+    using _disabledAct = disableActEnvironment();
+    const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+      () => useMutation<{ createTodo: Todo }, { priority: string; description: string }>(CREATE_TODO_MUTATION),
+      {
+        wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+      },
+    );
+
+    {
+      const [, result] = await takeSnapshot();
+
+      expect(result).toStrictEqualTyped({
+        data: undefined,
+        error: undefined,
+        loading: false,
+        called: false,
+      });
+    }
+
+    const [createTodo] = getCurrentSnapshot();
+
+    await expect(createTodo({ variables: { priority: 'Low', description: 'Get milk.' } })).resolves.toStrictEqualTyped({
+      data: CREATE_TODO_DATA,
+    });
+
+    {
+      const [, result] = await takeSnapshot();
+
+      expect(result).toStrictEqualTyped({
+        data: undefined,
+        error: undefined,
+        loading: true,
+        called: true,
+      });
+    }
+
+    {
+      const [, result] = await takeSnapshot();
+
+      expect(result).toStrictEqualTyped({
+        data: CREATE_TODO_DATA,
+        error: undefined,
+        loading: false,
+        called: true,
+      });
+    }
+
+    getCurrentSnapshot()[1].reset();
+
+    {
+      const [, result] = await takeSnapshot();
+
+      expect(result).toStrictEqualTyped({
+        data: undefined,
+        error: undefined,
+        loading: false,
+        called: false,
+      });
+    }
+
+    await expect(takeSnapshot).not.toRerender();
+  });
+
+  it("resetting while a mutation is running: ensure that the result doesn't end up in the hook", async () => {
+    const CREATE_TODO_DATA = {
+      createTodo: {
+        id: 1,
+        priority: 'Low',
+        description: 'Get milk!',
+        __typename: 'Todo',
+      },
+    };
+
+    const mocks: MockLink.MockedResponse[] = [
+      {
+        request: {
+          query: CREATE_TODO_MUTATION,
+          variables: {
+            priority: 'Low',
+            description: 'Get milk.',
+          },
+        },
+        result: {
+          data: CREATE_TODO_DATA,
+        },
+        delay: 20,
+      },
+    ];
+
+    using _disabledAct = disableActEnvironment();
+    const { takeSnapshot } = await renderHookToSnapshotStream(
+      () => useMutation<{ createTodo: Todo }, { priority: string; description: string }>(CREATE_TODO_MUTATION),
+      {
+        wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+      },
+    );
+
+    let createTodo: Awaited<ReturnType<typeof takeSnapshot>>[0];
+    let reset: Awaited<ReturnType<typeof takeSnapshot>>[1]['reset'];
+
+    {
+      const [mutate, result] = await takeSnapshot();
+      createTodo = mutate;
+      reset = result.reset;
+      //initial value
+      expect(result).toStrictEqualTyped({
+        data: undefined,
+        error: undefined,
+        loading: false,
+        called: false,
+      });
+    }
+
+    const fetchResult = createTodo({
+      variables: { priority: 'Low', description: 'Get milk.' },
+    });
+
+    {
+      const [, result] = await takeSnapshot();
+
+      // started loading
+      expect(result).toStrictEqualTyped({
+        data: undefined,
+        error: undefined,
+        loading: true,
+        called: true,
+      });
+    }
+
+    reset();
+
+    {
+      const [, result] = await takeSnapshot();
+
+      // reset to initial value
+      expect(result).toStrictEqualTyped({
+        data: undefined,
+        error: undefined,
+        loading: false,
+        called: false,
+      });
+    }
+
+    await expect(fetchResult).resolves.toStrictEqualTyped({
+      data: CREATE_TODO_DATA,
+    });
+
+    await expect(takeSnapshot).not.toRerender();
   });
 
   describe('Callbacks', () => {
@@ -768,30 +1274,61 @@ describe('useMutation Hook', () => {
           result: {
             data: CREATE_TODO_DATA,
           },
+          delay: 20,
         },
       ];
 
-      const { result } = renderHook(
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
         () => useMutation<{ createTodo: Todo }, { priority: string; description: string }>(CREATE_TODO_MUTATION),
         {
           wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
         },
       );
 
-      const createTodo = result.current[0];
-      let fetchResult: any;
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
+      }
+
+      const [createTodo] = getCurrentSnapshot();
+
       const onCompleted = jest.fn();
       const onError = jest.fn();
-      await act(async () => {
-        fetchResult = await createTodo({
-          variables,
-          onCompleted,
-          onError,
-        });
+      await expect(createTodo({ variables, onCompleted, onError })).resolves.toStrictEqualTyped({
+        data: CREATE_TODO_DATA,
       });
 
-      expect(fetchResult).toEqual({ data: CREATE_TODO_DATA });
-      expect(result.current[1].data).toEqual(CREATE_TODO_DATA);
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: true,
+          called: true,
+        });
+      }
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: CREATE_TODO_DATA,
+          error: undefined,
+          loading: false,
+          called: true,
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
+
       expect(onCompleted).toHaveBeenCalledTimes(1);
       expect(onCompleted).toHaveBeenCalledWith(CREATE_TODO_DATA, expect.objectContaining({ variables }));
       expect(onError).toHaveBeenCalledTimes(0);
@@ -819,20 +1356,35 @@ describe('useMutation Hook', () => {
           result: {
             data: CREATE_TODO_DATA,
           },
+          delay: 20,
         },
       ];
 
       const hookOnCompleted = jest.fn();
 
-      const { result } = renderHook(() => useMutation(CREATE_TODO_MUTATION, { onCompleted: hookOnCompleted }), {
-        wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
-      });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () => useMutation(CREATE_TODO_MUTATION, { onCompleted: hookOnCompleted }),
+        {
+          wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+        },
+      );
 
-      const [createTodo] = result.current;
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
+      }
+
+      const [createTodo] = getCurrentSnapshot();
       const onCompleted = jest.fn();
-      await act(async () => {
-        await createTodo({ variables, onCompleted });
-      });
+
+      await expect(createTodo({ variables, onCompleted })).resolves.toStrictEqualTyped({ data: CREATE_TODO_DATA });
 
       expect(onCompleted).toHaveBeenCalledTimes(1);
       expect(hookOnCompleted).not.toHaveBeenCalled();
@@ -853,37 +1405,66 @@ describe('useMutation Hook', () => {
           result: {
             errors,
           },
+          delay: 20,
         },
       ];
 
-      const { result } = renderHook(
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
         () => useMutation<{ createTodo: Todo }, { priority: string; description: string }>(CREATE_TODO_MUTATION),
         {
           wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
         },
       );
 
-      const createTodo = result.current[0];
-      let fetchResult: any;
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
+      }
+
+      const [createTodo] = getCurrentSnapshot();
+
       const onCompleted = jest.fn();
       const onError = jest.fn();
-      await act(async () => {
-        fetchResult = await createTodo({
-          variables,
-          onCompleted,
-          onError,
-        });
-      });
 
-      expect(fetchResult).toEqual({
-        data: undefined,
-        errors: new ApolloError({ graphQLErrors: errors }),
-      });
+      await expect(createTodo({ variables, onCompleted, onError })).rejects.toThrow(
+        new CombinedGraphQLErrors({ errors }),
+      );
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: true,
+          called: true,
+        });
+      }
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: new CombinedGraphQLErrors({ errors }),
+          loading: false,
+          called: true,
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
 
       expect(onCompleted).toHaveBeenCalledTimes(0);
       expect(onError).toHaveBeenCalledTimes(1);
       expect(onError).toHaveBeenCalledWith(
-        new ApolloError({ graphQLErrors: errors }),
+        new CombinedGraphQLErrors({ errors }),
         expect.objectContaining({ variables }),
       );
     });
@@ -900,24 +1481,68 @@ describe('useMutation Hook', () => {
             variables,
           },
           result: {
-            errors: [new GraphQLError(CREATE_TODO_ERROR)],
+            errors: [{ message: CREATE_TODO_ERROR }],
           },
+          delay: 20,
         },
       ];
 
       const hookOnError = jest.fn();
 
-      const { result } = renderHook(() => useMutation(CREATE_TODO_MUTATION, { onError: hookOnError }), {
-        wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
-      });
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () => useMutation(CREATE_TODO_MUTATION, { onError: hookOnError }),
+        {
+          wrapper: ({ children }) => <MockedProvider mocks={mocks}>{children}</MockedProvider>,
+        },
+      );
 
-      const [createTodo] = result.current;
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
+      }
+
+      const [createTodo] = getCurrentSnapshot();
       const onError = jest.fn();
-      await act(async () => {
-        await createTodo({ variables, onError });
-      });
+      await expect(createTodo({ variables, onError })).rejects.toThrow(
+        new CombinedGraphQLErrors({ errors: [{ message: CREATE_TODO_ERROR }] }),
+      );
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: true,
+          called: true,
+        });
+      }
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: new CombinedGraphQLErrors({
+            errors: [{ message: CREATE_TODO_ERROR }],
+          }),
+          loading: false,
+          called: true,
+        });
+      }
 
       expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(
+        new CombinedGraphQLErrors({ errors: [{ message: CREATE_TODO_ERROR }] }),
+        expect.objectContaining({ variables }),
+      );
       expect(hookOnError).not.toHaveBeenCalled();
     });
 
@@ -936,13 +1561,15 @@ describe('useMutation Hook', () => {
           result: {
             errors,
           },
+          delay: 20,
         },
       ];
 
       const onCompleted = jest.fn();
       const onError = jest.fn();
 
-      const { result, rerender } = renderHook(
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot, rerender } = await renderHookToSnapshotStream(
         ({ onCompleted, onError }) => {
           return useMutation<{ createTodo: Todo }, { priority: string; description: string }>(CREATE_TODO_MUTATION, {
             onCompleted,
@@ -955,27 +1582,64 @@ describe('useMutation Hook', () => {
         },
       );
 
-      const createTodo = result.current[0];
-      let fetchResult: any;
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
+      }
+
+      const [createTodo] = getCurrentSnapshot();
 
       const onError1 = jest.fn();
-      rerender({ onCompleted, onError: onError1 });
-      await act(async () => {
-        fetchResult = await createTodo({
-          variables,
-        });
-      });
+      await rerender({ onCompleted, onError: onError1 });
 
-      expect(fetchResult).toEqual({
-        data: undefined,
-        errors: new ApolloError({ graphQLErrors: errors }),
-      });
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
+      }
+
+      await expect(createTodo({ variables })).rejects.toThrow(new CombinedGraphQLErrors({ errors }));
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: true,
+          called: true,
+        });
+      }
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: new CombinedGraphQLErrors({ errors }),
+          loading: false,
+          called: true,
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
 
       expect(onCompleted).toHaveBeenCalledTimes(0);
       expect(onError).toHaveBeenCalledTimes(0);
       expect(onError1).toHaveBeenCalledTimes(1);
       expect(onError1).toHaveBeenCalledWith(
-        new ApolloError({ graphQLErrors: errors }),
+        new CombinedGraphQLErrors({ errors }),
         expect.objectContaining({ variables }),
       );
     });
@@ -1004,11 +1668,13 @@ describe('useMutation Hook', () => {
           result: {
             data: CREATE_TODO_DATA,
           },
+          delay: 20,
         },
       ];
 
       const onCompleted = jest.fn();
-      const { result, rerender } = renderHook(
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot, rerender } = await renderHookToSnapshotStream(
         ({ onCompleted }) => {
           return useMutation<{ createTodo: Todo }, { priority: string; description: string }>(CREATE_TODO_MUTATION, {
             onCompleted,
@@ -1020,18 +1686,60 @@ describe('useMutation Hook', () => {
         },
       );
 
-      const onCompleted1 = jest.fn();
-      rerender({ onCompleted: onCompleted1 });
-      const createTodo = result.current[0];
-      let fetchResult: any;
-      await act(async () => {
-        fetchResult = await createTodo({
-          variables,
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
         });
+      }
+
+      const onCompleted1 = jest.fn();
+      await rerender({ onCompleted: onCompleted1 });
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
+      }
+
+      const [createTodo] = getCurrentSnapshot();
+      await expect(createTodo({ variables })).resolves.toStrictEqualTyped({
+        data: CREATE_TODO_DATA,
       });
 
-      expect(fetchResult).toEqual({ data: CREATE_TODO_DATA });
-      expect(result.current[1].data).toEqual(CREATE_TODO_DATA);
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: true,
+          called: true,
+        });
+      }
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: CREATE_TODO_DATA,
+          error: undefined,
+          loading: false,
+          called: true,
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
+
       expect(onCompleted).toHaveBeenCalledTimes(0);
       expect(onCompleted1).toHaveBeenCalledTimes(1);
       expect(onCompleted1).toHaveBeenCalledWith(CREATE_TODO_DATA, expect.objectContaining({ variables }));
@@ -1061,12 +1769,14 @@ describe('useMutation Hook', () => {
           result: {
             data: CREATE_TODO_DATA,
           },
+          delay: 20,
         },
       ];
 
       const onCompleted = jest.fn();
 
-      const { result, rerender } = renderHook(
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot, rerender } = await renderHookToSnapshotStream(
         ({ onCompleted }) => {
           return useMutation<{ createTodo: Todo }, { priority: string; description: string }>(CREATE_TODO_MUTATION, {
             onCompleted,
@@ -1078,20 +1788,61 @@ describe('useMutation Hook', () => {
         },
       );
 
-      const createTodo = result.current[0];
-      let fetchResult: any;
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
+      }
+
+      const [createTodo] = getCurrentSnapshot();
 
       const onCompleted1 = jest.fn();
-      rerender({ onCompleted: onCompleted1 });
+      await rerender({ onCompleted: onCompleted1 });
 
-      await act(async () => {
-        fetchResult = await createTodo({
-          variables,
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
         });
+      }
+
+      await expect(createTodo({ variables })).resolves.toStrictEqualTyped({
+        data: CREATE_TODO_DATA,
       });
 
-      expect(fetchResult).toEqual({ data: CREATE_TODO_DATA });
-      expect(result.current[1].data).toEqual(CREATE_TODO_DATA);
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: true,
+          called: true,
+        });
+      }
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: CREATE_TODO_DATA,
+          error: undefined,
+          loading: false,
+          called: true,
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
+
       expect(onCompleted).toHaveBeenCalledTimes(0);
       expect(onCompleted1).toHaveBeenCalledTimes(1);
       expect(onCompleted1).toHaveBeenCalledWith(CREATE_TODO_DATA, expect.objectContaining({ variables }));
@@ -1154,20 +1905,22 @@ describe('useMutation Hook', () => {
     const link = new ApolloLink(
       operation =>
         new Observable(observer => {
-          observer.next({
-            data: {
-              __typename: 'Mutation',
-              doSomething: {
-                __typename: 'MutationPayload',
-                time: startTime,
+          setTimeout(() => {
+            observer.next({
+              data: {
+                __typename: 'Mutation',
+                doSomething: {
+                  __typename: 'MutationPayload',
+                  time: startTime,
+                },
               },
-            },
-          });
-          observer.complete();
+            });
+            observer.complete();
+          }, 20);
         }),
     );
 
-    const mutation = gql`
+    const mutation: TypedDocumentNode<any> = gql`
       mutation DoSomething {
         doSomething {
           time
@@ -1201,87 +1954,104 @@ describe('useMutation Hook', () => {
         }),
       });
 
-      const { result } = renderHook(() => useMutation(mutation), {
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(() => useMutation(mutation), {
         wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
       });
 
-      expect(result.current[1].loading).toBe(false);
-      expect(result.current[1].called).toBe(false);
-      expect(result.current[1].data).toBe(undefined);
-      const mutate = result.current[0];
+      {
+        const [, result] = await takeSnapshot();
 
-      let mutationResult: any;
-      act(() => {
-        mutationResult = mutate({
-          update(
-            cache,
-            {
-              data: {
-                doSomething: { __typename, time },
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
+      }
+
+      const [mutate] = getCurrentSnapshot();
+
+      await expect(
+        mutate({
+          update(cache, { data }) {
+            // Hermes: reads return a superset of the selected fields (here, the
+            // __typename the server sent for ROOT_MUTATION).
+            expect(data).toMatchObject({
+              doSomething: {
+                __typename: 'MutationPayload',
+                time: new Date(startTime),
               },
-            },
-          ) {
-            expect(__typename).toBe('MutationPayload');
-            expect(time).toBeInstanceOf(Date);
-            expect(time.getTime()).toBe(startTime);
+            });
+
             expect(timeReadCount).toBe(1);
             expect(timeMergeCount).toBe(1);
             // The contents of the ROOT_MUTATION object exist only briefly,
             // for the duration of the mutation update, and are removed
             // after the mutation write is finished.
-            expect(cache.extract()).toEqual({
+            expect(toNormalizedCacheObject(cache.extract() as Record<string, any>)).toEqual({
               ROOT_MUTATION: {
-                type: 0,
-                data: {
-                  __typename: 'Mutation',
-                  doSomething: {
-                    __typename: 'MutationPayload',
-                    time: startTime,
-                  },
+                __typename: 'Mutation',
+                doSomething: {
+                  __typename: 'MutationPayload',
+                  time: startTime,
                 },
               },
             });
           },
-        }).then(
-          ({
-            data: {
-              doSomething: { __typename, time },
-            },
-          }) => {
-            expect(__typename).toBe('MutationPayload');
-            expect(time).toBeInstanceOf(Date);
-            expect(time.getTime()).toBe(startTime);
-            expect(timeReadCount).toBe(1);
-            expect(timeMergeCount).toBe(1);
-            // The contents of the ROOT_MUTATION object exist only briefly,
-            // for the duration of the mutation update, and are removed after
-            // the mutation write is finished.
-            expect(client.cache.extract()).toEqual({
-              ROOT_MUTATION: { type: 0, data: { __typename: 'Mutation' } },
-            });
+        }),
+        // Hermes: reads return a superset of the selected fields (here, the
+        // __typename the server sent for ROOT_MUTATION).
+      ).resolves.toMatchObject({
+        data: {
+          doSomething: {
+            __typename: 'MutationPayload',
+            time: new Date(startTime),
           },
-        );
-        mutationResult.catch(() => {});
+        },
       });
 
-      expect(result.current[1].loading).toBe(true);
-      expect(result.current[1].called).toBe(true);
-      expect(result.current[1].data).toBe(undefined);
-
-      await waitFor(() => {
-        expect(result.current[1].loading).toBe(false);
+      expect(timeReadCount).toBe(1);
+      expect(timeMergeCount).toBe(1);
+      // The contents of the ROOT_MUTATION object exist only briefly,
+      // for the duration of the mutation update, and are removed after
+      // the mutation write is finished.
+      expect(toNormalizedCacheObject(client.cache.extract() as Record<string, any>)).toEqual({
+        ROOT_MUTATION: {
+          __typename: 'Mutation',
+        },
       });
-      expect(result.current[1].called).toBe(true);
-      expect(result.current[1].data).toBeDefined();
 
-      const {
-        doSomething: { __typename, time },
-      } = result.current[1].data;
-      expect(__typename).toBe('MutationPayload');
-      expect(time).toBeInstanceOf(Date);
-      expect(time.getTime()).toBe(startTime);
+      {
+        const [, result] = await takeSnapshot();
 
-      await expect(mutationResult).resolves.toBe(undefined);
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: true,
+          called: true,
+        });
+      }
+
+      {
+        const [, result] = await takeSnapshot();
+
+        // Hermes: reads return a superset of the selected fields (here, the
+        // __typename the server sent for ROOT_MUTATION).
+        expect(result).toMatchObject({
+          data: {
+            doSomething: {
+              __typename: 'MutationPayload',
+              time: new Date(startTime),
+            },
+          },
+          error: undefined,
+          loading: false,
+          called: true,
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('can be preserved by passing keepRootFields: true', async () => {
@@ -1311,7 +2081,8 @@ describe('useMutation Hook', () => {
         }),
       });
 
-      const { result } = renderHook(
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
         () =>
           useMutation(mutation, {
             keepRootFields: true,
@@ -1321,86 +2092,96 @@ describe('useMutation Hook', () => {
         },
       );
 
-      expect(result.current[1].loading).toBe(false);
-      expect(result.current[1].called).toBe(false);
-      expect(result.current[1].data).toBe(undefined);
-      const mutate = result.current[0];
+      {
+        const [, result] = await takeSnapshot();
 
-      let mutationResult: any;
-      act(() => {
-        mutationResult = mutate({
-          update(
-            cache,
-            {
-              data: {
-                doSomething: { __typename, time },
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
+      }
+
+      const [mutate] = getCurrentSnapshot();
+
+      await expect(
+        mutate({
+          update(cache, { data }) {
+            // Hermes: reads return a superset of the selected fields (here, the
+            // __typename the server sent for ROOT_MUTATION).
+            expect(data).toMatchObject({
+              doSomething: {
+                __typename: 'MutationPayload',
+                time: new Date(startTime),
               },
-            },
-          ) {
-            expect(__typename).toBe('MutationPayload');
-            expect(time).toBeInstanceOf(Date);
-            expect(time.getTime()).toBe(startTime);
+            });
             expect(timeReadCount).toBe(1);
             expect(timeMergeCount).toBe(1);
-            expect(cache.extract()).toEqual({
+            expect(toNormalizedCacheObject(cache.extract() as Record<string, any>)).toEqual({
               ROOT_MUTATION: {
-                type: 0,
-                data: {
-                  __typename: 'Mutation',
-                  doSomething: {
-                    __typename: 'MutationPayload',
-                    time: startTime,
-                  },
+                __typename: 'Mutation',
+                doSomething: {
+                  __typename: 'MutationPayload',
+                  time: startTime,
                 },
               },
             });
           },
-        }).then(
-          ({
-            data: {
-              doSomething: { __typename, time },
-            },
-          }) => {
-            expect(__typename).toBe('MutationPayload');
-            expect(time).toBeInstanceOf(Date);
-            expect(time.getTime()).toBe(startTime);
-            expect(timeReadCount).toBe(1);
-            expect(timeMergeCount).toBe(1);
-            expect(client.cache.extract()).toEqual({
-              ROOT_MUTATION: {
-                type: 0,
-                data: {
-                  __typename: 'Mutation',
-                  doSomething: {
-                    __typename: 'MutationPayload',
-                    time: startTime,
-                  },
-                },
-              },
-            });
+        }),
+        // Hermes: reads return a superset of the selected fields (here, the
+        // __typename the server sent for ROOT_MUTATION).
+      ).resolves.toMatchObject({
+        data: {
+          doSomething: {
+            __typename: 'MutationPayload',
+            time: new Date(startTime),
           },
-        );
+        },
       });
 
-      mutationResult.catch(() => {});
-      expect(result.current[1].loading).toBe(true);
-      expect(result.current[1].called).toBe(true);
-      expect(result.current[1].data).toBe(undefined);
-
-      await waitFor(() => {
-        expect(result.current[1].loading).toBe(false);
+      expect(timeReadCount).toBe(1);
+      expect(timeMergeCount).toBe(1);
+      expect(toNormalizedCacheObject(client.cache.extract() as Record<string, any>)).toEqual({
+        ROOT_MUTATION: {
+          __typename: 'Mutation',
+          doSomething: {
+            __typename: 'MutationPayload',
+            time: startTime,
+          },
+        },
       });
-      expect(result.current[1].called).toBe(true);
-      expect(result.current[1].data).toBeDefined();
 
-      const {
-        doSomething: { __typename, time },
-      } = result.current[1].data;
-      expect(__typename).toBe('MutationPayload');
-      expect(time).toBeInstanceOf(Date);
-      expect(time.getTime()).toBe(startTime);
+      {
+        const [, result] = await takeSnapshot();
 
-      await expect(mutationResult).resolves.toBe(undefined);
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: true,
+          called: true,
+        });
+      }
+
+      {
+        const [, result] = await takeSnapshot();
+
+        // Hermes: reads return a superset of the selected fields (here, the
+        // __typename the server sent for ROOT_MUTATION).
+        expect(result).toMatchObject({
+          data: {
+            doSomething: {
+              __typename: 'MutationPayload',
+              time: new Date(startTime),
+            },
+          },
+          error: undefined,
+          loading: false,
+          called: true,
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
   });
 
@@ -1462,7 +2243,7 @@ describe('useMutation Hook', () => {
 
       let foundContext = false;
       const Component = () => {
-        const [createTodo] = useMutation<Todo, { description: string }, { id: number }>(CREATE_TODO_MUTATION, {
+        const [createTodo] = useMutation<Todo, { description: string }>(CREATE_TODO_MUTATION, {
           context,
           update(_, __, options) {
             expect(options.context).toEqual(context);
@@ -1556,54 +2337,65 @@ describe('useMutation Hook', () => {
             variables,
           },
           result: { data: CREATE_TODO_RESULT },
+          delay: 20,
         },
       ];
 
-      const link = mockSingleLink(...mocks);
       const cache = new Hermes();
-      const client = new ApolloClient({
-        cache,
-        link,
-      });
+      const client = new ApolloClient({ cache, link: new MockLink(mocks) });
 
-      let renderCount = 0;
-      const Component = () => {
-        const [createTodo, { loading, data }] = useMutation(CREATE_TODO_MUTATION, { optimisticResponse });
-
-        switch (renderCount) {
-          case 0:
-            expect(loading).toBeFalsy();
-            expect(data).toBeUndefined();
-            void createTodo({ variables });
-
-            // eslint-disable-next-line no-case-declarations
-            const dataInStore = client.cache.extract(true);
-            expect(dataInStore['Todo:1'].data).toEqual(optimisticResponse.createTodo);
-
-            break;
-          case 1:
-            expect(loading).toBeTruthy();
-            expect(data).toBeUndefined();
-            break;
-          case 2:
-            expect(loading).toBeFalsy();
-            expect(data).toEqual(CREATE_TODO_RESULT);
-            break;
-          default:
-        }
-        renderCount += 1;
-        return null;
-      };
-
-      render(
-        <ApolloProvider client={client}>
-          <Component />
-        </ApolloProvider>,
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
+        () => useMutation(CREATE_TODO_MUTATION, { optimisticResponse }),
+        {
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        },
       );
 
-      await waitFor(() => {
-        expect(renderCount).toBe(3);
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
+      }
+
+      const [createTodo] = getCurrentSnapshot();
+
+      const promise = createTodo({ variables });
+
+      expect(toNormalizedCacheObject(cache.extract(true))['Todo:1']).toEqual(optimisticResponse.createTodo);
+
+      await expect(promise).resolves.toStrictEqualTyped({
+        data: CREATE_TODO_RESULT,
       });
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: true,
+          called: true,
+        });
+      }
+
+      {
+        const [, result] = await takeSnapshot();
+
+        expect(result).toStrictEqualTyped({
+          data: CREATE_TODO_RESULT,
+          error: undefined,
+          loading: false,
+          called: true,
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
     });
 
     it('should be called with the provided context', async () => {
@@ -1752,14 +2544,16 @@ describe('useMutation Hook', () => {
           },
         }),
 
-        link: mockSingleLink({
-          request: {
-            query: CREATE_TODO_MUTATION,
-            variables,
+        link: new MockLink([
+          {
+            request: {
+              query: CREATE_TODO_MUTATION,
+              variables,
+            },
+            result: { data: CREATE_TODO_RESULT },
+            delay: 20,
           },
-          result: { data: CREATE_TODO_RESULT },
-          delay: 20,
-        }),
+        ]),
       });
 
       // The goal of this test is to make sure onQueryUpdated gets called as
@@ -1768,35 +2562,25 @@ describe('useMutation Hook', () => {
       interface OnQueryUpdatedResults {
         obsQuery: ObservableQuery;
         diff: Cache.DiffResult<TData>;
-        result: ApolloQueryResult<TData>;
+        result: ApolloClient.QueryResult<TData>;
       }
       let resolveOnUpdate: (results: OnQueryUpdatedResults) => any;
       const onUpdatePromise = new Promise<OnQueryUpdatedResults>(resolve => {
         resolveOnUpdate = resolve;
       }).then(onUpdateResult => {
-        expect(finishedReobserving).toBe(true);
-        // Hermes: diffs also carry Hermes' entityIds/dynamicNodeIds bookkeeping.
-        expect(onUpdateResult.diff).toEqual(
-          expect.objectContaining({
-            complete: true,
-            result: {
-              todoCount: 1,
-            },
-          }),
-        );
-        expect(onUpdateResult.result).toEqual({
-          loading: false,
-          networkStatus: NetworkStatus.ready,
-          data: {
+        expect(onUpdateResult.diff).toEqual({
+          complete: true,
+          result: {
             todoCount: 1,
           },
         });
+        expect(onUpdateResult.result).toStrictEqualTyped({
+          data: { todoCount: 1 },
+        });
       });
 
-      onUpdatePromise.catch(() => {});
-
-      let finishedReobserving = false;
-      const { result } = renderHook(
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
         () => ({
           query: useQuery(countQuery),
           mutation: useMutation(CREATE_TODO_MUTATION, {
@@ -1818,50 +2602,163 @@ describe('useMutation Hook', () => {
         },
       );
 
-      expect(result.current.query.loading).toBe(false);
-      expect(result.current.query.data).toEqual({ todoCount: 0 });
-      expect(result.current.mutation[1].loading).toBe(false);
-      expect(result.current.mutation[1].data).toBe(undefined);
-      const createTodo = result.current.mutation[0];
-      act(() => {
-        void createTodo({
+      {
+        const {
+          query,
+          mutation: [, mutation],
+        } = await takeSnapshot();
+
+        expect(query).toStrictEqualTyped({
+          data: { todoCount: 0 },
+          dataState: 'complete',
+          networkStatus: NetworkStatus.ready,
+          loading: false,
+          previousData: undefined,
+          variables: {},
+        });
+        expect(mutation).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
+      }
+
+      const {
+        mutation: [createTodo],
+      } = getCurrentSnapshot();
+
+      await expect(
+        createTodo({
           variables,
           async onQueryUpdated(obsQuery, diff) {
             const result = await obsQuery.reobserve();
-            finishedReobserving = true;
             resolveOnUpdate({ obsQuery, diff, result });
             return result;
           },
+        }),
+      ).resolves.toStrictEqualTyped({ data: CREATE_TODO_RESULT });
+
+      {
+        const {
+          query,
+          mutation: [, mutation],
+        } = await takeSnapshot();
+
+        if (IS_REACT_17) {
+          expect(query).toStrictEqualTyped({
+            data: { todoCount: 0 },
+            dataState: 'complete',
+            networkStatus: NetworkStatus.ready,
+            loading: false,
+            previousData: undefined,
+            variables: {},
+          });
+
+          expect(mutation).toStrictEqualTyped({
+            data: undefined,
+            error: undefined,
+            loading: true,
+            called: true,
+          });
+        } else {
+          expect(query).toStrictEqualTyped({
+            data: { todoCount: 1 },
+            dataState: 'complete',
+            networkStatus: NetworkStatus.ready,
+            loading: false,
+            previousData: { todoCount: 0 },
+            variables: {},
+          });
+        }
+
+        if (IS_REACT_18) {
+          expect(mutation).toStrictEqualTyped({
+            data: undefined,
+            error: undefined,
+            loading: false,
+            called: false,
+          });
+        } else {
+          expect(mutation).toStrictEqualTyped({
+            data: undefined,
+            error: undefined,
+            loading: true,
+            called: true,
+          });
+        }
+      }
+
+      if (IS_REACT_19) {
+        const {
+          query,
+          mutation: [, mutation],
+        } = await takeSnapshot();
+
+        expect(query).toStrictEqualTyped({
+          data: { todoCount: 1 },
+          dataState: 'complete',
+          networkStatus: NetworkStatus.ready,
+          loading: false,
+          previousData: { todoCount: 0 },
+          variables: {},
         });
-      });
 
-      expect(result.current.query.loading).toBe(false);
-      expect(result.current.query.data).toEqual({ todoCount: 0 });
-      expect(result.current.mutation[1].loading).toBe(true);
-      expect(result.current.mutation[1].data).toBe(undefined);
-      expect(finishedReobserving).toBe(false);
+        expect(mutation).toStrictEqualTyped({
+          data: CREATE_TODO_RESULT,
+          error: undefined,
+          loading: false,
+          called: true,
+        });
+      } else {
+        {
+          const {
+            query,
+            mutation: [, mutation],
+          } = await takeSnapshot();
 
-      await waitFor(
-        () => {
-          expect(result.current.query.data).toEqual({ todoCount: 1 });
-        },
-        { interval: 1 },
-      );
-      expect(result.current.query.loading).toBe(false);
-      expect(result.current.mutation[1].loading).toBe(true);
-      expect(result.current.mutation[1].data).toBe(undefined);
+          expect(query).toStrictEqualTyped({
+            data: { todoCount: 1 },
+            dataState: 'complete',
+            networkStatus: NetworkStatus.ready,
+            loading: false,
+            previousData: { todoCount: 0 },
+            variables: {},
+          });
 
-      await waitFor(
-        () => {
-          expect(result.current.mutation[1].loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.query.loading).toBe(false);
-      expect(result.current.query.data).toEqual({ todoCount: 1 });
-      expect(result.current.mutation[1].data).toEqual(CREATE_TODO_RESULT);
-      expect(finishedReobserving).toBe(true);
+          expect(mutation).toStrictEqualTyped({
+            data: undefined,
+            error: undefined,
+            loading: true,
+            called: true,
+          });
+        }
 
+        {
+          const {
+            query,
+            mutation: [, mutation],
+          } = await takeSnapshot();
+
+          expect(query).toStrictEqualTyped({
+            data: { todoCount: 1 },
+            dataState: 'complete',
+            networkStatus: NetworkStatus.ready,
+            loading: false,
+            previousData: { todoCount: 0 },
+            variables: {},
+          });
+
+          expect(mutation).toStrictEqualTyped({
+            data: CREATE_TODO_RESULT,
+            error: undefined,
+            loading: false,
+            called: true,
+          });
+        }
+      }
+
+      await expect(takeSnapshot).not.toRerender();
       await expect(onUpdatePromise).resolves.toBe(undefined);
     });
 
@@ -1873,6 +2770,7 @@ describe('useMutation Hook', () => {
             query: GET_TODOS_QUERY,
           },
           result: { data: GET_TODOS_RESULT_1 },
+          delay: 20,
         },
         {
           request: {
@@ -1882,22 +2780,25 @@ describe('useMutation Hook', () => {
           result: {
             data: CREATE_TODO_RESULT,
           },
+          delay: 20,
         },
         {
           request: {
             query: GET_TODOS_QUERY,
           },
           result: { data: GET_TODOS_RESULT_2 },
+          delay: 20,
         },
       ];
 
-      const link = mockSingleLink(...mocks);
+      const link = new MockLink(mocks);
       const client = new ApolloClient({
         link,
         cache: new Hermes(),
       });
 
-      const { result } = renderHook(
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
         () => ({
           query: useQuery(GET_TODOS_QUERY),
           mutation: useMutation(CREATE_TODO_MUTATION),
@@ -1907,31 +2808,156 @@ describe('useMutation Hook', () => {
         },
       );
 
-      expect(result.current.query.loading).toBe(true);
-      expect(result.current.query.data).toBe(undefined);
-      await waitFor(
-        () => {
-          expect(result.current.query.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
+      {
+        const {
+          query,
+          mutation: [, mutation],
+        } = await takeSnapshot();
 
-      expect(result.current.query.data).toEqual(mocks[0].result.data);
-      const mutate = result.current.mutation[0];
-      await act(async () => {
-        await mutate({
+        expect(query).toStrictEqualTyped({
+          data: undefined,
+          dataState: 'empty',
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+
+        expect(mutation).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
+      }
+
+      {
+        const {
+          query,
+          mutation: [, mutation],
+        } = await takeSnapshot();
+
+        expect(query).toStrictEqualTyped({
+          data: GET_TODOS_RESULT_1,
+          dataState: 'complete',
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+
+        expect(mutation).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
+      }
+
+      const {
+        mutation: [mutate],
+      } = getCurrentSnapshot();
+
+      await expect(
+        mutate({
           variables,
           refetchQueries: ['getTodos'],
-        });
-      });
+        }),
+      ).resolves.toStrictEqualTyped({ data: CREATE_TODO_RESULT });
 
-      await waitFor(
-        () => {
-          expect(result.current.query.data).toEqual(mocks[2].result.data);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.query.loading).toBe(false);
+      {
+        const {
+          query,
+          mutation: [, mutation],
+        } = await takeSnapshot();
+
+        expect(query).toStrictEqualTyped({
+          data: GET_TODOS_RESULT_1,
+          dataState: 'complete',
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+
+        expect(mutation).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: true,
+          called: true,
+        });
+      }
+
+      {
+        const {
+          query,
+          mutation: [, mutation],
+        } = await takeSnapshot();
+
+        expect(query).toStrictEqualTyped({
+          data: GET_TODOS_RESULT_1,
+          dataState: 'complete',
+          loading: true,
+          networkStatus: NetworkStatus.refetch,
+          previousData: undefined,
+          variables: {},
+        });
+
+        expect(mutation).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: true,
+          called: true,
+        });
+      }
+
+      {
+        const {
+          query,
+          mutation: [, mutation],
+        } = await takeSnapshot();
+
+        expect(query).toStrictEqualTyped({
+          data: GET_TODOS_RESULT_1,
+          dataState: 'complete',
+          loading: true,
+          networkStatus: NetworkStatus.refetch,
+          previousData: undefined,
+          variables: {},
+        });
+
+        expect(mutation).toStrictEqualTyped({
+          data: CREATE_TODO_RESULT,
+          error: undefined,
+          loading: false,
+          called: true,
+        });
+      }
+
+      {
+        const {
+          query,
+          mutation: [, mutation],
+        } = await takeSnapshot();
+
+        expect(query).toStrictEqualTyped({
+          data: GET_TODOS_RESULT_2,
+          dataState: 'complete',
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: GET_TODOS_RESULT_1,
+          variables: {},
+        });
+
+        expect(mutation).toStrictEqualTyped({
+          data: CREATE_TODO_RESULT,
+          error: undefined,
+          loading: false,
+          called: true,
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
 
       expect(client.readQuery({ query: GET_TODOS_QUERY })).toEqual(mocks[2].result.data);
     });
@@ -1944,6 +2970,7 @@ describe('useMutation Hook', () => {
             query: GET_TODOS_QUERY,
           },
           result: { data: GET_TODOS_RESULT_1 },
+          delay: 20,
         },
         {
           request: {
@@ -1953,24 +2980,25 @@ describe('useMutation Hook', () => {
           result: {
             data: CREATE_TODO_RESULT,
           },
-          delay: 10,
+          delay: 20,
         },
         {
           request: {
             query: GET_TODOS_QUERY,
           },
           result: { data: GET_TODOS_RESULT_2 },
-          delay: 10,
+          delay: 20,
         },
       ];
 
-      const link = mockSingleLink(...mocks);
+      const link = new MockLink(mocks);
       const client = new ApolloClient({
         link,
         cache: new Hermes(),
       });
 
-      const { result } = renderHook(
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(
         () => ({
           query: useQuery(GET_TODOS_QUERY),
           mutation: useMutation(CREATE_TODO_MUTATION),
@@ -1980,40 +3008,157 @@ describe('useMutation Hook', () => {
         },
       );
 
-      expect(result.current.query.loading).toBe(true);
-      expect(result.current.query.data).toBe(undefined);
-      await waitFor(
-        () => {
-          expect(result.current.query.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
+      {
+        const {
+          query,
+          mutation: [, mutation],
+        } = await takeSnapshot();
 
-      expect(result.current.query.data).toEqual(mocks[0].result.data);
-      const mutate = result.current.mutation[0];
-      let mutation: Promise<unknown>;
-      act(() => {
-        mutation = mutate({
+        expect(query).toStrictEqualTyped({
+          data: undefined,
+          dataState: 'empty',
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
+
+        expect(mutation).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
+      }
+
+      {
+        const {
+          query,
+          mutation: [, mutation],
+        } = await takeSnapshot();
+
+        expect(query).toStrictEqualTyped({
+          data: GET_TODOS_RESULT_1,
+          dataState: 'complete',
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+
+        expect(mutation).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
+      }
+
+      const {
+        mutation: [mutate],
+      } = getCurrentSnapshot();
+
+      await expect(
+        mutate({
           variables,
           refetchQueries: [GET_TODOS_QUERY],
+        }),
+      ).resolves.toStrictEqualTyped({ data: CREATE_TODO_RESULT });
+
+      {
+        const {
+          query,
+          mutation: [, mutation],
+        } = await takeSnapshot();
+
+        expect(query).toStrictEqualTyped({
+          data: GET_TODOS_RESULT_1,
+          dataState: 'complete',
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
         });
-      });
-      expect(result.current.query.loading).toBe(false);
-      expect(result.current.query.data).toEqual(mocks[0].result.data);
 
-      await act(async () => {
-        await mutation;
-      });
-      expect(result.current.query.loading).toBe(false);
-      expect(result.current.query.data).toEqual(mocks[0].result.data);
+        expect(mutation).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: true,
+          called: true,
+        });
+      }
 
-      await waitFor(
-        () => {
-          expect(result.current.query.data).toEqual(mocks[2].result.data);
-        },
-        { interval: 1 },
-      );
-      expect(result.current.query.loading).toBe(false);
+      {
+        const {
+          query,
+          mutation: [, mutation],
+        } = await takeSnapshot();
+
+        expect(query).toStrictEqualTyped({
+          data: GET_TODOS_RESULT_1,
+          dataState: 'complete',
+          loading: true,
+          networkStatus: NetworkStatus.refetch,
+          previousData: undefined,
+          variables: {},
+        });
+
+        expect(mutation).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: true,
+          called: true,
+        });
+      }
+
+      {
+        const {
+          query,
+          mutation: [, mutation],
+        } = await takeSnapshot();
+
+        expect(query).toStrictEqualTyped({
+          data: GET_TODOS_RESULT_1,
+          dataState: 'complete',
+          loading: true,
+          networkStatus: NetworkStatus.refetch,
+          previousData: undefined,
+          variables: {},
+        });
+
+        expect(mutation).toStrictEqualTyped({
+          data: CREATE_TODO_RESULT,
+          error: undefined,
+          loading: false,
+          called: true,
+        });
+      }
+
+      {
+        const {
+          query,
+          mutation: [, mutation],
+        } = await takeSnapshot();
+
+        expect(query).toStrictEqualTyped({
+          data: GET_TODOS_RESULT_2,
+          dataState: 'complete',
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: GET_TODOS_RESULT_1,
+          variables: {},
+        });
+
+        expect(mutation).toStrictEqualTyped({
+          data: CREATE_TODO_RESULT,
+          error: undefined,
+          loading: false,
+          called: true,
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
+
       expect(client.readQuery({ query: GET_TODOS_QUERY })).toEqual(mocks[2].result.data);
     });
 
@@ -2025,6 +3170,7 @@ describe('useMutation Hook', () => {
             query: GET_TODOS_QUERY,
           },
           result: { data: GET_TODOS_RESULT_1 },
+          delay: 20,
         },
         {
           request: {
@@ -2034,22 +3180,25 @@ describe('useMutation Hook', () => {
           result: {
             data: CREATE_TODO_RESULT,
           },
+          delay: 20,
         },
         {
           request: {
             query: GET_TODOS_QUERY,
           },
           result: { data: GET_TODOS_RESULT_2 },
+          delay: 20,
         },
       ];
 
-      const link = mockSingleLink(...mocks);
+      const link = new MockLink(mocks);
       const client = new ApolloClient({
         link,
         cache: new Hermes(),
       });
 
-      const { result, unmount } = renderHook(
+      using _disabledAct = disableActEnvironment();
+      const { takeSnapshot, getCurrentSnapshot, unmount } = await renderHookToSnapshotStream(
         () => ({
           query: useQuery(GET_TODOS_QUERY),
           mutation: useMutation(CREATE_TODO_MUTATION),
@@ -2059,40 +3208,92 @@ describe('useMutation Hook', () => {
         },
       );
 
-      expect(result.current.query.loading).toBe(true);
-      expect(result.current.query.data).toBe(undefined);
-      await waitFor(
-        () => {
-          expect(result.current.query.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
+      {
+        const {
+          query,
+          mutation: [, mutation],
+        } = await takeSnapshot();
 
-      expect(result.current.query.data).toEqual(mocks[0].result.data);
-      const mutate = result.current.mutation[0];
-      let onMutationDone: Function;
-      const mutatePromise = new Promise(resolve => (onMutationDone = resolve));
+        expect(query).toStrictEqualTyped({
+          data: undefined,
+          dataState: 'empty',
+          loading: true,
+          networkStatus: NetworkStatus.loading,
+          previousData: undefined,
+          variables: {},
+        });
 
-      expect(result.current.query.loading).toBe(false);
-      expect(result.current.query.data).toEqual(mocks[0].result.data);
+        expect(mutation).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
+      }
 
-      await act(async () => {
-        await mutate({
+      {
+        const {
+          query,
+          mutation: [, mutation],
+        } = await takeSnapshot();
+
+        expect(query).toStrictEqualTyped({
+          data: GET_TODOS_RESULT_1,
+          dataState: 'complete',
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+
+        expect(mutation).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: false,
+          called: false,
+        });
+      }
+
+      const {
+        mutation: [mutate],
+      } = getCurrentSnapshot();
+
+      await expect(
+        mutate({
           variables,
           refetchQueries: ['getTodos'],
           update() {
             unmount();
           },
-        }).then(result => {
-          expect(result.data).toEqual(CREATE_TODO_RESULT);
-          onMutationDone();
-        });
-      });
-      await mutatePromise;
+        }),
+      ).resolves.toStrictEqualTyped({ data: CREATE_TODO_RESULT });
 
-      await waitFor(() => {
-        expect(client.readQuery({ query: GET_TODOS_QUERY })).toEqual(mocks[2].result.data);
-      });
+      {
+        const {
+          query,
+          mutation: [, mutation],
+        } = await takeSnapshot();
+
+        expect(query).toStrictEqualTyped({
+          data: GET_TODOS_RESULT_1,
+          dataState: 'complete',
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          previousData: undefined,
+          variables: {},
+        });
+
+        expect(mutation).toStrictEqualTyped({
+          data: undefined,
+          error: undefined,
+          loading: true,
+          called: true,
+        });
+      }
+
+      await expect(takeSnapshot).not.toRerender();
+
+      expect(client.readQuery({ query: GET_TODOS_QUERY })).toEqual(GET_TODOS_RESULT_2);
     });
 
     it('using onQueryUpdated callback should not prevent cache broadcast', async () => {
@@ -2200,16 +3401,14 @@ describe('useMutation Hook', () => {
 
       const renderStream = createRenderStream({
         initialSnapshot: {
-          useQueryResult: null as QueryResult<TNumbersQuery> | null,
-          useMutationResult: null as MutationTuple<any, any> | null,
+          useQueryResult: null as useQuery.Result<TNumbersQuery> | null,
+          useMutationResult: null as useMutation.ResultTuple<any, any> | null,
         },
       });
 
       function App() {
         renderStream.mergeSnapshot({
-          useQueryResult: useQuery(NumbersQuery, {
-            notifyOnNetworkStatusChange: true,
-          }),
+          useQueryResult: useQuery(NumbersQuery),
           useMutationResult: useMutation(RemoveNumberMutation, {
             update(cache) {
               const oldData = cache.readQuery({ query: NumbersQuery });
@@ -2478,7 +3677,7 @@ describe('useMutation Hook', () => {
 
         expect(useQueryResult.loading).toBe(false);
         expect(useQueryResult.networkStatus).toBe(NetworkStatus.ready);
-        // This mutation did not braodcast results, so we expect our numbers to
+        // This mutation did not broadcast results, so we expect our numbers to
         // equal the previous set.
         expect(useQueryResult.data).toEqual(getNumbersData(5));
 
@@ -2508,6 +3707,8 @@ describe('useMutation Hook', () => {
         }
       `;
 
+      // Hermes: the installed fetch-mock 12 replaced restore() with
+      // hardReset(), and needs mockGlobal() to mock the global fetch.
       fetchMock.hardReset();
 
       const responseBodies = [
@@ -2527,8 +3728,8 @@ describe('useMutation Hook', () => {
       );
 
       const Test = () => {
-        const { data } = useQuery(QUERY_1);
-        const [mutate] = useMutation(MUTATION_1, {
+        const { data } = useQuery<any>(QUERY_1);
+        const [mutate] = useMutation<any>(MUTATION_1, {
           awaitRefetchQueries: true,
           refetchQueries: [QUERY_1],
         });
@@ -2571,250 +3772,6 @@ describe('useMutation Hook', () => {
       await waitFor(() => screen.findByText('item 3'));
     });
   });
-  describe('defer', () => {
-    const CREATE_TODO_MUTATION_DEFER = gql`
-      mutation createTodo($description: String!, $priority: String) {
-        createTodo(description: $description, priority: $priority) {
-          id
-          ... @defer {
-            description
-            priority
-          }
-        }
-      }
-    `;
-    const variables = {
-      description: 'Get milk!',
-    };
-    it('resolves a deferred mutation with the full result', async () => {
-      using consoleSpies = spyOnConsole('error');
-      const link = new MockSubscriptionLink();
-
-      const client = new ApolloClient({
-        link,
-        cache: new Hermes(),
-      });
-
-      const useCreateTodo = () => {
-        const [createTodo, { loading, data }] = useMutation(CREATE_TODO_MUTATION_DEFER);
-
-        useEffect(() => {
-          void createTodo({ variables });
-        }, [variables]);
-
-        return { loading, data };
-      };
-
-      const { result } = renderHook(() => useCreateTodo(), {
-        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
-      });
-
-      expect(result.current.loading).toBe(true);
-      expect(result.current.data).toBe(undefined);
-
-      setTimeout(() => {
-        link.simulateResult({
-          result: {
-            data: {
-              createTodo: {
-                id: 1,
-                __typename: 'Todo',
-              },
-            },
-            hasNext: true,
-          },
-        });
-      });
-
-      setTimeout(() => {
-        link.simulateResult(
-          {
-            result: {
-              incremental: [
-                {
-                  data: {
-                    description: 'Get milk!',
-                    priority: 'High',
-                    __typename: 'Todo',
-                  },
-                  path: ['createTodo'],
-                },
-              ],
-              hasNext: false,
-            },
-          },
-          true,
-        );
-      });
-
-      // When defer is used in a mutation, the final value resolves
-      // in a single result
-      await waitFor(
-        () => {
-          expect(result.current.loading).toBe(false);
-        },
-        { interval: 1 },
-      );
-
-      expect(result.current.data).toEqual({
-        createTodo: {
-          id: 1,
-          description: 'Get milk!',
-          priority: 'High',
-          __typename: 'Todo',
-        },
-      });
-      expect(consoleSpies.error).not.toHaveBeenCalled();
-    });
-    it('resolves with resulting errors and calls onError callback', async () => {
-      using consoleSpies = spyOnConsole('error');
-      const link = new MockSubscriptionLink();
-
-      const client = new ApolloClient({
-        link,
-        cache: new Hermes(),
-      });
-
-      const onError = jest.fn();
-      const { result } = renderHook(() => useMutation(CREATE_TODO_MUTATION_DEFER, { onError }), {
-        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
-      });
-
-      const createTodo = result.current[0];
-
-      let fetchResult: any;
-
-      setTimeout(() => {
-        link.simulateResult({
-          result: {
-            data: {
-              createTodo: {
-                id: 1,
-                __typename: 'Todo',
-              },
-            },
-            hasNext: true,
-          },
-        });
-      });
-
-      setTimeout(() => {
-        link.simulateResult(
-          {
-            result: {
-              incremental: [
-                {
-                  data: null,
-                  errors: [new GraphQLError(CREATE_TODO_ERROR)],
-                  path: ['createTodo'],
-                },
-              ],
-              hasNext: false,
-            },
-          },
-          true,
-        );
-      });
-      await act(async () => {
-        fetchResult = await createTodo({ variables });
-      });
-
-      await waitFor(() => {
-        expect(fetchResult.errors.message).toBe(CREATE_TODO_ERROR);
-      });
-      await waitFor(() => {
-        expect(fetchResult.data).toBe(undefined);
-      });
-      await waitFor(() => {
-        expect(onError).toHaveBeenCalledTimes(1);
-      });
-      await waitFor(() => {
-        expect(onError.mock.calls[0][0].message).toBe(CREATE_TODO_ERROR);
-      });
-      await waitFor(() => {
-        expect(consoleSpies.error).not.toHaveBeenCalled();
-      });
-    });
-    it('calls the update function with the final merged result data', async () => {
-      using consoleSpies = spyOnConsole('error');
-      const link = new MockSubscriptionLink();
-      const update = jest.fn();
-      const client = new ApolloClient({
-        link,
-        cache: new Hermes(),
-      });
-
-      const { result } = renderHook(() => useMutation(CREATE_TODO_MUTATION_DEFER, { update }), {
-        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
-      });
-      const [createTodo] = result.current;
-
-      let promiseReturnedByMutate: Promise<FetchResult>;
-
-      await act(async () => {
-        promiseReturnedByMutate = createTodo({ variables });
-      });
-
-      link.simulateResult({
-        result: {
-          data: {
-            createTodo: {
-              id: 1,
-              __typename: 'Todo',
-            },
-          },
-          hasNext: true,
-        },
-      });
-
-      link.simulateResult(
-        {
-          result: {
-            incremental: [
-              {
-                data: {
-                  description: 'Get milk!',
-                  priority: 'High',
-                  __typename: 'Todo',
-                },
-                path: ['createTodo'],
-              },
-            ],
-            hasNext: false,
-          },
-        },
-        true,
-      );
-
-      await act(async () => {
-        await promiseReturnedByMutate;
-      });
-
-      expect(update).toHaveBeenCalledTimes(1);
-      expect(update).toHaveBeenCalledWith(
-        // the first item is the cache, which we don't need to make any
-        // assertions against in this test
-        expect.anything(),
-        // second argument is the result
-        expect.objectContaining({
-          data: {
-            createTodo: {
-              id: 1,
-              description: 'Get milk!',
-              priority: 'High',
-              __typename: 'Todo',
-            },
-          },
-        }),
-        // third argument is an object containing context and variables
-        // but we only care about variables here
-        expect.objectContaining({ variables }),
-      );
-      await waitFor(() => {
-        expect(consoleSpies.error).not.toHaveBeenCalled();
-      });
-    });
-  });
 });
 
 describe('data masking', () => {
@@ -2827,7 +3784,7 @@ describe('data masking', () => {
       };
     }
 
-    const mutation: TypedDocumentNode<Mutation, never> = gql`
+    const mutation: TypedDocumentNode<Mutation, Record<string, never>> = gql`
       mutation MaskedMutation {
         updateUser {
           id
@@ -2865,49 +3822,59 @@ describe('data masking', () => {
     });
 
     using _disabledAct = disableActEnvironment();
-    const { takeSnapshot } = await renderHookToSnapshotStream(() => useMutation(mutation), {
+    const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(() => useMutation(mutation), {
       wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
     });
 
-    const [mutate, result] = await takeSnapshot();
-
-    expect(result.loading).toBe(false);
-    expect(result.data).toBeUndefined();
-    expect(result.error).toBeUndefined();
-
     {
-      const { data, errors } = await mutate();
+      const [, result] = await takeSnapshot();
 
-      expect(data).toEqual({
+      expect(result).toStrictEqualTyped({
+        data: undefined,
+        error: undefined,
+        loading: false,
+        called: false,
+      });
+    }
+
+    const [mutate] = getCurrentSnapshot();
+
+    await expect(mutate()).resolves.toStrictEqualTyped({
+      data: {
         updateUser: {
           __typename: 'User',
           id: 1,
           name: 'Test User',
         },
+      },
+    });
+
+    {
+      const [, result] = await takeSnapshot();
+
+      expect(result).toStrictEqualTyped({
+        data: undefined,
+        error: undefined,
+        loading: true,
+        called: true,
       });
-      expect(errors).toBeUndefined();
     }
 
     {
       const [, result] = await takeSnapshot();
 
-      expect(result.loading).toBe(true);
-      expect(result.data).toBeUndefined();
-      expect(result.error).toBeUndefined();
-    }
-
-    {
-      const [, result] = await takeSnapshot();
-
-      expect(result.loading).toBe(false);
-      expect(result.data).toEqual({
-        updateUser: {
-          __typename: 'User',
-          id: 1,
-          name: 'Test User',
+      expect(result).toStrictEqualTyped({
+        data: {
+          updateUser: {
+            __typename: 'User',
+            id: 1,
+            name: 'Test User',
+          },
         },
+        error: undefined,
+        loading: false,
+        called: true,
       });
-      expect(result.error).toBeUndefined();
     }
 
     await expect(takeSnapshot).not.toRerender();
@@ -2919,10 +3886,11 @@ describe('data masking', () => {
         __typename: 'User';
         id: number;
         name: string;
+        age: number;
       };
     }
 
-    const mutation: TypedDocumentNode<Mutation, never> = gql`
+    const mutation: TypedDocumentNode<Mutation, Record<string, never>> = gql`
       mutation MaskedMutation {
         updateUser {
           id
@@ -2960,51 +3928,61 @@ describe('data masking', () => {
     });
 
     using _disabledAct = disableActEnvironment();
-    const { takeSnapshot } = await renderHookToSnapshotStream(() => useMutation(mutation), {
+    const { takeSnapshot, getCurrentSnapshot } = await renderHookToSnapshotStream(() => useMutation(mutation), {
       wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
     });
 
-    const [mutate, result] = await takeSnapshot();
-
-    expect(result.loading).toBe(false);
-    expect(result.data).toBeUndefined();
-    expect(result.error).toBeUndefined();
-
     {
-      const { data, errors } = await mutate();
+      const [, result] = await takeSnapshot();
 
-      expect(data).toEqual({
+      expect(result).toStrictEqualTyped({
+        data: undefined,
+        error: undefined,
+        loading: false,
+        called: false,
+      });
+    }
+
+    const [mutate] = getCurrentSnapshot();
+
+    await expect(mutate()).resolves.toStrictEqualTyped({
+      data: {
         updateUser: {
           __typename: 'User',
           id: 1,
           name: 'Test User',
           age: 30,
         },
+      },
+    });
+
+    {
+      const [, result] = await takeSnapshot();
+
+      expect(result).toStrictEqualTyped({
+        data: undefined,
+        error: undefined,
+        loading: true,
+        called: true,
       });
-      expect(errors).toBeUndefined();
     }
 
     {
       const [, result] = await takeSnapshot();
 
-      expect(result.loading).toBe(true);
-      expect(result.data).toBeUndefined();
-      expect(result.error).toBeUndefined();
-    }
-
-    {
-      const [, result] = await takeSnapshot();
-
-      expect(result.loading).toBe(false);
-      expect(result.data).toEqual({
-        updateUser: {
-          __typename: 'User',
-          id: 1,
-          name: 'Test User',
-          age: 30,
+      expect(result).toStrictEqualTyped({
+        data: {
+          updateUser: {
+            __typename: 'User',
+            id: 1,
+            name: 'Test User',
+            age: 30,
+          },
         },
+        error: undefined,
+        loading: false,
+        called: true,
       });
-      expect(result.error).toBeUndefined();
     }
 
     await expect(takeSnapshot).not.toRerender();
@@ -3019,7 +3997,7 @@ describe('data masking', () => {
       };
     }
 
-    const mutation: TypedDocumentNode<Mutation, never> = gql`
+    const mutation: TypedDocumentNode<Mutation, Record<string, never>> = gql`
       mutation MaskedMutation {
         updateUser {
           id
@@ -3096,179 +4074,5 @@ describe('data masking', () => {
       },
       { context: undefined, variables: {} },
     );
-  });
-});
-
-describe.skip('Type Tests', () => {
-  it('NoInfer prevents adding arbitrary additional variables', () => {
-    const typedNode = {} as TypedDocumentNode<{ foo: string }, { bar: number }>;
-    useMutation(typedNode, {
-      variables: {
-        bar: 4,
-        // @ts-expect-error
-        nonExistingVariable: 'string',
-      },
-    });
-  });
-
-  it('uses any as masked and unmasked type when using plain DocumentNode', () => {
-    const mutation = gql`
-      mutation ($id: ID!) {
-        updateUser(id: $id) {
-          id
-          ...UserFields
-        }
-      }
-
-      fragment UserFields on User {
-        age
-      }
-    `;
-
-    const [mutate, { data }] = useMutation(mutation, {
-      optimisticResponse: { foo: 'foo' },
-      updateQueries: {
-        TestQuery: (_, { mutationResult }) => {
-          expectTypeOf(mutationResult.data).toMatchTypeOf<any>();
-
-          return {};
-        },
-      },
-      refetchQueries(result) {
-        expectTypeOf(result.data).toMatchTypeOf<any>();
-
-        return 'active';
-      },
-      onCompleted(data) {
-        expectTypeOf(data).toMatchTypeOf<any>();
-      },
-      update(_, result) {
-        expectTypeOf(result.data).toMatchTypeOf<any>();
-      },
-    });
-
-    expectTypeOf(data).toMatchTypeOf<any>();
-    expectTypeOf(mutate()).toMatchTypeOf<Promise<FetchResult<any>>>();
-  });
-
-  it('uses TData type when using plain TypedDocumentNode', () => {
-    interface Mutation {
-      updateUser: {
-        __typename: 'User';
-        id: string;
-        age: number;
-      };
-    }
-
-    interface Variables {
-      id: string;
-    }
-
-    const mutation: TypedDocumentNode<Mutation, Variables> = gql`
-      mutation ($id: ID!) {
-        updateUser(id: $id) {
-          id
-          ...UserFields
-        }
-      }
-
-      fragment UserFields on User {
-        age
-      }
-    `;
-
-    const [mutate, { data }] = useMutation(mutation, {
-      variables: { id: '1' },
-      optimisticResponse: {
-        updateUser: { __typename: 'User', id: '1', age: 30 },
-      },
-      updateQueries: {
-        TestQuery: (_, { mutationResult }) => {
-          expectTypeOf(mutationResult.data).toMatchTypeOf<Mutation | null | undefined>();
-
-          return {};
-        },
-      },
-      refetchQueries(result) {
-        expectTypeOf(result.data).toMatchTypeOf<Mutation | null | undefined>();
-
-        return 'active';
-      },
-      onCompleted(data) {
-        expectTypeOf(data).toMatchTypeOf<Mutation>();
-      },
-      update(_, result) {
-        expectTypeOf(result.data).toMatchTypeOf<Mutation | null | undefined>();
-      },
-    });
-
-    expectTypeOf(data).toMatchTypeOf<Mutation | null | undefined>();
-    expectTypeOf(mutate()).toMatchTypeOf<Promise<FetchResult<Mutation>>>();
-  });
-
-  it('uses masked/unmasked type when using Masked<TData>', async () => {
-    type UserFieldsFragment = {
-      __typename: 'User';
-      age: number;
-    } & { ' $fragmentName': 'UserFieldsFragment' };
-
-    type Mutation = {
-      updateUser: {
-        __typename: 'User';
-        id: string;
-      } & { ' $fragmentRefs': { UserFieldsFragment: UserFieldsFragment } };
-    };
-
-    type UnmaskedMutation = {
-      updateUser: {
-        __typename: 'User';
-        id: string;
-        age: number;
-      };
-    };
-
-    interface Variables {
-      id: string;
-    }
-
-    const mutation: TypedDocumentNode<Masked<Mutation>, Variables> = gql`
-      mutation ($id: ID!) {
-        updateUser(id: $id) {
-          id
-          ...UserFields
-        }
-      }
-
-      fragment UserFields on User {
-        age
-      }
-    `;
-
-    const [mutate, { data }] = useMutation(mutation, {
-      optimisticResponse: {
-        updateUser: { __typename: 'User', id: '1', age: 30 },
-      },
-      updateQueries: {
-        TestQuery: (_, { mutationResult }) => {
-          expectTypeOf(mutationResult.data).toMatchTypeOf<UnmaskedMutation | null | undefined>();
-
-          return {};
-        },
-      },
-      refetchQueries(result) {
-        expectTypeOf(result.data).toMatchTypeOf<UnmaskedMutation | null | undefined>();
-
-        return 'active';
-      },
-      onCompleted(data) {
-        expectTypeOf(data).toMatchTypeOf<Mutation>();
-      },
-      update(_, result) {
-        expectTypeOf(result.data).toMatchTypeOf<UnmaskedMutation | null | undefined>();
-      },
-    });
-
-    expectTypeOf(data).toMatchTypeOf<Mutation | null | undefined>();
-    expectTypeOf(mutate()).toMatchTypeOf<Promise<FetchResult<Mutation>>>();
   });
 });

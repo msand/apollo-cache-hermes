@@ -1,16 +1,17 @@
 /** @jest-environment node */
+import crypto from 'crypto';
+import fetchMock from 'fetch-mock';
+import { print } from 'graphql';
+import { gql } from 'graphql-tag';
 import * as React from 'react';
 import * as ReactDOM from 'react-dom/server';
-import gql from 'graphql-tag';
-import { print } from 'graphql';
-import fetchMock from 'fetch-mock';
-import crypto from 'crypto';
-import { ApolloProvider } from '@apollo/client/react/context';
-import { ApolloClient } from '@apollo/client/core/ApolloClient';
-import { createHttpLink } from '@apollo/client/link/http/createHttpLink';
-import { graphql } from '@apollo/client/react/hoc/graphql';
-import { getDataFromTree } from '@apollo/client/react/ssr/getDataFromTree';
-import { createPersistedQueryLink as createPersistedQuery, VERSION } from '@apollo/client/link/persisted-queries';
+import type { OperationVariables } from '@apollo/client';
+import { ApolloClient, version } from '@apollo/client';
+import { HttpLink } from '@apollo/client/link/http';
+import { PersistedQueryLink, VERSION } from '@apollo/client/link/persisted-queries';
+import { ApolloProvider, useQuery } from '@apollo/client/react';
+import { getDataFromTree } from '@apollo/client/react/ssr';
+import { addTypenameToDocument } from '@apollo/client/utilities';
 
 import { Hermes } from '../../../../../src';
 
@@ -20,8 +21,15 @@ function sha256(data: string) {
   return hash.digest('hex');
 }
 
-// Hermes: this repo uses fetch-mock 12, which allows several routes for the
-// same (/graphql) endpoint without configuration, matching them in order.
+// Hermes: this repo uses fetch-mock 12, which always allows several routes for the
+// same (/graphql) endpoint, so upstream's `overwriteRoutes = false` setting is not
+// needed. Routes are installed on the global fetch with `mockGlobal()`, and
+// `fetchCalls()` returns fetch-mock 9 style `[url, options]` calls, with the url and
+// options the link passed to fetch.
+function fetchCalls(): [string, RequestInit][] {
+  return fetchMock.callHistory.calls().map(call => [call.args[0] as string, call.args[1] as RequestInit]);
+}
+
 afterAll(() => {
   fetchMock.hardReset();
 });
@@ -50,34 +58,38 @@ const data2 = {
 };
 const response = JSON.stringify({ data });
 const response2 = JSON.stringify({ data: data2 });
-const queryString = print(query);
+const queryString = print(addTypenameToDocument(query));
 
 const hash = sha256(queryString);
 
 describe('react application', () => {
   beforeEach(async () => {
-    // Hermes: fetch-mock 12 API (upstream uses fetch-mock 9's `restore()`).
     fetchMock.hardReset();
   });
   it('works on a simple tree', async () => {
-    fetchMock.mockGlobal().post('/graphql', () => new Promise(resolve => resolve({ body: response })), { repeat: 1 });
+    fetchMock
+      .mockGlobal()
+      .post('path:/graphql', () => new Promise(resolve => resolve({ body: response })), { repeat: 1 });
     // `repeat: 1` simulates a `mockResponseOnce` API with fetch-mock:
     // it limits the number of times the route can be used,
     // after which the call to `fetch()` will fall through to be
     // handled by any other routes defined...
-    // This means subsequent /graphql mocks will be used.
-    fetchMock.post('/graphql', () => new Promise(resolve => resolve({ body: response2 })), { repeat: 1 });
+    // Subsequent /graphql mocks will then be used.
+    fetchMock
+      .mockGlobal()
+      .post('path:/graphql', () => new Promise(resolve => resolve({ body: response2 })), { repeat: 1 });
 
-    const link = createPersistedQuery({ sha256 }).concat(createHttpLink());
+    const link = new PersistedQueryLink({ sha256 }).concat(new HttpLink());
 
     const client = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Hermes(),
       ssrMode: true,
     });
 
-    const Query = graphql<React.PropsWithChildren>(query)(({ data, children }) => {
-      if (data!.loading) return null;
+    const Query = ({ children, variables }: { children: React.ReactNode; variables: OperationVariables }) => {
+      const { data, loading } = useQuery(query, { variables });
+      if (loading) return null;
 
       return (
         <div>
@@ -85,10 +97,10 @@ describe('react application', () => {
           {children}
         </div>
       );
-    });
+    };
     const app = (
       <ApolloProvider client={client}>
-        <Query {...variables}>
+        <Query variables={variables}>
           <h1>Hello!</h1>
         </Query>
       </ApolloProvider>
@@ -97,12 +109,16 @@ describe('react application', () => {
     // preload all the data for client side request (with filter)
     const result = await getDataFromTree(app);
     expect(result).toContain('data was returned');
-    const [request] = fetchMock.callHistory.calls();
-    expect(request!.options.body).toBe(
+    const [[, request]] = fetchCalls();
+    expect(request!.body).toBe(
       JSON.stringify({
         operationName: 'Test',
         variables,
         extensions: {
+          clientLibrary: {
+            name: '@apollo/client',
+            version,
+          },
           persistedQuery: {
             version: VERSION,
             sha256Hash: hash,
@@ -114,13 +130,13 @@ describe('react application', () => {
     // reset client and try with different input object
     const client2 = new ApolloClient({
       link,
-      cache: new Hermes({ addTypename: false }),
+      cache: new Hermes(),
       ssrMode: true,
     });
 
     const app2 = (
       <ApolloProvider client={client2}>
-        <Query {...variables2}>
+        <Query variables={variables2}>
           <h1>Hello!</h1>
         </Query>
       </ApolloProvider>
@@ -130,14 +146,18 @@ describe('react application', () => {
     await getDataFromTree(app2);
     const view = ReactDOM.renderToString(app2);
 
-    const [, request2] = fetchMock.callHistory.calls();
+    const [, [, request2]] = fetchCalls();
 
     expect(view).not.toContain('data was returned');
-    expect(request2!.options.body).toBe(
+    expect(request2!.body).toBe(
       JSON.stringify({
         operationName: 'Test',
         variables: variables2,
         extensions: {
+          clientLibrary: {
+            name: '@apollo/client',
+            version,
+          },
           persistedQuery: {
             version: VERSION,
             sha256Hash: hash,

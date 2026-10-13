@@ -51,7 +51,7 @@ describe(`overlapping fragments`, () => {
     snapshot = result.snapshot;
   });
 
-  it.skip(`writing an entity with overlapping fragment fields should not lose data`, () => {
+  it(`writing an entity with overlapping fragment fields should not lose data`, () => {
     const bar = snapshot.getNodeData('Bar:1');
 
     jestExpect(bar.id).toBe('Bar:1');

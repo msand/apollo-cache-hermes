@@ -3,9 +3,12 @@
   "version": "0.11.0",
   "description": "A cache implementation for Apollo Client, tuned for performance",
   "license": "Apache-2.0",
-  "repository": "convoyinc/apollo-cache-hermes",
-  "homepage": "https://github.com/convoyinc/apollo-cache-hermes",
-  "bugs": "https://github.com/convoyinc/apollo-cache-hermes/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/msand/apollo-cache-hermes.git"
+  },
+  "homepage": "https://github.com/msand/apollo-cache-hermes",
+  "bugs": "https://github.com/msand/apollo-cache-hermes/issues",
   "keywords": [
     "apollo",
     "apollo-client",
@@ -13,12 +16,12 @@
     "graphql"
   ],
   "files": [
-    "**/*.md",
+    "*.md",
+    "docs/**/*.md",
+    "src/**/*.md",
     "src/**/**.js",
     "src/**/**.d.ts",
-    "tsconfig.json",
-    "!apollo-client/**",
-    "!.claude/**"
+    "tsconfig.json"
   ],
   "main": "./src/index.js",
   "typings": "./src/index.d.ts",
@@ -35,17 +38,20 @@
     "test-unit-coverage": "./scripts/test-unit-coverage.sh",
     "test-audit": "node ./node_modules/.bin/audit-ci --config .audit-ci.json --pass-enoaudit",
     "format": "prettier --write .",
-    "test-format": "prettier --check ."
+    "test-format": "prettier --check .",
+    "prepare": "node ./scripts/patch-graphql-17-alpha9.js",
+    "bench:setup": "node ./bench/setup.mjs",
+    "bench": "node ./bench/run.mjs"
   },
   "devDependencies": {
-    "@apollo/client": "^3.14.1",
+    "@apollo/client": "^4.3.3",
     "@babel/core": "^8.0.7",
     "@babel/preset-env": "^8.0.7",
     "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
     "@eslint/js": "^10.0.1",
-    "@graphql-tools/merge": "^9.2.6",
-    "@graphql-tools/schema": "^10.1.3",
-    "@graphql-tools/utils": "^12.0.3",
+    "@graphql-tools/merge": "^9.2.7",
+    "@graphql-tools/schema": "^10.1.4",
+    "@graphql-tools/utils": "^12.0.4",
     "@graphql-typed-document-node/core": "^3.2.0",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",
@@ -55,9 +61,9 @@
     "@types/chai": "^5.2.3",
     "@types/jest": "^30.0.0",
     "@types/lodash": "^4.17.26",
-    "@types/node": "^22.20.5",
-    "@types/react": "^18.3.31",
-    "@types/react-dom": "^18.3.7",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@types/relay-runtime": "^20.1.1",
     "audit-ci": "^7.1.0",
     "babel-jest": "^30.5.2",
@@ -71,18 +77,20 @@
     "expect-type": "^1.4.0",
     "fetch-mock": "^12.6.0",
     "globals": "^17.13.0",
-    "graphql": "^16.14.2",
+    "graphql": "^17.0.2",
+    "graphql-17-alpha2": "npm:graphql@17.0.0-alpha.2",
+    "graphql-17-alpha9": "npm:graphql@17.0.0-alpha.9",
     "graphql-tag": "^2.12.7",
-    "graphql-ws": "^5.16.2",
+    "graphql-ws": "^6.3.0",
     "jest": "^30.5.2",
     "jest-environment-jsdom": "^30.5.2",
     "jest-fixed-jsdom": "^0.0.11",
     "jest-junit": "^17.0.0",
-    "jsdom": "^26.1.0",
+    "jsdom": "^29.1.1",
     "lodash": "^4.18.1",
     "prettier": "^3.9.10",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "react-error-boundary": "^6.1.6",
     "rehackt": "^0.1.0",
     "relay-runtime": "^21.0.1",
@@ -90,12 +98,12 @@
     "subscriptions-transport-ws": "^0.11.0",
     "symbol-observable": "^4.0.0",
     "ts-jest": "^29.4.14",
-    "typescript": "~5.9.3",
-    "typescript-eslint": "^8.71.1",
+    "typescript": "~6.0.3",
+    "typescript-7": "npm:typescript@7.0.2",
+    "typescript-eslint": "^8.71.2",
     "use-sync-external-store": "^1.7.0",
     "wait-for-observables": "^1.0.3",
-    "web-streams-polyfill": "^4.3.0",
-    "zen-observable-ts": "^1.2.5"
+    "web-streams-polyfill": "^4.3.0"
   },
   "dependencies": {
     "@wry/equality": "^0.5.7",
@@ -104,9 +112,12 @@
     "tslib": "^2.8.1"
   },
   "peerDependencies": {
-    "@apollo/client": "^3.14.1"
+    "@apollo/client": "^4.3.3"
   },
   "overrides": {
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.0",
+    "subscriptions-transport-ws": {
+      "graphql": "$graphql"
+    }
   }
 }

@@ -39,7 +39,7 @@ describe('reading from the store', () => {
         query: bQuery,
         returnPartialData: true,
       }),
-    ).toMatchObject({});
+    ).toBe(null);
 
     jestExpect(
       cache.readQuery({
@@ -171,7 +171,7 @@ describe('reading from the store', () => {
       },
     });
 
-    jestExpect(missing?.[0]).toEqual(
+    jestExpect(missing).toEqual(
       new MissingFieldError(
         `Can't find field 'missing' on object ${JSON.stringify(
           {
@@ -505,21 +505,19 @@ describe('reading from the store', () => {
 
     jestExpect(diffChickens()).toMatchObject({
       complete: false,
-      missing: [
-        new MissingFieldError(
-          "Can't find field 'id' on object {}",
-          {
-            chickens: {
-              1: {
-                id: "Can't find field 'id' on object {}",
-                inCoop: "Can't find field 'inCoop' on object {}",
-              },
+      missing: new MissingFieldError(
+        "Can't find field 'id' on object {}",
+        {
+          chickens: {
+            1: {
+              id: "Can't find field 'id' on object {}",
+              inCoop: "Can't find field 'inCoop' on object {}",
             },
           },
-          jestExpect.anything(), // query
-          jestExpect.anything(), // variables
-        ),
-      ],
+        },
+        jestExpect.anything(), // query
+        jestExpect.anything(), // variables
+      ),
       result: {
         chickens: [{ __typename: 'Chicken', id: 1, inCoop: true }, {}, { __typename: 'Chicken', id: 3, inCoop: false }],
       },

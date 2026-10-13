@@ -31,6 +31,18 @@ export enum StaticNodeId {
 }
 
 /**
+ * Whether `id` is the id of a root object (ROOT_QUERY, ROOT_MUTATION or
+ * ROOT_SUBSCRIPTION, whatever their types' names).
+ *
+ * Like InMemoryCache, which writes and reads a root object's fields under its
+ * own id, root objects are never identified as entities by their data (even if
+ * they have an id, or their type has keyFields).
+ */
+export function isRootNodeId(id: string): boolean {
+  return id === StaticNodeId.QueryRoot || id === StaticNodeId.MutationRoot || id === StaticNodeId.SubscriptionRoot;
+}
+
+/**
  * All the information needed to describe a complete GraphQL operation that can
  * be made against the cache (read or written).
  */
@@ -43,11 +55,14 @@ export interface RawOperation {
   readonly variables?: JsonObject;
   /** Fragment's name in readFragment/writeFragment with multiple fragments */
   readonly fragmentName?: string;
-  /** A boolean flag indicating whether the operation is constructed
-   * from fragment only document.
-   * This is used to skip queryInfo._assertAllVariablesDeclared
-   **/
-  readonly fromFragmentDocument?: boolean;
+  /** The GraphQL extensions of a write, passed to merge functions. */
+  readonly extensions?: Record<string, unknown>;
+  /**
+   * Whether a write replaces existing field values: like InMemoryCache's
+   * `overwrite` write option, merge functions are called with no existing
+   * value.
+   */
+  readonly overwrite?: boolean;
 }
 
 /**
@@ -59,6 +74,11 @@ export interface OperationInstance<TSerialized> {
   readonly rootId: NodeId;
   /** A parsed GraphQL document, declaring an operation to execute. */
   readonly info: QueryInfo<TSerialized>;
+  /**
+   * The document as it was passed to the cache (before transformDocument),
+   * which missing field errors report, like InMemoryCache.
+   */
+  readonly document: DocumentNode;
   /** Parsed form of the query, with values substituted for any variables. */
   readonly parsedQuery: ParsedQuery;
   /** Whether the operation contains _no_ parameterized values. */

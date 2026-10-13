@@ -1,0 +1,13 @@
+{
+  "name": "bench-impl-hermes-0.10.0",
+  "private": true,
+  "description": "The published Hermes 0.10.0 with Apollo Client 3.10.8.",
+  "dependencies": {
+    "@apollo/client": "3.10.8",
+    "graphql": "16.14.2",
+    "msand-apollo-cache-hermes": "file:./hermes.tgz"
+  },
+  "overrides": {
+    "@apollo/client": "3.10.8"
+  }
+}

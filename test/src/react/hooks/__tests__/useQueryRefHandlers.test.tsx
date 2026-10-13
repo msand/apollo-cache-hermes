@@ -1,25 +1,24 @@
-import * as React from 'react';
-import { Suspense } from 'react';
 import { screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { ApolloClient, NetworkStatus, TypedDocumentNode, gql, split } from '@apollo/client/core';
-import { SubscribeToMoreFunction, SubscribeToMoreUpdateQueryFn } from '@apollo/client/core/watchQueryOptions';
-import { MockLink, MockSubscriptionLink, MockedResponse } from '@apollo/client/testing';
-import {
-  createClientWrapper,
-  PaginatedCaseData,
-  SimpleCaseData,
-  setupPaginatedCase,
-  setupSimpleCase,
-} from '@apollo/client/testing/internal';
-import { useQueryRefHandlers } from '@apollo/client/react/hooks/useQueryRefHandlers';
-import { UseReadQueryResult, useReadQuery } from '@apollo/client/react/hooks/useReadQuery';
-import { createQueryPreloader } from '@apollo/client/react/query-preloader/createQueryPreloader';
-import { QueryRef } from '@apollo/client/react/internal';
-import { useBackgroundQuery } from '@apollo/client/react/hooks/useBackgroundQuery';
-import { useLoadableQuery } from '@apollo/client/react/hooks/useLoadableQuery';
-import { concatPagination, getMainDefinition } from '@apollo/client/utilities';
 import { createRenderStream, disableActEnvironment, useTrackRenders } from '@testing-library/react-render-stream';
+import { userEvent } from '@testing-library/user-event';
+import React, { Suspense } from 'react';
+import type { TypedDocumentNode } from '@apollo/client';
+import { ApolloClient, ApolloLink, gql, NetworkStatus } from '@apollo/client';
+import type { QueryRef } from '@apollo/client/react';
+import {
+  createQueryPreloader,
+  useBackgroundQuery,
+  useLoadableQuery,
+  useQueryRefHandlers,
+  useReadQuery,
+} from '@apollo/client/react';
+import { MockLink, MockSubscriptionLink } from '@apollo/client/testing';
+import { concatPagination } from '@apollo/client/utilities';
+import { getMainDefinition } from '@apollo/client/utilities/internal';
+import type { SubscribeToMoreFunction, SubscribeToMoreUpdateQueryFn } from '@apollo/client/core/watchQueryOptions';
+
+import { createClientWrapper, setupPaginatedCase, setupSimpleCase } from '@apollo/client/testing/internal';
+import type { PaginatedCaseData, SimpleCaseData } from '@apollo/client/testing/internal';
 
 import { Hermes } from '../../../../../src';
 
@@ -34,7 +33,7 @@ it('does not interfere with updates from useReadQuery', async () => {
   using _disabledAct = disableActEnvironment();
   const renderStream = createRenderStream({
     initialSnapshot: {
-      result: null as UseReadQueryResult<SimpleCaseData> | null,
+      result: null as useReadQuery.Result<SimpleCaseData> | null,
     },
   });
 
@@ -79,8 +78,9 @@ it('does not interfere with updates from useReadQuery', async () => {
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: { greeting: 'Hello' },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
@@ -92,8 +92,9 @@ it('does not interfere with updates from useReadQuery', async () => {
     const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: { greeting: 'Hello again' },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
@@ -105,8 +106,9 @@ it('does not interfere with updates from useReadQuery', async () => {
     const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: { greeting: 'Hello again' },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
@@ -135,7 +137,7 @@ it('refetches and resuspends when calling refetch', async () => {
   using _disabledAct = disableActEnvironment();
   const renderStream = createRenderStream({
     initialSnapshot: {
-      result: null as UseReadQueryResult<SimpleCaseData> | null,
+      result: null as useReadQuery.Result<SimpleCaseData> | null,
     },
   });
 
@@ -178,8 +180,9 @@ it('refetches and resuspends when calling refetch', async () => {
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: { greeting: 'Hello' },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
@@ -196,16 +199,16 @@ it('refetches and resuspends when calling refetch', async () => {
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: { greeting: 'Hello again' },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
   }
 });
 
-// Hermes: keyArgs (merging a field across arguments) is not implemented.
-it.skip('honors refetchWritePolicy set to "merge"', async () => {
+it('honors refetchWritePolicy set to "merge"', async () => {
   const query: TypedDocumentNode<{ primes: number[] }, { min: number; max: number }> = gql`
     query GetPrimes($min: number, $max: number) {
       primes(min: $min, max: $max)
@@ -255,7 +258,7 @@ it.skip('honors refetchWritePolicy set to "merge"', async () => {
   using _disabledAct = disableActEnvironment();
   const renderStream = createRenderStream({
     initialSnapshot: {
-      result: null as UseReadQueryResult<QueryData> | null,
+      result: null as useReadQuery.Result<QueryData> | null,
     },
   });
 
@@ -296,8 +299,9 @@ it.skip('honors refetchWritePolicy set to "merge"', async () => {
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: { primes: [2, 3, 5, 7, 11] },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
@@ -310,8 +314,9 @@ it.skip('honors refetchWritePolicy set to "merge"', async () => {
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: { primes: [2, 3, 5, 7, 11, 13, 17, 19, 23, 29] },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
@@ -377,7 +382,7 @@ it('honors refetchWritePolicy set to "overwrite"', async () => {
   using _disabledAct = disableActEnvironment();
   const renderStream = createRenderStream({
     initialSnapshot: {
-      result: null as UseReadQueryResult<QueryData> | null,
+      result: null as useReadQuery.Result<QueryData> | null,
     },
   });
 
@@ -418,8 +423,9 @@ it('honors refetchWritePolicy set to "overwrite"', async () => {
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: { primes: [2, 3, 5, 7, 11] },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
@@ -432,8 +438,9 @@ it('honors refetchWritePolicy set to "overwrite"', async () => {
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: { primes: [13, 17, 19, 23, 29] },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
@@ -496,7 +503,7 @@ it('defaults refetchWritePolicy to "overwrite"', async () => {
   using _disabledAct = disableActEnvironment();
   const renderStream = createRenderStream({
     initialSnapshot: {
-      result: null as UseReadQueryResult<QueryData> | null,
+      result: null as useReadQuery.Result<QueryData> | null,
     },
   });
 
@@ -536,8 +543,9 @@ it('defaults refetchWritePolicy to "overwrite"', async () => {
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: { primes: [2, 3, 5, 7, 11] },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
@@ -550,8 +558,9 @@ it('defaults refetchWritePolicy to "overwrite"', async () => {
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: { primes: [13, 17, 19, 23, 29] },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
@@ -588,7 +597,7 @@ it('`refetch` works with startTransition', async () => {
     }
   `;
 
-  const mocks: MockedResponse[] = [
+  const mocks: MockLink.MockedResponse[] = [
     {
       request: { query, variables: { id: '1' } },
       result: {
@@ -614,7 +623,7 @@ it('`refetch` works with startTransition', async () => {
   const renderStream = createRenderStream({
     initialSnapshot: {
       isPending: false,
-      result: null as UseReadQueryResult<Data> | null,
+      result: null as useReadQuery.Result<Data> | null,
     },
   });
 
@@ -678,10 +687,11 @@ it('`refetch` works with startTransition', async () => {
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot).toEqual({
+    expect(snapshot).toStrictEqualTyped({
       isPending: false,
       result: {
         data: { todo: { id: '1', name: 'Clean room', completed: false } },
+        dataState: 'complete',
         error: undefined,
         networkStatus: NetworkStatus.ready,
       },
@@ -695,10 +705,11 @@ it('`refetch` works with startTransition', async () => {
     const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, Todo]);
-    expect(snapshot).toEqual({
+    expect(snapshot).toStrictEqualTyped({
       isPending: true,
       result: {
         data: { todo: { id: '1', name: 'Clean room', completed: false } },
+        dataState: 'complete',
         error: undefined,
         networkStatus: NetworkStatus.ready,
       },
@@ -709,10 +720,11 @@ it('`refetch` works with startTransition', async () => {
     const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, Todo]);
-    expect(snapshot).toEqual({
+    expect(snapshot).toStrictEqualTyped({
       isPending: false,
       result: {
         data: { todo: { id: '1', name: 'Clean room', completed: true } },
+        dataState: 'complete',
         error: undefined,
         networkStatus: NetworkStatus.ready,
       },
@@ -751,7 +763,7 @@ it('`refetch` works with startTransition from useBackgroundQuery and usePreloade
     initialSnapshot: {
       useBackgroundQueryIsPending: false,
       usePreloadedQueryHandlersIsPending: false,
-      result: null as UseReadQueryResult<SimpleCaseData> | null,
+      result: null as useReadQuery.Result<SimpleCaseData> | null,
     },
   });
 
@@ -819,8 +831,9 @@ it('`refetch` works with startTransition from useBackgroundQuery and usePreloade
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: { greeting: 'Hello' },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
@@ -832,11 +845,12 @@ it('`refetch` works with startTransition from useBackgroundQuery and usePreloade
     const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
-    expect(snapshot).toEqual({
+    expect(snapshot).toStrictEqualTyped({
       useBackgroundQueryIsPending: true,
       usePreloadedQueryHandlersIsPending: false,
       result: {
         data: { greeting: 'Hello' },
+        dataState: 'complete',
         error: undefined,
         networkStatus: NetworkStatus.ready,
       },
@@ -847,11 +861,12 @@ it('`refetch` works with startTransition from useBackgroundQuery and usePreloade
     const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
-    expect(snapshot).toEqual({
+    expect(snapshot).toStrictEqualTyped({
       useBackgroundQueryIsPending: false,
       usePreloadedQueryHandlersIsPending: false,
       result: {
         data: { greeting: 'Hello again' },
+        dataState: 'complete',
         error: undefined,
         networkStatus: NetworkStatus.ready,
       },
@@ -864,11 +879,12 @@ it('`refetch` works with startTransition from useBackgroundQuery and usePreloade
     const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
-    expect(snapshot).toEqual({
+    expect(snapshot).toStrictEqualTyped({
       useBackgroundQueryIsPending: false,
       usePreloadedQueryHandlersIsPending: true,
       result: {
         data: { greeting: 'Hello again' },
+        dataState: 'complete',
         error: undefined,
         networkStatus: NetworkStatus.ready,
       },
@@ -879,11 +895,12 @@ it('`refetch` works with startTransition from useBackgroundQuery and usePreloade
     const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
-    expect(snapshot).toEqual({
+    expect(snapshot).toStrictEqualTyped({
       useBackgroundQueryIsPending: false,
       usePreloadedQueryHandlersIsPending: false,
       result: {
         data: { greeting: 'You again?' },
+        dataState: 'complete',
         error: undefined,
         networkStatus: NetworkStatus.ready,
       },
@@ -915,7 +932,7 @@ it('refetches from queryRefs produced by useBackgroundQuery', async () => {
   using _disabledAct = disableActEnvironment();
   const renderStream = createRenderStream({
     initialSnapshot: {
-      result: null as UseReadQueryResult<SimpleCaseData> | null,
+      result: null as useReadQuery.Result<SimpleCaseData> | null,
     },
   });
 
@@ -955,8 +972,9 @@ it('refetches from queryRefs produced by useBackgroundQuery', async () => {
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: { greeting: 'Hello' },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
@@ -973,8 +991,9 @@ it('refetches from queryRefs produced by useBackgroundQuery', async () => {
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: { greeting: 'Hello again' },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
@@ -1003,7 +1022,7 @@ it('refetches from queryRefs produced by useLoadableQuery', async () => {
   using _disabledAct = disableActEnvironment();
   const renderStream = createRenderStream({
     initialSnapshot: {
-      result: null as UseReadQueryResult<SimpleCaseData> | null,
+      result: null as useReadQuery.Result<SimpleCaseData> | null,
     },
   });
 
@@ -1047,8 +1066,9 @@ it('refetches from queryRefs produced by useLoadableQuery', async () => {
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: { greeting: 'Hello' },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
@@ -1065,16 +1085,16 @@ it('refetches from queryRefs produced by useLoadableQuery', async () => {
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: { greeting: 'Hello again' },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
   }
 });
 
-// Hermes: keyArgs (merging a field across arguments) is not implemented.
-it.skip('resuspends when calling `fetchMore`', async () => {
+it('resuspends when calling `fetchMore`', async () => {
   const { query, link } = setupPaginatedCase();
 
   const user = userEvent.setup();
@@ -1096,7 +1116,7 @@ it.skip('resuspends when calling `fetchMore`', async () => {
   using _disabledAct = disableActEnvironment();
   const renderStream = createRenderStream({
     initialSnapshot: {
-      result: null as UseReadQueryResult<PaginatedCaseData> | null,
+      result: null as useReadQuery.Result<PaginatedCaseData> | null,
     },
   });
 
@@ -1138,13 +1158,14 @@ it.skip('resuspends when calling `fetchMore`', async () => {
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: {
         letters: [
           { __typename: 'Letter', letter: 'A', position: 1 },
           { __typename: 'Letter', letter: 'B', position: 2 },
         ],
       },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
@@ -1161,13 +1182,14 @@ it.skip('resuspends when calling `fetchMore`', async () => {
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: {
         letters: [
           { __typename: 'Letter', letter: 'C', position: 3 },
           { __typename: 'Letter', letter: 'D', position: 4 },
         ],
       },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
@@ -1185,7 +1207,7 @@ it('properly uses `updateQuery` when calling `fetchMore`', async () => {
   using _disabledAct = disableActEnvironment();
   const renderStream = createRenderStream({
     initialSnapshot: {
-      result: null as UseReadQueryResult<PaginatedCaseData> | null,
+      result: null as useReadQuery.Result<PaginatedCaseData> | null,
     },
   });
 
@@ -1238,13 +1260,14 @@ it('properly uses `updateQuery` when calling `fetchMore`', async () => {
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: {
         letters: [
           { __typename: 'Letter', letter: 'A', position: 1 },
           { __typename: 'Letter', letter: 'B', position: 2 },
         ],
       },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
@@ -1261,7 +1284,7 @@ it('properly uses `updateQuery` when calling `fetchMore`', async () => {
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: {
         letters: [
           { __typename: 'Letter', letter: 'A', position: 1 },
@@ -1270,14 +1293,14 @@ it('properly uses `updateQuery` when calling `fetchMore`', async () => {
           { __typename: 'Letter', letter: 'D', position: 4 },
         ],
       },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
   }
 });
 
-// Hermes: concatPagination relies on keyArgs: false, which is not implemented.
-it.skip('properly uses cache field policies when calling `fetchMore` without `updateQuery`', async () => {
+it('properly uses cache field policies when calling `fetchMore` without `updateQuery`', async () => {
   const { query, link } = setupPaginatedCase();
 
   const user = userEvent.setup();
@@ -1299,7 +1322,7 @@ it.skip('properly uses cache field policies when calling `fetchMore` without `up
   using _disabledAct = disableActEnvironment();
   const renderStream = createRenderStream({
     initialSnapshot: {
-      result: null as UseReadQueryResult<PaginatedCaseData> | null,
+      result: null as useReadQuery.Result<PaginatedCaseData> | null,
     },
   });
 
@@ -1341,13 +1364,14 @@ it.skip('properly uses cache field policies when calling `fetchMore` without `up
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: {
         letters: [
           { __typename: 'Letter', letter: 'A', position: 1 },
           { __typename: 'Letter', letter: 'B', position: 2 },
         ],
       },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
@@ -1364,7 +1388,7 @@ it.skip('properly uses cache field policies when calling `fetchMore` without `up
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: {
         letters: [
           { __typename: 'Letter', letter: 'A', position: 1 },
@@ -1373,14 +1397,14 @@ it.skip('properly uses cache field policies when calling `fetchMore` without `up
           { __typename: 'Letter', letter: 'D', position: 4 },
         ],
       },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
   }
 });
 
-// Hermes: keyArgs (merging a field across arguments) is not implemented.
-it.skip('paginates from queryRefs produced by useBackgroundQuery', async () => {
+it('paginates from queryRefs produced by useBackgroundQuery', async () => {
   const { query, link } = setupPaginatedCase();
 
   const user = userEvent.setup();
@@ -1400,7 +1424,7 @@ it.skip('paginates from queryRefs produced by useBackgroundQuery', async () => {
   using _disabledAct = disableActEnvironment();
   const renderStream = createRenderStream({
     initialSnapshot: {
-      result: null as UseReadQueryResult<PaginatedCaseData> | null,
+      result: null as useReadQuery.Result<PaginatedCaseData> | null,
     },
   });
 
@@ -1440,13 +1464,14 @@ it.skip('paginates from queryRefs produced by useBackgroundQuery', async () => {
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: {
         letters: [
           { __typename: 'Letter', letter: 'A', position: 1 },
           { __typename: 'Letter', letter: 'B', position: 2 },
         ],
       },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
@@ -1463,21 +1488,21 @@ it.skip('paginates from queryRefs produced by useBackgroundQuery', async () => {
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: {
         letters: [
           { __typename: 'Letter', letter: 'C', position: 3 },
           { __typename: 'Letter', letter: 'D', position: 4 },
         ],
       },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
   }
 });
 
-// Hermes: keyArgs (merging a field across arguments) is not implemented.
-it.skip('paginates from queryRefs produced by useLoadableQuery', async () => {
+it('paginates from queryRefs produced by useLoadableQuery', async () => {
   const { query, link } = setupPaginatedCase();
 
   const user = userEvent.setup();
@@ -1497,7 +1522,7 @@ it.skip('paginates from queryRefs produced by useLoadableQuery', async () => {
   using _disabledAct = disableActEnvironment();
   const renderStream = createRenderStream({
     initialSnapshot: {
-      result: null as UseReadQueryResult<PaginatedCaseData> | null,
+      result: null as useReadQuery.Result<PaginatedCaseData> | null,
     },
   });
 
@@ -1543,13 +1568,14 @@ it.skip('paginates from queryRefs produced by useLoadableQuery', async () => {
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: {
         letters: [
           { __typename: 'Letter', letter: 'A', position: 1 },
           { __typename: 'Letter', letter: 'B', position: 2 },
         ],
       },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
@@ -1566,21 +1592,21 @@ it.skip('paginates from queryRefs produced by useLoadableQuery', async () => {
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: {
         letters: [
           { __typename: 'Letter', letter: 'C', position: 3 },
           { __typename: 'Letter', letter: 'D', position: 4 },
         ],
       },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
   }
 });
 
-// Hermes: keyArgs (merging a field across arguments) is not implemented.
-it.skip('`fetchMore` works with startTransition', async () => {
+it('`fetchMore` works with startTransition', async () => {
   const { query, link } = setupPaginatedCase();
 
   const user = userEvent.setup();
@@ -1602,7 +1628,7 @@ it.skip('`fetchMore` works with startTransition', async () => {
   const renderStream = createRenderStream({
     initialSnapshot: {
       isPending: false,
-      result: null as UseReadQueryResult<PaginatedCaseData> | null,
+      result: null as useReadQuery.Result<PaginatedCaseData> | null,
     },
   });
 
@@ -1656,13 +1682,14 @@ it.skip('`fetchMore` works with startTransition', async () => {
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: {
         letters: [
           { __typename: 'Letter', letter: 'A', position: 1 },
           { __typename: 'Letter', letter: 'B', position: 2 },
         ],
       },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
@@ -1674,7 +1701,7 @@ it.skip('`fetchMore` works with startTransition', async () => {
     const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
-    expect(snapshot).toEqual({
+    expect(snapshot).toStrictEqualTyped({
       isPending: true,
       result: {
         data: {
@@ -1683,6 +1710,7 @@ it.skip('`fetchMore` works with startTransition', async () => {
             { __typename: 'Letter', letter: 'B', position: 2 },
           ],
         },
+        dataState: 'complete',
         error: undefined,
         networkStatus: NetworkStatus.ready,
       },
@@ -1693,7 +1721,7 @@ it.skip('`fetchMore` works with startTransition', async () => {
     const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
-    expect(snapshot).toEqual({
+    expect(snapshot).toStrictEqualTyped({
       isPending: false,
       result: {
         data: {
@@ -1702,6 +1730,7 @@ it.skip('`fetchMore` works with startTransition', async () => {
             { __typename: 'Letter', letter: 'D', position: 4 },
           ],
         },
+        dataState: 'complete',
         error: undefined,
         networkStatus: NetworkStatus.ready,
       },
@@ -1711,8 +1740,7 @@ it.skip('`fetchMore` works with startTransition', async () => {
   await expect(renderStream).not.toRerender();
 });
 
-// Hermes: keyArgs (merging a field across arguments) is not implemented.
-it.skip('`fetchMore` works with startTransition from useBackgroundQuery and useQueryRefHandlers', async () => {
+it('`fetchMore` works with startTransition from useBackgroundQuery and useQueryRefHandlers', async () => {
   const { query, link } = setupPaginatedCase();
 
   const user = userEvent.setup();
@@ -1734,7 +1762,7 @@ it.skip('`fetchMore` works with startTransition from useBackgroundQuery and useQ
     initialSnapshot: {
       useBackgroundQueryIsPending: false,
       useQueryRefHandlersIsPending: false,
-      result: null as UseReadQueryResult<PaginatedCaseData> | null,
+      result: null as useReadQuery.Result<PaginatedCaseData> | null,
     },
   });
 
@@ -1802,13 +1830,14 @@ it.skip('`fetchMore` works with startTransition from useBackgroundQuery and useQ
   {
     const { snapshot } = await renderStream.takeRender();
 
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: {
         letters: [
           { __typename: 'Letter', letter: 'A', position: 1 },
           { __typename: 'Letter', letter: 'B', position: 2 },
         ],
       },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
@@ -1820,7 +1849,7 @@ it.skip('`fetchMore` works with startTransition from useBackgroundQuery and useQ
     const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
-    expect(snapshot).toEqual({
+    expect(snapshot).toStrictEqualTyped({
       useBackgroundQueryIsPending: true,
       useQueryRefHandlersIsPending: false,
       result: {
@@ -1830,6 +1859,7 @@ it.skip('`fetchMore` works with startTransition from useBackgroundQuery and useQ
             { __typename: 'Letter', letter: 'B', position: 2 },
           ],
         },
+        dataState: 'complete',
         error: undefined,
         networkStatus: NetworkStatus.ready,
       },
@@ -1840,7 +1870,7 @@ it.skip('`fetchMore` works with startTransition from useBackgroundQuery and useQ
     const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([App, ReadQueryHook]);
-    expect(snapshot).toEqual({
+    expect(snapshot).toStrictEqualTyped({
       useBackgroundQueryIsPending: false,
       useQueryRefHandlersIsPending: false,
       result: {
@@ -1850,6 +1880,7 @@ it.skip('`fetchMore` works with startTransition from useBackgroundQuery and useQ
             { __typename: 'Letter', letter: 'D', position: 4 },
           ],
         },
+        dataState: 'complete',
         error: undefined,
         networkStatus: NetworkStatus.ready,
       },
@@ -1862,7 +1893,7 @@ it.skip('`fetchMore` works with startTransition from useBackgroundQuery and useQ
     const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
-    expect(snapshot).toEqual({
+    expect(snapshot).toStrictEqualTyped({
       useBackgroundQueryIsPending: false,
       useQueryRefHandlersIsPending: true,
       result: {
@@ -1872,6 +1903,7 @@ it.skip('`fetchMore` works with startTransition from useBackgroundQuery and useQ
             { __typename: 'Letter', letter: 'D', position: 4 },
           ],
         },
+        dataState: 'complete',
         error: undefined,
         networkStatus: NetworkStatus.ready,
       },
@@ -1882,7 +1914,7 @@ it.skip('`fetchMore` works with startTransition from useBackgroundQuery and useQ
     const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
-    expect(snapshot).toEqual({
+    expect(snapshot).toStrictEqualTyped({
       useBackgroundQueryIsPending: false,
       useQueryRefHandlersIsPending: false,
       result: {
@@ -1892,6 +1924,7 @@ it.skip('`fetchMore` works with startTransition from useBackgroundQuery and useQ
             { __typename: 'Letter', letter: 'F', position: 6 },
           ],
         },
+        dataState: 'complete',
         error: undefined,
         networkStatus: NetworkStatus.ready,
       },
@@ -1919,7 +1952,7 @@ it('can subscribe to subscriptions and react to cache updates via `subscribeToMo
   const wsLink = new MockSubscriptionLink();
   const mockLink = new MockLink(mocks);
 
-  const link = split(
+  const link = ApolloLink.split(
     ({ query }) => {
       const definition = getMainDefinition(query);
 
@@ -1938,7 +1971,7 @@ it('can subscribe to subscriptions and react to cache updates via `subscribeToMo
   const renderStream = createRenderStream({
     initialSnapshot: {
       subscribeToMore: null as SubscribeToMoreFunction<SimpleCaseData, Record<string, never>> | null,
-      result: null as UseReadQueryResult<SimpleCaseData> | null,
+      result: null as useReadQuery.Result<SimpleCaseData> | null,
     },
   });
 
@@ -1982,8 +2015,9 @@ it('can subscribe to subscriptions and react to cache updates via `subscribeToMo
     const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: { greeting: 'Hello' },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });
@@ -2011,8 +2045,9 @@ it('can subscribe to subscriptions and react to cache updates via `subscribeToMo
     const { snapshot, renderedComponents } = await renderStream.takeRender();
 
     expect(renderedComponents).toStrictEqual([ReadQueryHook]);
-    expect(snapshot.result).toEqual({
+    expect(snapshot.result).toStrictEqualTyped({
       data: { greeting: 'Subscription hello' },
+      dataState: 'complete',
       error: undefined,
       networkStatus: NetworkStatus.ready,
     });

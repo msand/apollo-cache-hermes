@@ -1,0 +1,9 @@
+{
+  "name": "bench-impl-inmemory-3",
+  "private": true,
+  "description": "InMemoryCache from Apollo Client 3.",
+  "dependencies": {
+    "@apollo/client": "3.14.1",
+    "graphql": "16.14.2"
+  }
+}

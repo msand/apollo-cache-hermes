@@ -1,21 +1,58 @@
-import gql from 'graphql-tag';
-import { DocumentNode } from 'graphql';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { InvariantError } from 'ts-invariant';
-import { ApolloCache } from '@apollo/client';
-import { EntityStore } from '@apollo/client/cache/inmemory/entityStore';
-import { StoreObject } from '@apollo/client/cache/inmemory/types';
-import { Cache } from '@apollo/client/cache/core/types/Cache';
-import { Reference, makeReference, isReference, StoreValue, stringifyForDisplay } from '@apollo/client/utilities';
-import { MissingFieldError } from '@apollo/client/cache';
+import type { DocumentNode } from 'graphql';
+import { gql } from 'graphql-tag';
+import type { ApolloCache, Cache, InMemoryCache, StoreObject } from '@apollo/client/cache';
+import { EntityStore, MissingFieldError, Policies } from '@apollo/client/cache';
+import type { Reference, StoreValue } from '@apollo/client/utilities';
+import { isReference } from '@apollo/client/utilities';
+import { makeReference, stringifyForDisplay } from '@apollo/client/utilities/internal';
+import { InvariantError } from '@apollo/client/utilities/invariant';
+// not exported
+import { supportsResultCaching } from '@apollo/client/cache/inmemory/entityStore'; // eslint-disable-line import/no-unresolved
+
 import { spyOnConsole } from '@apollo/client/testing/internal';
 
 import { Hermes } from '../../../../../src';
+import { toNormalizedCacheObject } from '../../../../helpers';
 
 describe('EntityStore', () => {
+  // Hermes: this tests InMemoryCache's internal EntityStore. Its Policies only
+  // hold on to the cache (whose config EntityStore reads to check for custom
+  // scalars), so a Hermes cache stands in for the InMemoryCache.
+  it('should support result caching if so configured', () => {
+    const policies = new Policies({
+      cache: Object.assign(new Hermes(), { config: {} }) as unknown as InMemoryCache,
+    });
+
+    const storeWithResultCaching = new EntityStore.Root({
+      policies,
+      resultCaching: true,
+    });
+
+    const storeWithoutResultCaching = new EntityStore.Root({
+      policies,
+      resultCaching: false,
+    });
+
+    expect(supportsResultCaching({ some: 'arbitrary object ' })).toBe(false);
+    expect(supportsResultCaching(storeWithResultCaching)).toBe(true);
+    expect(supportsResultCaching(storeWithoutResultCaching)).toBe(false);
+
+    const layerWithCaching = storeWithResultCaching.addLayer('with caching', () => {});
+    expect(supportsResultCaching(layerWithCaching)).toBe(true);
+    const anotherLayer = layerWithCaching.addLayer('another layer', () => {});
+    expect(supportsResultCaching(anotherLayer)).toBe(true);
+    expect(anotherLayer.removeLayer('with caching').removeLayer('another layer')).toBe(storeWithResultCaching.stump);
+    expect(supportsResultCaching(storeWithResultCaching)).toBe(true);
+
+    const layerWithoutCaching = storeWithoutResultCaching.addLayer('with caching', () => {});
+    expect(supportsResultCaching(layerWithoutCaching)).toBe(false);
+    expect(layerWithoutCaching.removeLayer('with caching')).toBe(storeWithoutResultCaching.stump);
+    expect(supportsResultCaching(storeWithoutResultCaching)).toBe(false);
+  });
+
   function newBookAuthorCache() {
     const cache = new Hermes({
-      // resultCaching: true,
       dataIdFromObject(value: any) {
         switch (value && value.__typename) {
           case 'Book':
@@ -52,224 +89,6 @@ describe('EntityStore', () => {
       query,
     };
   }
-
-  // Hermes: relies on InMemoryCache result-cache internals (storeReader, canonizeResults, resetResultIdentities)
-  it.skip('should reclaim no-longer-reachable, unretained entities', () => {
-    const { cache, query } = newBookAuthorCache();
-
-    cache.writeQuery({
-      query,
-      data: {
-        book: {
-          __typename: 'Book',
-          isbn: '9781451673319',
-          title: 'Fahrenheit 451',
-          author: {
-            __typename: 'Author',
-            name: 'Ray Bradbury',
-          },
-        },
-      },
-    });
-
-    expect(cache.extract()).toEqual({
-      ROOT_QUERY: {
-        __typename: 'Query',
-        book: {
-          __ref: 'Book:9781451673319',
-        },
-      },
-      'Book:9781451673319': {
-        __typename: 'Book',
-        title: 'Fahrenheit 451',
-        author: {
-          __ref: 'Author:Ray Bradbury',
-        },
-      },
-      'Author:Ray Bradbury': {
-        __typename: 'Author',
-        name: 'Ray Bradbury',
-      },
-    });
-
-    cache.writeQuery({
-      query,
-      data: {
-        book: {
-          __typename: 'Book',
-          isbn: '0312429215',
-          title: '2666',
-          author: {
-            __typename: 'Author',
-            name: 'Roberto Bolaño',
-          },
-        },
-      },
-    });
-
-    const snapshot = cache.extract();
-
-    expect(snapshot).toEqual({
-      ROOT_QUERY: {
-        __typename: 'Query',
-        book: {
-          __ref: 'Book:0312429215',
-        },
-      },
-      'Book:9781451673319': {
-        __typename: 'Book',
-        title: 'Fahrenheit 451',
-        author: {
-          __ref: 'Author:Ray Bradbury',
-        },
-      },
-      'Author:Ray Bradbury': {
-        __typename: 'Author',
-        name: 'Ray Bradbury',
-      },
-      'Book:0312429215': {
-        __typename: 'Book',
-        author: {
-          __ref: 'Author:Roberto Bolaño',
-        },
-        title: '2666',
-      },
-      'Author:Roberto Bolaño': {
-        __typename: 'Author',
-        name: 'Roberto Bolaño',
-      },
-    });
-
-    function read() {
-      return cache.readQuery({ query, canonizeResults: true });
-    }
-
-    const resultBeforeGC = read();
-
-    expect(cache.gc().sort()).toEqual(['Author:Ray Bradbury', 'Book:9781451673319']);
-
-    const resultAfterGC = read();
-    expect(resultBeforeGC).toBe(resultAfterGC);
-
-    expect(cache.extract()).toEqual({
-      ROOT_QUERY: {
-        __typename: 'Query',
-        book: {
-          __ref: 'Book:0312429215',
-        },
-      },
-      'Book:0312429215': {
-        __typename: 'Book',
-        author: {
-          __ref: 'Author:Roberto Bolaño',
-        },
-        title: '2666',
-      },
-      'Author:Roberto Bolaño': {
-        __typename: 'Author',
-        name: 'Roberto Bolaño',
-      },
-    });
-
-    // Nothing left to collect, but let's also reset the result cache to
-    // demonstrate that the recomputed cache results are unchanged.
-    const originalReader = cache['storeReader'];
-    expect(
-      cache.gc(
-        /* {
-        resetResultCache: true,
-      } */
-      ),
-    ).toEqual([]);
-    expect(cache['storeReader']).not.toBe(originalReader);
-    const resultAfterResetResultCache = read();
-    expect(resultAfterResetResultCache).toBe(resultBeforeGC);
-    expect(resultAfterResetResultCache).toBe(resultAfterGC);
-
-    // Now discard cache.storeReader.canon as well.
-    expect(
-      cache.gc(
-        /* {
-        resetResultCache: true,
-        resetResultIdentities: true,
-      } */
-      ),
-    ).toEqual([]);
-
-    const resultAfterFullGC = read();
-    expect(resultAfterFullGC).toEqual(resultBeforeGC);
-    expect(resultAfterFullGC).toEqual(resultAfterGC);
-    // These !== relations are triggered by passing resetResultIdentities:true
-    // to cache.gc, above.
-    expect(resultAfterFullGC).not.toBe(resultBeforeGC);
-    expect(resultAfterFullGC).not.toBe(resultAfterGC);
-    // Result caching immediately begins working again after the intial reset.
-    expect(read()).toBe(resultAfterFullGC);
-
-    // Go back to the pre-GC snapshot.
-    cache.restore(snapshot);
-    expect(cache.extract()).toEqual(snapshot);
-
-    // Reading a specific fragment causes it to be retained during garbage collection.
-    const authorNameFragment = gql`
-      fragment AuthorName on Author {
-        name
-      }
-    `;
-    const ray = cache.readFragment({
-      id: 'Author:Ray Bradbury',
-      fragment: authorNameFragment,
-    });
-
-    expect(cache.retain('Author:Ray Bradbury')).toBe(1);
-
-    expect(ray).toEqual({
-      __typename: 'Author',
-      name: 'Ray Bradbury',
-    });
-
-    expect(cache.gc()).toEqual([
-      // Only Fahrenheit 451 (the book) is reclaimed this time.
-      'Book:9781451673319',
-    ]);
-
-    const rayMeta = {
-      extraRootIds: ['Author:Ray Bradbury'],
-    };
-
-    expect(cache.extract()).toEqual({
-      __META: rayMeta,
-      ROOT_QUERY: {
-        __typename: 'Query',
-        book: {
-          __ref: 'Book:0312429215',
-        },
-      },
-      'Author:Ray Bradbury': {
-        __typename: 'Author',
-        name: 'Ray Bradbury',
-      },
-      'Book:0312429215': {
-        __typename: 'Book',
-        author: {
-          __ref: 'Author:Roberto Bolaño',
-        },
-        title: '2666',
-      },
-      'Author:Roberto Bolaño': {
-        __typename: 'Author',
-        name: 'Roberto Bolaño',
-      },
-    });
-
-    expect(cache.gc()).toEqual([]);
-
-    expect(cache.release('Author:Ray Bradbury')).toBe(0);
-
-    expect(cache.gc()).toEqual(['Author:Ray Bradbury']);
-
-    expect(cache.gc()).toEqual([]);
-  });
 
   it('should respect optimistic updates, when active', () => {
     const { cache, query } = newBookAuthorCache();
@@ -908,7 +727,7 @@ describe('EntityStore', () => {
     // Hacky way of injecting a stray __ref field into the Will Smith Person
     // object, clearing store.refs (which was populated by the previous GC).
     storeRootData[willId]!.__ref = willId;
-    store['refs'] = Object.create(null);
+    store['refs'] = {};
 
     expect(cache.extract()).toEqual({
       'Person:{"name":"Jaden Smith"}': {
@@ -952,7 +771,6 @@ describe('EntityStore', () => {
     `;
 
     const cache = new Hermes({
-      // canonizeResults: true,
       typePolicies: {
         Query: {
           fields: {
@@ -993,9 +811,13 @@ describe('EntityStore', () => {
       },
     });
 
-    // Hermes: parameterized fields are separate nodes linked to ROOT_QUERY,
+    // Hermes: parameterized fields are separate nodes linked to ROOT_QUERY
+    // (identified by their keyArgs store field names, when they have keyArgs),
     // and references are inbound/outbound edges.
-    const fieldId = (fieldName: string, isbn: string) => `ROOT_QUERY❖["${fieldName}"]❖{"isbn":"${isbn}"}`;
+    const fieldId = (fieldName: string, isbn: string) =>
+      fieldName === 'authorOfBook'
+        ? `ROOT_QUERY❖["authorOfBook"]❖authorOfBook:{"isbn":"${isbn}"}`
+        : `ROOT_QUERY❖["${fieldName}"]❖{"isbn":"${isbn}"}`;
     const fieldRef = (fieldName: string, isbn: string) => ({ id: fieldId(fieldName, isbn), path: [fieldName] });
     const fieldNode = (fieldName: string, entityId: string) => ({
       data: null,
@@ -1199,7 +1021,7 @@ describe('EntityStore', () => {
     const partialJennyResult = cache.diff<any>({
       query,
       returnPartialData: true,
-      optimistic: true, // required but not important
+      optimistic: false, // required but not important
       variables: {
         isbn: '1760641790',
       },
@@ -1237,19 +1059,17 @@ describe('EntityStore', () => {
       result: {
         authorOfBook: tedWithoutHobby,
       },
-      missing: [
-        new MissingFieldError(
-          'Can\'t find field \'hobby\' on Author:{"name":"Ted Chiang"} object',
-          {
-            publisherOfBook: "Can't find field 'publisherOfBook' on ROOT_QUERY object",
-            authorOfBook: {
-              hobby: 'Can\'t find field \'hobby\' on Author:{"name":"Ted Chiang"} object',
-            },
+      missing: new MissingFieldError(
+        'Can\'t find field \'hobby\' on Author:{"name":"Ted Chiang"} object',
+        {
+          publisherOfBook: "Can't find field 'publisherOfBook' on ROOT_QUERY object",
+          authorOfBook: {
+            hobby: 'Can\'t find field \'hobby\' on Author:{"name":"Ted Chiang"} object',
           },
-          expect.anything(), // query
-          expect.anything(), // variables
-        ),
-      ],
+        },
+        expect.anything(), // query
+        expect.anything(), // variables
+      ),
     });
 
     cache.evict({ id: 'ROOT_QUERY', fieldName: 'authorOfBook' });
@@ -1274,14 +1094,7 @@ describe('EntityStore', () => {
 
     const cache = new Hermes();
 
-    // Hermes: each authorOfBook(isbn) value is a parameterized node linked to ROOT_QUERY.
-    const authorOfBookId = (args: string) => `ROOT_QUERY❖["authorOfBook"]❖${args}`;
-    const authorOfBookRef = (args: string) => ({ id: authorOfBookId(args), path: ['authorOfBook'] });
-    const authorOfBookNode = (data: object) => ({
-      data,
-      inbound: [{ id: 'ROOT_QUERY', path: ['authorOfBook'] }],
-      type: 1,
-    });
+    // Hermes: compare in InMemoryCache's normalized shape.
 
     const TedChiangData = {
       __typename: 'Author',
@@ -1329,14 +1142,25 @@ describe('EntityStore', () => {
       variables: {},
     });
 
-    expect(cache.extract()).toEqual({
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
-        parameterized: [authorOfBookRef('{"isbn":"1"}'), authorOfBookRef('{"isbn":"2"}'), authorOfBookRef('{}')],
-        type: 0,
+        __typename: 'Query',
+        'authorOfBook({"isbn":"1"})': {
+          __typename: 'Author',
+          name: 'Ted Chiang',
+          hobby: 'video games',
+        },
+        'authorOfBook({"isbn":"2"})': {
+          __typename: 'Author',
+          name: 'Isaac Asimov',
+          hobby: 'chemistry',
+        },
+        authorOfBook: {
+          __typename: 'Author',
+          name: 'James S.A. Corey',
+          hobby: 'tabletop games',
+        },
       },
-      [authorOfBookId('{"isbn":"1"}')]: authorOfBookNode(TedChiangData),
-      [authorOfBookId('{"isbn":"2"}')]: authorOfBookNode(IsaacAsimovData),
-      [authorOfBookId('{}')]: authorOfBookNode(JamesCoreyData),
     });
 
     cache.evict({
@@ -1344,13 +1168,20 @@ describe('EntityStore', () => {
       args: { isbn: '1' },
     });
 
-    expect(cache.extract()).toEqual({
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
-        parameterized: [authorOfBookRef('{"isbn":"2"}'), authorOfBookRef('{}')],
-        type: 0,
+        __typename: 'Query',
+        'authorOfBook({"isbn":"2"})': {
+          __typename: 'Author',
+          name: 'Isaac Asimov',
+          hobby: 'chemistry',
+        },
+        authorOfBook: {
+          __typename: 'Author',
+          name: 'James S.A. Corey',
+          hobby: 'tabletop games',
+        },
       },
-      [authorOfBookId('{"isbn":"2"}')]: authorOfBookNode(IsaacAsimovData),
-      [authorOfBookId('{}')]: authorOfBookNode(JamesCoreyData),
     });
 
     cache.evict({
@@ -1358,13 +1189,20 @@ describe('EntityStore', () => {
       args: { isbn: '3' },
     });
 
-    expect(cache.extract()).toEqual({
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
-        parameterized: [authorOfBookRef('{"isbn":"2"}'), authorOfBookRef('{}')],
-        type: 0,
+        __typename: 'Query',
+        'authorOfBook({"isbn":"2"})': {
+          __typename: 'Author',
+          name: 'Isaac Asimov',
+          hobby: 'chemistry',
+        },
+        authorOfBook: {
+          __typename: 'Author',
+          name: 'James S.A. Corey',
+          hobby: 'tabletop games',
+        },
       },
-      [authorOfBookId('{"isbn":"2"}')]: authorOfBookNode(IsaacAsimovData),
-      [authorOfBookId('{}')]: authorOfBookNode(JamesCoreyData),
     });
 
     cache.evict({
@@ -1372,21 +1210,24 @@ describe('EntityStore', () => {
       args: {},
     });
 
-    expect(cache.extract()).toEqual({
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
-        parameterized: [authorOfBookRef('{"isbn":"2"}')],
-        type: 0,
+        __typename: 'Query',
+        'authorOfBook({"isbn":"2"})': {
+          __typename: 'Author',
+          name: 'Isaac Asimov',
+          hobby: 'chemistry',
+        },
       },
-      [authorOfBookId('{"isbn":"2"}')]: authorOfBookNode(IsaacAsimovData),
     });
 
     cache.evict({
       fieldName: 'authorOfBook',
     });
 
-    expect(cache.extract()).toEqual({
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
-        type: 0,
+        __typename: 'Query',
       },
     });
   });
@@ -1403,14 +1244,7 @@ describe('EntityStore', () => {
 
     const cache = new Hermes();
 
-    // Hermes: each authorOfBook(isbn) value is a parameterized node linked to ROOT_QUERY.
-    const authorOfBookId = (args: string) => `ROOT_QUERY❖["authorOfBook"]❖${args}`;
-    const authorOfBookRef = (args: string) => ({ id: authorOfBookId(args), path: ['authorOfBook'] });
-    const authorOfBookNode = (data: object) => ({
-      data,
-      inbound: [{ id: 'ROOT_QUERY', path: ['authorOfBook'] }],
-      type: 1,
-    });
+    // Hermes: compare in InMemoryCache's normalized shape.
 
     const TedChiangData = {
       __typename: 'Author',
@@ -1458,14 +1292,25 @@ describe('EntityStore', () => {
       variables: {},
     });
 
-    expect(cache.extract()).toEqual({
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
-        parameterized: [authorOfBookRef('{"isbn":"1"}'), authorOfBookRef('{"isbn":"2"}'), authorOfBookRef('{}')],
-        type: 0,
+        __typename: 'Query',
+        'authorOfBook({"isbn":"1"})': {
+          __typename: 'Author',
+          name: 'Ted Chiang',
+          hobby: 'video games',
+        },
+        'authorOfBook({"isbn":"2"})': {
+          __typename: 'Author',
+          name: 'Isaac Asimov',
+          hobby: 'chemistry',
+        },
+        authorOfBook: {
+          __typename: 'Author',
+          name: 'James S.A. Corey',
+          hobby: 'tabletop games',
+        },
       },
-      [authorOfBookId('{"isbn":"1"}')]: authorOfBookNode(TedChiangData),
-      [authorOfBookId('{"isbn":"2"}')]: authorOfBookNode(IsaacAsimovData),
-      [authorOfBookId('{}')]: authorOfBookNode(JamesCoreyData),
     });
 
     cache.evict({
@@ -1474,13 +1319,20 @@ describe('EntityStore', () => {
       args: { isbn: '1' },
     });
 
-    expect(cache.extract()).toEqual({
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
-        parameterized: [authorOfBookRef('{"isbn":"2"}'), authorOfBookRef('{}')],
-        type: 0,
+        __typename: 'Query',
+        'authorOfBook({"isbn":"2"})': {
+          __typename: 'Author',
+          name: 'Isaac Asimov',
+          hobby: 'chemistry',
+        },
+        authorOfBook: {
+          __typename: 'Author',
+          name: 'James S.A. Corey',
+          hobby: 'tabletop games',
+        },
       },
-      [authorOfBookId('{"isbn":"2"}')]: authorOfBookNode(IsaacAsimovData),
-      [authorOfBookId('{}')]: authorOfBookNode(JamesCoreyData),
     });
 
     cache.evict({
@@ -1489,13 +1341,20 @@ describe('EntityStore', () => {
       args: { isbn: '3' },
     });
 
-    expect(cache.extract()).toEqual({
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
-        parameterized: [authorOfBookRef('{"isbn":"2"}'), authorOfBookRef('{}')],
-        type: 0,
+        __typename: 'Query',
+        'authorOfBook({"isbn":"2"})': {
+          __typename: 'Author',
+          name: 'Isaac Asimov',
+          hobby: 'chemistry',
+        },
+        authorOfBook: {
+          __typename: 'Author',
+          name: 'James S.A. Corey',
+          hobby: 'tabletop games',
+        },
       },
-      [authorOfBookId('{"isbn":"2"}')]: authorOfBookNode(IsaacAsimovData),
-      [authorOfBookId('{}')]: authorOfBookNode(JamesCoreyData),
     });
 
     cache.evict({
@@ -1504,12 +1363,15 @@ describe('EntityStore', () => {
       args: {},
     });
 
-    expect(cache.extract()).toEqual({
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
-        parameterized: [authorOfBookRef('{"isbn":"2"}')],
-        type: 0,
+        __typename: 'Query',
+        'authorOfBook({"isbn":"2"})': {
+          __typename: 'Author',
+          name: 'Isaac Asimov',
+          hobby: 'chemistry',
+        },
       },
-      [authorOfBookId('{"isbn":"2"}')]: authorOfBookNode(IsaacAsimovData),
     });
 
     cache.evict({
@@ -1517,9 +1379,9 @@ describe('EntityStore', () => {
       fieldName: 'authorOfBook',
     });
 
-    expect(cache.extract()).toEqual({
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
-        type: 0,
+        __typename: 'Query',
       },
     });
   });
@@ -1731,7 +1593,18 @@ describe('EntityStore', () => {
       }),
     ).toBe(null);
 
-    expect(() => diff(queryWithAliases)).toThrow(/Dangling reference to missing ABCs:.* object/);
+    expect(diff(queryWithAliases)).toEqual({
+      result: null,
+      complete: false,
+      missing: new MissingFieldError(
+        'Dangling reference to missing ABCs:{"b":"bee","a":"ay","c":"see"} object',
+        {
+          abcs: 'Dangling reference to missing ABCs:{"b":"bee","a":"ay","c":"see"} object',
+        },
+        queryWithAliases,
+        {},
+      ),
+    });
 
     expect(
       cache.readQuery({
@@ -1739,7 +1612,18 @@ describe('EntityStore', () => {
       }),
     ).toBe(null);
 
-    expect(() => diff(queryWithoutAliases)).toThrow(/Dangling reference to missing ABCs:.* object/);
+    expect(diff(queryWithoutAliases)).toEqual({
+      result: null,
+      complete: false,
+      missing: new MissingFieldError(
+        'Dangling reference to missing ABCs:{"b":"bee","a":"ay","c":"see"} object',
+        {
+          abcs: 'Dangling reference to missing ABCs:{"b":"bee","a":"ay","c":"see"} object',
+        },
+        queryWithoutAliases,
+        {},
+      ),
+    });
   });
 
   it('gracefully handles eviction amid optimistic updates', () => {
@@ -1754,7 +1638,7 @@ describe('EntityStore', () => {
       }
     `;
 
-    function writeInitialData(cache: ApolloCache<any>) {
+    function writeInitialData(cache: ApolloCache) {
       cache.writeQuery({
         query,
         data: {
@@ -1818,19 +1702,17 @@ describe('EntityStore', () => {
 
     expect(cache.evict({ id: authorId })).toBe(false);
 
-    // Hermes: results may contain a superset of the selected fields.
-    const missing = [
-      new MissingFieldError(
-        'Dangling reference to missing Author:2 object',
-        {
-          book: {
-            author: 'Dangling reference to missing Author:2 object',
-          },
+    // Hermes: results may contain a superset of the selected fields (book.id).
+    const missing = new MissingFieldError(
+      'Dangling reference to missing Author:2 object',
+      {
+        book: {
+          author: 'Dangling reference to missing Author:2 object',
         },
-        expect.anything(), // query
-        expect.anything(), // variables
-      ),
-    ];
+      },
+      expect.anything(), // query
+      expect.anything(), // variables
+    );
 
     expect(
       cache.diff({
@@ -2137,18 +2019,16 @@ describe('EntityStore', () => {
           isbn: '031648637X',
         },
       },
-      missing: [
-        new MissingFieldError(
-          'Can\'t find field \'title\' on Book:{"isbn":"031648637X"} object',
-          {
-            book: {
-              title: 'Can\'t find field \'title\' on Book:{"isbn":"031648637X"} object',
-            },
+      missing: new MissingFieldError(
+        'Can\'t find field \'title\' on Book:{"isbn":"031648637X"} object',
+        {
+          book: {
+            title: 'Can\'t find field \'title\' on Book:{"isbn":"031648637X"} object',
           },
-          expect.anything(), // query
-          expect.anything(), // variables
-        ),
-      ],
+        },
+        expect.anything(), // query
+        expect.anything(), // variables
+      ),
     });
 
     expect(cache.extract()).toEqual({
@@ -2351,12 +2231,14 @@ describe('EntityStore', () => {
     });
   });
 
-  // Hermes: keyArgs-based result-cache invalidation; adapted copy in test/unit/vendor/entityStore.ts
+  // Hermes: the final non-optimistic read reuses the result cached for the
+  // optimistic read (the optimistic and baseline snapshots are the same), so
+  // the read function does not run again; adapted copy in
+  // test/unit/vendor/entityStore.ts
   it.skip('should not over-invalidate fields with keyArgs', () => {
     const isbnsWeHaveRead: string[] = [];
 
     const cache = new Hermes({
-      // canonizeResults: true,
       typePolicies: {
         Query: {
           fields: {
@@ -2549,7 +2431,7 @@ describe('EntityStore', () => {
         // runs again, adding "1449373321" again to isbnsWeHaveRead.
         optimistic: false,
       }),
-    ).toBe(diffs[0].result);
+    ).toEqual(diffs[0].result);
 
     expect(isbnsWeHaveRead).toEqual(['1449373321', '1982103558', '1449373321']);
   });

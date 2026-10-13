@@ -24,3 +24,12 @@
 
 # jetbrains
 .idea/
+
+# Benchmark: installed implementations and raw results (see bench/setup.mjs)
+/bench/impl/*/node_modules/
+/bench/impl/*/package-lock.json
+/bench/impl/*/hermes.tgz
+/bench/impl/*/BUILD_COMMIT
+/bench/impl/hermes-dev/
+/bench/impl/hermes-prev/
+/bench/results*.json

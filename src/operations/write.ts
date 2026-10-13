@@ -3,7 +3,7 @@ import { GraphSnapshot } from '../GraphSnapshot';
 import { JsonObject } from '../primitive';
 import { RawOperation } from '../schema';
 
-import { EditedSnapshot, SnapshotEditor } from './SnapshotEditor';
+import { EditedSnapshot, IsRetained, SnapshotEditor } from './SnapshotEditor';
 
 /**
  * Merges a payload with an existing graph snapshot, generating a new one.
@@ -17,6 +17,7 @@ export function write<TSerialized>(
   raw: RawOperation,
   payload: JsonObject,
   prune: boolean = false,
+  isRetained?: IsRetained,
 ): EditedSnapshot<TSerialized> {
   let tracerContext;
   if (context.tracer.writeStart) {
@@ -26,7 +27,7 @@ export function write<TSerialized>(
   // We _could_ go purely functional with the editor, but it's honestly pretty
   // convenient to follow the builder function instead - it'd end up passing
   // around a context object anyway.
-  const editor = new SnapshotEditor(context, snapshot);
+  const editor = new SnapshotEditor(context, snapshot, isRetained);
   const { warnings, ref } = editor.mergePayload(raw, payload, prune);
   const newSnapshot = editor.commit(ref);
 

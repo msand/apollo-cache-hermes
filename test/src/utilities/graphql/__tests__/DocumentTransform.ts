@@ -1,13 +1,8 @@
+import type { DocumentNode } from 'graphql';
+import { Kind, visit } from 'graphql';
 import { gql } from 'graphql-tag';
-import { DocumentNode, visit, Kind } from 'graphql';
-import { DocumentTransform } from '@apollo/client/utilities/graphql/DocumentTransform';
-import { isMutationOperation, isQueryOperation } from '@apollo/client/utilities/graphql/operations';
-import { removeDirectivesFromDocument } from '@apollo/client/utilities/graphql/transform';
-import { loadErrorMessages } from '@apollo/client/dev';
-
-// Hermes: the published @apollo/client package replaces invariant messages with error
-// codes. Load the messages so errors read as they do in Apollo's source tests.
-loadErrorMessages();
+import { DocumentTransform, isMutationOperation, isQueryOperation } from '@apollo/client/utilities';
+import { removeDirectivesFromDocument } from '@apollo/client/utilities/internal';
 
 function stripDirective(directive: string) {
   return (document: DocumentNode) => {

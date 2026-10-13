@@ -1,22 +1,18 @@
-import gql from 'graphql-tag';
-import { DocumentNode, ExecutionResult } from 'graphql';
-import {
-  ApolloClient,
-  ApolloQueryResult,
-  NetworkStatus,
-  Resolvers,
-  isReference,
-  Observable,
-  ApolloLink,
-} from '@apollo/client';
-import { LocalState } from '@apollo/client/core/LocalState';
-import { ObservableStream } from '@apollo/client/testing/internal';
+import type { DocumentNode, ExecutionResult } from 'graphql';
+import { gql } from 'graphql-tag';
+import { delay, of } from 'rxjs';
+import { ApolloClient, NetworkStatus } from '@apollo/client';
+import { isReference } from '@apollo/client/cache';
+import { ApolloLink } from '@apollo/client/link';
+import { LocalState } from '@apollo/client/local-state';
 import { MockLink } from '@apollo/client/testing';
+
+import { ObservableStream } from '@apollo/client/testing/internal';
 
 import { Hermes } from '../../../../src';
 
 const setupTestWithResolvers = ({
-  resolvers,
+  localState,
   query,
   serverQuery,
   variables = {},
@@ -25,7 +21,7 @@ const setupTestWithResolvers = ({
   error,
   delay,
 }: {
-  resolvers: Resolvers;
+  localState: LocalState;
   query: DocumentNode;
   serverQuery?: DocumentNode;
   variables?: object;
@@ -35,7 +31,7 @@ const setupTestWithResolvers = ({
   delay?: number;
 }) => {
   const client = new ApolloClient({
-    cache: new Hermes({ addTypename: false }),
+    cache: new Hermes(),
     link: new MockLink([
       {
         request: { query: serverQuery || query, variables },
@@ -44,9 +40,8 @@ const setupTestWithResolvers = ({
         delay,
       },
     ]),
+    localState,
   });
-
-  client.addResolvers(resolvers);
 
   return new ObservableStream(client.watchQuery<any>({ query, variables, ...queryOptions }));
 };
@@ -61,18 +56,37 @@ describe('Basic resolver capabilities', () => {
       }
     `;
 
-    const resolvers = {
-      Query: {
-        foo: () => ({ bar: true }),
+    const localState = new LocalState({
+      resolvers: {
+        Query: {
+          foo: () => ({ __typename: 'Foo', bar: true }),
+        },
       },
-    };
+    });
 
-    const stream = setupTestWithResolvers({ resolvers, query });
+    const client = new ApolloClient({
+      localState,
+      cache: new Hermes(),
+      // Local resolvers handle this query
+      link: ApolloLink.empty(),
+    });
 
-    await expect(stream).toEmitApolloQueryResult({
-      data: { foo: { bar: true } },
+    const stream = new ObservableStream(client.watchQuery({ query }));
+
+    await expect(stream).toEmitTypedValue({
+      data: undefined,
+      dataState: 'empty',
+      loading: true,
+      networkStatus: NetworkStatus.loading,
+      partial: true,
+    });
+
+    await expect(stream).toEmitTypedValue({
+      data: { foo: { __typename: 'Foo', bar: true } },
+      dataState: 'complete',
       loading: false,
       networkStatus: NetworkStatus.ready,
+      partial: false,
     });
 
     await expect(stream).not.toEmitAnything();
@@ -98,26 +112,38 @@ describe('Basic resolver capabilities', () => {
       }
     `;
 
-    const resolvers = {
-      Query: {
-        foo: () => ({ bar: true }),
+    const localState = new LocalState({
+      resolvers: {
+        Query: {
+          foo: () => ({ __typename: 'Foo', bar: true }),
+        },
       },
-    };
-
-    const stream = setupTestWithResolvers({
-      resolvers,
-      query,
-      serverQuery,
-      serverResult: { data: { bar: { baz: true } } },
     });
 
-    await expect(stream).toEmitApolloQueryResult({
+    const stream = setupTestWithResolvers({
+      localState,
+      query,
+      serverQuery,
+      serverResult: { data: { bar: { __typename: 'Bar', baz: true } } },
+    });
+
+    await expect(stream).toEmitTypedValue({
+      data: undefined,
+      dataState: 'empty',
+      loading: true,
+      networkStatus: NetworkStatus.loading,
+      partial: true,
+    });
+
+    await expect(stream).toEmitTypedValue({
       data: {
-        foo: { bar: true },
-        bar: { baz: true },
+        foo: { __typename: 'Foo', bar: true },
+        bar: { __typename: 'Bar', baz: true },
       },
+      dataState: 'complete',
       loading: false,
       networkStatus: NetworkStatus.ready,
+      partial: false,
     });
 
     await expect(stream).not.toEmitAnything();
@@ -148,27 +174,38 @@ describe('Basic resolver capabilities', () => {
       }
     `;
 
-    const resolvers = {
-      Query: {
-        foo: () => ({ bar: true, __typename: 'ClientData' }),
+    const localState = new LocalState({
+      resolvers: {
+        Query: {
+          foo: () => ({ bar: true, __typename: 'ClientData' }),
+        },
       },
-    };
+    });
 
     const stream = setupTestWithResolvers({
-      resolvers,
+      localState,
       query,
       serverQuery,
       serverResult: { data: { bar: { baz: true, __typename: 'Bar' } } },
     });
 
-    // Hermes: results can hold extra cached fields (here the unselected __typename).
-    await expect(stream).toEmitMatchedValue({
+    await expect(stream).toEmitTypedValue({
+      data: undefined,
+      dataState: 'empty',
+      loading: true,
+      networkStatus: NetworkStatus.loading,
+      partial: true,
+    });
+
+    await expect(stream).toEmitTypedValue({
       data: {
         foo: { bar: true, __typename: 'ClientData' },
-        bar: { baz: true },
+        bar: { baz: true, __typename: 'Bar' },
       },
+      dataState: 'complete',
       loading: false,
       networkStatus: NetworkStatus.ready,
+      partial: false,
     });
 
     await expect(stream).not.toEmitAnything();
@@ -208,14 +245,16 @@ describe('Basic resolver capabilities', () => {
       }
     `;
 
-    const resolvers = {
-      Foo: {
-        baz: () => false,
+    const localState = new LocalState({
+      resolvers: {
+        Foo: {
+          baz: () => false,
+        },
       },
-    };
+    });
 
     const stream = setupTestWithResolvers({
-      resolvers,
+      localState,
       query,
       serverQuery,
       serverResult: {
@@ -223,13 +262,23 @@ describe('Basic resolver capabilities', () => {
       },
     });
 
-    await expect(stream).toEmitApolloQueryResult({
+    await expect(stream).toEmitTypedValue({
+      data: undefined,
+      dataState: 'empty',
+      loading: true,
+      networkStatus: NetworkStatus.loading,
+      partial: true,
+    });
+
+    await expect(stream).toEmitTypedValue({
       data: {
         foo: { bar: true, baz: false, __typename: 'Foo' },
         bar: { baz: true },
       },
+      dataState: 'complete',
       loading: false,
       networkStatus: NetworkStatus.ready,
+      partial: false,
     });
 
     await expect(stream).not.toEmitAnything();
@@ -244,26 +293,40 @@ describe('Basic resolver capabilities', () => {
       }
     `;
 
-    const resolvers = {
-      Query: {
-        foo: () => ({ __typename: 'Foo' }),
+    const localState = new LocalState({
+      resolvers: {
+        Query: {
+          foo: () => ({ __typename: 'Foo' }),
+        },
+        Foo: {
+          bar: (_data, { id }: { id: number }) => id,
+        },
       },
-      Foo: {
-        bar: (_data: any, { id }: { id: number }) => id,
-      },
-    };
-
-    const stream = setupTestWithResolvers({
-      resolvers,
-      query,
-      variables: { id: 1 },
     });
 
-    // Hermes: results can hold extra cached fields (here the unselected __typename).
-    await expect(stream).toEmitMatchedValue({
-      data: { foo: { bar: 1 } },
+    const client = new ApolloClient({
+      localState,
+      cache: new Hermes(),
+      // Local resolvers handle this query
+      link: ApolloLink.empty(),
+    });
+
+    const stream = new ObservableStream(client.watchQuery({ query, variables: { id: 1 } }));
+
+    await expect(stream).toEmitTypedValue({
+      data: undefined,
+      dataState: 'empty',
+      loading: true,
+      networkStatus: NetworkStatus.loading,
+      partial: true,
+    });
+
+    await expect(stream).toEmitTypedValue({
+      data: { foo: { __typename: 'Foo', bar: 1 } },
+      dataState: 'complete',
       loading: false,
       networkStatus: NetworkStatus.ready,
+      partial: false,
     });
 
     await expect(stream).not.toEmitAnything();
@@ -278,26 +341,40 @@ describe('Basic resolver capabilities', () => {
       }
     `;
 
-    const resolvers = {
-      Query: {
-        foo: () => ({ __typename: 'Foo' }),
+    const localState = new LocalState({
+      resolvers: {
+        Query: {
+          foo: () => ({ __typename: 'Foo' }),
+        },
+        Foo: {
+          bar: (_data, _args, { requestContext }) => requestContext.id,
+        },
       },
-      Foo: {
-        bar: (_data: any, _args: any, { id }: { id: number }) => id,
-      },
-    };
-
-    const stream = setupTestWithResolvers({
-      resolvers,
-      query,
-      queryOptions: { context: { id: 1 } },
     });
 
-    // Hermes: results can hold extra cached fields (here the unselected __typename).
-    await expect(stream).toEmitMatchedValue({
-      data: { foo: { bar: 1 } },
+    const client = new ApolloClient({
+      localState,
+      cache: new Hermes(),
+      // The resolvers will handle the full response
+      link: ApolloLink.empty(),
+    });
+
+    const stream = new ObservableStream(client.watchQuery({ query, context: { id: 1 } }));
+
+    await expect(stream).toEmitTypedValue({
+      data: undefined,
+      dataState: 'empty',
+      loading: true,
+      networkStatus: NetworkStatus.loading,
+      partial: true,
+    });
+
+    await expect(stream).toEmitTypedValue({
+      data: { foo: { __typename: 'Foo', bar: 1 } },
+      dataState: 'complete',
       loading: false,
       networkStatus: NetworkStatus.ready,
+      partial: false,
     });
 
     await expect(stream).not.toEmitAnything();
@@ -327,14 +404,16 @@ describe('Basic resolver capabilities', () => {
       }
     `;
 
-    const resolvers = {
-      Stats: {
-        postsToday: () => 10,
+    const localState = new LocalState({
+      resolvers: {
+        Stats: {
+          postsToday: () => 10,
+        },
       },
-    };
+    });
 
     const stream = setupTestWithResolvers({
-      resolvers,
+      localState,
       query,
       serverQuery,
       serverResult: {
@@ -351,19 +430,30 @@ describe('Basic resolver capabilities', () => {
       },
     });
 
-    // Hermes: results can hold extra cached fields (here the unselected __typename).
-    await expect(stream).toEmitMatchedValue({
+    await expect(stream).toEmitTypedValue({
+      data: undefined,
+      dataState: 'empty',
+      loading: true,
+      networkStatus: NetworkStatus.loading,
+      partial: true,
+    });
+
+    await expect(stream).toEmitTypedValue({
       data: {
         author: {
+          __typename: 'Author',
           name: 'John Smith',
           stats: {
+            __typename: 'Stats',
             totalPosts: 100,
             postsToday: 10,
           },
         },
       },
+      dataState: 'complete',
       loading: false,
       networkStatus: NetworkStatus.ready,
+      partial: false,
     });
 
     await expect(stream).not.toEmitAnything();
@@ -381,20 +471,19 @@ describe('Basic resolver capabilities', () => {
 
     const client = new ApolloClient({
       cache,
-      resolvers: {
-        Query: {
-          isInCart: () => false,
+      link: ApolloLink.empty(),
+      localState: new LocalState({
+        resolvers: {
+          Query: {
+            isInCart: () => false,
+          },
         },
-      },
+      }),
     });
 
     const result = await client.query({ query, fetchPolicy: 'network-only' });
 
-    expect(result).toEqualApolloQueryResult({
-      data: { isInCart: false },
-      loading: false,
-      networkStatus: NetworkStatus.ready,
-    });
+    expect(result).toStrictEqualTyped({ data: { isInCart: false } });
   });
 
   it('should handle nested asynchronous @client resolvers (issue #4841)', () => {
@@ -436,42 +525,45 @@ describe('Basic resolver capabilities', () => {
 
     const client = new ApolloClient({
       cache: new Hermes(),
-      resolvers: {
-        Query: {
-          async developer(_, { id }) {
-            await randomDelay(50);
-            expect(id).toBe(developerId);
-            return {
-              __typename: 'Developer',
-              id,
-              handle: '@benjamn',
-            };
+      link: ApolloLink.empty(),
+      localState: new LocalState({
+        resolvers: {
+          Query: {
+            async developer(_, { id }) {
+              await randomDelay(50);
+              expect(id).toBe(developerId);
+              return {
+                __typename: 'Developer',
+                id,
+                handle: '@benjamn',
+              };
+            },
+          },
+          Developer: {
+            async tickets(developer) {
+              await randomDelay(50);
+              expect(developer.__typename).toBe('Developer');
+              return times(ticketsPerDev, () => ({
+                __typename: 'Ticket',
+                id: uuid(),
+              }));
+            },
+          },
+          Ticket: {
+            async comments(ticket) {
+              await randomDelay(50);
+              expect(ticket.__typename).toBe('Ticket');
+              return times(commentsPerTicket, () => ({
+                __typename: 'Comment',
+                id: uuid(),
+              }));
+            },
           },
         },
-        Developer: {
-          async tickets(developer) {
-            await randomDelay(50);
-            expect(developer.__typename).toBe('Developer');
-            return times(ticketsPerDev, () => ({
-              __typename: 'Ticket',
-              id: uuid(),
-            }));
-          },
-        },
-        Ticket: {
-          async comments(ticket) {
-            await randomDelay(50);
-            expect(ticket.__typename).toBe('Ticket');
-            return times(commentsPerTicket, () => ({
-              __typename: 'Comment',
-              id: uuid(),
-            }));
-          },
-        },
-      },
+      }),
     });
 
-    function check(result: ApolloQueryResult<any>) {
+    function check(result: ApolloClient.QueryResult<any>) {
       return new Promise<void>(resolve => {
         expect(result.data.developer.id).toBe(developerId);
         expect(result.data.developer.handle).toBe('@benjamn');
@@ -498,6 +590,7 @@ describe('Basic resolver capabilities', () => {
             variables: {
               id: developerId,
             },
+            notifyOnNetworkStatusChange: false,
           })
           .subscribe({
             next(result) {
@@ -539,25 +632,39 @@ describe('Basic resolver capabilities', () => {
 
     const barResolver = jest.fn(() => ({ __typename: `Bar`, baz: false }));
 
-    const resolvers = {
-      Query: {
-        foo: () => ({ __typename: `Foo`, bar: true }),
-        bar: barResolver,
+    const localState = new LocalState({
+      resolvers: {
+        Query: {
+          foo: () => ({ __typename: `Foo`, bar: true }),
+          bar: barResolver,
+        },
       },
-    };
-
-    const stream = setupTestWithResolvers({
-      resolvers,
-      query,
-      serverQuery,
-      serverResult: { data: { bar: { baz: true } } },
     });
 
-    // Hermes: results can hold extra cached fields (here the unselected __typename).
-    await expect(stream).toEmitMatchedValue({
-      data: { foo: { bar: true }, bar: { baz: true } },
+    const stream = setupTestWithResolvers({
+      localState,
+      query,
+      serverQuery,
+      serverResult: { data: { bar: { __typename: 'Bar', baz: true } } },
+    });
+
+    await expect(stream).toEmitTypedValue({
+      data: undefined,
+      dataState: 'empty',
+      loading: true,
+      networkStatus: NetworkStatus.loading,
+      partial: true,
+    });
+
+    await expect(stream).toEmitTypedValue({
+      data: {
+        foo: { __typename: 'Foo', bar: true },
+        bar: { __typename: 'Bar', baz: true },
+      },
+      dataState: 'complete',
       loading: false,
       networkStatus: NetworkStatus.ready,
+      partial: false,
     });
     expect(barResolver).not.toHaveBeenCalled();
   });
@@ -580,24 +687,24 @@ describe('Writing cache data from resolvers', () => {
     const client = new ApolloClient({
       cache: new Hermes(),
       link: ApolloLink.empty(),
-      resolvers: {
-        Mutation: {
-          start(_data, _args, { cache }) {
-            cache.writeQuery({ query, data: { field: 1 } });
-            return { start: true };
+      localState: new LocalState({
+        resolvers: {
+          Mutation: {
+            start(_data, _args, { client }) {
+              client.cache.writeQuery({ query, data: { field: 1 } });
+              return true;
+            },
           },
         },
-      },
+      }),
     });
 
-    await client.mutate({ mutation });
+    await expect(client.mutate({ mutation })).resolves.toStrictEqualTyped({
+      data: { start: true },
+    });
     const result = await client.query({ query });
 
-    expect(result).toEqualApolloQueryResult({
-      data: { field: 1 },
-      loading: false,
-      networkStatus: NetworkStatus.ready,
-    });
+    expect(result).toStrictEqualTyped({ data: { field: 1 } });
   });
 
   it('should let you write to the cache with a mutation using an ID', async () => {
@@ -620,41 +727,43 @@ describe('Writing cache data from resolvers', () => {
     const client = new ApolloClient({
       cache,
       link: ApolloLink.empty(),
-      resolvers: {
-        Mutation: {
-          start() {
-            cache.writeQuery({
-              query,
-              data: {
-                obj: { field: 1, id: 'uniqueId', __typename: 'Object' },
-              },
-            });
-
-            cache.modify({
-              id: 'Object:uniqueId',
-              fields: {
-                field(value) {
-                  expect(value).toBe(1);
-                  return 2;
+      localState: new LocalState({
+        resolvers: {
+          Mutation: {
+            start() {
+              cache.writeQuery({
+                query,
+                data: {
+                  obj: { field: 1, id: 'uniqueId', __typename: 'Object' },
                 },
-              },
-            });
+              });
 
-            return { start: true };
+              cache.modify({
+                id: 'Object:uniqueId',
+                fields: {
+                  field(value) {
+                    expect(value).toBe(1);
+                    return 2;
+                  },
+                },
+              });
+
+              return true;
+            },
           },
         },
-      },
+      }),
     });
 
-    await client.mutate({ mutation });
+    await expect(client.mutate({ mutation })).resolves.toStrictEqualTyped({
+      data: { start: true },
+    });
 
     const result = await client.query({ query });
 
     // Hermes: results can hold extra cached fields (here the unselected id).
     expect(result).toMatchObject({
       data: { obj: { __typename: 'Object', field: 2 } },
-      loading: false,
-      networkStatus: NetworkStatus.ready,
     });
   });
 
@@ -681,41 +790,45 @@ describe('Writing cache data from resolvers', () => {
     const client = new ApolloClient({
       cache,
       link: ApolloLink.empty(),
-      resolvers: {
-        Mutation: {
-          start() {
-            cache.writeQuery({
-              query,
-              data: {
-                obj: {
-                  field: { field2: 1, __typename: 'Field' },
-                  id: 'uniqueId',
-                  __typename: 'Object',
+      localState: new LocalState({
+        resolvers: {
+          Mutation: {
+            start() {
+              cache.writeQuery({
+                query,
+                data: {
+                  obj: {
+                    field: { field2: 1, __typename: 'Field' },
+                    id: 'uniqueId',
+                    __typename: 'Object',
+                  },
                 },
-              },
-            });
-            cache.modify<{ field: { field2: number } }>({
-              id: 'Object:uniqueId',
-              fields: {
-                field(value) {
-                  if (isReference(value)) {
-                    fail('Should not be a reference');
-                  }
-                  expect(value.field2).toBe(1);
-                  return { ...value, field2: 2 };
+              });
+              cache.modify<{ field: { field2: number } }>({
+                id: 'Object:uniqueId',
+                fields: {
+                  field(value) {
+                    if (isReference(value)) {
+                      fail('Should not be a reference');
+                    }
+                    expect(value.field2).toBe(1);
+                    return { ...value, field2: 2 };
+                  },
                 },
-              },
-            });
-            return { start: true };
+              });
+              return true;
+            },
           },
         },
-      },
+      }),
     });
 
-    await client.mutate({ mutation });
+    await expect(client.mutate({ mutation })).resolves.toStrictEqualTyped({
+      data: { start: true },
+    });
     const result = await client.query({ query });
 
-    expect(result).toEqualApolloQueryResult({
+    expect(result).toStrictEqualTyped({
       data: {
         obj: {
           __typename: 'Object',
@@ -723,8 +836,6 @@ describe('Writing cache data from resolvers', () => {
           id: 'uniqueId',
         },
       },
-      loading: false,
-      networkStatus: NetworkStatus.ready,
     });
   });
 });
@@ -745,17 +856,19 @@ describe('Resolving field aliases', () => {
     const link = new ApolloLink(() =>
       // Each link is responsible for implementing their own aliasing so it
       // returns baz not bar
-      Observable.of({ data: { baz: { foo: true, __typename: 'Baz' } } }),
+      of({ data: { baz: { foo: true, __typename: 'Baz' } } }),
     );
 
     const client = new ApolloClient({
       cache: new Hermes(),
       link,
-      resolvers: {
-        Query: {
-          foo: () => ({ bar: true, __typename: 'Foo' }),
+      localState: new LocalState({
+        resolvers: {
+          Query: {
+            foo: () => ({ bar: true, __typename: 'Foo' }),
+          },
         },
-      },
+      }),
     });
 
     const result = await client.query({ query });
@@ -766,8 +879,6 @@ describe('Resolving field aliases', () => {
         foo: { bar: true, __typename: 'Foo' },
         baz: { foo: true, __typename: 'Baz' },
       },
-      loading: false,
-      networkStatus: NetworkStatus.ready,
     });
   });
 
@@ -784,12 +895,14 @@ describe('Resolving field aliases', () => {
     const client = new ApolloClient({
       cache: new Hermes(),
       link: ApolloLink.empty(),
-      resolvers: {
-        Query: {
-          foo: () => ({ bar: true, __typename: 'Foo' }),
-          fie,
+      localState: new LocalState({
+        resolvers: {
+          Query: {
+            foo: () => ({ bar: true, __typename: 'Foo' }),
+            fie,
+          },
         },
-      },
+      }),
     });
 
     const result = await client.query({ query: aliasedQuery });
@@ -797,8 +910,6 @@ describe('Resolving field aliases', () => {
     // Hermes: results can hold extra cached fields (here the field under its unaliased name too).
     expect(result).toMatchObject({
       data: { fie: { bar: true, __typename: 'Foo' } },
-      loading: false,
-      networkStatus: NetworkStatus.ready,
     });
     expect(fie).not.toHaveBeenCalled();
   });
@@ -815,18 +926,20 @@ describe('Resolving field aliases', () => {
       }
     `;
 
-    const link = new ApolloLink(() => Observable.of({ data: { baz: { foo: true, __typename: 'Baz' } } }));
+    const link = new ApolloLink(() => of({ data: { baz: { foo: true, __typename: 'Baz' } } }));
 
     const fie = jest.fn();
     const client = new ApolloClient({
       cache: new Hermes(),
       link,
-      resolvers: {
-        Query: {
-          foo: () => ({ bar: true, __typename: 'Foo' }),
-          fie,
+      localState: new LocalState({
+        resolvers: {
+          Query: {
+            foo: () => ({ bar: true, __typename: 'Foo' }),
+            fie,
+          },
         },
-      },
+      }),
     });
 
     const result = await client.query({ query: aliasedQuery });
@@ -837,8 +950,6 @@ describe('Resolving field aliases', () => {
         fie: { fum: true, __typename: 'Foo' },
         baz: { foo: true, __typename: 'Baz' },
       },
-      loading: false,
-      networkStatus: NetworkStatus.ready,
     });
     expect(fie).not.toHaveBeenCalled();
   });
@@ -856,7 +967,7 @@ describe('Resolving field aliases', () => {
     const client = new ApolloClient({
       cache,
       link: ApolloLink.empty(),
-      resolvers: {},
+      localState: new LocalState(),
     });
 
     cache.writeQuery({
@@ -880,8 +991,6 @@ describe('Resolving field aliases', () => {
     // Hermes: results can hold extra cached fields (here the field under its unaliased name too).
     expect(result).toMatchObject({
       data: { fie: { bar: 'yo', __typename: 'Foo' } },
-      loading: false,
-      networkStatus: NetworkStatus.ready,
     });
   });
 
@@ -900,7 +1009,7 @@ describe('Resolving field aliases', () => {
     `;
 
     const link = new ApolloLink(() =>
-      Observable.of({
+      of({
         data: {
           launch: {
             id: 1,
@@ -913,13 +1022,15 @@ describe('Resolving field aliases', () => {
     const client = new ApolloClient({
       cache: new Hermes(),
       link,
-      resolvers: {
-        Launch: {
-          isInCart() {
-            return true;
+      localState: new LocalState({
+        resolvers: {
+          Launch: {
+            isInCart() {
+              return true;
+            },
           },
         },
-      },
+      }),
     });
 
     client.writeQuery({
@@ -940,18 +1051,14 @@ describe('Resolving field aliases', () => {
 
     // `isInCart` resolver is fired, returning `true` (which is then
     // stored in the cache).
-    await expect(client.query({ query })).resolves.toEqualApolloQueryResult({
+    await expect(client.query({ query })).resolves.toStrictEqualTyped({
       data: { launch: { __typename: 'Launch', id: 1, isInCart: true } },
-      loading: false,
-      networkStatus: NetworkStatus.ready,
     });
 
     // When the same query fires again, `isInCart` should be pulled from
     // the cache and have a value of `true`.
-    await expect(client.query({ query })).resolves.toEqualApolloQueryResult({
+    await expect(client.query({ query })).resolves.toStrictEqualTyped({
       data: { launch: { __typename: 'Launch', id: 1, isInCart: true } },
-      loading: false,
-      networkStatus: NetworkStatus.ready,
     });
   });
 });
@@ -968,10 +1075,11 @@ describe('Force local resolvers', () => {
     `;
 
     const cache = new Hermes();
+    const localState = new LocalState();
     const client = new ApolloClient({
       cache,
       link: ApolloLink.empty(),
-      resolvers: {},
+      localState,
     });
 
     cache.writeQuery({
@@ -987,15 +1095,13 @@ describe('Force local resolvers', () => {
 
     // When the resolver isn't defined, there isn't anything to force, so
     // make sure the query resolves from the cache properly.
-    await expect(client.query({ query })).resolves.toEqualApolloQueryResult({
+    await expect(client.query({ query })).resolves.toStrictEqualTyped({
       data: {
         author: { __typename: 'Author', isLoggedIn: false, name: 'John Smith' },
       },
-      loading: false,
-      networkStatus: NetworkStatus.ready,
     });
 
-    client.addResolvers({
+    localState.addResolvers({
       Author: {
         isLoggedIn() {
           return true;
@@ -1006,12 +1112,10 @@ describe('Force local resolvers', () => {
     // A resolver is defined, so make sure it's forced, and the result
     // resolves properly as a combination of cache and local resolver
     // data.
-    await expect(client.query({ query })).resolves.toEqualApolloQueryResult({
+    await expect(client.query({ query })).resolves.toStrictEqualTyped({
       data: {
         author: { __typename: 'Author', isLoggedIn: true, name: 'John Smith' },
       },
-      loading: false,
-      networkStatus: NetworkStatus.ready,
     });
   });
 
@@ -1026,7 +1130,7 @@ describe('Force local resolvers', () => {
     `;
 
     const link = new ApolloLink(() =>
-      Observable.of({
+      of({
         data: {
           author: {
             name: 'John Smith',
@@ -1040,17 +1144,19 @@ describe('Force local resolvers', () => {
     const client = new ApolloClient({
       cache: new Hermes(),
       link,
-      resolvers: {
-        Author: {
-          isLoggedIn() {
-            count += 1;
-            return true;
+      localState: new LocalState({
+        resolvers: {
+          Author: {
+            isLoggedIn() {
+              count += 1;
+              return true;
+            },
           },
         },
-      },
+      }),
     });
 
-    await expect(client.query({ query })).resolves.toEqualApolloQueryResult({
+    await expect(client.query({ query })).resolves.toStrictEqualTyped({
       data: {
         author: {
           __typename: 'Author',
@@ -1058,8 +1164,6 @@ describe('Force local resolvers', () => {
           name: 'John Smith',
         },
       },
-      loading: false,
-      networkStatus: NetworkStatus.ready,
     });
     expect(count).toEqual(1);
   });
@@ -1076,18 +1180,21 @@ describe('Force local resolvers', () => {
     let isLoggedInCount = 0;
     const client = new ApolloClient({
       cache: new Hermes(),
-      resolvers: {
-        Query: {
-          name() {
-            nameCount += 1;
-            return 'John Smith';
-          },
-          isLoggedIn() {
-            isLoggedInCount += 1;
-            return true;
+      link: ApolloLink.empty(),
+      localState: new LocalState({
+        resolvers: {
+          Query: {
+            name() {
+              nameCount += 1;
+              return 'John Smith';
+            },
+            isLoggedIn() {
+              isLoggedInCount += 1;
+              return true;
+            },
           },
         },
-      },
+      }),
     });
 
     await client.query({ query });
@@ -1118,14 +1225,17 @@ describe('Force local resolvers', () => {
     let callCount = 0;
     const client = new ApolloClient({
       cache: new Hermes(),
-      resolvers: {
-        Query: {
-          isUserLoggedIn() {
-            callCount += 1;
-            return true;
+      link: ApolloLink.empty(),
+      localState: new LocalState({
+        resolvers: {
+          Query: {
+            isUserLoggedIn() {
+              callCount += 1;
+              return true;
+            },
           },
         },
-      },
+      }),
     });
 
     {
@@ -1165,27 +1275,30 @@ describe('Force local resolvers', () => {
 
     const client = new ApolloClient({
       cache: new Hermes(),
-      resolvers: {
-        Query: {
-          userData() {
-            return {
-              __typename: 'User',
-              firstName: 'Ben',
-              lastName: 'Newman',
-            };
+      link: ApolloLink.empty(),
+      localState: new LocalState({
+        resolvers: {
+          Query: {
+            userData() {
+              return {
+                __typename: 'User',
+                firstName: 'Ben',
+                lastName: 'Newman',
+              };
+            },
+          },
+          User: {
+            fullName(data) {
+              return `${data.firstName} ${data.lastName}`;
+            },
           },
         },
-        User: {
-          fullName(data) {
-            return `${data.firstName} ${data.lastName}`;
-          },
-        },
-      },
+      }),
     });
 
     const result = await client.query({ query });
 
-    expect(result).toEqualApolloQueryResult({
+    expect(result).toStrictEqualTyped({
       data: {
         userData: {
           __typename: 'User',
@@ -1194,9 +1307,185 @@ describe('Force local resolvers', () => {
           fullName: 'Ben Newman',
         },
       },
+    });
+  });
+
+  it('runs forced resolvers and returns result when returnPartialData is true', async () => {
+    const query = gql`
+      query {
+        user {
+          id
+          name
+        }
+        isLoggedIn @client(always: true)
+      }
+    `;
+
+    let isLoggedInCount = 0;
+    const client = new ApolloClient({
+      cache: new Hermes(),
+      link: new ApolloLink(() => {
+        return of({
+          data: { user: { __typename: 'User', id: 1, name: 'Test User' } },
+        }).pipe(delay(10));
+      }),
+      localState: new LocalState({
+        resolvers: {
+          Query: {
+            isLoggedIn: () => {
+              isLoggedInCount++;
+              return true;
+            },
+          },
+        },
+      }),
+    });
+
+    const stream = new ObservableStream(client.watchQuery({ query, returnPartialData: true }));
+
+    await expect(stream).toEmitTypedValue({
+      data: undefined,
+      dataState: 'empty',
+      loading: true,
+      networkStatus: NetworkStatus.loading,
+      partial: true,
+    });
+
+    await expect(stream).toEmitTypedValue({
+      data: {
+        isLoggedIn: true,
+      },
+      dataState: 'partial',
+      loading: true,
+      networkStatus: NetworkStatus.loading,
+      partial: true,
+    });
+
+    await expect(stream).toEmitTypedValue({
+      data: {
+        user: { __typename: 'User', id: 1, name: 'Test User' },
+        isLoggedIn: true,
+      },
+      dataState: 'complete',
       loading: false,
       networkStatus: NetworkStatus.ready,
+      partial: false,
     });
+
+    await expect(stream).not.toEmitAnything();
+
+    expect(isLoggedInCount).toBe(2);
+  });
+
+  it('reports dataState partial when a forced resolver fills an empty cache result with returnPartialData', async () => {
+    const query = gql`
+      query {
+        greeting {
+          message
+        }
+        isLoggedIn @client(always: true)
+      }
+    `;
+
+    const client = new ApolloClient({
+      cache: new Hermes(),
+      link: ApolloLink.empty(),
+      localState: new LocalState({
+        resolvers: {
+          Query: {
+            isLoggedIn: () => true,
+          },
+        },
+      }),
+    });
+
+    const stream = new ObservableStream(
+      client.watchQuery({
+        query,
+        fetchPolicy: 'cache-only',
+        returnPartialData: true,
+      }),
+    );
+
+    // Forced resolvers run asynchronously, so the first emit is the empty
+    // loading state. The next emit must stay "partial": the cache diff is
+    // empty, but the resolver added a field.
+    await expect(stream).toEmitTypedValue({
+      data: undefined,
+      dataState: 'empty',
+      loading: true,
+      networkStatus: NetworkStatus.loading,
+      partial: true,
+    });
+
+    await expect(stream).toEmitTypedValue({
+      data: { isLoggedIn: true },
+      dataState: 'partial',
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+      partial: true,
+    });
+
+    await expect(stream).not.toEmitAnything();
+  });
+
+  it('reports dataState when a forced client field is unresolved and server fields are complete', async () => {
+    const query = gql`
+      query {
+        greeting {
+          message
+        }
+        isLoggedIn @client(always: true)
+      }
+    `;
+
+    const cache = new Hermes();
+    cache.writeQuery({
+      query: gql`
+        query {
+          greeting {
+            message
+          }
+        }
+      `,
+      data: {
+        greeting: { __typename: 'Greeting', message: 'Hello' },
+      },
+    });
+
+    const client = new ApolloClient({
+      cache,
+      link: ApolloLink.empty(),
+      localState: new LocalState(),
+    });
+
+    const stream = new ObservableStream(
+      client.watchQuery({
+        query,
+        fetchPolicy: 'cache-only',
+        returnPartialData: true,
+      }),
+    );
+
+    await expect(stream).toEmitTypedValue({
+      data: undefined,
+      dataState: 'empty',
+      loading: true,
+      networkStatus: NetworkStatus.loading,
+      partial: true,
+    });
+
+    await expect(stream).toEmitTypedValue({
+      data: {
+        greeting: { __typename: 'Greeting', message: 'Hello' },
+      },
+      dataState: 'partial',
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+      partial: true,
+    });
+
+    await expect(stream).not.toEmitAnything();
   });
 });
 
@@ -1210,21 +1499,22 @@ describe('Async resolvers', () => {
 
     const client = new ApolloClient({
       cache: new Hermes(),
-      resolvers: {
-        Query: {
-          isLoggedIn() {
-            return Promise.resolve(true);
+      link: ApolloLink.empty(),
+      localState: new LocalState({
+        resolvers: {
+          Query: {
+            isLoggedIn() {
+              return Promise.resolve(true);
+            },
           },
         },
-      },
+      }),
     });
 
     const result = await client.query({ query })!;
 
-    expect(result).toEqualApolloQueryResult({
+    expect(result).toStrictEqualTyped({
       data: { isLoggedIn: true },
-      loading: false,
-      networkStatus: NetworkStatus.ready,
     });
   });
 
@@ -1246,7 +1536,7 @@ describe('Async resolvers', () => {
     };
 
     const link = new ApolloLink(() =>
-      Observable.of({
+      of({
         data: {
           member: {
             name: testMember.name,
@@ -1259,21 +1549,23 @@ describe('Async resolvers', () => {
     const client = new ApolloClient({
       cache: new Hermes(),
       link,
-      resolvers: {
-        Member: {
-          isLoggedIn() {
-            return Promise.resolve(testMember.isLoggedIn);
-          },
-          sessionCount() {
-            return testMember.sessionCount;
+      localState: new LocalState({
+        resolvers: {
+          Member: {
+            isLoggedIn() {
+              return Promise.resolve(testMember.isLoggedIn);
+            },
+            sessionCount() {
+              return testMember.sessionCount;
+            },
           },
         },
-      },
+      }),
     });
 
     const result = await client.query({ query })!;
 
-    expect(result).toEqualApolloQueryResult({
+    expect(result).toStrictEqualTyped({
       data: {
         member: {
           name: testMember.name,
@@ -1282,45 +1574,146 @@ describe('Async resolvers', () => {
           __typename: 'Member',
         },
       },
-      loading: false,
-      networkStatus: NetworkStatus.ready,
     });
   });
 });
 
-describe('LocalState helpers', () => {
-  describe('#shouldForceResolvers', () => {
-    it('should return true if the document contains any @client directives with an `always` variable of true', () => {
-      const localState = new LocalState({ cache: new Hermes() });
-      const query = gql`
-        query Author {
-          name
-          isLoggedIn @client(always: true)
-        }
-      `;
-      expect(localState.shouldForceResolvers(query)).toBe(true);
-    });
+it('does not execute resolver when using cache-only fetch policy with no data in the cache', async () => {
+  const query = gql`
+    query {
+      user {
+        id
+        name
+      }
+      isLoggedIn @client
+    }
+  `;
 
-    it('should return false if the document contains any @client directives without an `always` variable', () => {
-      const localState = new LocalState({ cache: new Hermes() });
-      const query = gql`
-        query Author {
-          name
-          isLoggedIn @client
-        }
-      `;
-      expect(localState.shouldForceResolvers(query)).toBe(false);
-    });
-
-    it('should return false if the document contains any @client directives with an `always` variable of false', () => {
-      const localState = new LocalState({ cache: new Hermes() });
-      const query = gql`
-        query Author {
-          name
-          isLoggedIn @client(always: false)
-        }
-      `;
-      expect(localState.shouldForceResolvers(query)).toBe(false);
-    });
+  const client = new ApolloClient({
+    cache: new Hermes(),
+    link: ApolloLink.empty(),
+    localState: new LocalState({
+      resolvers: {
+        Query: {
+          isLoggedIn: () => {
+            return true;
+          },
+        },
+      },
+    }),
   });
+
+  const stream = new ObservableStream(client.watchQuery({ query, fetchPolicy: 'cache-only' }));
+
+  await expect(stream).toEmitTypedValue({
+    data: undefined,
+    dataState: 'empty',
+    loading: false,
+    networkStatus: NetworkStatus.ready,
+    partial: true,
+  });
+
+  await expect(stream).not.toEmitAnything();
+});
+
+it('does not execute resolver if client field is not in the cache when using cache-only fetch policy', async () => {
+  const query = gql`
+    query {
+      user {
+        id
+        name
+        isLoggedIn @client
+      }
+    }
+  `;
+
+  const client = new ApolloClient({
+    cache: new Hermes(),
+    link: ApolloLink.empty(),
+    localState: new LocalState({
+      resolvers: {
+        Query: {
+          isLoggedIn: () => {
+            return true;
+          },
+        },
+      },
+    }),
+  });
+
+  client.writeQuery({
+    query,
+    data: {
+      user: { __typename: 'User', id: '1', name: 'Test User' },
+    },
+  });
+
+  const stream = new ObservableStream(client.watchQuery({ query, fetchPolicy: 'cache-only' }));
+
+  await expect(stream).toEmitTypedValue({
+    data: undefined,
+    dataState: 'empty',
+    loading: false,
+    networkStatus: NetworkStatus.ready,
+    partial: true,
+  });
+
+  await expect(stream).not.toEmitAnything();
+});
+
+it('returns cache @client field data when using cache-only fetch policy', async () => {
+  const query = gql`
+    query {
+      user {
+        id
+        name
+        isLoggedIn @client
+      }
+    }
+  `;
+
+  const client = new ApolloClient({
+    cache: new Hermes(),
+    link: ApolloLink.empty(),
+    localState: new LocalState({
+      resolvers: {
+        Query: {
+          isLoggedIn: () => {
+            return true;
+          },
+        },
+      },
+    }),
+  });
+
+  client.writeQuery({
+    query,
+    data: {
+      user: {
+        __typename: 'User',
+        id: '1',
+        name: 'Test User',
+        isLoggedIn: false,
+      },
+    },
+  });
+
+  const stream = new ObservableStream(client.watchQuery({ query, fetchPolicy: 'cache-only' }));
+
+  await expect(stream).toEmitTypedValue({
+    data: {
+      user: {
+        __typename: 'User',
+        id: '1',
+        name: 'Test User',
+        isLoggedIn: false,
+      },
+    },
+    dataState: 'complete',
+    loading: false,
+    networkStatus: NetworkStatus.ready,
+    partial: false,
+  });
+
+  await expect(stream).not.toEmitAnything();
 });

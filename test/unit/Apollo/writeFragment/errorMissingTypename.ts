@@ -31,6 +31,7 @@ describe(`writeFragment with missing __typename`, () => {
           name: 'Gouda',
         },
       }),
-    ).to.deep.equal({ __ref: '123' });
+      // Like InMemoryCache, the root object is not identified by its data.
+    ).to.deep.equal({ __ref: QueryRootId });
   });
 });

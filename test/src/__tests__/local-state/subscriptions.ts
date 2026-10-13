@@ -1,5 +1,9 @@
-import gql from 'graphql-tag';
-import { ApolloClient, ApolloLink, Observable } from '@apollo/client';
+import { gql } from 'graphql-tag';
+import { of } from 'rxjs';
+import { ApolloClient } from '@apollo/client';
+import { ApolloLink } from '@apollo/client/link';
+import { LocalState } from '@apollo/client/local-state';
+
 import { ObservableStream } from '@apollo/client/testing/internal';
 
 import { Hermes } from '../../../../src';
@@ -12,22 +16,24 @@ describe('Basic functionality', () => {
       }
     `;
 
-    const link = new ApolloLink(() => Observable.of({ data: { field: 1 } }, { data: { field: 2 } }));
+    const link = new ApolloLink(() => of({ data: { field: 1 } }, { data: { field: 2 } }));
 
     const client = new ApolloClient({
       cache: new Hermes(),
       link,
-      resolvers: {
-        Query: {
-          count: () => 0,
+      localState: new LocalState({
+        resolvers: {
+          Query: {
+            count: () => 0,
+          },
         },
-      },
+      }),
     });
 
     const stream = new ObservableStream(client.subscribe({ query }));
 
-    await expect(stream).toEmitValue({ data: { field: 1 } });
-    await expect(stream).toEmitValue({ data: { field: 2 } });
+    await expect(stream).toEmitTypedValue({ data: { field: 1 } });
+    await expect(stream).toEmitTypedValue({ data: { field: 2 } });
     await expect(stream).toComplete();
   });
 
@@ -39,26 +45,28 @@ describe('Basic functionality', () => {
       }
     `;
 
-    const link = new ApolloLink(() => Observable.of({ data: { field: 1 } }, { data: { field: 2 } }));
+    const link = new ApolloLink(() => of({ data: { field: 1 } }, { data: { field: 2 } }));
 
     let subCounter = 0;
     const client = new ApolloClient({
       cache: new Hermes(),
       link,
-      resolvers: {
-        Subscription: {
-          count: () => {
-            subCounter += 1;
-            return subCounter;
+      localState: new LocalState({
+        resolvers: {
+          Subscription: {
+            count: () => {
+              subCounter += 1;
+              return subCounter;
+            },
           },
         },
-      },
+      }),
     });
 
     const stream = new ObservableStream(client.subscribe({ query }));
 
-    await expect(stream).toEmitValue({ data: { field: 1, count: 1 } });
-    await expect(stream).toEmitValue({ data: { field: 2, count: 2 } });
+    await expect(stream).toEmitTypedValue({ data: { field: 1, count: 1 } });
+    await expect(stream).toEmitTypedValue({ data: { field: 2, count: 2 } });
     await expect(stream).toComplete();
   });
 });

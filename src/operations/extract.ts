@@ -2,7 +2,7 @@ import { CacheContext } from '../context';
 import { GraphSnapshot } from '../GraphSnapshot';
 import { EntitySnapshot, NodeSnapshot, ParameterizedValueSnapshot } from '../nodes';
 import { JsonValue, NestedValue } from '../primitive';
-import { Serializable, isSerializable } from '../schema';
+import { NodeId, Serializable, isSerializable } from '../schema';
 import { iterParameterized, iterRefs, lazyImmutableDeepSet } from '../util';
 
 /**
@@ -18,12 +18,38 @@ export function extract<TSerialized>(
   graphSnapshot: GraphSnapshot,
   cacheContext: CacheContext<TSerialized>,
 ): Serializable.GraphSnapshot {
+  let extracted = extractedSnapshots.get(graphSnapshot);
+  if (!extracted) {
+    const result = extractNodes(graphSnapshot, cacheContext);
+    extracted = { ids: Object.keys(result), nodes: Object.values(result) };
+    extractedSnapshots.set(graphSnapshot, extracted);
+  }
+  // (A new object each time, like InMemoryCache's.)
+  const { ids, nodes } = extracted;
+  const result: Serializable.GraphSnapshot = {};
+  for (let i = 0; i < ids.length; i++) result[ids[i]] = nodes[i];
+  return result;
+}
+
+/** The serialized nodes of each snapshot extracted (by id, in order). */
+const extractedSnapshots = new WeakMap<GraphSnapshot, { ids: string[]; nodes: Serializable.NodeSnapshot[] }>();
+
+function extractNodes<TSerialized>(
+  graphSnapshot: GraphSnapshot,
+  cacheContext: CacheContext<TSerialized>,
+): Serializable.GraphSnapshot {
   const result: Serializable.GraphSnapshot = {};
   const entities = graphSnapshot._values;
   // We don't need to check for hasOwnProperty because data._values is
   // created with prototype of 'null'
   for (const id in entities) {
     const nodeSnapshot = entities[id];
+    const targets = targetKinds(graphSnapshot, nodeSnapshot);
+    const known = extractedNodes.get(nodeSnapshot);
+    if (known && sameTargets(known.targets, targets)) {
+      result[id] = known.serialized;
+      continue;
+    }
     const { outbound, inbound, parameterized } = nodeSnapshot;
 
     let type: Serializable.NodeSnapshotType;
@@ -72,9 +98,46 @@ export function extract<TSerialized>(
     }
 
     result[id] = serializedEntity;
+    extractedNodes.set(nodeSnapshot, { serialized: serializedEntity, targets });
   }
 
   return result;
+}
+
+/**
+ * The serialized form of each node snapshot extracted, and the kinds of the
+ * nodes it referenced then (see targetKinds): the node snapshots are
+ * immutable, so it holds for as long as those don't change. (Like
+ * InMemoryCache's extract(), extracts therefore share their entities' objects.)
+ */
+const extractedNodes = new WeakMap<NodeSnapshot, { serialized: Serializable.NodeSnapshot; targets: TargetKind[] }>();
+
+/** What a reference's target is: an entity, another node, or missing (a dangling reference). */
+const enum TargetKind {
+  Missing,
+  Entity,
+  Other,
+}
+
+/** The kinds of the nodes a node references, which its serialized data depends on. */
+function targetKinds(graphSnapshot: GraphSnapshot, nodeSnapshot: NodeSnapshot): TargetKind[] {
+  const kinds: TargetKind[] = [];
+  const kindOf = (reference: { id: NodeId }) => {
+    const target = graphSnapshot.getNodeSnapshot(reference.id);
+    kinds.push(target instanceof EntitySnapshot ? TargetKind.Entity : target ? TargetKind.Other : TargetKind.Missing);
+  };
+  // (In the order of iterRefs.)
+  nodeSnapshot.parameterized?.forEach(references => references.forEach(kindOf));
+  nodeSnapshot.outbound?.forEach(kindOf);
+  return kinds;
+}
+
+function sameTargets(a: TargetKind[], b: TargetKind[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
 }
 
 function extractSerializableData(

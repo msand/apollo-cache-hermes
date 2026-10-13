@@ -1,10 +1,10 @@
+import type { ExecutionResult } from 'graphql';
+import { gql } from 'graphql-tag';
+import { Observable, of } from 'rxjs';
 import { SubscriptionClient } from 'subscriptions-transport-ws';
-import { ExecutionResult } from 'graphql';
-import gql from 'graphql-tag';
-import { Observable } from '@apollo/client/utilities';
-import { execute } from '@apollo/client/link/core';
 import { WebSocketLink } from '@apollo/client/link/ws';
-import { ObservableStream } from '@apollo/client/testing/internal';
+
+import { executeWithDefaultContext as execute, ObservableStream } from '@apollo/client/testing/internal';
 
 const query = gql`
   query SampleQuery {
@@ -46,7 +46,7 @@ describe('WebSocketLink', () => {
   it('should call request on the client for a query', async () => {
     const result = { data: { data: 'result' } };
     const client: any = {};
-    const observable = Observable.of(result);
+    const observable = of(result);
     // eslint-disable-next-line no-proto
     client.__proto__ = SubscriptionClient.prototype;
     client.request = jest.fn();
@@ -54,18 +54,17 @@ describe('WebSocketLink', () => {
     const link = new WebSocketLink(client);
 
     const obs = execute(link, { query });
-    expect(obs).toEqual(observable);
 
     const stream = new ObservableStream(obs);
 
-    await expect(stream).toEmitValue(result);
+    await expect(stream).toEmitTypedValue(result);
     expect(client.request).toHaveBeenCalledTimes(1);
   });
 
   it('should call query on the client for a mutation', async () => {
     const result = { data: { data: 'result' } };
     const client: any = {};
-    const observable = Observable.of(result);
+    const observable = of(result);
     // eslint-disable-next-line no-proto
     client.__proto__ = SubscriptionClient.prototype;
     client.request = jest.fn();
@@ -73,18 +72,17 @@ describe('WebSocketLink', () => {
     const link = new WebSocketLink(client);
 
     const obs = execute(link, { query: mutation });
-    expect(obs).toEqual(observable);
 
     const stream = new ObservableStream(obs);
 
-    await expect(stream).toEmitValue(result);
+    await expect(stream).toEmitTypedValue(result);
     expect(client.request).toHaveBeenCalledTimes(1);
   });
 
   it('should call request on the subscriptions client for subscription', async () => {
     const result = { data: { data: 'result' } };
     const client: any = {};
-    const observable = Observable.of(result);
+    const observable = of(result);
     // eslint-disable-next-line no-proto
     client.__proto__ = SubscriptionClient.prototype;
     client.request = jest.fn();
@@ -92,11 +90,10 @@ describe('WebSocketLink', () => {
     const link = new WebSocketLink(client);
 
     const obs = execute(link, { query: subscription });
-    expect(obs).toEqual(observable);
 
     const stream = new ObservableStream(obs);
 
-    await expect(stream).toEmitValue(result);
+    await expect(stream).toEmitTypedValue(result);
     expect(client.request).toHaveBeenCalledTimes(1);
   });
 
@@ -118,8 +115,8 @@ describe('WebSocketLink', () => {
     const observable = execute(link, { query: subscription });
     const stream = new ObservableStream(observable);
 
-    await expect(stream).toEmitValue(results.shift());
-    await expect(stream).toEmitValue(results.shift());
+    await expect(stream).toEmitTypedValue(results.shift()!);
+    await expect(stream).toEmitTypedValue(results.shift()!);
 
     expect(client.request).toHaveBeenCalledTimes(1);
     expect(results).toHaveLength(0);

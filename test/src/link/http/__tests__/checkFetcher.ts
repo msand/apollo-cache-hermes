@@ -1,11 +1,6 @@
-import { checkFetcher } from '@apollo/client/link/http/checkFetcher';
-import { loadErrorMessages } from '@apollo/client/dev';
+import { checkFetcher } from '@apollo/client/link/http';
 
 import { voidFetchDuringEachTest } from './helpers';
-
-// Hermes: the published @apollo/client package replaces invariant messages with error
-// codes. Load the messages so errors read as they do in Apollo's source tests.
-loadErrorMessages();
 
 describe('checkFetcher', () => {
   voidFetchDuringEachTest();

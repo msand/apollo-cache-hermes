@@ -27,11 +27,8 @@ exports[`mutation results should write results to cache according to errorPolicy
 exports[`mutation results should write results to cache according to errorPolicy 2`] = `
 Object {
   "Person:{\\"name\\":\\"Jenn Creighton\\"}": Object {
-    "data": Object {
-      "__typename": "Person",
-      "name": "Jenn Creighton",
-    },
-    "type": 0,
+    "__typename": "Person",
+    "name": "Jenn Creighton",
   },
 }
 `;
@@ -39,18 +36,12 @@ Object {
 exports[`mutation results should write results to cache according to errorPolicy 3`] = `
 Object {
   "Person:{\\"name\\":\\"Ellen Shapiro\\"}": Object {
-    "data": Object {
-      "__typename": "Person",
-      "name": "Ellen Shapiro",
-    },
-    "type": 0,
+    "__typename": "Person",
+    "name": "Ellen Shapiro",
   },
   "Person:{\\"name\\":\\"Jenn Creighton\\"}": Object {
-    "data": Object {
-      "__typename": "Person",
-      "name": "Jenn Creighton",
-    },
-    "type": 0,
+    "__typename": "Person",
+    "name": "Jenn Creighton",
   },
 }
 `;

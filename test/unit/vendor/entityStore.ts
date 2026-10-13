@@ -1,7 +1,8 @@
 // noinspection GraphQLUnresolvedReference
 
 import gql from 'graphql-tag';
-import { Cache, makeReference, MissingFieldError, Reference } from '@apollo/client';
+import { Cache, MissingFieldError, Reference } from '@apollo/client';
+import { makeReference } from '@apollo/client/utilities/internal';
 
 import { Hermes } from '../../../src';
 
@@ -251,18 +252,16 @@ describe('EntityStore', () => {
           isbn: '031648637X',
         },
       },
-      missing: [
-        new MissingFieldError(
-          'Can\'t find field \'title\' on Book:{"isbn":"031648637X"} object',
-          {
-            book: {
-              title: 'Can\'t find field \'title\' on Book:{"isbn":"031648637X"} object',
-            },
+      missing: new MissingFieldError(
+        'Can\'t find field \'title\' on Book:{"isbn":"031648637X"} object',
+        {
+          book: {
+            title: 'Can\'t find field \'title\' on Book:{"isbn":"031648637X"} object',
           },
-          expect.anything(), // query
-          expect.anything(), // variables
-        ),
-      ],
+        },
+        expect.anything(), // query
+        expect.anything(), // variables
+      ),
     });
 
     expect(cache.extract()).toEqual({

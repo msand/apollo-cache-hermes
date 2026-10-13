@@ -1,18 +1,15 @@
-import gql from 'graphql-tag';
-import { visit, FragmentDefinitionNode } from 'graphql';
-import { hasOwn } from '@apollo/client/cache/inmemory/helpers';
+import type { FragmentDefinitionNode } from 'graphql';
+import { visit } from 'graphql';
+import { gql } from 'graphql-tag';
 
 import { Hermes } from '../../../../../src';
 import { toNormalizedCacheObject } from '../../../../helpers';
 
 describe('fragment matching', () => {
   it('can match exact types with or without possibleTypes', () => {
-    const cacheWithoutPossibleTypes = new Hermes({
-      addTypename: true,
-    });
+    const cacheWithoutPossibleTypes = new Hermes();
 
     const cacheWithPossibleTypes = new Hermes({
-      addTypename: true,
       possibleTypes: {
         Animal: ['Cat', 'Dog'],
       },
@@ -58,7 +55,6 @@ describe('fragment matching', () => {
 
   it('can match interface subtypes', () => {
     const cache = new Hermes({
-      addTypename: true,
       possibleTypes: {
         Animal: ['Cat', 'Dog'],
       },
@@ -90,7 +86,6 @@ describe('fragment matching', () => {
 
   it('can match union member types', () => {
     const cache = new Hermes({
-      addTypename: true,
       possibleTypes: {
         Status: ['PASSING', 'FAILING', 'SKIPPED'],
       },
@@ -140,7 +135,6 @@ describe('fragment matching', () => {
 
   it('can match indirect subtypes while avoiding cycles', () => {
     const cache = new Hermes({
-      addTypename: true,
       possibleTypes: {
         Animal: ['Animal', 'Bug', 'Mammal'],
         Bug: ['Ant', 'Spider', 'RolyPoly'],
@@ -187,9 +181,7 @@ describe('fragment matching', () => {
   });
 
   it('can match against the root Query', () => {
-    const cache = new Hermes({
-      addTypename: true,
-    });
+    const cache = new Hermes();
 
     const query = gql`
       query AllPeople {
@@ -289,7 +281,7 @@ describe('policies.fragmentMatches', () => {
           const supertype = frag.typeCondition.name.value;
           expect('ABCDEF'.split('')).toContain(supertype);
 
-          if (hasOwn.call(expected, supertype)) {
+          if (Object.hasOwn(expected, supertype)) {
             Object.keys(expected[supertype]).forEach(subtype => {
               check(subtype, expected[supertype][subtype]);
             });
@@ -481,8 +473,7 @@ describe('policies.fragmentMatches', () => {
     expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
 
     // Now add the TooLong subtype of C explicitly.
-    // Hermes: possibleTypes are added to the cache's context (InMemoryCache's policies).
-    (cache as any)._queryable._context.addPossibleTypes({
+    cache.policies.addPossibleTypes({
       C: ['TooLong'],
     });
 
