@@ -180,6 +180,8 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     verifyQuery?: RawOperation,
   ) {
     const { cacheSnapshot, editedNodeIds, extraRootIds } = restore(data, this._context);
+    // The nodes the restored data replaces are edited too (removed, if it lacks them).
+    addToSet(editedNodeIds, this._snapshot.baseline.allNodeIds());
     const migrated = migrate(cacheSnapshot, migrationMap);
     if (verifyQuery && !read(this._context, verifyQuery, migrated.baseline, Object.create(null), false).complete) {
       throw new UnsatisfiedCacheError(`Restored cache cannot satisfy the verification query`);
@@ -451,6 +453,9 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     const optimistic = baseline;
     const optimisticQueue = new OptimisticUpdateQueue();
     this._rootIds = Object.create(null);
+    // Like InMemoryCache (whose new root store has new storage), read and
+    // merge functions start over with empty storage.
+    this._context.fieldStorage.clear();
 
     this._fieldsUntracked = true;
     this._setSnapshot(new CacheSnapshot(baseline, optimistic, optimisticQueue), allIds);
@@ -486,6 +491,12 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
   ): void {
     const lastSnapshot = this._snapshot;
     this._snapshot = snapshot;
+
+    // The storage of read and merge functions for nodes no longer in the cache.
+    const { fieldStorage } = this._context;
+    for (const id of editedNodeIds) {
+      if (!snapshot.baseline.has(id) && !snapshot.optimistic.has(id)) fieldStorage.delete(id);
+    }
 
     if (lastSnapshot) {
       const { strict } = this._context;

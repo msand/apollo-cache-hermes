@@ -107,11 +107,31 @@ function isUntypedObject(value: unknown) {
 /**
  * Per-field storage objects shared by read and merge functions, keyed by the
  * identity of the object containing the field (and the path to it).
+ *
+ * The storage of a node's fields (whose keys start with the node's id) is
+ * dropped when the node is removed from the cache (see delete), and all of it
+ * when the cache is reset.
  */
 export class FieldStorage {
   private _strong?: Map<unknown, FieldStorage>;
   private _weak?: WeakMap<object, FieldStorage>;
   private _storage?: Record<string, any>;
+
+  /** Drops the storage objects whose keys start with `key` (e.g. a node's id). */
+  delete(key: unknown): void {
+    if (key !== null && typeof key === 'object') {
+      this._weak?.delete(key);
+    } else {
+      this._strong?.delete(key);
+    }
+  }
+
+  /** Drops every storage object. */
+  clear(): void {
+    this._strong = undefined;
+    this._weak = undefined;
+    this._storage = undefined;
+  }
 
   get(keys: unknown[]): Record<string, any> {
     let node: FieldStorage = this;
