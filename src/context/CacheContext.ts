@@ -448,6 +448,7 @@ export class CacheContext<TSerialized = GraphSnapshot> {
     }
     const operation = {
       info,
+      document: raw.document,
       rootId: updateRaw.rootId,
       parsedQuery: expandVariables(info.parsed, fullVariables),
       isStatic: !areChildrenDynamic(info.parsed) && !rootHasReadPolicy,

@@ -61,6 +61,11 @@ export interface OperationInstance<TSerialized> {
   readonly rootId: NodeId;
   /** A parsed GraphQL document, declaring an operation to execute. */
   readonly info: QueryInfo<TSerialized>;
+  /**
+   * The document as it was passed to the cache (before transformDocument),
+   * which missing field errors report, like InMemoryCache.
+   */
+  readonly document: DocumentNode;
   /** Parsed form of the query, with values substituted for any variables. */
   readonly parsedQuery: ParsedQuery;
   /** Whether the operation contains _no_ parameterized values. */

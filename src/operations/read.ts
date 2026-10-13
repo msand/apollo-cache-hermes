@@ -50,9 +50,10 @@ export function toDiffResult<TData = unknown>(
   { result, complete, missing }: QueryResult,
   returnPartialData = true,
 ): Cache.DiffResult<TData> {
-  // Like InMemoryCache, a complete read of a query that selects no fields (e.g.
-  // all are skipped) from an empty node is an empty object.
-  if (complete) return { result: (result ?? {}) as any, complete: true };
+  // Like InMemoryCache, a complete result has a `missing: undefined` property,
+  // and a read that selects no fields (they are all skipped) has an empty
+  // result, even when nothing was written.
+  if (complete) return { result: (result ?? {}) as any, complete: true, missing: undefined };
   const keepResult = returnPartialData && !!result && Object.keys(result).length > 0;
   return { result: keepResult ? (result as any) : null, complete: false, missing };
 }
@@ -109,7 +110,7 @@ export function read<TSerialized>(
       const message = `Dangling reference to missing ${operation.rootId} object`;
       queryResult.result = {};
       queryResult.complete = false;
-      queryResult.missing = new MissingFieldError(message, message, operation.info.document, operation.variables ?? {});
+      queryResult.missing = new MissingFieldError(message, message, operation.document, operation.variables ?? {});
       queryResult.entityIds = includeNodeIds ? new Set([operation.rootId]) : undefined;
     } else {
       const { data, outbound, parameterized } = rootSnapshot ?? {};
@@ -783,7 +784,7 @@ export function _visitSelection<TSerialized>(
   const missing =
     missingTree === undefined
       ? undefined
-      : new MissingFieldError(firstMissing(missingTree), missingTree, query.info.document, query.variables ?? {});
+      : new MissingFieldError(firstMissing(missingTree), missingTree, query.document, query.variables ?? {});
 
   return { complete, missing, result: filteredResult };
 }
