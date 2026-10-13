@@ -339,7 +339,9 @@ export class SnapshotEditor<TSerialized> {
     let payloadId =
       ref ??
       this._context.entityIdForValue(getPayloadProxy(payload, propMap)) ??
-      (path.length === 0 && !isRoot ? containerId : undefined);
+      // A null value of a parameterized field (whose node is the container) is
+      // not the container itself.
+      (path.length === 0 && !isRoot && !isNil(payload) ? containerId : undefined);
     const previousId =
       this._context.entityIdForValue(getVisibleProxy(previousValue, propMap)) ??
       (path.length === 0 && !isRoot
@@ -436,6 +438,19 @@ export class SnapshotEditor<TSerialized> {
       prefixPath = [...prefixPath, ...path];
       containerId = payloadId;
       path = [];
+    }
+
+    // Like InMemoryCache, an empty unidentified object (e.g. the `{}` a merge
+    // function returns) is stored, rather than left missing.
+    if (
+      !prune &&
+      !payloadId &&
+      isNil(previousValue) &&
+      path.length &&
+      isObject(payload) &&
+      !Object.keys(payload).length
+    ) {
+      this._setValue(containerId, path, {});
     }
 
     // Finally, we can walk into individual values.

@@ -49,7 +49,9 @@ export function toDiffResult<TData = unknown>(
   { result, complete, missing }: QueryResult,
   returnPartialData = true,
 ): Cache.DiffResult<TData> {
-  if (complete) return { result: result as any, complete: true };
+  // Like InMemoryCache, a complete read of a query that selects no fields (e.g.
+  // all are skipped) from an empty node is an empty object.
+  if (complete) return { result: (result ?? {}) as any, complete: true };
   const keepResult = returnPartialData && !!result && Object.keys(result).length > 0;
   return { result: keepResult ? (result as any) : null, complete: false, missing };
 }
