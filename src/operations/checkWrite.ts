@@ -2,6 +2,7 @@ import { invariant, InvariantError } from '@apollo/client/utilities/invariant';
 import { addTypenameToDocument, getMainDefinition, isReference } from '@apollo/client/utilities';
 import {
   argumentsObjectFromField,
+  checkDocument,
   createFragmentMap,
   getDefaultValues,
   getFragmentDefinitions,
@@ -55,6 +56,20 @@ const uncaughtErrors = new WeakSet<object>();
  */
 export function isUncaughtWriteError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && uncaughtErrors.has(error);
+}
+
+/**
+ * Validates a written document (e.g. that it does not alias a field to
+ * __typename), like InMemoryCache, whose writes throw these errors to the
+ * caller rather than rolling back a transaction.
+ */
+export function checkWriteDocument(document: DocumentNode): void {
+  try {
+    checkDocument(document);
+  } catch (error) {
+    if (typeof error === 'object' && error !== null) uncaughtErrors.add(error);
+    throw error;
+  }
 }
 
 /**

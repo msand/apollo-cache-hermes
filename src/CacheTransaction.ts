@@ -30,7 +30,7 @@ import * as schema from './schema';
 import * as nodes from './nodes';
 import * as util from './util';
 import { nodeIdForParameterizedValue } from './operations/SnapshotEditor';
-import { checkWrite } from './operations/checkWrite';
+import { checkWrite, checkWriteDocument } from './operations/checkWrite';
 import { getReadFunction, storageFieldName } from './operations/fieldFunctions';
 
 const isEqual = equality.equal;
@@ -203,6 +203,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
    * baseline state (and any optimistic updates will be replayed over it).
    */
   write(query: RawOperation, payload: JsonObject): Reference | undefined {
+    checkWriteDocument(query.document);
     if (payload && typeof payload === 'object') {
       checkWrite(
         this._context,
