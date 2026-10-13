@@ -31,8 +31,8 @@ const run = (cmd, args, cwd) => {
 const published = { 'hermes-0.9.12': '0.9.12', 'hermes-0.10.0': '0.10.0', 'hermes-0.11.0': '0.11.0' };
 
 const only = process.argv.slice(2).filter(arg => !arg.startsWith('--'));
-// (hermes-dev is a copy of hermes-branch made by bench/dev-sync.mjs.)
-const names = only.length ? only : Object.keys(IMPLS).filter(name => name !== 'hermes-dev');
+// (hermes-dev and hermes-prev are copies of hermes-branch made by bench/dev-sync.mjs.)
+const names = only.length ? only : Object.keys(IMPLS).filter(name => name !== 'hermes-dev' && name !== 'hermes-prev');
 for (const name of names) {
   const dir = implDir(name);
   const tarball = path.join(dir, 'hermes.tgz');

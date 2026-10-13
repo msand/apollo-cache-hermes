@@ -31,4 +31,5 @@
 /bench/impl/*/hermes.tgz
 /bench/impl/*/BUILD_COMMIT
 /bench/impl/hermes-dev/
+/bench/impl/hermes-prev/
 /bench/results*.json

@@ -35,6 +35,8 @@ export const IMPLS = {
   'hermes-branch': { label: 'Hermes (this branch) + AC 4.3.3', dir: 'hermes-branch', kind: 'hermes' },
   // For trying out changes: `node bench/dev-sync.mjs` copies this checkout's compiled src/ into it.
   'hermes-dev': { label: 'Hermes (working copy) + AC 4.3.3', dir: 'hermes-dev', kind: 'hermes' },
+  // Another build to compare against (`node bench/dev-sync.mjs hermes-prev <checkout>`).
+  'hermes-prev': { label: 'Hermes (other build) + AC 4.3.3', dir: 'hermes-prev', kind: 'hermes' },
   'inmemory-3': { label: 'InMemoryCache AC 3.14.1', dir: 'inmemory-3', kind: 'inmemory' },
   'inmemory-4': { label: 'InMemoryCache AC 4.3.3', dir: 'inmemory-4', kind: 'inmemory' },
 };

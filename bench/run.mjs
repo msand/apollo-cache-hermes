@@ -191,6 +191,12 @@ function comparisons(columns) {
       pairs.push(['hermes-0.11.0', 'hermes-branch']);
   }
   if (columns.includes('inmemory-4') && columns.includes('hermes-branch')) pairs.push(['inmemory-4', 'hermes-branch']);
+  // The working copy (see bench/dev-sync.mjs) against what it should beat.
+  if (columns.includes('hermes-dev')) {
+    for (const other of ['hermes-prev', 'hermes-0.9.12', 'inmemory-4']) {
+      if (columns.includes(other)) pairs.push([other, 'hermes-dev']);
+    }
+  }
   return pairs;
 }
 
