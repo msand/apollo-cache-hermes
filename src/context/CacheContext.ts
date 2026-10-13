@@ -1,5 +1,4 @@
-import { addTypenameToDocument, print } from '@apollo/client/utilities';
-import isEqual from '@wry/equality';
+import { addTypenameToDocument, canonicalStringify, print } from '@apollo/client/utilities';
 import type {
   FragmentRegistryAPI,
   InputObjectsOption,
@@ -238,9 +237,8 @@ export class CacheContext<TSerialized = GraphSnapshot> {
    */
   private readonly _transformedOutputs = new WeakSet<DocumentNode>();
 
-  private readonly _queryInfoMap = new Map<string, QueryInfo<TSerialized>>();
-  /** All currently known & parsed queries, for identity mapping. */
-  private readonly _operationMap = new Map<string, OperationInstance<TSerialized>[]>();
+  /** The parsed operations of each known document (by its cache key; see parseOperation). */
+  private readonly _documentOperations = new Map<string, DocumentOperations<TSerialized>>();
 
   public readonly dirty = new Map<NodeId, Set<string>>();
 
@@ -371,7 +369,9 @@ export class CacheContext<TSerialized = GraphSnapshot> {
    * Returns a memoized & parsed operation.
    *
    * To aid in various cache lookups, the result is memoized by all of its
-   * values, and can be used as an identity for a specific operation.
+   * values, and can be used as an identity for a specific operation. (The
+   * operations of a document are kept like an LRU cache: those not used
+   * recently are eventually dropped, and parsed again when next used.)
    */
   parseOperation(raw: RawOperation): OperationInstance<TSerialized> {
     // It appears like Apollo or someone upstream is cloning or otherwise
@@ -379,30 +379,31 @@ export class CacheContext<TSerialized = GraphSnapshot> {
     // is a more reliable cache key…
     // ApolloClient passes documents it already transformed with transformDocument.
     // Their __typename fields are part of the query as the client sees it.
-    // Like InMemoryCache, custom scalar variables are serialized.
-    const variables = this.scalars.serializeVariables(raw.document, raw.variables);
-    if (variables !== raw.variables) raw = { ...raw, variables };
     const pretransformed = this._transformedOutputs.has(raw.document);
     const cacheKey = `${operationCacheKey(raw.document, raw.fragmentName)}${pretransformed ? '❖transformed' : ''}`;
-    let operationInstances = this._operationMap.get(cacheKey);
-    if (!operationInstances) {
-      operationInstances = [];
-      this._operationMap.set(cacheKey, operationInstances);
+    let operations = this._documentOperations.get(cacheKey);
+    if (!operations) {
+      operations = new DocumentOperations();
+      this._documentOperations.set(cacheKey, operations);
     }
 
+    // Like InMemoryCache, custom scalar variables are serialized.
+    const { variables, key: variablesKey } = operations.variablesOf(raw.variables, () =>
+      this.scalars.serializeVariables(raw.document, raw.variables),
+    );
     // Do we already have a copy of this guy?
-    for (const instance of operationInstances) {
-      if (instance.rootId !== raw.rootId) continue;
-      if (!isEqual(instance.variables, raw.variables)) continue;
-      return instance;
-    }
+    const key = `${raw.rootId}\u0000${variablesKey}`;
+    const existing = operations.get(key);
+    if (existing) return existing;
 
     const updateRaw: RawOperation = {
       ...raw,
+      variables,
       document: this.transformDocument(raw.document),
     };
 
-    const info = this._queryInfo(cacheKey, updateRaw, pretransformed);
+    operations.info ??= new QueryInfo(this, updateRaw, pretransformed);
+    const { info } = operations;
     const fullVariables = { ...info.variableDefaults, ...updateRaw.variables } as JsonObject;
     // Like InMemoryCache, treat variables without a value as undefined (e.g. @export variables before they are resolved).
     for (const name of info.variables) {
@@ -418,19 +419,68 @@ export class CacheContext<TSerialized = GraphSnapshot> {
       variables: updateRaw.variables,
       propMap: info.propMap,
     };
-    operationInstances.push(operation);
+    operations.set(key, operation);
 
     return operation;
   }
+}
+
+/**
+ * The parsed operations of a document (its QueryInfo, and the operation
+ * instances for the root ids and variables it was read or written with).
+ *
+ * Instances are kept in two generations, like an LRU cache: when the current
+ * generation is full, it becomes the previous one (dropping the one before),
+ * and instances still in use move back to the current generation.
+ */
+class DocumentOperations<TSerialized> {
+  /** The number of instances in a generation. */
+  static readonly generationSize = 1000;
+
+  info: QueryInfo<TSerialized> | undefined;
+
+  private _current = new Map<string, OperationInstance<TSerialized>>();
+  private _previous = new Map<string, OperationInstance<TSerialized>>();
 
   /**
-   * Retrieves a memoized QueryInfo for a given GraphQL document.
+   * The (serialized) variables objects of the operations, and their keys, by
+   * the variables objects passed in: like Apollo Client, Hermes treats
+   * variables objects as immutable.
    */
-  private _queryInfo(cacheKey: string, raw: RawOperation, pretransformed: boolean): QueryInfo<TSerialized> {
-    if (!this._queryInfoMap.has(cacheKey)) {
-      this._queryInfoMap.set(cacheKey, new QueryInfo(this, raw, pretransformed));
+  private readonly _variables = new WeakMap<JsonObject, { variables: JsonObject | undefined; key: string }>();
+
+  get(key: string): OperationInstance<TSerialized> | undefined {
+    const current = this._current.get(key);
+    if (current) return current;
+    const previous = this._previous.get(key);
+    if (previous) {
+      this._previous.delete(key);
+      this.set(key, previous);
     }
-    return this._queryInfoMap.get(cacheKey)!;
+    return previous;
+  }
+
+  set(key: string, operation: OperationInstance<TSerialized>) {
+    if (this._current.size >= DocumentOperations.generationSize) {
+      this._previous = this._current;
+      this._current = new Map();
+    }
+    this._current.set(key, operation);
+  }
+
+  /** The serialized variables of an operation (see `serialize`), and a key for them. */
+  variablesOf(
+    raw: JsonObject | undefined,
+    serialize: () => JsonObject | undefined,
+  ): { variables: JsonObject | undefined; key: string } {
+    if (!raw) return { variables: raw, key: '' };
+    let entry = this._variables.get(raw);
+    if (!entry) {
+      const variables = serialize();
+      entry = { variables, key: canonicalStringify(variables) };
+      this._variables.set(raw, entry);
+    }
+    return entry;
   }
 }
 
