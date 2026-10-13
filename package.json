@@ -10,8 +10,8 @@
     "type": "git",
     "url": "git+https://github.com/msand/apollo-cache-hermes.git"
   },
-  "homepage": "https://github.com/convoyinc/apollo-cache-hermes",
-  "bugs": "https://github.com/convoyinc/apollo-cache-hermes/issues",
+  "homepage": "https://github.com/msand/apollo-cache-hermes",
+  "bugs": "https://github.com/msand/apollo-cache-hermes/issues",
   "keywords": [
     "apollo",
     "apollo-client",
