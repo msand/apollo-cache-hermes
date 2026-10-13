@@ -332,8 +332,7 @@ it.each([['cache-first'], ['no-cache']] as const)(
   },
 );
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('delivers cache updates written while a deferred response is still streaming', async () => {
+it('delivers cache updates written while a deferred response is still streaming', async () => {
   const query = gql`
     query PostQuery {
       post {
@@ -442,8 +441,7 @@ it.skip('delivers cache updates written while a deferred response is still strea
   expect(outgoingRequestSpy).toHaveBeenCalledTimes(1);
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('delivers cache updates written while a deferred response is still streaming with `returnPartialData: true`', async () => {
+it('delivers cache updates written while a deferred response is still streaming with `returnPartialData: true`', async () => {
   const query = gql`
     query PostQuery {
       post {

@@ -1507,8 +1507,7 @@ it('throws errors returned by deferred queries that include partial data', async
   await expect(takeRender).not.toRerender();
 });
 
-// Hermes: @defer dataState pruning is not implemented: diff reports a result missing only deferred fields as incomplete (null) rather than streaming, so Apollo's Defer handler has no data to merge the erroring chunk into.
-it.skip('discards partial data and throws errors returned in incremental chunks', async () => {
+it('discards partial data and throws errors returned in incremental chunks', async () => {
   using _consoleSpy = spyOnConsole('error');
 
   const query = gql`

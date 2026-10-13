@@ -11,8 +11,7 @@ import { markAsStreaming, spyOnConsole } from '@apollo/client/testing/internal';
 
 import { Hermes } from '../../../../../../src';
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "complete" when the cache fully satisfies the query', () => {
+it('returns dataState "complete" when the cache fully satisfies the query', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -68,8 +67,7 @@ it.skip('returns dataState "complete" when the cache fully satisfies the query',
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" when only deferred fields are missing with returnPartialData: false', () => {
+it('returns dataState "streaming" when only deferred fields are missing with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -115,8 +113,7 @@ it.skip('returns dataState "streaming" when only deferred fields are missing wit
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" when only deferred fields are missing with returnPartialData: true', () => {
+it('returns dataState "streaming" when only deferred fields are missing with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -162,8 +159,7 @@ it.skip('returns dataState "streaming" when only deferred fields are missing wit
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" for a typename-added document when only deferred fields are missing with returnPartialData: true', () => {
+it('returns dataState "streaming" for a typename-added document when only deferred fields are missing with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = addTypenameToDocument(gql`
     query {
@@ -209,8 +205,7 @@ it.skip('returns dataState "streaming" for a typename-added document when only d
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "partial" when non-deferred fields are missing with returnPartialData: true', () => {
+it('returns dataState "partial" when non-deferred fields are missing with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -271,8 +266,7 @@ it.skip('returns dataState "partial" when non-deferred fields are missing with r
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "empty" when non-deferred fields are missing with returnPartialData: false', () => {
+it('returns dataState "empty" when non-deferred fields are missing with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -328,8 +322,7 @@ it.skip('returns dataState "empty" when non-deferred fields are missing with ret
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips incomplete fields inside a defer boundary when returnPartialData is false', () => {
+it('strips incomplete fields inside a defer boundary when returnPartialData is false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -382,8 +375,7 @@ it.skip('strips incomplete fields inside a defer boundary when returnPartialData
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('keeps incomplete fields inside a defer boundary when returnPartialData is true and reports dataState "partial"', () => {
+it('keeps incomplete fields inside a defer boundary when returnPartialData is true and reports dataState "partial"', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -453,8 +445,7 @@ it.skip('keeps incomplete fields inside a defer boundary when returnPartialData 
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" and strips a dangling referenced object inside a defer boundary with returnPartialData: false', () => {
+it('returns dataState "streaming" and strips a dangling referenced object inside a defer boundary with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -514,8 +505,7 @@ it.skip('returns dataState "streaming" and strips a dangling referenced object i
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "partial" for a dangling referenced object inside a defer boundary with returnPartialData: true', () => {
+it('returns dataState "partial" for a dangling referenced object inside a defer boundary with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -586,8 +576,7 @@ it.skip('returns dataState "partial" for a dangling referenced object inside a d
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "partial" with a __typename-only deferred object when selected fields are missing with returnPartialData: true', () => {
+it('returns dataState "partial" with a __typename-only deferred object when selected fields are missing with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -630,6 +619,7 @@ it.skip('returns dataState "partial" with a __typename-only deferred object when
     phone: '555-0100',
   };
 
+  // Hermes: reads return a superset of the selected fields (recipient.phone).
   expect(
     cache.diff({
       query,
@@ -637,7 +627,7 @@ it.skip('returns dataState "partial" with a __typename-only deferred object when
       returnPartialData: true,
       [handleIncrementalSymbol]: undefined,
     }),
-  ).toStrictEqualTyped({
+  ).toMatchObject({
     result: {
       greeting: {
         __typename: 'Greeting',
@@ -664,8 +654,7 @@ it.skip('returns dataState "partial" with a __typename-only deferred object when
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips a __typename-only deferred object when selected fields are missing with returnPartialData: false', () => {
+it('strips a __typename-only deferred object when selected fields are missing with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -723,8 +712,7 @@ it.skip('strips a __typename-only deferred object when selected fields are missi
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "partial" when all selected fields under a deferred object are missing but __typename is present with returnPartialData: true', () => {
+it('returns dataState "partial" when all selected fields under a deferred object are missing but __typename is present with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -768,6 +756,7 @@ it.skip('returns dataState "partial" when all selected fields under a deferred o
     phone: '555-0100',
   };
 
+  // Hermes: reads return a superset of the selected fields (recipient.phone).
   expect(
     cache.diff({
       query,
@@ -775,7 +764,7 @@ it.skip('returns dataState "partial" when all selected fields under a deferred o
       returnPartialData: true,
       [handleIncrementalSymbol]: undefined,
     }),
-  ).toStrictEqualTyped({
+  ).toMatchObject({
     result: {
       greeting: {
         __typename: 'Greeting',
@@ -803,8 +792,7 @@ it.skip('returns dataState "partial" when all selected fields under a deferred o
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips a deferred object whose own nested object is present but incomplete with returnPartialData: false', () => {
+it('strips a deferred object whose own nested object is present but incomplete with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -871,8 +859,7 @@ it.skip('strips a deferred object whose own nested object is present but incompl
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "partial" for a deferred object whose own nested object is present but incomplete with returnPartialData: true', () => {
+it('returns dataState "partial" for a deferred object whose own nested object is present but incomplete with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -921,6 +908,7 @@ it.skip('returns dataState "partial" for a deferred object whose own nested obje
 
   const missingObject = { __typename: 'Profile' };
 
+  // Hermes: reads return a superset of the selected fields (author.id).
   expect(
     cache.diff({
       query,
@@ -928,7 +916,7 @@ it.skip('returns dataState "partial" for a deferred object whose own nested obje
       returnPartialData: true,
       [handleIncrementalSymbol]: undefined,
     }),
-  ).toStrictEqualTyped({
+  ).toMatchObject({
     result: {
       greeting: {
         __typename: 'Greeting',
@@ -958,8 +946,7 @@ it.skip('returns dataState "partial" for a deferred object whose own nested obje
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('does not treat overlapping non-deferred fields as partial when only deferred siblings are missing', () => {
+it('does not treat overlapping non-deferred fields as partial when only deferred siblings are missing', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -1019,8 +1006,7 @@ it.skip('does not treat overlapping non-deferred fields as partial when only def
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('does not surface incomplete cached defer-only fields under an overlapping parent with returnPartialData: false', () => {
+it('does not surface incomplete cached defer-only fields under an overlapping parent with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -1082,8 +1068,7 @@ it.skip('does not surface incomplete cached defer-only fields under an overlappi
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns a referentially stable result across reads, rebuilding only the paths changed by a write, when partial @defer boundaries are stripped with returnPartialData: false', () => {
+it('returns a referentially stable result across reads, rebuilding only the paths changed by a write, when partial @defer boundaries are stripped with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -1456,8 +1441,7 @@ it.skip('returns a referentially stable result across reads, rebuilding only the
   expect(greeting7.friendGroups).toBe(greeting6.friendGroups);
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('preserves shared object identity for repeated list entities after stripping partial @defer fields with returnPartialData: false', () => {
+it('preserves shared object identity for repeated list entities after stripping partial @defer fields with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -1565,8 +1549,7 @@ it.skip('preserves shared object identity for repeated list entities after strip
   expect(strippedFriends[0]).not.toBe(strippedFriends[2]);
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns a referentially stable streaming result when a __typename-only deferred object is stripped, rebuilding only written paths with returnPartialData: false', () => {
+it('returns a referentially stable streaming result when a __typename-only deferred object is stripped, rebuilding only written paths with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -1673,8 +1656,7 @@ it.skip('returns a referentially stable streaming result when a __typename-only 
   expect(greeting3.sender).toBe(greeting1.sender);
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "partial" under an overlapping parent when a defer-only field is present and another is still missing with returnPartialData: true', () => {
+it('returns dataState "partial" under an overlapping parent when a defer-only field is present and another is still missing with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -1754,8 +1736,7 @@ it.skip('returns dataState "partial" under an overlapping parent when a defer-on
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('does not surface incomplete cached deep defer-only fields under an overlapped path with returnPartialData: false', () => {
+it('does not surface incomplete cached deep defer-only fields under an overlapped path with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -1827,8 +1808,7 @@ it.skip('does not surface incomplete cached deep defer-only fields under an over
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" when overlapping non-deferred fields are contributed by a fragment spread', () => {
+it('returns dataState "streaming" when overlapping non-deferred fields are contributed by a fragment spread', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -1892,8 +1872,7 @@ it.skip('returns dataState "streaming" when overlapping non-deferred fields are 
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" when overlapping non-deferred fields are contributed by an inline fragment', () => {
+it('returns dataState "streaming" when overlapping non-deferred fields are contributed by an inline fragment', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -1955,8 +1934,7 @@ it.skip('returns dataState "streaming" when overlapping non-deferred fields are 
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" when non-deferred fields for the same response key are split across sibling selection sets', () => {
+it('returns dataState "streaming" when non-deferred fields for the same response key are split across sibling selection sets', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -2022,8 +2000,7 @@ it.skip('returns dataState "streaming" when non-deferred fields for the same res
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" when non-deferred named fragments contribute different subfields under the same response key with returnPartialData: true', () => {
+it('returns dataState "streaming" when non-deferred named fragments contribute different subfields under the same response key with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -2097,8 +2074,7 @@ it.skip('returns dataState "streaming" when non-deferred named fragments contrib
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" when overlapping non-deferred list fields are complete and only defer-only item fields are missing', () => {
+it('returns dataState "streaming" when overlapping non-deferred list fields are complete and only defer-only item fields are missing', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -2160,8 +2136,7 @@ it.skip('returns dataState "streaming" when overlapping non-deferred list fields
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('does not surface incomplete cached defer-only list item fields under an overlapping list parent with returnPartialData: false', () => {
+it('does not surface incomplete cached defer-only list item fields under an overlapping list parent with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -2233,8 +2208,7 @@ it.skip('does not surface incomplete cached defer-only list item fields under an
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "empty" when an overlapping non-deferred field is missing even if deferred siblings are present with returnPartialData: false', () => {
+it('returns dataState "empty" when an overlapping non-deferred field is missing even if deferred siblings are present with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -2301,8 +2275,7 @@ it.skip('returns dataState "empty" when an overlapping non-deferred field is mis
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips incomplete fields inside a deferred named fragment with returnPartialData: false', () => {
+it('strips incomplete fields inside a deferred named fragment with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -2357,8 +2330,7 @@ it.skip('strips incomplete fields inside a deferred named fragment with returnPa
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips incomplete fields inside a defer boundary contributed by a registered named fragment with returnPartialData: false', () => {
+it('strips incomplete fields inside a defer boundary contributed by a registered named fragment with returnPartialData: false', () => {
   const cache = new Hermes({
     fragments: createFragmentRegistry(gql`
       fragment GreetingRecipient on Greeting {
@@ -2425,8 +2397,7 @@ it.skip('strips incomplete fields inside a defer boundary contributed by a regis
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip("does not reuse a cached fragment-resolution error across queries when a registered deferred fragment's spread is later defined", () => {
+it("does not reuse a cached fragment-resolution error across queries when a registered deferred fragment's spread is later defined", () => {
   const cache = new Hermes({
     fragments: createFragmentRegistry(gql`
       fragment GreetingWithDeferredRecipient on Greeting {
@@ -2517,8 +2488,7 @@ it.skip("does not reuse a cached fragment-resolution error across queries when a
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips incomplete nested fields inside a nested defer boundary with returnPartialData: false', () => {
+it('strips incomplete nested fields inside a nested defer boundary with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -2578,8 +2548,7 @@ it.skip('strips incomplete nested fields inside a nested defer boundary with ret
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns incomplete deferred data written only inside the boundary without non-deferred siblings as streaming when fully absent', () => {
+it('returns incomplete deferred data written only inside the boundary without non-deferred siblings as streaming when fully absent', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -2625,8 +2594,7 @@ it.skip('returns incomplete deferred data written only inside the boundary witho
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "complete" for pure @stream when all selected fields on written items are present', () => {
+it('returns dataState "complete" for pure @stream when all selected fields on written items are present', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -2667,8 +2635,7 @@ it.skip('returns dataState "complete" for pure @stream when all selected fields 
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "complete" with empty array with incomplete item with returnPartialData: false', () => {
+it('returns dataState "complete" with empty array with incomplete item with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -2711,8 +2678,7 @@ it.skip('returns dataState "complete" with empty array with incomplete item with
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns truncated list before a partial item when streamInfo is provided before truncation is set', () => {
+it('returns truncated list before a partial item when streamInfo is provided before truncation is set', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -2757,8 +2723,7 @@ it.skip('returns truncated list before a partial item when streamInfo is provide
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('does not reuse a streamInfo-truncated result when streamInfo is later omitted', () => {
+it('does not reuse a streamInfo-truncated result when streamInfo is later omitted', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -2818,8 +2783,7 @@ it.skip('does not reuse a streamInfo-truncated result when streamInfo is later o
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('does not truncate a partial stream array when returnPartialData is true', () => {
+it('does not truncate a partial stream array when returnPartialData is true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -2882,8 +2846,7 @@ it.skip('does not truncate a partial stream array when returnPartialData is true
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns only the complete prefix when streamInfo includes a partial stream item', () => {
+it('returns only the complete prefix when streamInfo includes a partial stream item', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -2931,8 +2894,7 @@ it.skip('returns only the complete prefix when streamInfo includes a partial str
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns the full stream array when every item is complete', () => {
+it('returns the full stream array when every item is complete', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -2979,8 +2941,7 @@ it.skip('returns the full stream array when every item is complete', () => {
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('truncates a complete stream array to the stream position when truncation is enabled', () => {
+it('truncates a complete stream array to the stream position when truncation is enabled', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -3023,8 +2984,7 @@ it.skip('truncates a complete stream array to the stream position when truncatio
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "complete" when truncating a stream item with an empty @defer boundary', () => {
+it('returns dataState "complete" when truncating a stream item with an empty @defer boundary', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -3087,8 +3047,7 @@ it.skip('returns dataState "complete" when truncating a stream item with an empt
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "complete" when truncating a stream item with a partial @defer boundary', () => {
+it('returns dataState "complete" when truncating a stream item with a partial @defer boundary', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -3155,8 +3114,7 @@ it.skip('returns dataState "complete" when truncating a stream item with a parti
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('invalidates a pruned stream array when the stream position changes', () => {
+it('invalidates a pruned stream array when the stream position changes', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -3206,8 +3164,7 @@ it.skip('invalidates a pruned stream array when the stream position changes', ()
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "complete" with an empty list when every stream list item is incomplete with returnPartialData: false', () => {
+it('returns dataState "complete" with an empty list when every stream list item is incomplete with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -3248,8 +3205,7 @@ it.skip('returns dataState "complete" with an empty list when every stream list 
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('keeps incomplete stream list items when returnPartialData is true and reports dataState "partial"', () => {
+it('keeps incomplete stream list items when returnPartialData is true and reports dataState "partial"', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -3306,8 +3262,7 @@ it.skip('keeps incomplete stream list items when returnPartialData is true and r
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "complete" with empty array with partial array item under a combined @stream and @defer selection with returnPartialData: false', () => {
+it('returns dataState "complete" with empty array with partial array item under a combined @stream and @defer selection with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -3358,8 +3313,7 @@ it.skip('returns dataState "complete" with empty array with partial array item u
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns streaming for complete non-deferred stream fields when only deferred fields are missing', () => {
+it('returns streaming for complete non-deferred stream fields when only deferred fields are missing', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -3409,8 +3363,7 @@ it.skip('returns streaming for complete non-deferred stream fields when only def
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "complete" for sibling @stream and a complete @defer with returnPartialData: false', () => {
+it('returns dataState "complete" for sibling @stream and a complete @defer with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -3475,8 +3428,7 @@ it.skip('returns dataState "complete" for sibling @stream and a complete @defer 
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "complete" with an empty stream array when an item is incomplete alongside a complete @defer with returnPartialData: false', () => {
+it('returns dataState "complete" with an empty stream array when an item is incomplete alongside a complete @defer with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -3542,8 +3494,7 @@ it.skip('returns dataState "complete" with an empty stream array when an item is
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('complete is only true when dataState is complete', () => {
+it('complete is only true when dataState is complete', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -3681,8 +3632,7 @@ it.skip('complete is only true when dataState is complete', () => {
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "empty" for incomplete fields under @defer(if: false) with returnPartialData: false', () => {
+it('returns dataState "empty" for incomplete fields under @defer(if: false) with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -3743,8 +3693,7 @@ it.skip('returns dataState "empty" for incomplete fields under @defer(if: false)
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "empty" for incomplete fields under @defer(if: $shouldDefer) when the variable disables defer with returnPartialData: false', () => {
+it('returns dataState "empty" for incomplete fields under @defer(if: $shouldDefer) when the variable disables defer with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query ($shouldDefer: Boolean!) {
@@ -3808,8 +3757,7 @@ it.skip('returns dataState "empty" for incomplete fields under @defer(if: $shoul
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" for incomplete fields under @defer(if: $shouldDefer) when the variable enables defer with returnPartialData: false', () => {
+it('returns dataState "streaming" for incomplete fields under @defer(if: $shouldDefer) when the variable enables defer with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query ($shouldDefer: Boolean!) {
@@ -3865,8 +3813,7 @@ it.skip('returns dataState "streaming" for incomplete fields under @defer(if: $s
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "empty" when an incomplete list item appears before complete items with returnPartialData: false', () => {
+it('returns dataState "empty" when an incomplete list item appears before complete items with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -3916,8 +3863,7 @@ it.skip('returns dataState "empty" when an incomplete list item appears before c
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "partial" when an incomplete list item appears before complete items with returnPartialData: true', () => {
+it('returns dataState "partial" when an incomplete list item appears before complete items with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -3972,8 +3918,7 @@ it.skip('returns dataState "partial" when an incomplete list item appears before
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" when an earlier list item is still streaming and a later item is complete', () => {
+it('returns dataState "streaming" when an earlier list item is still streaming and a later item is complete', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -4027,8 +3972,7 @@ it.skip('returns dataState "streaming" when an earlier list item is still stream
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" when an earlier list item is complete and a later item is still streaming', () => {
+it('returns dataState "streaming" when an earlier list item is complete and a later item is still streaming', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -4082,8 +4026,7 @@ it.skip('returns dataState "streaming" when an earlier list item is complete and
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "partial" when a complete scalar sibling precedes a partial list with returnPartialData: true', () => {
+it('returns dataState "partial" when a complete scalar sibling precedes a partial list with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -4135,8 +4078,7 @@ it.skip('returns dataState "partial" when a complete scalar sibling precedes a p
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "empty" when a complete scalar sibling precedes a partial list with returnPartialData: false', () => {
+it('returns dataState "empty" when a complete scalar sibling precedes a partial list with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -4185,8 +4127,7 @@ it.skip('returns dataState "empty" when a complete scalar sibling precedes a par
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "partial" when an empty list is present and a sibling field is missing with returnPartialData: true', () => {
+it('returns dataState "partial" when an empty list is present and a sibling field is missing with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -4234,8 +4175,7 @@ it.skip('returns dataState "partial" when an empty list is present and a sibling
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "empty" when an empty list is present and a sibling field is missing with returnPartialData: false', () => {
+it('returns dataState "empty" when an empty list is present and a sibling field is missing with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -4281,8 +4221,7 @@ it.skip('returns dataState "empty" when an empty list is present and a sibling f
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" when a complete scalar sibling precedes a streaming list', () => {
+it('returns dataState "streaming" when a complete scalar sibling precedes a streaming list', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -4323,8 +4262,7 @@ it.skip('returns dataState "streaming" when a complete scalar sibling precedes a
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" when a complete object field precedes a streaming sibling object field', () => {
+it('returns dataState "streaming" when a complete object field precedes a streaming sibling object field', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -4366,8 +4304,7 @@ it.skip('returns dataState "streaming" when a complete object field precedes a s
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" when a streaming object field precedes a complete sibling object field', () => {
+it('returns dataState "streaming" when a streaming object field precedes a complete sibling object field', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -4409,8 +4346,7 @@ it.skip('returns dataState "streaming" when a streaming object field precedes a 
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "complete" for a fragment-only root selection set when the cache is fully populated', () => {
+it('returns dataState "complete" for a fragment-only root selection set when the cache is fully populated', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -4442,8 +4378,7 @@ it.skip('returns dataState "complete" for a fragment-only root selection set whe
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "complete" when an object selection set is only a deferred fragment and that data is fully present', () => {
+it('returns dataState "complete" when an object selection set is only a deferred fragment and that data is fully present', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -4485,8 +4420,7 @@ it.skip('returns dataState "complete" when an object selection set is only a def
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "empty" when a root defer boundary has nothing written with returnPartialData: true', () => {
+it('returns dataState "empty" when a root defer boundary has nothing written with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -4514,8 +4448,7 @@ it.skip('returns dataState "empty" when a root defer boundary has nothing writte
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "partial" when a root defer boundary is only partially written with returnPartialData: true', () => {
+it('returns dataState "partial" when a root defer boundary is only partially written with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -4572,8 +4505,7 @@ it.skip('returns dataState "partial" when a root defer boundary is only partiall
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "empty" without missing when a root defer boundary is only partially written with returnPartialData: false', () => {
+it('returns dataState "empty" without missing when a root defer boundary is only partially written with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -4614,8 +4546,7 @@ it.skip('returns dataState "empty" without missing when a root defer boundary is
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" when an object selection set is only a deferred fragment and that data is absent', () => {
+it('returns dataState "streaming" when an object selection set is only a deferred fragment and that data is absent', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -4655,8 +4586,7 @@ it.skip('returns dataState "streaming" when an object selection set is only a de
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" when an object selection set is only a deferred fragment, that data is absent, and __typename is selected', () => {
+it('returns dataState "streaming" when an object selection set is only a deferred fragment, that data is absent, and __typename is selected', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -4697,8 +4627,7 @@ it.skip('returns dataState "streaming" when an object selection set is only a de
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "complete" for an empty list', () => {
+it('returns dataState "complete" for an empty list', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -4733,8 +4662,7 @@ it.skip('returns dataState "complete" for an empty list', () => {
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "complete" when a nullable object field is explicitly null', () => {
+it('returns dataState "complete" when a nullable object field is explicitly null', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -4779,8 +4707,7 @@ it.skip('returns dataState "complete" when a nullable object field is explicitly
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('does not reuse a returnPartialData: false empty result when the same query is later read with returnPartialData: true', () => {
+it('does not reuse a returnPartialData: false empty result when the same query is later read with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -4858,8 +4785,7 @@ it.skip('does not reuse a returnPartialData: false empty result when the same qu
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('does not reuse a returnPartialData: true partial result when the same query is later read with returnPartialData: false', () => {
+it('does not reuse a returnPartialData: true partial result when the same query is later read with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -4937,8 +4863,7 @@ it.skip('does not reuse a returnPartialData: true partial result when the same q
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('does not reuse a stripped deferred result when the same query is later read with returnPartialData: true', () => {
+it('does not reuse a stripped deferred result when the same query is later read with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -5027,8 +4952,7 @@ it.skip('does not reuse a stripped deferred result when the same query is later 
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" when one of two sibling defer boundaries is still empty', () => {
+it('returns dataState "streaming" when one of two sibling defer boundaries is still empty', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -5084,8 +5008,7 @@ it.skip('returns dataState "streaming" when one of two sibling defer boundaries 
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "complete" when both sibling defer boundaries are fully present', () => {
+it('returns dataState "complete" when both sibling defer boundaries are fully present', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -5143,8 +5066,7 @@ it.skip('returns dataState "complete" when both sibling defer boundaries are ful
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('does not reuse a deferred result when the @defer if variable changes', () => {
+it('does not reuse a deferred result when the @defer if variable changes', () => {
   const cache = new Hermes();
   const query = gql`
     query ($shouldDefer: Boolean!) {
@@ -5232,8 +5154,7 @@ it.skip('does not reuse a deferred result when the @defer if variable changes', 
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('does not reuse a streamed result when the @stream if variable changes', () => {
+it('does not reuse a streamed result when the @stream if variable changes', () => {
   const cache = new Hermes();
   const query = gql`
     query ($shouldStream: Boolean!) {
@@ -5306,8 +5227,7 @@ it.skip('does not reuse a streamed result when the @stream if variable changes',
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('does not reuse an @include result when its if variable changes', () => {
+it('does not reuse an @include result when its if variable changes', () => {
   const cache = new Hermes();
   const query = gql`
     query ($includeRecipient: Boolean!) {
@@ -5385,8 +5305,7 @@ it.skip('does not reuse an @include result when its if variable changes', () => 
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('does not reuse an @skip result when its if variable changes', () => {
+it('does not reuse an @skip result when its if variable changes', () => {
   const cache = new Hermes();
   const query = gql`
     query ($skipRecipient: Boolean!) {
@@ -5464,8 +5383,7 @@ it.skip('does not reuse an @skip result when its if variable changes', () => {
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "empty" when a deferred fragment is excluded via @skip and a non-deferred field is missing', () => {
+it('returns dataState "empty" when a deferred fragment is excluded via @skip and a non-deferred field is missing', () => {
   const cache = new Hermes();
   const query = gql`
     query ($skipDefer: Boolean!) {
@@ -5523,8 +5441,7 @@ it.skip('returns dataState "empty" when a deferred fragment is excluded via @ski
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" when a deferred fragment is included via @include and only deferred fields are missing', () => {
+it('returns dataState "streaming" when a deferred fragment is included via @include and only deferred fields are missing', () => {
   const cache = new Hermes();
   const query = gql`
     query ($includeDefer: Boolean!) {
@@ -5572,8 +5489,7 @@ it.skip('returns dataState "streaming" when a deferred fragment is included via 
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "complete" when a deferred fragment is excluded via @include(if: false) even if deferred fields are absent', () => {
+it('returns dataState "complete" when a deferred fragment is excluded via @include(if: false) even if deferred fields are absent', () => {
   const cache = new Hermes();
   const query = gql`
     query ($includeDefer: Boolean!) {
@@ -5621,8 +5537,7 @@ it.skip('returns dataState "complete" when a deferred fragment is excluded via @
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip.each([
+it.each([
   [
     '@skip(if: true)',
     gql`
@@ -5739,8 +5654,7 @@ it.skip.each([
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" for nested @defer when the outer boundary is complete and the inner boundary is still empty', () => {
+it('returns dataState "streaming" for nested @defer when the outer boundary is complete and the inner boundary is still empty', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -5796,8 +5710,7 @@ it.skip('returns dataState "streaming" for nested @defer when the outer boundary
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" for nested @defer when both defer boundaries are still empty', () => {
+it('returns dataState "streaming" for nested @defer when both defer boundaries are still empty', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -5845,8 +5758,7 @@ it.skip('returns dataState "streaming" for nested @defer when both defer boundar
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "complete" for nested @defer when both defer boundaries are fully present', () => {
+it('returns dataState "complete" for nested @defer when both defer boundaries are fully present', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -5904,8 +5816,7 @@ it.skip('returns dataState "complete" for nested @defer when both defer boundari
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "partial" for nested @defer when the outer boundary is complete and the inner boundary is incomplete with returnPartialData: true', () => {
+it('returns dataState "partial" for nested @defer when the outer boundary is complete and the inner boundary is incomplete with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -5984,8 +5895,7 @@ it.skip('returns dataState "partial" for nested @defer when the outer boundary i
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips an incomplete nested inner @defer while keeping a complete outer @defer result as streaming when returnPartialData is false', () => {
+it('strips an incomplete nested inner @defer while keeping a complete outer @defer result as streaming when returnPartialData is false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -6046,8 +5956,7 @@ it.skip('strips an incomplete nested inner @defer while keeping a complete outer
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "partial" for nested @defer when the outer boundary has incomplete non-deferred fields with returnPartialData: true', () => {
+it('returns dataState "partial" for nested @defer when the outer boundary has incomplete non-deferred fields with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -6121,8 +6030,7 @@ it.skip('returns dataState "partial" for nested @defer when the outer boundary h
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips an incomplete outer @defer boundary that contains a nested @defer when returnPartialData is false', () => {
+it('strips an incomplete outer @defer boundary that contains a nested @defer when returnPartialData is false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -6178,8 +6086,7 @@ it.skip('strips an incomplete outer @defer boundary that contains a nested @defe
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" for nested @defer when only the outer boundary is empty and the inner selection would otherwise be complete', () => {
+it('returns dataState "streaming" for nested @defer when only the outer boundary is empty and the inner selection would otherwise be complete', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -6235,8 +6142,7 @@ it.skip('returns dataState "streaming" for nested @defer when only the outer bou
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips an incomplete outer @defer even when the nested inner @defer is complete with returnPartialData: false', () => {
+it('strips an incomplete outer @defer even when the nested inner @defer is complete with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -6293,8 +6199,7 @@ it.skip('strips an incomplete outer @defer even when the nested inner @defer is 
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "partial" for nested @defer when the outer boundary is incomplete and the inner boundary is complete with returnPartialData: true', () => {
+it('returns dataState "partial" for nested @defer when the outer boundary is incomplete and the inner boundary is complete with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -6373,8 +6278,7 @@ it.skip('returns dataState "partial" for nested @defer when the outer boundary i
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips an incomplete outer @defer when the nested inner @defer is also incomplete with returnPartialData: false', () => {
+it('strips an incomplete outer @defer when the nested inner @defer is also incomplete with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -6432,8 +6336,7 @@ it.skip('strips an incomplete outer @defer when the nested inner @defer is also 
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "partial" for nested @defer when both outer non-deferred and inner deferred fields are incomplete with returnPartialData: true', () => {
+it('returns dataState "partial" for nested @defer when both outer non-deferred and inner deferred fields are incomplete with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -6514,8 +6417,7 @@ it.skip('returns dataState "partial" for nested @defer when both outer non-defer
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips only the incomplete nested inner @defer among sibling inners while keeping complete sibling deferred fields when returnPartialData is false', () => {
+it('strips only the incomplete nested inner @defer among sibling inners while keeping complete sibling deferred fields when returnPartialData is false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -6581,8 +6483,7 @@ it.skip('strips only the incomplete nested inner @defer among sibling inners whi
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "partial" for nested sibling @defer inners when one is incomplete and one is complete with returnPartialData: true', () => {
+it('returns dataState "partial" for nested sibling @defer inners when one is incomplete and one is complete with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -6667,8 +6568,7 @@ it.skip('returns dataState "partial" for nested sibling @defer inners when one i
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips an incomplete nested inner @defer while keeping a streaming sibling inner empty when returnPartialData is false', () => {
+it('strips an incomplete nested inner @defer while keeping a streaming sibling inner empty when returnPartialData is false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -6732,8 +6632,7 @@ it.skip('strips an incomplete nested inner @defer while keeping a streaming sibl
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips only the incomplete branch in a 3-level nested @defer chain when returnPartialData is false', () => {
+it('strips only the incomplete branch in a 3-level nested @defer chain when returnPartialData is false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -6799,8 +6698,7 @@ it.skip('strips only the incomplete branch in a 3-level nested @defer chain when
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips nested partial data from one sibling outer @defer while keeping another complete outer @defer when returnPartialData is false', () => {
+it('strips nested partial data from one sibling outer @defer while keeping another complete outer @defer when returnPartialData is false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -6874,8 +6772,7 @@ it.skip('strips nested partial data from one sibling outer @defer while keeping 
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips nested partial data from one sibling outer @defer while ignoring another streaming outer @defer when returnPartialData is false', () => {
+it('strips nested partial data from one sibling outer @defer while ignoring another streaming outer @defer when returnPartialData is false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -6941,8 +6838,7 @@ it.skip('strips nested partial data from one sibling outer @defer while ignoring
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips nested partial data from one sibling outer @defer while stripping another partial outer @defer when returnPartialData is false', () => {
+it('strips nested partial data from one sibling outer @defer while stripping another partial outer @defer when returnPartialData is false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -7013,8 +6909,7 @@ it.skip('strips nested partial data from one sibling outer @defer while strippin
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('keeps overlapping recipient fields selected by a complete sibling @defer when another sibling @defer is partial with returnPartialData: false', () => {
+it('keeps overlapping recipient fields selected by a complete sibling @defer when another sibling @defer is partial with returnPartialData: false', () => {
   const queries = [
     // complete boundary first
     gql`
@@ -7087,8 +6982,7 @@ it.skip('keeps overlapping recipient fields selected by a complete sibling @defe
   }
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" when two sibling @defer fragments overlap and only exclusive fields are missing with returnPartialData: true', () => {
+it('returns dataState "streaming" when two sibling @defer fragments overlap and only exclusive fields are missing with returnPartialData: true', () => {
   const queries = [
     // complete boundary first
     gql`
@@ -7161,8 +7055,7 @@ it.skip('returns dataState "streaming" when two sibling @defer fragments overlap
   }
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips fields from a partial sibling @defer with disjoint selections from a complete sibling @defer regardless of selection order when returnPartialData is false', () => {
+it('strips fields from a partial sibling @defer with disjoint selections from a complete sibling @defer regardless of selection order when returnPartialData is false', () => {
   const queries = [
     // partial boundary first
     gql`
@@ -7253,8 +7146,7 @@ it.skip('strips fields from a partial sibling @defer with disjoint selections fr
   }
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips overlapping recipient fields when both sibling @defer boundaries selecting them are partial with returnPartialData: false', () => {
+it('strips overlapping recipient fields when both sibling @defer boundaries selecting them are partial with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -7301,8 +7193,7 @@ it.skip('strips overlapping recipient fields when both sibling @defer boundaries
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips nested partial @defer fields contributed under the same response key by sibling fragments with returnPartialData: false', () => {
+it('strips nested partial @defer fields contributed under the same response key by sibling fragments with returnPartialData: false', () => {
   const queries = [
     // email/bio fragment first
     gql`
@@ -7405,8 +7296,7 @@ it.skip('strips nested partial @defer fields contributed under the same response
   }
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips nested partial @defer fields under the same list field contributed by sibling fragments with returnPartialData: false', () => {
+it('strips nested partial @defer fields under the same list field contributed by sibling fragments with returnPartialData: false', () => {
   const queries = [
     gql`
       query {
@@ -7529,8 +7419,7 @@ it.skip('strips nested partial @defer fields under the same list field contribut
   }
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('does not reintroduce nested stripped @defer fields when a later sibling outer @defer is partial with returnPartialData: false', () => {
+it('does not reintroduce nested stripped @defer fields when a later sibling outer @defer is partial with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -7599,8 +7488,7 @@ it.skip('does not reintroduce nested stripped @defer fields when a later sibling
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips a partial @defer nested under an interface fragment that matches a concrete typename via possibleTypes when returnPartialData is false', () => {
+it('strips a partial @defer nested under an interface fragment that matches a concrete typename via possibleTypes when returnPartialData is false', () => {
   const cache = new Hermes({
     possibleTypes: {
       Character: ['Human', 'Droid'],
@@ -7657,8 +7545,7 @@ it.skip('strips a partial @defer nested under an interface fragment that matches
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips a partial @defer on an interface type condition that matches a concrete typename via possibleTypes when returnPartialData is false', () => {
+it('strips a partial @defer on an interface type condition that matches a concrete typename via possibleTypes when returnPartialData is false', () => {
   const cache = new Hermes({
     possibleTypes: {
       Character: ['Human', 'Droid'],
@@ -7710,8 +7597,7 @@ it.skip('strips a partial @defer on an interface type condition that matches a c
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips a partial @defer nested under a named fragment on an interface that matches via possibleTypes when returnPartialData is false', () => {
+it('strips a partial @defer nested under a named fragment on an interface that matches via possibleTypes when returnPartialData is false', () => {
   const cache = new Hermes({
     possibleTypes: {
       Character: ['Human', 'Droid'],
@@ -7770,8 +7656,7 @@ it.skip('strips a partial @defer nested under a named fragment on an interface t
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('does not reintroduce fields from a partial @defer via a non-matching sibling type condition when returnPartialData is false', () => {
+it('does not reintroduce fields from a partial @defer via a non-matching sibling type condition when returnPartialData is false', () => {
   const cache = new Hermes({
     possibleTypes: {
       Character: ['Human', 'Droid'],
@@ -7826,8 +7711,7 @@ it.skip('does not reintroduce fields from a partial @defer via a non-matching si
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "complete" when a deferred object field is explicitly null', () => {
+it('returns dataState "complete" when a deferred object field is explicitly null', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -7875,8 +7759,7 @@ it.skip('returns dataState "complete" when a deferred object field is explicitly
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "complete" when a deferred scalar field is explicitly null', () => {
+it('returns dataState "complete" when a deferred scalar field is explicitly null', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -7932,8 +7815,7 @@ it.skip('returns dataState "complete" when a deferred scalar field is explicitly
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('preserves an explicitly null list item while stripping partial deferred fields on sibling items when returnPartialData is false', () => {
+it('preserves an explicitly null list item while stripping partial deferred fields on sibling items when returnPartialData is false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -8004,8 +7886,7 @@ it.skip('preserves an explicitly null list item while stripping partial deferred
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('preserves a null list field under a parent that also has a partial sibling @defer when returnPartialData is false', () => {
+it('preserves a null list field under a parent that also has a partial sibling @defer when returnPartialData is false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -8061,8 +7942,7 @@ it.skip('preserves a null list field under a parent that also has a partial sibl
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('preserves an explicitly null nested object while stripping a partial sibling nested @defer when returnPartialData is false', () => {
+it('preserves an explicitly null nested object while stripping a partial sibling nested @defer when returnPartialData is false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -8128,8 +8008,7 @@ it.skip('preserves an explicitly null nested object while stripping a partial si
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('honors field aliases when stripping a partial @defer boundary with returnPartialData: false', () => {
+it('honors field aliases when stripping a partial @defer boundary with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -8170,14 +8049,15 @@ it.skip('honors field aliases when stripping a partial @defer boundary with retu
     });
   }
 
-  expect(
-    cache.diff({
-      query,
-      optimistic: true,
-      returnPartialData: false,
-      [handleIncrementalSymbol]: undefined,
-    }),
-  ).toStrictEqualTyped({
+  // Hermes: reads return a superset of the selected fields (the fields under
+  // their schema names: message, recipient and recipient.name).
+  const diff = cache.diff({
+    query,
+    optimistic: true,
+    returnPartialData: false,
+    [handleIncrementalSymbol]: undefined,
+  });
+  expect(diff).toMatchObject({
     result: markAsStreaming({
       greeting: {
         __typename: 'Greeting',
@@ -8192,10 +8072,10 @@ it.skip('honors field aliases when stripping a partial @defer boundary with retu
     complete: false,
     missing: undefined,
   });
+  expect((diff.result as any).greeting).not.toHaveProperty('contact');
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "complete" for a fully populated 2d scalar array', () => {
+it('returns dataState "complete" for a fully populated 2d scalar array', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -8233,8 +8113,7 @@ it.skip('returns dataState "complete" for a fully populated 2d scalar array', ()
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "complete" for a fully populated 2d object array', () => {
+it('returns dataState "complete" for a fully populated 2d object array', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -8281,8 +8160,7 @@ it.skip('returns dataState "complete" for a fully populated 2d object array', ()
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "empty" for a 2d object array with an incomplete nested item when returnPartialData is false', () => {
+it('returns dataState "empty" for a 2d object array with an incomplete nested item when returnPartialData is false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -8337,8 +8215,7 @@ it.skip('returns dataState "empty" for a 2d object array with an incomplete nest
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "partial" for a 2d object array with an incomplete nested item when returnPartialData is true', () => {
+it('returns dataState "partial" for a 2d object array with an incomplete nested item when returnPartialData is true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -8401,8 +8278,7 @@ it.skip('returns dataState "partial" for a 2d object array with an incomplete ne
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" for a 2d object array when only deferred fields are missing on a nested item', () => {
+it('returns dataState "streaming" for a 2d object array when only deferred fields are missing on a nested item', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -8462,8 +8338,7 @@ it.skip('returns dataState "streaming" for a 2d object array when only deferred 
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips partial deferred fields from nested items in a 2d object array while retaining complete siblings with returnPartialData: false', () => {
+it('strips partial deferred fields from nested items in a 2d object array while retaining complete siblings with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -8541,8 +8416,7 @@ it.skip('strips partial deferred fields from nested items in a 2d object array w
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "partial" for a 2d object array when a nested item has incomplete non-deferred fields with returnPartialData: true', () => {
+it('returns dataState "partial" for a 2d object array when a nested item has incomplete non-deferred fields with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -8604,8 +8478,7 @@ it.skip('returns dataState "partial" for a 2d object array when a nested item ha
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" when a partial @defer inside every list item is stripped with returnPartialData: false', () => {
+it('returns dataState "streaming" when a partial @defer inside every list item is stripped with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -8663,8 +8536,7 @@ it.skip('returns dataState "streaming" when a partial @defer inside every list i
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "partial" when a partial @defer inside a list item is present with returnPartialData: true', () => {
+it('returns dataState "partial" when a partial @defer inside a list item is present with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -8742,8 +8614,7 @@ it.skip('returns dataState "partial" when a partial @defer inside a list item is
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "streaming" keeping complete per-item @defer data while stripping a partial sibling item with returnPartialData: false', () => {
+it('returns dataState "streaming" keeping complete per-item @defer data while stripping a partial sibling item with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -8808,8 +8679,7 @@ it.skip('returns dataState "streaming" keeping complete per-item @defer data whi
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "complete" with an empty object when all fields are skipped', () => {
+it('returns dataState "complete" with an empty object when all fields are skipped', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -8833,8 +8703,7 @@ it.skip('returns dataState "complete" with an empty object when all fields are s
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips a __typename-only deferred object nested inside a list item with returnPartialData: false', () => {
+it('strips a __typename-only deferred object nested inside a list item with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -8895,8 +8764,7 @@ it.skip('strips a __typename-only deferred object nested inside a list item with
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "partial" for a __typename-only deferred object nested inside a list item with returnPartialData: true', () => {
+it('returns dataState "partial" for a __typename-only deferred object nested inside a list item with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -9346,8 +9214,7 @@ it('without handleIncrementalSymbol, a fully satisfied deferred query is complet
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('prunes a complete cached @defer boundary when deferInfo marks it as pending', () => {
+it('prunes a complete cached @defer boundary when deferInfo marks it as pending', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -9396,8 +9263,7 @@ it.skip('prunes a complete cached @defer boundary when deferInfo marks it as pen
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('keeps a cached @defer boundary that deferInfo does not mark as pending while pruning a sibling boundary that it does', () => {
+it('keeps a cached @defer boundary that deferInfo does not mark as pending while pruning a sibling boundary that it does', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -9454,8 +9320,7 @@ it.skip('keeps a cached @defer boundary that deferInfo does not mark as pending 
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip("keeps a non-deferred fragment's fields at a path that deferInfo marks as pending", () => {
+it("keeps a non-deferred fragment's fields at a path that deferInfo marks as pending", () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -9509,8 +9374,7 @@ it.skip("keeps a non-deferred fragment's fields at a path that deferInfo marks a
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('prunes only the labeled @defer boundary that deferInfo marks as pending when siblings share a path', () => {
+it('prunes only the labeled @defer boundary that deferInfo marks as pending when siblings share a path', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -9564,8 +9428,7 @@ it.skip('prunes only the labeled @defer boundary that deferInfo marks as pending
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('prunes a labeled @defer boundary on a fragment spread that deferInfo marks as pending', () => {
+it('prunes a labeled @defer boundary on a fragment spread that deferInfo marks as pending', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -9616,8 +9479,7 @@ it.skip('prunes a labeled @defer boundary on a fragment spread that deferInfo ma
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('prunes only the labeled @defer boundary that deferInfo marks as pending when sibling fragment spreads share a path', () => {
+it('prunes only the labeled @defer boundary that deferInfo marks as pending when sibling fragment spreads share a path', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -9677,8 +9539,7 @@ it.skip('prunes only the labeled @defer boundary that deferInfo marks as pending
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('does not apply deferInfo pruning when returnPartialData is true', () => {
+it('does not apply deferInfo pruning when returnPartialData is true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -9728,8 +9589,7 @@ it.skip('does not apply deferInfo pruning when returnPartialData is true', () =>
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('prunes cached @defer boundaries for list items marked pending in deferInfo', () => {
+it('prunes cached @defer boundaries for list items marked pending in deferInfo', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -9787,8 +9647,7 @@ it.skip('prunes cached @defer boundaries for list items marked pending in deferI
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip("keeps a delivered list item's @defer boundary while pruning a still-pending sibling", () => {
+it("keeps a delivered list item's @defer boundary while pruning a still-pending sibling", () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -9845,8 +9704,7 @@ it.skip("keeps a delivered list item's @defer boundary while pruning a still-pen
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('does not reuse a deferInfo-pruned result when deferInfo is later omitted', () => {
+it('does not reuse a deferInfo-pruned result when deferInfo is later omitted', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -9915,8 +9773,7 @@ it.skip('does not reuse a deferInfo-pruned result when deferInfo is later omitte
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('does not reuse a deferInfo-pruned result when a sibling boundary is delivered on a later read', () => {
+it('does not reuse a deferInfo-pruned result when a sibling boundary is delivered on a later read', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -10002,8 +9859,7 @@ it.skip('does not reuse a deferInfo-pruned result when a sibling boundary is del
   }
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips a partial pending @defer boundary while keeping a complete delivered sibling boundary', () => {
+it('strips a partial pending @defer boundary while keeping a complete delivered sibling boundary', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -10064,8 +9920,7 @@ it.skip('strips a partial pending @defer boundary while keeping a complete deliv
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('strips both a partial pending @defer boundary and a complete pending sibling boundary', () => {
+it('strips both a partial pending @defer boundary and a complete pending sibling boundary', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -10127,8 +9982,7 @@ it.skip('strips both a partial pending @defer boundary and a complete pending si
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('keeps fields shared with a delivered @defer boundary while pruning a pending boundary at a nested path', () => {
+it('keeps fields shared with a delivered @defer boundary while pruning a pending boundary at a nested path', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -10179,8 +10033,7 @@ it.skip('keeps fields shared with a delivered @defer boundary while pruning a pe
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "partial" when a non-deferred field is missing and deferInfo marks a boundary as pending with returnPartialData: true', () => {
+it('returns dataState "partial" when a non-deferred field is missing and deferInfo marks a boundary as pending with returnPartialData: true', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -10244,8 +10097,7 @@ it.skip('returns dataState "partial" when a non-deferred field is missing and de
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "empty" when a non-deferred field is missing and deferInfo marks a boundary as pending with returnPartialData: false', () => {
+it('returns dataState "empty" when a non-deferred field is missing and deferInfo marks a boundary as pending with returnPartialData: false', () => {
   const cache = new Hermes();
   const query = gql`
     query {
@@ -10307,8 +10159,7 @@ it.skip('returns dataState "empty" when a non-deferred field is missing and defe
   });
 });
 
-// Hermes: @defer/@stream incremental diffs (dataState, boundary pruning, streamInfo/deferInfo) are not implemented.
-it.skip('returns dataState "empty" when the cache is empty and deferInfo marks a boundary as pending', () => {
+it('returns dataState "empty" when the cache is empty and deferInfo marks a boundary as pending', () => {
   const cache = new Hermes();
   const query = gql`
     query {

@@ -1233,8 +1233,7 @@ it('parses custom scalar fields with an `ignore` error policy', async () => {
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: a diff of a query with pending deferred fields is incomplete, so Apollo Client falls back to the raw (unparsed) network result while streaming.
-it.skip('parses custom scalar fields across `@defer` payloads (defer20220824)', async () => {
+it('parses custom scalar fields across `@defer` payloads (defer20220824)', async () => {
   const link = mockDefer20220824();
   const client = new ApolloClient({
     cache: new Hermes({
@@ -1321,8 +1320,7 @@ it.skip('parses custom scalar fields across `@defer` payloads (defer20220824)', 
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: a diff of a query with pending deferred fields is incomplete, so Apollo Client falls back to the raw (unparsed) network result while streaming.
-it.skip('parses custom scalar fields across `@defer` payloads (graphql17Alpha9)', async () => {
+it('parses custom scalar fields across `@defer` payloads (graphql17Alpha9)', async () => {
   const link = mockDeferStreamGraphQL17Alpha9();
   const client = new ApolloClient({
     cache: new Hermes({
@@ -1411,8 +1409,7 @@ it.skip('parses custom scalar fields across `@defer` payloads (graphql17Alpha9)'
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: a diff of a query with pending deferred fields is incomplete, so Apollo Client falls back to the raw (unparsed) network result while streaming.
-it.skip('parses custom scalar fields across `@defer` payloads when refetching (defer20220824)', async () => {
+it('parses custom scalar fields across `@defer` payloads when refetching (defer20220824)', async () => {
   const link = mockDefer20220824();
   const client = new ApolloClient({
     cache: new Hermes({
@@ -1574,8 +1571,7 @@ it.skip('parses custom scalar fields across `@defer` payloads when refetching (d
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: a diff of a query with pending deferred fields is incomplete, so Apollo Client falls back to the raw (unparsed) network result while streaming.
-it.skip('parses custom scalar fields across `@defer` payloads when refetching (graphql17Alpha9)', async () => {
+it('parses custom scalar fields across `@defer` payloads when refetching (graphql17Alpha9)', async () => {
   const link = mockDeferStreamGraphQL17Alpha9();
   const client = new ApolloClient({
     cache: new Hermes({

@@ -478,8 +478,7 @@ it('returns non-deferred cached data with a "cache-first" fetch policy and retur
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('does not return incomplete cached fields inside a deferred named fragment spread with returnPartialData: false', async () => {
+it('does not return incomplete cached fields inside a deferred named fragment spread with returnPartialData: false', async () => {
   const query = gql`
     query {
       greeting {
@@ -585,8 +584,7 @@ it.skip('does not return incomplete cached fields inside a deferred named fragme
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('does not surface incomplete cached fields from nested fragments inside a `@defer` boundary with returnPartialData: false', async () => {
+it('does not surface incomplete cached fields from nested fragments inside a `@defer` boundary with returnPartialData: false', async () => {
   const query = gql`
     query {
       greeting {
@@ -686,8 +684,7 @@ it.skip('does not surface incomplete cached fields from nested fragments inside 
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('does not surface incomplete cached fields from a named fragment spread inside a `@defer` boundary with returnPartialData: false', async () => {
+it('does not surface incomplete cached fields from a named fragment spread inside a `@defer` boundary with returnPartialData: false', async () => {
   const query = gql`
     query {
       greeting {
@@ -789,8 +786,7 @@ it.skip('does not surface incomplete cached fields from a named fragment spread 
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('does not surface incomplete cached defer-only fields under an overlapping parent with returnPartialData: false', async () => {
+it('does not surface incomplete cached defer-only fields under an overlapping parent with returnPartialData: false', async () => {
   const query = gql`
     query {
       greeting {
@@ -909,8 +905,7 @@ it.skip('does not surface incomplete cached defer-only fields under an overlappi
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('does not surface incomplete cached fields inside a list item `@defer` boundary while sibling items are clean defer gaps with returnPartialData: false', async () => {
+it('does not surface incomplete cached fields inside a list item `@defer` boundary while sibling items are clean defer gaps with returnPartialData: false', async () => {
   const query = gql`
     query {
       person {
@@ -1057,8 +1052,7 @@ it.skip('does not surface incomplete cached fields inside a list item `@defer` b
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('does not surface incomplete cached fields inside a later sibling `@defer` boundary while an earlier sibling is still pending with returnPartialData: false', async () => {
+it('does not surface incomplete cached fields inside a later sibling `@defer` boundary while an earlier sibling is still pending with returnPartialData: false', async () => {
   const query = gql`
     query {
       greeting {
@@ -1200,8 +1194,7 @@ it.skip('does not surface incomplete cached fields inside a later sibling `@defe
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('does not surface incomplete cached deep defer-only fields under an overlapped path with returnPartialData: false', async () => {
+it('does not surface incomplete cached deep defer-only fields under an overlapped path with returnPartialData: false', async () => {
   const query = gql`
     query {
       greeting {
@@ -1339,8 +1332,7 @@ it.skip('does not surface incomplete cached deep defer-only fields under an over
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('does not treat cached `__typename`-only data inside a `@defer` boundary as incomplete deferred fields with returnPartialData: false', async () => {
+it('does not treat cached `__typename`-only data inside a `@defer` boundary as incomplete deferred fields with returnPartialData: false', async () => {
   const query = gql`
     query {
       greeting {
@@ -1459,8 +1451,7 @@ it.skip('does not treat cached `__typename`-only data inside a `@defer` boundary
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('returns partial non-deferred cached data with a "cache-first" fetch policy and returnPartialData', async () => {
+it('returns partial non-deferred cached data with a "cache-first" fetch policy and returnPartialData', async () => {
   const query = gql`
     query {
       greeting {
@@ -1569,8 +1560,7 @@ it.skip('returns partial non-deferred cached data with a "cache-first" fetch pol
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('reports dataState streaming from getCurrentResult when only deferred fields are missing with returnPartialData', async () => {
+it('reports dataState streaming from getCurrentResult when only deferred fields are missing with returnPartialData', async () => {
   const query = gql`
     query {
       greeting {
@@ -2026,8 +2016,7 @@ it('reports partial data correctly when a mid-stream request is abandoned and th
   await expect(streamB).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('emits empty then streaming results for deferred queries with no data in the cache and returnPartialData', async () => {
+it('emits empty then streaming results for deferred queries with no data in the cache and returnPartialData', async () => {
   const query = gql`
     query {
       greeting {
@@ -2118,8 +2107,7 @@ it.skip('emits empty then streaming results for deferred queries with no data in
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('reports overlapping deferred and non-deferred fields as "streaming" when only the deferred-only fields are missing', async () => {
+it('reports overlapping deferred and non-deferred fields as "streaming" when only the deferred-only fields are missing', async () => {
   // Suppress expected missing field write warnings since defer context is reset.
   using _ = spyOnConsole('error');
 
@@ -2229,8 +2217,7 @@ it.skip('reports overlapping deferred and non-deferred fields as "streaming" whe
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('reports "streaming" when non-deferred fields for the same response key are split across sibling selection sets', async () => {
+it('reports "streaming" when non-deferred fields for the same response key are split across sibling selection sets', async () => {
   // Suppress expected missing field write warnings since defer context is reset.
   using _ = spyOnConsole('error');
 
@@ -2349,8 +2336,7 @@ it.skip('reports "streaming" when non-deferred fields for the same response key 
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('reports "streaming" when non-deferred fields for the same response key come from a field and a fragment', async () => {
+it('reports "streaming" when non-deferred fields for the same response key come from a field and a fragment', async () => {
   // Suppress expected missing field write warnings since defer context is reset.
   using _ = spyOnConsole('error');
 
@@ -2471,8 +2457,7 @@ it.skip('reports "streaming" when non-deferred fields for the same response key 
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('reports "streaming" when nested non-deferred fields are split across sibling selection sets', async () => {
+it('reports "streaming" when nested non-deferred fields are split across sibling selection sets', async () => {
   // Suppress expected missing field write warnings since defer context is reset.
   using _ = spyOnConsole('error');
 
@@ -2625,8 +2610,7 @@ it.skip('reports "streaming" when nested non-deferred fields are split across si
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('reports "streaming" when one of multiple sibling `@defer` fragments has fully arrived and another is still pending', async () => {
+it('reports "streaming" when one of multiple sibling `@defer` fragments has fully arrived and another is still pending', async () => {
   const query = gql`
     query {
       greeting {
@@ -2833,8 +2817,7 @@ it('treats `@defer(if: false)` as a non-deferred fragment with a "cache-first" f
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('evaluates `@defer(if: $variable)` as non-deferred when the variable is false, reporting "streaming" while a sibling `@defer` is pending', async () => {
+it('evaluates `@defer(if: $variable)` as non-deferred when the variable is false, reporting "streaming" while a sibling `@defer` is pending', async () => {
   const query = gql`
     query ($shouldDefer: Boolean!) {
       greeting {
@@ -2933,8 +2916,7 @@ it.skip('evaluates `@defer(if: $variable)` as non-deferred when the variable is 
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('evaluates `@defer(if: $variable)` as deferred when the variable is true, reporting "streaming" while deferred fields are pending', async () => {
+it('evaluates `@defer(if: $variable)` as deferred when the variable is true, reporting "streaming" while deferred fields are pending', async () => {
   const query = gql`
     query ($shouldDefer: Boolean!) {
       greeting {
@@ -3053,8 +3035,7 @@ it.skip('evaluates `@defer(if: $variable)` as deferred when the variable is true
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('evaluates `@defer(if: $variable)` for overlapping fields so disabled-defer selections stay non-deferred', async () => {
+it('evaluates `@defer(if: $variable)` for overlapping fields so disabled-defer selections stay non-deferred', async () => {
   // Suppress expected missing field write warnings since defer context is reset.
   using _ = spyOnConsole('error');
 
@@ -3394,8 +3375,7 @@ it('reports the correct data state for `@defer` on a named fragment spread with 
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('reports overlapping fields contributed by a non-deferred fragment spread as "streaming"', async () => {
+it('reports overlapping fields contributed by a non-deferred fragment spread as "streaming"', async () => {
   // Suppress expected missing field write warnings since defer context is reset.
   using _ = spyOnConsole('error');
 
@@ -3500,8 +3480,7 @@ it.skip('reports overlapping fields contributed by a non-deferred fragment sprea
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('reports overlapping fields contributed by a non-deferred inline fragment as "streaming"', async () => {
+it('reports overlapping fields contributed by a non-deferred inline fragment as "streaming"', async () => {
   // Suppress expected missing field write warnings since defer context is reset.
   using _ = spyOnConsole('error');
 
@@ -3958,8 +3937,7 @@ it('reports "partial" when a nested defer-only field is present under an overlap
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('merges non-deferred selections that contribute different subfields under the same response key', async () => {
+it('merges non-deferred selections that contribute different subfields under the same response key', async () => {
   // Suppress expected missing field write warnings since defer context is reset.
   using _ = spyOnConsole('error');
 
@@ -4078,8 +4056,7 @@ it.skip('merges non-deferred selections that contribute different subfields unde
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('reports overlapping fields from a fragment spread repeated at the same selection-set level as "streaming"', async () => {
+it('reports overlapping fields from a fragment spread repeated at the same selection-set level as "streaming"', async () => {
   // Suppress expected missing field write warnings since defer context is reset.
   using _ = spyOnConsole('error');
 
@@ -4194,8 +4171,7 @@ it.skip('reports overlapping fields from a fragment spread repeated at the same 
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('reports overlapping fields from the same fragment spread used at different selection-set levels as "streaming"', async () => {
+it('reports overlapping fields from the same fragment spread used at different selection-set levels as "streaming"', async () => {
   // Suppress expected missing field write warnings since defer context is reset.
   using _ = spyOnConsole('error');
 
@@ -4333,8 +4309,7 @@ it.skip('reports overlapping fields from the same fragment spread used at differ
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('reports per-item `@defer` gaps on a list as "streaming" when every item is still pending', async () => {
+it('reports per-item `@defer` gaps on a list as "streaming" when every item is still pending', async () => {
   const query = gql`
     query {
       person {
@@ -4437,8 +4412,7 @@ it.skip('reports per-item `@defer` gaps on a list as "streaming" when every item
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('reports "streaming" when one list item\'s `@defer` has arrived and another item is still pending', async () => {
+it('reports "streaming" when one list item\'s `@defer` has arrived and another item is still pending', async () => {
   const query = gql`
     query {
       person {
@@ -4565,8 +4539,7 @@ it.skip('reports "streaming" when one list item\'s `@defer` has arrived and anot
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('reports overlapping deferred and non-deferred list fields as "streaming" when only defer-only item fields are missing', async () => {
+it('reports overlapping deferred and non-deferred list fields as "streaming" when only defer-only item fields are missing', async () => {
   // Suppress expected missing field write warnings since defer context is reset.
   using _ = spyOnConsole('error');
 
@@ -4867,8 +4840,7 @@ it('reports "partial" when one list item has a started `@defer` that is still in
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('reports `@defer` nested under a field as "streaming" when only the nested deferred fields are missing', async () => {
+it('reports `@defer` nested under a field as "streaming" when only the nested deferred fields are missing', async () => {
   const query = gql`
     query {
       greeting {
@@ -4967,8 +4939,7 @@ it.skip('reports `@defer` nested under a field as "streaming" when only the nest
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('reports "partial" when a later `@defer` boundary is incomplete and an earlier sibling `@defer` is still fully pending', async () => {
+it('reports "partial" when a later `@defer` boundary is incomplete and an earlier sibling `@defer` is still fully pending', async () => {
   // Suppress expected missing field write warnings since defer context is reset.
   using _ = spyOnConsole('error');
 
@@ -5118,8 +5089,7 @@ it.skip('reports "partial" when a later `@defer` boundary is incomplete and an e
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('reports "streaming" when two `@defer` fragments overlap and only the second fragment\'s exclusive fields are missing', async () => {
+it('reports "streaming" when two `@defer` fragments overlap and only the second fragment\'s exclusive fields are missing', async () => {
   // Suppress expected missing field write warnings since defer context is reset.
   using _ = spyOnConsole('error');
 
@@ -5526,8 +5496,7 @@ it('reports "partial" when a deep defer-only field is present under an overlappe
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('reports overlapping fields gated by `@include` as "streaming" when the included non-deferred fields are present and only defer-only fields are missing', async () => {
+it('reports overlapping fields gated by `@include` as "streaming" when the included non-deferred fields are present and only defer-only fields are missing', async () => {
   // Suppress expected missing field write warnings since defer context is reset.
   using _ = spyOnConsole('error');
 
@@ -5636,8 +5605,7 @@ it.skip('reports overlapping fields gated by `@include` as "streaming" when the 
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('reports "streaming" when `@defer(if: false)` fields arrive in the initial payload while another `@defer` is still pending', async () => {
+it('reports "streaming" when `@defer(if: false)` fields arrive in the initial payload while another `@defer` is still pending', async () => {
   const query = gql`
     query {
       greeting {
@@ -5730,7 +5698,10 @@ it.skip('reports "streaming" when `@defer(if: false)` fields arrive in the initi
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
+// Hermes: reads return a superset of the selected fields, here the aliased field under its schema name
+// too (greeting.recipient). Apollo Client merges the deferred chunk into the cache diff's result
+// (into `user`) and writes the merged result back, and that write stores the stale `recipient`
+// object (without email) rather than `user`, so the query never completes.
 it.skip('uses response aliases when matching overlapping non-deferred and deferred fields', async () => {
   // Suppress expected missing field write warnings since defer context is reset.
   using _ = spyOnConsole('error');
@@ -5837,8 +5808,7 @@ it.skip('uses response aliases when matching overlapping non-deferred and deferr
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('reports "streaming" for nested `@defer` when the outer fragment has arrived and the inner fragment is still pending', async () => {
+it('reports "streaming" for nested `@defer` when the outer fragment has arrived and the inner fragment is still pending', async () => {
   const query = gql`
     query {
       greeting {
@@ -6425,8 +6395,7 @@ it('keeps complete cached deferred data when a defer boundary completes with err
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('does not return complete cached deferred data while streaming with a "cache-first" fetch policy when the non-deferred cached data is incomplete', async () => {
+it('does not return complete cached deferred data while streaming with a "cache-first" fetch policy when the non-deferred cached data is incomplete', async () => {
   const query = gql`
     query {
       greeting {
@@ -6524,8 +6493,7 @@ it.skip('does not return complete cached deferred data while streaming with a "c
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('does not return complete cached deferred data when a defer boundary completes with errors with a "cache-first" fetch policy when the non-deferred cached data is incomplete', async () => {
+it('does not return complete cached deferred data when a defer boundary completes with errors with a "cache-first" fetch policy when the non-deferred cached data is incomplete', async () => {
   const query = gql`
     query {
       greeting {
@@ -6628,8 +6596,7 @@ it.skip('does not return complete cached deferred data when a defer boundary com
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('does not return complete cached deferred data while streaming with a "cache-and-network" fetch policy when the non-deferred cached data is incomplete', async () => {
+it('does not return complete cached deferred data while streaming with a "cache-and-network" fetch policy when the non-deferred cached data is incomplete', async () => {
   const query = gql`
     query {
       greeting {
@@ -6726,8 +6693,7 @@ it.skip('does not return complete cached deferred data while streaming with a "c
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('does not return complete cached deferred data when a defer boundary completes with errors with a "cache-and-network" fetch policy when the non-deferred cached data is incomplete', async () => {
+it('does not return complete cached deferred data when a defer boundary completes with errors with a "cache-and-network" fetch policy when the non-deferred cached data is incomplete', async () => {
   const query = gql`
     query {
       greeting {
@@ -6946,8 +6912,7 @@ it('reports residual deferred cached data as "complete" while streaming with a "
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('prunes a list item\'s cached defer boundary while a sibling item has already streamed in with a "cache-first" fetch policy', async () => {
+it('prunes a list item\'s cached defer boundary while a sibling item has already streamed in with a "cache-first" fetch policy', async () => {
   const query = gql`
     query {
       person {
@@ -7083,8 +7048,7 @@ it.skip('prunes a list item\'s cached defer boundary while a sibling item has al
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('does not return complete cached deferred data while streaming with a "network-only" fetch policy', async () => {
+it('does not return complete cached deferred data while streaming with a "network-only" fetch policy', async () => {
   const query = gql`
     query {
       greeting {
@@ -7175,8 +7139,7 @@ it.skip('does not return complete cached deferred data while streaming with a "n
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('keeps a non-deferred fragment\'s fields at a path with a pending defer boundary with a "network-only" fetch policy', async () => {
+it('keeps a non-deferred fragment\'s fields at a path with a pending defer boundary with a "network-only" fetch policy', async () => {
   const query = gql`
     query {
       greeting {
@@ -7282,8 +7245,7 @@ it.skip('keeps a non-deferred fragment\'s fields at a path with a pending defer 
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('does not return complete cached deferred data when a defer boundary completes with errors with a "network-only" fetch policy', async () => {
+it('does not return complete cached deferred data when a defer boundary completes with errors with a "network-only" fetch policy', async () => {
   const query = gql`
     query {
       greeting {
@@ -7386,8 +7348,7 @@ it.skip('does not return complete cached deferred data when a defer boundary com
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('does not return complete cached deferred data when a defer boundary completes with errors with a "network-only" fetch policy and errorPolicy "none"', async () => {
+it('does not return complete cached deferred data when a defer boundary completes with errors with a "network-only" fetch policy and errorPolicy "none"', async () => {
   const query = gql`
     query {
       greeting {
@@ -7484,8 +7445,7 @@ it.skip('does not return complete cached deferred data when a defer boundary com
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('does not return a partial cached defer boundary while streaming with a "network-only" fetch policy', async () => {
+it('does not return a partial cached defer boundary while streaming with a "network-only" fetch policy', async () => {
   const query = gql`
     query {
       greeting {
@@ -7684,8 +7644,7 @@ it('does not return cached non-deferred data through a clean defer boundary whil
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('does not return cached defer boundaries for list items while streaming with a "network-only" fetch policy', async () => {
+it('does not return cached defer boundaries for list items while streaming with a "network-only" fetch policy', async () => {
   const query = gql`
     query {
       person {
@@ -7797,8 +7756,7 @@ it.skip('does not return cached defer boundaries for list items while streaming 
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('prunes a list item\'s cached defer boundary while a sibling item has already streamed in with a "network-only" fetch policy', async () => {
+it('prunes a list item\'s cached defer boundary while a sibling item has already streamed in with a "network-only" fetch policy', async () => {
   const query = gql`
     query {
       person {
@@ -7930,8 +7888,7 @@ it.skip('prunes a list item\'s cached defer boundary while a sibling item has al
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('prunes each list item\'s sibling `@defer` boundaries independently by label with a "network-only" fetch policy', async () => {
+it('prunes each list item\'s sibling `@defer` boundaries independently by label with a "network-only" fetch policy', async () => {
   const query = gql`
     query {
       person {
@@ -8114,8 +8071,7 @@ it.skip('prunes each list item\'s sibling `@defer` boundaries independently by l
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip("prunes the right list item's defer boundary when a spread fragment's nested `@defer` shares a label across sibling boundaries", async () => {
+it("prunes the right list item's defer boundary when a spread fragment's nested `@defer` shares a label across sibling boundaries", async () => {
   const query = gql`
     query {
       friendList {
@@ -8378,8 +8334,7 @@ it.skip("prunes the right list item's defer boundary when a spread fragment's ne
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip("prunes correctly when a spread fragment's nested `@defer` sits at the same path as the sibling boundaries that spread it", async () => {
+it("prunes correctly when a spread fragment's nested `@defer` sits at the same path as the sibling boundaries that spread it", async () => {
   const query = gql`
     query {
       friendList {
@@ -8610,8 +8565,7 @@ it.skip("prunes correctly when a spread fragment's nested `@defer` sits at the s
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip("prunes correctly when the same spread fragment's nested `@defer` resolves to two different paths", async () => {
+it("prunes correctly when the same spread fragment's nested `@defer` resolves to two different paths", async () => {
   const query = gql`
     query {
       friendList {
@@ -8850,8 +8804,7 @@ it.skip("prunes correctly when the same spread fragment's nested `@defer` resolv
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('does not leak complete or partial cached defer boundaries while streaming with a "network-only" fetch policy and returnPartialData: true', async () => {
+it('does not leak complete or partial cached defer boundaries while streaming with a "network-only" fetch policy and returnPartialData: true', async () => {
   const query = gql`
     query {
       greeting {
@@ -9386,8 +9339,7 @@ it('keeps residual deferred cache data as "complete" while streaming after a ref
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('treats a deferred field delivered as null as fulfilled rather than still missing', async () => {
+it('treats a deferred field delivered as null as fulfilled rather than still missing', async () => {
   const query = gql`
     query {
       greeting {
@@ -9468,8 +9420,7 @@ it.skip('treats a deferred field delivered as null as fulfilled rather than stil
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('applies field read functions to in-flight results while pruning cached deferred data with a "network-only" fetch policy', async () => {
+it('applies field read functions to in-flight results while pruning cached deferred data with a "network-only" fetch policy', async () => {
   const query = gql`
     query {
       greeting {
@@ -9573,8 +9524,7 @@ it.skip('applies field read functions to in-flight results while pruning cached 
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff of a query with pending @defer boundaries is incomplete, so Apollo Client falls back to the raw network result (without read functions applied) while streaming.
-it.skip('applies field read functions to non-deferred fields while streaming deferred results', async () => {
+it('applies field read functions to non-deferred fields while streaming deferred results', async () => {
   const query = gql`
     query {
       greeting {
@@ -9674,8 +9624,7 @@ it.skip('applies field read functions to non-deferred fields while streaming def
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('applies field read functions to partial non-deferred cached data before and after deferred network results', async () => {
+it('applies field read functions to partial non-deferred cached data before and after deferred network results', async () => {
   const query = gql`
     query {
       greeting {
@@ -9935,8 +9884,7 @@ it('applies field read functions when partial cache data in a defer boundary is 
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff of a query with pending @defer boundaries is incomplete, so Apollo Client falls back to the raw network result (without read functions applied) while streaming.
-it.skip('applies field read functions with overlapping non-deferred and deferred fields while streaming', async () => {
+it('applies field read functions with overlapping non-deferred and deferred fields while streaming', async () => {
   const query = gql`
     query {
       greeting {
@@ -10183,8 +10131,7 @@ it('applies field read functions when complete cache data inside a defer boundar
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('delivers cache updates written while a deferred response is still streaming', async () => {
+it('delivers cache updates written while a deferred response is still streaming', async () => {
   const query = gql`
     query PostQuery {
       post {
@@ -10299,8 +10246,7 @@ it.skip('delivers cache updates written while a deferred response is still strea
   expect(outgoingRequestSpy).toHaveBeenCalledTimes(1);
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('keeps dataState streaming for an optimistic cache write while a deferred response is still streaming', async () => {
+it('keeps dataState streaming for an optimistic cache write while a deferred response is still streaming', async () => {
   const query = gql`
     query PostQuery {
       post {
@@ -10418,8 +10364,7 @@ it.skip('keeps dataState streaming for an optimistic cache write while a deferre
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('delivers an optimistic cache write while a deferred response is still streaming', async () => {
+it('delivers an optimistic cache write while a deferred response is still streaming', async () => {
   const query = gql`
     query PostQuery {
       post {
@@ -10531,8 +10476,7 @@ it.skip('delivers an optimistic cache write while a deferred response is still s
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it reports missing deferred fields as "partial" (not "streaming") and does not prune cached data inside pending boundaries.
-it.skip('delivers cache updates written while a deferred response is still streaming with `returnPartialData: true`', async () => {
+it('delivers cache updates written while a deferred response is still streaming with `returnPartialData: true`', async () => {
   const query = gql`
     query PostQuery {
       post {

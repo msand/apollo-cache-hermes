@@ -548,9 +548,7 @@ it('should handle deferred queries with fetch policy no-cache', async () => {
   await expect(takeSnapshot).not.toRerender();
 });
 
-// Hermes: `@defer` incremental cache semantics are not implemented: the diff of the result does not
-// prune the pending `@defer` boundaries, so it is incomplete (null) when the error arrives
-it.skip('should handle deferred queries with errors returned on the incremental batched result', async () => {
+it('should handle deferred queries with errors returned on the incremental batched result', async () => {
   const query = gql`
     query {
       hero {
