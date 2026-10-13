@@ -9,7 +9,8 @@ import type {
   SelectionSetNode,
   ValueNode,
 } from 'graphql';
-import { getOperationDefinition } from '@apollo/client/utilities/internal';
+import { addTypenameToDocument } from '@apollo/client/utilities';
+import { createFragmentMap, getFragmentDefinitions, getOperationDefinition } from '@apollo/client/utilities/internal';
 import type { FragmentMap } from '@apollo/client/utilities/internal';
 import invariant from 'ts-invariant';
 
@@ -61,13 +62,47 @@ export function variableDefaultsInOperation(operation: OperationDefinitionNode):
  * Extracts fragments from `document` by name.
  */
 export function fragmentMapForDocument(document: DocumentNode): FragmentMap {
-  const map: FragmentMap = {};
-  for (const definition of document.definitions) {
-    if (definition.kind !== 'FragmentDefinition') continue;
-    map[definition.name.value] = definition;
-  }
+  return createFragmentMap(getFragmentDefinitions(document));
+}
 
-  return map;
+/**
+ * Calls `callback` for each selection that the selection sets make for the
+ * same object: their own selections, and those of their fragments (whether or
+ * not their type conditions or @skip/@include directives apply), visiting each
+ * selection set once. (It does not descend into fields' selection sets.)
+ *
+ * Stops when `callback` returns true, and returns whether it did.
+ */
+export function someSelection(
+  selectionSets: Iterable<SelectionSetNode>,
+  getFragment: (name: string) => SelectionSetNode | undefined,
+  callback: (selection: SelectionNode) => boolean | void,
+): boolean {
+  const visited = new Set<SelectionSetNode>();
+  const visit = (selectionSet: SelectionSetNode): boolean => {
+    if (visited.has(selectionSet)) return false;
+    visited.add(selectionSet);
+    for (const selection of selectionSet.selections) {
+      if (callback(selection)) return true;
+      if (selection.kind === 'Field') continue;
+      const fragment = selection.kind === 'InlineFragment' ? selection.selectionSet : getFragment(selection.name.value);
+      if (fragment && visit(fragment)) return true;
+    }
+    return false;
+  };
+  for (const selectionSet of selectionSets) {
+    if (visit(selectionSet)) return true;
+  }
+  return false;
+}
+
+/**
+ * Whether the caller's document selects a field itself: any field but the
+ * __typename fields that Hermes added with addTypenameToDocument. (Those added
+ * before the document reached Hermes count when `pretransformed`.)
+ */
+export function isSelectedByCaller(field: FieldNode, pretransformed = false): boolean {
+  return pretransformed || !addTypenameToDocument.added(field);
 }
 
 /**
@@ -77,6 +112,11 @@ export function fragmentMapForDocument(document: DocumentNode): FragmentMap {
  * This is helpful if you want to assert that certain fragments or queries stay
  * static within the cache (and thus, avoid read-time overhead).
  *
+ * Like the cache's reads, fields that are aliased or parameterized (unless
+ * marked @static), and selections whose @skip/@include directives depend on
+ * variables, are not static. (Field policies, if a cache has any, make every
+ * read dynamic.)
+ *
  * If the selectionSet contains fragments, you must provide a getter function
  * that exposes them.
  */
@@ -84,28 +124,31 @@ export function selectionSetIsStatic(
   selectionSet: SelectionSetNode,
   fragmentGetter?: (name: string) => SelectionSetNode | undefined,
 ): boolean {
-  for (const selection of selectionSet.selections) {
-    if (selection.kind === 'Field') {
-      if (!fieldIsStatic(selection)) return false;
-      if (selection.selectionSet && !selectionSetIsStatic(selection.selectionSet, fragmentGetter)) return false;
-    } else if (selection.kind === 'FragmentSpread') {
-      if (!fragmentGetter) {
-        throw new Error(`fragmentGetter is required for selection sets with ...fragments`);
-      }
-      const fragmentSet = fragmentGetter(selection.name.value);
-      if (!fragmentSet) {
-        throw new Error(`Unknown fragment ${selection.name.value} in isSelectionSetStatic`);
-      }
-
-      if (!selectionSetIsStatic(fragmentSet, fragmentGetter)) return false;
-    } else if (selection.kind === 'InlineFragment') {
-      if (!selectionSetIsStatic(selection.selectionSet, fragmentGetter)) return false;
-    } else {
-      throw new Error(`Unknown selection type ${(selection as any).kind} in isSelectionSetStatic`);
+  const getFragment = (name: string) => {
+    if (!fragmentGetter) {
+      throw new Error(`fragmentGetter is required for selection sets with ...fragments`);
     }
-  }
+    const fragmentSet = fragmentGetter(name);
+    if (!fragmentSet) {
+      throw new Error(`Unknown fragment ${name} in isSelectionSetStatic`);
+    }
+    return fragmentSet;
+  };
+  const isStatic = (selections: SelectionSetNode): boolean =>
+    !someSelection([selections], getFragment, selection => {
+      if (hasVariableInclusionDirective(selection)) return true;
+      if (selection.kind !== 'Field') return false;
+      return !fieldIsStatic(selection) || (!!selection.selectionSet && !isStatic(selection.selectionSet));
+    });
+  return isStatic(selectionSet);
+}
 
-  return true;
+/** Whether a selection has a @skip or @include directive whose condition is a variable. */
+function hasVariableInclusionDirective({ directives }: SelectionNode): boolean {
+  return !!directives?.some(
+    ({ name, arguments: args }) =>
+      (name.value === 'skip' || name.value === 'include') && !!args?.some(arg => arg.value.kind === 'Variable'),
+  );
 }
 
 export function fieldIsStatic(field: FieldNode) {

@@ -62,6 +62,12 @@ describe(`ast.selectionSetIsStatic`, () => {
     ).to.eq(false);
   });
 
+  it(`considers selections included or skipped depending on variables as dynamic`, () => {
+    expect(selectionSetIsStatic(selection(`query ($a: Boolean) { one @include(if: $a) }`))).to.eq(false);
+    expect(selectionSetIsStatic(selection(`query ($a: Boolean) { ... @skip(if: $a) { one } }`))).to.eq(false);
+    expect(selectionSetIsStatic(selection(`{ one @include(if: true) two @skip(if: false) }`))).to.eq(true);
+  });
+
   it(`honors @static when on aliased fields`, () => {
     expect(
       selectionSetIsStatic(
