@@ -31,7 +31,7 @@ import * as operations from './operations';
 import * as schema from './schema';
 import * as nodes from './nodes';
 import * as util from './util';
-import { nodeIdForParameterizedValue, nodeIdForStoreKey } from './operations/SnapshotEditor';
+import { nodeIdForStoreKey } from './operations/SnapshotEditor';
 import { checkWrite, checkWriteDocument } from './operations/checkWrite';
 import { entityTypename } from './operations/fieldFunctions';
 
@@ -934,24 +934,30 @@ export class CacheTransaction<TSerialized> implements Queryable {
     // Like InMemoryCache, only a missing id means ROOT_QUERY; other falsy ids match nothing.
     if ('id' in options && !options.id) return false;
     // Evicting one argument variant of a field removes just that stored value.
+    let unparameterizedOnly = false;
     if (options.fieldName && options.args) {
       // The variant is identified as the field's keyArgs policy says.
       const id = options.id ?? 'ROOT_QUERY';
       const node = this._snapshot.baseline.getNodeSnapshot(id) ?? this._snapshot.optimistic.getNodeSnapshot(id);
       const typename = entityTypename(this._context, id, node);
-      const { storeFieldNames } = this._context;
-      const args = options.args as JsonObject;
-      if (!storeFieldNames.hasKeyArgsFor(typename, options.fieldName)) {
-        return this.batchEvict([nodeIdForParameterizedValue(id, [options.fieldName], args)]);
-      }
-      const storeKey = storeFieldNames.storeKey(typename, options.fieldName, args, undefined, undefined);
+      const storeKey = this._context.storeFieldNames.storeKey(
+        typename,
+        options.fieldName,
+        options.args as JsonObject,
+        undefined,
+        undefined,
+      );
       if (storeKey !== undefined) {
         return this.batchEvict([nodeIdForStoreKey(id, [options.fieldName], storeKey)]);
       }
-      // Stored under the field name itself (e.g. keyArgs: false).
+      // Stored under the field name itself (e.g. keyArgs: false, or arguments
+      // that are all undefined): like InMemoryCache, only that value is
+      // evicted, not the field's other argument variants.
+      unparameterizedOnly = true;
       options = { ...options, args: undefined };
     }
-    const modifier: Modifier<any> = (_current, details) => {
+    const modifier: Modifier<any> = (current, details) => {
+      if (unparameterizedOnly && details.storeFieldName !== details.fieldName) return current;
       return details.DELETE;
     };
     const modifyOptions: CacheInterface.ModifyOptions = {

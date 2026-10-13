@@ -13,6 +13,7 @@ import { supportsResultCaching } from '@apollo/client/cache/inmemory/entityStore
 import { spyOnConsole } from '@apollo/client/testing/internal';
 
 import { Hermes } from '../../../../../src';
+import { toNormalizedCacheObject } from '../../../../helpers';
 
 describe('EntityStore', () => {
   // Hermes: this tests InMemoryCache's internal EntityStore. Its Policies only
@@ -1093,14 +1094,7 @@ describe('EntityStore', () => {
 
     const cache = new Hermes();
 
-    // Hermes: each authorOfBook(isbn) value is a parameterized node linked to ROOT_QUERY.
-    const authorOfBookId = (args: string) => `ROOT_QUERY❖["authorOfBook"]❖${args}`;
-    const authorOfBookRef = (args: string) => ({ id: authorOfBookId(args), path: ['authorOfBook'] });
-    const authorOfBookNode = (data: object) => ({
-      data,
-      inbound: [{ id: 'ROOT_QUERY', path: ['authorOfBook'] }],
-      type: 1,
-    });
+    // Hermes: compare in InMemoryCache's normalized shape.
 
     const TedChiangData = {
       __typename: 'Author',
@@ -1148,14 +1142,25 @@ describe('EntityStore', () => {
       variables: {},
     });
 
-    expect(cache.extract()).toEqual({
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
-        parameterized: [authorOfBookRef('{"isbn":"1"}'), authorOfBookRef('{"isbn":"2"}'), authorOfBookRef('{}')],
-        type: 0,
+        __typename: 'Query',
+        'authorOfBook({"isbn":"1"})': {
+          __typename: 'Author',
+          name: 'Ted Chiang',
+          hobby: 'video games',
+        },
+        'authorOfBook({"isbn":"2"})': {
+          __typename: 'Author',
+          name: 'Isaac Asimov',
+          hobby: 'chemistry',
+        },
+        authorOfBook: {
+          __typename: 'Author',
+          name: 'James S.A. Corey',
+          hobby: 'tabletop games',
+        },
       },
-      [authorOfBookId('{"isbn":"1"}')]: authorOfBookNode(TedChiangData),
-      [authorOfBookId('{"isbn":"2"}')]: authorOfBookNode(IsaacAsimovData),
-      [authorOfBookId('{}')]: authorOfBookNode(JamesCoreyData),
     });
 
     cache.evict({
@@ -1163,13 +1168,20 @@ describe('EntityStore', () => {
       args: { isbn: '1' },
     });
 
-    expect(cache.extract()).toEqual({
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
-        parameterized: [authorOfBookRef('{"isbn":"2"}'), authorOfBookRef('{}')],
-        type: 0,
+        __typename: 'Query',
+        'authorOfBook({"isbn":"2"})': {
+          __typename: 'Author',
+          name: 'Isaac Asimov',
+          hobby: 'chemistry',
+        },
+        authorOfBook: {
+          __typename: 'Author',
+          name: 'James S.A. Corey',
+          hobby: 'tabletop games',
+        },
       },
-      [authorOfBookId('{"isbn":"2"}')]: authorOfBookNode(IsaacAsimovData),
-      [authorOfBookId('{}')]: authorOfBookNode(JamesCoreyData),
     });
 
     cache.evict({
@@ -1177,13 +1189,20 @@ describe('EntityStore', () => {
       args: { isbn: '3' },
     });
 
-    expect(cache.extract()).toEqual({
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
-        parameterized: [authorOfBookRef('{"isbn":"2"}'), authorOfBookRef('{}')],
-        type: 0,
+        __typename: 'Query',
+        'authorOfBook({"isbn":"2"})': {
+          __typename: 'Author',
+          name: 'Isaac Asimov',
+          hobby: 'chemistry',
+        },
+        authorOfBook: {
+          __typename: 'Author',
+          name: 'James S.A. Corey',
+          hobby: 'tabletop games',
+        },
       },
-      [authorOfBookId('{"isbn":"2"}')]: authorOfBookNode(IsaacAsimovData),
-      [authorOfBookId('{}')]: authorOfBookNode(JamesCoreyData),
     });
 
     cache.evict({
@@ -1191,21 +1210,24 @@ describe('EntityStore', () => {
       args: {},
     });
 
-    expect(cache.extract()).toEqual({
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
-        parameterized: [authorOfBookRef('{"isbn":"2"}')],
-        type: 0,
+        __typename: 'Query',
+        'authorOfBook({"isbn":"2"})': {
+          __typename: 'Author',
+          name: 'Isaac Asimov',
+          hobby: 'chemistry',
+        },
       },
-      [authorOfBookId('{"isbn":"2"}')]: authorOfBookNode(IsaacAsimovData),
     });
 
     cache.evict({
       fieldName: 'authorOfBook',
     });
 
-    expect(cache.extract()).toEqual({
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
-        type: 0,
+        __typename: 'Query',
       },
     });
   });
@@ -1222,14 +1244,7 @@ describe('EntityStore', () => {
 
     const cache = new Hermes();
 
-    // Hermes: each authorOfBook(isbn) value is a parameterized node linked to ROOT_QUERY.
-    const authorOfBookId = (args: string) => `ROOT_QUERY❖["authorOfBook"]❖${args}`;
-    const authorOfBookRef = (args: string) => ({ id: authorOfBookId(args), path: ['authorOfBook'] });
-    const authorOfBookNode = (data: object) => ({
-      data,
-      inbound: [{ id: 'ROOT_QUERY', path: ['authorOfBook'] }],
-      type: 1,
-    });
+    // Hermes: compare in InMemoryCache's normalized shape.
 
     const TedChiangData = {
       __typename: 'Author',
@@ -1277,14 +1292,25 @@ describe('EntityStore', () => {
       variables: {},
     });
 
-    expect(cache.extract()).toEqual({
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
-        parameterized: [authorOfBookRef('{"isbn":"1"}'), authorOfBookRef('{"isbn":"2"}'), authorOfBookRef('{}')],
-        type: 0,
+        __typename: 'Query',
+        'authorOfBook({"isbn":"1"})': {
+          __typename: 'Author',
+          name: 'Ted Chiang',
+          hobby: 'video games',
+        },
+        'authorOfBook({"isbn":"2"})': {
+          __typename: 'Author',
+          name: 'Isaac Asimov',
+          hobby: 'chemistry',
+        },
+        authorOfBook: {
+          __typename: 'Author',
+          name: 'James S.A. Corey',
+          hobby: 'tabletop games',
+        },
       },
-      [authorOfBookId('{"isbn":"1"}')]: authorOfBookNode(TedChiangData),
-      [authorOfBookId('{"isbn":"2"}')]: authorOfBookNode(IsaacAsimovData),
-      [authorOfBookId('{}')]: authorOfBookNode(JamesCoreyData),
     });
 
     cache.evict({
@@ -1293,13 +1319,20 @@ describe('EntityStore', () => {
       args: { isbn: '1' },
     });
 
-    expect(cache.extract()).toEqual({
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
-        parameterized: [authorOfBookRef('{"isbn":"2"}'), authorOfBookRef('{}')],
-        type: 0,
+        __typename: 'Query',
+        'authorOfBook({"isbn":"2"})': {
+          __typename: 'Author',
+          name: 'Isaac Asimov',
+          hobby: 'chemistry',
+        },
+        authorOfBook: {
+          __typename: 'Author',
+          name: 'James S.A. Corey',
+          hobby: 'tabletop games',
+        },
       },
-      [authorOfBookId('{"isbn":"2"}')]: authorOfBookNode(IsaacAsimovData),
-      [authorOfBookId('{}')]: authorOfBookNode(JamesCoreyData),
     });
 
     cache.evict({
@@ -1308,13 +1341,20 @@ describe('EntityStore', () => {
       args: { isbn: '3' },
     });
 
-    expect(cache.extract()).toEqual({
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
-        parameterized: [authorOfBookRef('{"isbn":"2"}'), authorOfBookRef('{}')],
-        type: 0,
+        __typename: 'Query',
+        'authorOfBook({"isbn":"2"})': {
+          __typename: 'Author',
+          name: 'Isaac Asimov',
+          hobby: 'chemistry',
+        },
+        authorOfBook: {
+          __typename: 'Author',
+          name: 'James S.A. Corey',
+          hobby: 'tabletop games',
+        },
       },
-      [authorOfBookId('{"isbn":"2"}')]: authorOfBookNode(IsaacAsimovData),
-      [authorOfBookId('{}')]: authorOfBookNode(JamesCoreyData),
     });
 
     cache.evict({
@@ -1323,12 +1363,15 @@ describe('EntityStore', () => {
       args: {},
     });
 
-    expect(cache.extract()).toEqual({
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
-        parameterized: [authorOfBookRef('{"isbn":"2"}')],
-        type: 0,
+        __typename: 'Query',
+        'authorOfBook({"isbn":"2"})': {
+          __typename: 'Author',
+          name: 'Isaac Asimov',
+          hobby: 'chemistry',
+        },
       },
-      [authorOfBookId('{"isbn":"2"}')]: authorOfBookNode(IsaacAsimovData),
     });
 
     cache.evict({
@@ -1336,9 +1379,9 @@ describe('EntityStore', () => {
       fieldName: 'authorOfBook',
     });
 
-    expect(cache.extract()).toEqual({
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
-        type: 0,
+        __typename: 'Query',
       },
     });
   });

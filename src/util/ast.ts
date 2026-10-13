@@ -37,23 +37,26 @@ export function getOperationOrDie(document: DocumentNode): OperationDefinitionNo
 }
 
 /**
- * Returns the default values of all variables in the operation.
+ * Returns the default values of the variables in the operation that declare
+ * one.
+ *
+ * Like InMemoryCache (getDefaultValues), variables declared without a default
+ * value have none: unless passed, they are undefined (and so are left out of
+ * store field names), not null.
  */
 export function variableDefaultsInOperation(operation: OperationDefinitionNode): { [Key: string]: JsonValue } {
   const defaults: { [Key: string]: JsonValue } = {};
   if (operation.variableDefinitions) {
     for (const definition of operation.variableDefinitions) {
-      if (definition.type.kind === 'NonNullType') continue; // Required.
-
       const { defaultValue } = definition;
-      defaults[definition.variable.name.value] = isObject(defaultValue)
-        ? valueFromNode(defaultValue as ValueNode)
-        : null;
+      if (!isObject(defaultValue)) continue;
+      defaults[definition.variable.name.value] = valueFromNode(defaultValue as ValueNode);
     }
   }
 
   return defaults;
 }
+
 /**
  * Extracts fragments from `document` by name.
  */

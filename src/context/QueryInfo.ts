@@ -42,9 +42,10 @@ export class QueryInfo<TSerialized = GraphSnapshot> {
   public readonly variables: Set<string>;
   public readonly propMap: { [p: string]: string } | undefined;
   /**
-   * Default values for the variables used by this query.
+   * The declared default values of the variables used by this query.
    *
-   * Variables not present in this map are considered required.
+   * Like InMemoryCache, variables without one (that aren't passed) are
+   * undefined.
    */
   public readonly variableDefaults: { [Key: string]: JsonValue };
   /**

@@ -79,8 +79,9 @@ describe(`context.QueryInfo`, () => {
       expect(info.variableDefaults['name']).to.eq('Munster');
     });
 
-    it(`includes optional arguments as having a default value of null`, () => {
-      expect(info.variableDefaults['stinky']).to.eq(null);
+    // Like InMemoryCache, optional variables without a default are undefined.
+    it(`excludes optional parameters without a default value`, () => {
+      expect(info.variableDefaults).to.not.have.key('stinky');
     });
 
     it(`excludes required parameters from the defaults`, () => {
@@ -133,7 +134,7 @@ describe(`context.QueryInfo`, () => {
         `),
       );
       expect(info.variables).to.deep.eq(new Set(['foo', 'bar']));
-      expect(info.variableDefaults).to.deep.eq({ foo: null });
+      expect(info.variableDefaults).to.deep.eq({});
     });
   });
 });

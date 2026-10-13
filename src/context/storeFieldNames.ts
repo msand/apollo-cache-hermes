@@ -90,7 +90,10 @@ export class StoreFieldNames {
         return toStoreKey(fieldName, storeFieldName);
       }
     }
-    return argsStoreKey(args!);
+    // Like InMemoryCache's getStoreKeyName, arguments that are all undefined
+    // (e.g. optional variables that aren't passed) leave the field unkeyed.
+    const key = argsStoreKey(args!);
+    return key === '{}' ? undefined : key;
   }
 
   /**

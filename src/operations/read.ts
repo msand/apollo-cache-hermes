@@ -435,8 +435,11 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
 
           dynamicNodeIds.add(childId);
 
-          // Still no snapshot? Ok we're done here.
+          // Still no snapshot? Ok we're done here.  (The field is missing,
+          // even if its container holds a value for the field stored under
+          // its name, e.g. one written without arguments.)
           if (!childSnapshot) {
+            delete value[key];
             continue;
           }
           child = childSnapshot.data;
