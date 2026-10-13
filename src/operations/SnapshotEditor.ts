@@ -1869,32 +1869,40 @@ export class SnapshotEditor<TSerialized> {
         continue;
       }
 
-      // Breadth-first, so that the nearest root is found first. `via` maps
-      // each node found to the node it references on the way to the candidate.
+      // Depth-first, one referrer at a time: entities are usually a few
+      // references away from a root, but can have many referrers (each of
+      // which leads to one). `via` maps each node found to the node it
+      // references on the way to the candidate.
       const found = [candidate];
       const via = new Map<NodeId, NodeId | undefined>([[candidate, undefined]]);
+      const stack = [{ id: candidate, referrers: candidateNode.inbound!.values() }];
       let reachedFrom: NodeId | undefined;
-      for (let i = 0; reachedFrom === undefined && budget > 0 && i < found.length; i++) {
-        const node = this._getNodeSnapshot(found[i]);
-        if (!node?.inbound) continue;
-        budget -= node.inbound.size;
-        for (const { id: referrerId } of node.inbound.values()) {
-          if (via.has(referrerId)) continue;
-          const referrer = this._getNodeSnapshot(referrerId);
-          if (!referrer) continue;
-          via.set(referrerId, found[i]);
-          if (isKnownReachable(referrerId, referrer)) {
-            reachedFrom = found[i];
-            break;
-          }
-          found.push(referrerId);
+      while (stack.length && budget > 0) {
+        const top = stack[stack.length - 1];
+        const next = top.referrers.next();
+        if (next.done) {
+          stack.pop();
+          continue;
         }
+        budget--;
+        const referrerId = next.value.id;
+        if (via.has(referrerId)) continue;
+        const referrer = this._getNodeSnapshot(referrerId);
+        if (!referrer) continue;
+        via.set(referrerId, top.id);
+        if (isKnownReachable(referrerId, referrer)) {
+          reachedFrom = top.id;
+          break;
+        }
+        found.push(referrerId);
+        // (Nodes without referrers are roots: known to be reachable.)
+        stack.push({ id: referrerId, referrers: referrer.inbound!.values() });
       }
 
       if (reachedFrom !== undefined) {
         // Everything on the path from the candidate to the root is reachable.
         for (let id: NodeId | undefined = reachedFrom; id !== undefined; id = via.get(id)) reachable.add(id);
-      } else if (budget > 0) {
+      } else if (!stack.length) {
         // Nothing that references these nodes (even indirectly) is reachable.
         // Removing them may leave more candidates (e.g. a cycle that one of
         // them referenced), which this loop visits too.
