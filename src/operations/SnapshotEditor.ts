@@ -552,6 +552,19 @@ export class SnapshotEditor<TSerialized> {
       path = [];
     }
 
+    // An entity that is new (neither in the cache nor written earlier in this
+    // write) has nothing to merge its fields with: without field policies that
+    // change where or how fields are written, its leaf fields are set in new
+    // data directly (see below).
+    const isNewEntity =
+      !unidentified &&
+      !this._context.policies.hasKeyArgs &&
+      !this._context.policies.hasMergePolicies &&
+      !this._streamInfo &&
+      !(containerId in this._newNodes) &&
+      !this._parent.getNodeSnapshot(containerId);
+    let newData: JsonObject | undefined;
+
     // Like InMemoryCache, an empty unidentified object (e.g. the `{}` a merge
     // function returns) is stored, rather than left missing.
     if (
@@ -595,6 +608,13 @@ export class SnapshotEditor<TSerialized> {
           warnings.push(`Encountered undefined at ${[...prefixPath, ...path].join('.')}. Treating as null`);
         }
 
+        continue;
+      }
+
+      if (isNewEntity && !node.children && !node.args) {
+        newData ??= this._newEntityData(containerId);
+        // Custom scalar values are stored serialized (and parsed when read).
+        newData[schemaName] = this._context.scalars.serializeField(typename, schemaName, fieldValue) as JsonValue;
         continue;
       }
 
@@ -2001,6 +2021,21 @@ export class SnapshotEditor<TSerialized> {
     current.data = lazyImmutableDeepSet(current.data, parent && parent.data, path, newValue, isDelete);
     // (Setting a value at a path copies the data, unless this edit made it.)
     if (path.length && isObject(current.data)) this._ownedData[id] = current.data;
+  }
+
+  /**
+   * The data of a new entity node, which this edit made (and can change in
+   * place; see _setValue): empty, unless fields of it were set already (e.g.
+   * those of an object selected before its leaf fields).
+   */
+  private _newEntityData(id: NodeId): JsonObject {
+    this._editedNodeIds.add(id);
+    const snapshot = this._ensureNewSnapshot(id);
+    if (snapshot.data === undefined) {
+      snapshot.data = {};
+      this._ownedData[id] = snapshot.data;
+    }
+    return snapshot.data as JsonObject;
   }
 
   /**
