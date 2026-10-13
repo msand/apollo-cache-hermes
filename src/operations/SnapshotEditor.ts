@@ -177,6 +177,35 @@ function toStoreValue(
   return value;
 }
 
+/**
+ * A copy of `value` (found at `path`) with null in place of each Reference
+ * within it (as Hermes stores the slots of references, before filling them in
+ * with the referenced data), collecting their paths and ids in `references`.
+ */
+function withoutReferences(value: unknown, path: PathPart[], references: [PathPart[], NodeId][]): JsonValue {
+  if (isReference(value)) {
+    references.push([path, value.__ref]);
+    return null;
+  }
+  if (Array.isArray(value)) {
+    let copy: JsonValue[] | undefined;
+    value.forEach((item, index) => {
+      const newItem = withoutReferences(item, [...path, index], references);
+      if (newItem !== item) (copy ??= value.slice())[index] = newItem;
+    });
+    return copy ?? (value as JsonValue[]);
+  }
+  if (isPlainObject(value)) {
+    let copy: JsonObject | undefined;
+    for (const key of Object.keys(value)) {
+      const newValue = withoutReferences(value[key], [...path, key], references);
+      if (newValue !== value[key]) (copy ??= { ...(value as JsonObject) })[key] = newValue;
+    }
+    return copy ?? (value as JsonObject);
+  }
+  return value as JsonValue;
+}
+
 /** Whether two values are objects with different __typenames (like InMemoryCache's mergeObjects checks). */
 function typenamesDiffer(a: unknown, b: unknown): boolean {
   const aTypename = typenameOf(a);
@@ -225,6 +254,8 @@ export class SnapshotEditor<TSerialized> {
   private _fieldFunctionsInstance: FieldFunctions<TSerialized> | undefined;
   /** The fragments of the operation being merged, for keyFields functions. */
   private _fragmentMap: FragmentMap | undefined;
+  /** The reference edits of the payload being merged (see mergePayload). */
+  private _referenceEdits: ReferenceEdit[] | undefined;
 
   constructor(
     /** The configuration/context to use when editing snapshots. */
@@ -268,6 +299,7 @@ export class SnapshotEditor<TSerialized> {
     // once all new nodes have been built (and we can guarantee that we're
     // referencing the correct version).
     const referenceEdits: ReferenceEdit[] = [];
+    this._referenceEdits = referenceEdits;
     const ref = this._mergeSubgraph(
       referenceEdits,
       warnings,
@@ -287,6 +319,7 @@ export class SnapshotEditor<TSerialized> {
     // nodes, and collects all newly orphaned nodes (and the nodes that lost
     // some, but not all, of their inbound references).
     const unreachableCandidates = new Set<NodeId>();
+    this._referenceEdits = undefined;
     const orphanedNodeIds = this._mergeReferenceEdits(referenceEdits, unreachableCandidates);
 
     // Remove (garbage collect) orphaned subgraphs.
@@ -886,13 +919,35 @@ export class SnapshotEditor<TSerialized> {
   }
 
   /**
-   * Shallowly merges `value` into the data of an entity (creating it if needed).
+   * Shallowly merges `value` (a store object, from toReference or
+   * mergeObjects) into the data of an entity, creating it if needed. With
+   * `valueIsOlder`, the entity's own fields take precedence.
+   *
+   * The References within `value` become references of the entity (so, like
+   * any other, they keep what they reference from being garbage collected).
    */
   private _mergeIntoEntity(entityId: NodeId, value: StoreObject, valueIsOlder = false) {
     // Custom scalar values are stored serialized.
     value = this._context.scalars.serializeStoreObject(value);
-    const data = isObject(this._getNodeData(entityId)) ? (this._getNodeData(entityId) as JsonObject) : {};
-    this._setValue(entityId, [], valueIsOlder ? { ...value, ...data } : { ...data, ...value });
+    const node = this._getNodeSnapshot(entityId);
+    const data = isObject(node?.data) ? (node!.data as JsonObject) : undefined;
+    // Outside of mergePayload, the edits are applied right away.
+    const referenceEdits = this._referenceEdits ?? [];
+
+    if (!data) this._setValue(entityId, [], {});
+    for (const key of Object.keys(value)) {
+      const hasField = (data && hasOwn.call(data, key)) || node?.outbound?.has(key);
+      if (valueIsOlder && hasField) continue;
+      const references: [PathPart[], NodeId][] = [];
+      const fieldValue = withoutReferences(value[key], [key], references);
+      if (hasField) this._removeReferencesWithin(referenceEdits, entityId, [key], true);
+      this._setValue(entityId, [key], fieldValue);
+      for (const [path, id] of references) {
+        referenceEdits.push({ containerId: entityId, path, prevNodeId: undefined, nextNodeId: id, reference: true });
+      }
+    }
+
+    if (!this._referenceEdits) this._mergeReferenceEdits(referenceEdits);
   }
 
   /**

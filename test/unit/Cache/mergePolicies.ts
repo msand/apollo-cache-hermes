@@ -211,4 +211,98 @@ describe(`merge policies`, () => {
       expect(hermes.result).to.deep.eq(imc.result);
     });
   });
+  describe(`entities merged into by merge functions`, () => {
+    const readQuery = gql`
+      {
+        book {
+          id
+          title
+          author {
+            id
+            name
+          }
+        }
+      }
+    `;
+    const expected = {
+      book: { __typename: 'Book', id: 1, title: 'x', author: { __typename: 'Author', id: 2, name: 'a' } },
+    };
+
+    for (const [name, Cache] of Object.entries(caches)) {
+      it(`keep the References they are given through gc, with toReference(object, true) (${name})`, () => {
+        const cache = new Cache({
+          typePolicies: {
+            Query: {
+              fields: {
+                book: {
+                  merge(_, _incoming, { toReference }) {
+                    const author = toReference({ __typename: 'Author', id: 2, name: 'a' }, true);
+                    return toReference({ __typename: 'Book', id: 1, title: 'x', author }, true);
+                  },
+                },
+              },
+            },
+          },
+        });
+        cache.writeQuery({
+          query: gql`
+            {
+              book {
+                id
+              }
+            }
+          `,
+          data: { book: { __typename: 'Book', id: 1 } },
+        });
+
+        expect(cache.readQuery({ query: readQuery })).to.deep.eq(expected);
+        expect(cache.gc()).to.deep.eq([]);
+        expect(cache.readQuery({ query: readQuery })).to.deep.eq(expected);
+      });
+
+      it(`keep the References they are given through gc, with mergeObjects (${name})`, () => {
+        const cache = new Cache({
+          typePolicies: {
+            Query: {
+              fields: {
+                book: {
+                  merge: (existing, incoming, { mergeObjects }) =>
+                    existing ? mergeObjects(existing, incoming) : incoming,
+                },
+              },
+            },
+          },
+        });
+        cache.writeQuery({
+          query: gql`
+            {
+              book {
+                id
+                title
+              }
+            }
+          `,
+          data: { book: { __typename: 'Book', id: 1, title: 'x' } },
+        });
+        // An unidentified Book (without id), merged into the stored one.
+        cache.writeQuery({
+          query: gql`
+            {
+              book {
+                author {
+                  id
+                  name
+                }
+              }
+            }
+          `,
+          data: { book: { __typename: 'Book', author: { __typename: 'Author', id: 2, name: 'a' } } },
+        });
+
+        expect(cache.readQuery({ query: readQuery })).to.deep.eq(expected);
+        expect(cache.gc()).to.deep.eq([]);
+        expect(cache.readQuery({ query: readQuery })).to.deep.eq(expected);
+      });
+    }
+  });
 });
