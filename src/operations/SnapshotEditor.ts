@@ -52,6 +52,14 @@ const {
 } = util;
 const makeRef = makeReference;
 
+/**
+ * How many nodes the backward searches of _removeUnreachableNodes may visit
+ * (in total, plus a number per candidate) before it marks the reachable nodes
+ * of the whole graph instead.
+ */
+const UNREACHABLE_SEARCH_BUDGET = 1000;
+const UNREACHABLE_SEARCH_BUDGET_PER_CANDIDATE = 8;
+
 const ensureIdConstistencyMsg = `Ensure id is included (or not included) consistently across multiple requests.`;
 /**
  * A newly modified snapshot.
@@ -1684,49 +1692,120 @@ export class SnapshotEditor<TSerialized> {
    *
    * Roots are the root nodes (ROOT_QUERY etc), the nodes nothing references
    * (which Hermes keeps, e.g. those written by writeFragment), retained nodes,
-   * and the root of the write.  Only the candidates are checked, by searching
-   * backwards (through inbound references) from each for a root: if there is
-   * none, all the nodes found are unreachable, and are removed (along with
+   * and the root of the write.
+   *
+   * Each candidate is first checked by searching backwards (through inbound
+   * references) from it for a root or a node already known to be reachable;
+   * when one is found, every node on the path to it is reachable too. If there
+   * is none, all the nodes found are unreachable, and are removed (along with
    * what they alone reference).
+   *
+   * Those searches share a budget of visited nodes. Should it run out (many
+   * candidates, in large reference graphs), reachability is instead marked
+   * forwards from the roots, once, over the whole graph; then the candidates
+   * that are not marked are removed with what references them.
    */
   private _removeUnreachableNodes(candidates: Set<NodeId>, writeRootId: NodeId) {
     if (!candidates.size) return;
     const reachable = new Set<NodeId>();
     const isRoot = (id: NodeId, node: NodeSnapshot) =>
       !node.inbound || id === writeRootId || isRootNodeId(id) || !!this._isRetained?.(id);
+    const isKnownReachable = (id: NodeId, node: NodeSnapshot) => reachable.has(id) || isRoot(id, node);
+
+    // The nodes the backward searches may visit, in total.
+    let budget = UNREACHABLE_SEARCH_BUDGET + UNREACHABLE_SEARCH_BUDGET_PER_CANDIDATE * candidates.size;
+    // Once the budget runs out: the nodes reachable from the roots.
+    let marked: Set<NodeId> | undefined;
 
     for (const candidate of candidates) {
-      if (reachable.has(candidate) || !this._getNodeSnapshot(candidate)) continue;
+      const candidateNode = this._getNodeSnapshot(candidate);
+      if (!candidateNode || reachable.has(candidate)) continue;
+      if (marked) {
+        if (!marked.has(candidate)) this._removeOrphanedNodes(this._referrersOf(candidate), candidates);
+        continue;
+      }
+      if (isKnownReachable(candidate, candidateNode)) {
+        reachable.add(candidate);
+        continue;
+      }
 
-      // Breadth-first, so that the nearest root is found first.
+      // Breadth-first, so that the nearest root is found first. `via` maps
+      // each node found to the node it references on the way to the candidate.
       const found = [candidate];
-      const seen = new Set(found);
-      let isReachable = false;
-      for (let i = 0; i < found.length; i++) {
-        const id = found[i];
-        const node = this._getNodeSnapshot(id);
-        if (!node) continue;
-        if (reachable.has(id) || isRoot(id, node)) {
-          isReachable = true;
-          break;
-        }
-        for (const { id: referrerId } of node.inbound!.values()) {
-          if (!seen.has(referrerId)) {
-            seen.add(referrerId);
-            found.push(referrerId);
+      const via = new Map<NodeId, NodeId | undefined>([[candidate, undefined]]);
+      let reachedFrom: NodeId | undefined;
+      for (let i = 0; reachedFrom === undefined && budget > 0 && i < found.length; i++) {
+        const node = this._getNodeSnapshot(found[i]);
+        if (!node?.inbound) continue;
+        budget -= node.inbound.size;
+        for (const { id: referrerId } of node.inbound.values()) {
+          if (via.has(referrerId)) continue;
+          const referrer = this._getNodeSnapshot(referrerId);
+          if (!referrer) continue;
+          via.set(referrerId, found[i]);
+          if (isKnownReachable(referrerId, referrer)) {
+            reachedFrom = found[i];
+            break;
           }
+          found.push(referrerId);
         }
       }
 
-      if (isReachable) {
-        reachable.add(candidate);
-      } else {
+      if (reachedFrom !== undefined) {
+        // Everything on the path from the candidate to the root is reachable.
+        for (let id: NodeId | undefined = reachedFrom; id !== undefined; id = via.get(id)) reachable.add(id);
+      } else if (budget > 0) {
         // Nothing that references these nodes (even indirectly) is reachable.
         // Removing them may leave more candidates (e.g. a cycle that one of
         // them referenced), which this loop visits too.
-        this._removeOrphanedNodes(seen, candidates);
+        this._removeOrphanedNodes(found, candidates);
+      } else {
+        marked = this._markReachableNodes(isRoot);
+        if (!marked.has(candidate)) this._removeOrphanedNodes(this._referrersOf(candidate), candidates);
       }
     }
+  }
+
+  /**
+   * The nodes reachable from the roots (see _removeUnreachableNodes), marked
+   * forwards through references.
+   */
+  private _markReachableNodes(isRoot: (id: NodeId, node: NodeSnapshot) => boolean): Set<NodeId> {
+    const marked = new Set<NodeId>();
+    const queue: NodeId[] = [];
+    const visit = (id: NodeId) => {
+      if (marked.has(id) || !this._getNodeSnapshot(id)) return;
+      marked.add(id);
+      queue.push(id);
+    };
+    for (const id of this._parent.allNodeIds()) {
+      const node = this._getNodeSnapshot(id);
+      if (node && isRoot(id, node)) visit(id);
+    }
+    for (const id in this._newNodes) {
+      const node = this._newNodes[id];
+      if (node && isRoot(id, node)) visit(id);
+    }
+    while (queue.length) {
+      const node = this._getNodeSnapshot(queue.pop()!)!;
+      for (const { id } of iterRefs(node.outbound, node.parameterized)) visit(id);
+    }
+    return marked;
+  }
+
+  /** The node and every node that (directly or indirectly) references it. */
+  private _referrersOf(nodeId: NodeId): NodeId[] {
+    const found = [nodeId];
+    const seen = new Set(found);
+    for (let i = 0; i < found.length; i++) {
+      for (const { id } of this._getNodeSnapshot(found[i])?.inbound?.values() ?? []) {
+        if (!seen.has(id) && this._getNodeSnapshot(id)) {
+          seen.add(id);
+          found.push(id);
+        }
+      }
+    }
+    return found;
   }
 
   /**
