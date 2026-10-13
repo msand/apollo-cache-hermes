@@ -822,7 +822,6 @@ Object {
       "edges": Array [
         Object {
           "__ref": "TodoEdge:edge1",
-          "cursor": "YXJyYXljb25uZWN0aW9uOjI=",
         },
       ],
       "pageInfo": Object {
@@ -859,7 +858,6 @@ Object {
       "edges": Array [
         Object {
           "__ref": "TodoEdge:edge1",
-          "cursor": "YXJyYXljb25uZWN0aW9uOjI=",
         },
       ],
       "extraMetaData": "extra",

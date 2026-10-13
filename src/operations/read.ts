@@ -635,6 +635,12 @@ export function isRootId(id: NodeId) {
   return id === StaticNodeId.QueryRoot || id === StaticNodeId.MutationRoot || id === StaticNodeId.SubscriptionRoot;
 }
 
+/** Whether a parsed __typename field was selected by the document itself, not added by addTypenameToDocument. */
+function selectsTypename(node: ParsedQueryNode): boolean {
+  const field = fieldNodeOf(node);
+  return !!field && !addTypenameToDocument.added(field);
+}
+
 const rootTypenameSelections = new WeakMap<QueryInfo<any>, boolean>();
 
 /**
@@ -790,7 +796,13 @@ export function _visitSelection<TSerialized>(
         query.variables,
       );
       if (fieldValue === undefined) {
-        if (key === '__typename') continue;
+        // Like InMemoryCache, only a __typename the document selects itself (not
+        // one added by addTypenameToDocument) can be missing; roots always have one.
+        if (
+          key === '__typename' &&
+          ((!containerPath.length && context.rootTypename(containerId)) || !selectsTypename(node))
+        )
+          continue;
         let target;
         if (snapshot) {
           target =

@@ -88,8 +88,10 @@ describe(`context.QueryInfo`, () => {
     });
   });
 
-  describe(`validation`, () => {
-    it(`asserts that all variables are declared`, () => {
+  // Like InMemoryCache, Hermes doesn't validate variable declarations: a
+  // variable that is used but neither declared nor passed reads as undefined.
+  describe(`undeclared variables`, () => {
+    it(`allows variables that are used but not declared`, () => {
       expect(() => {
         new QueryInfo(
           context,
@@ -99,10 +101,10 @@ describe(`context.QueryInfo`, () => {
             }
           `),
         );
-      }).to.throw(/\$bar(.|\n)*\$baz/);
+      }).to.not.throw();
     });
 
-    it(`asserts that all variables are declared, when used via fragments`, () => {
+    it(`allows variables that are used but not declared, via fragments`, () => {
       expect(() => {
         new QueryInfo(
           context,
@@ -118,7 +120,20 @@ describe(`context.QueryInfo`, () => {
             }
           `),
         );
-      }).to.throw(/\$bar(.|\n)*\$baz/);
+      }).to.not.throw();
+    });
+
+    it(`collects undeclared variables with the used ones`, () => {
+      const info = new QueryInfo(
+        context,
+        buildRawOperationFromQuery(gql`
+          query whoops($foo: Number) {
+            thing(foo: $foo, bar: $bar)
+          }
+        `),
+      );
+      expect(info.variables).to.deep.eq(new Set(['foo', 'bar']));
+      expect(info.variableDefaults).to.deep.eq({ foo: null });
     });
   });
 });

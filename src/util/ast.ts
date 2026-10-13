@@ -37,20 +37,6 @@ export function getOperationOrDie(document: DocumentNode): OperationDefinitionNo
 }
 
 /**
- * Returns the names of all variables declared by the operation.
- */
-export function variablesInOperation(operation: OperationDefinitionNode): Set<string> {
-  const names = new Set<string>();
-  if (operation.variableDefinitions) {
-    for (const definition of operation.variableDefinitions) {
-      names.add(definition.variable.name.value);
-    }
-  }
-
-  return names;
-}
-
-/**
  * Returns the default values of all variables in the operation.
  */
 export function variableDefaultsInOperation(operation: OperationDefinitionNode): { [Key: string]: JsonValue } {

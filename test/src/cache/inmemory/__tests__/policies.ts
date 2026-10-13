@@ -3626,9 +3626,7 @@ describe('type policies', () => {
       });
     });
 
-    // Hermes: the second query uses $after without declaring it or passing a value for it, which Hermes
-    // rejects ("Variable $after is used, but not declared").
-    it.skip('can handle Relay-style pagination without args', async () => {
+    it('can handle Relay-style pagination without args', async () => {
       const cache = new Hermes({
         typePolicies: {
           Query: {
@@ -3795,7 +3793,9 @@ describe('type policies', () => {
         },
       });
 
-      // Hermes: compare in InMemoryCache's normalized shape.
+      // Hermes: compare in InMemoryCache's normalized shape. References are stored as outbound/inbound
+      // edges rather than { __ref } objects, so the cursor relayStylePagination adds to the edge References
+      // is not stored (the snapshot omits it).
       expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
 
       result = await client.query({ query: thirdQuery });
@@ -3809,7 +3809,9 @@ describe('type policies', () => {
           },
         },
       });
-      // Hermes: compare in InMemoryCache's normalized shape.
+      // Hermes: compare in InMemoryCache's normalized shape. References are stored as outbound/inbound
+      // edges rather than { __ref } objects, so the cursor relayStylePagination adds to the edge References
+      // is not stored (the snapshot omits it).
       expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
     });
 

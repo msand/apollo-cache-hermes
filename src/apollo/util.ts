@@ -32,7 +32,6 @@ export function buildRawOperationFromFragment(
     document: getFragmentQueryDocument(fragmentDocument, fragmentName),
     variables,
     fragmentName,
-    fromFragmentDocument: true,
   };
 }
 

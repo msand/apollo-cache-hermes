@@ -323,9 +323,11 @@ function execSelectionSetImpl(
       const counts = !addTypenameToDocument.added(selection);
 
       if (fieldValue === undefined) {
-        // Like Hermes' reads, a missing __typename does not make a result
-        // incomplete.
-        if (counts && selection.name.value !== '__typename') dataState = mergeDataState(dataState, 'empty');
+        // Like Hermes' reads (and InMemoryCache), a missing __typename the
+        // document selects itself makes a result incomplete, except on roots.
+        if (counts && (selection.name.value !== '__typename' || rootTypename === undefined)) {
+          dataState = mergeDataState(dataState, 'empty');
+        }
       } else if (Array.isArray(fieldValue)) {
         if (fieldValue.length > 0) {
           const exec = executeSubSelectedArray(selection, fieldValue, context);
