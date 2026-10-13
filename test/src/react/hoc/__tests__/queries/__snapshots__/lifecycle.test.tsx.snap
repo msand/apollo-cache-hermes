@@ -1,9 +1,0 @@
-// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
-
-exports[`[queries] lifecycle handles asynchronous racecondition with prefilled data from the server 1`] = `
-<div>
-  <p>
-     stub 
-  </p>
-</div>
-`;

@@ -1,0 +1,21 @@
+// Apollo Client 4.3.3's src/declarations.d.ts: the type augmentations its own test suite
+// (vendored in test/src) is written against.
+import type { ApolloCache, InternalTypes } from '@apollo/client';
+
+declare module '@apollo/client' {
+  // in our own codebase, we have to account for all possible `defaultOptions`s
+  export namespace ApolloClient {
+    export namespace DeclareDefaultOptions {
+      interface WatchQuery {}
+      interface Query {}
+      interface Mutate {}
+    }
+  }
+  export namespace ApolloCache {
+    export interface Scalars extends Record<string, { serialized: any; parsed: any }> {}
+  }
+
+  export interface TypeOverrides {
+    cache: ApolloCache;
+  }
+}

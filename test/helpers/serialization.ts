@@ -32,19 +32,33 @@ export const mapToEntries2 = (map: Map<string, NodeReference> | undefined): Node
  * vendored Apollo Client expectations can be checked as written.
  *
  * Fields with arguments (Hermes' parameterized value nodes) are stored in
- * their container under InMemoryCache's store field name, `field({"arg":1})`.
+ * their container under InMemoryCache's store field name: `field({"arg":1})`,
+ * or, for fields stored per their keyArgs policies (or @connection
+ * directives), the store field name their node id ends with (e.g.
+ * `field:{"arg":1}`).
+ *
+ * Like InMemoryCache's, root objects have the __typename of their root type:
+ * Query, Mutation or Subscription, unless `rootTypenames` (e.g. a cache's
+ * `policies.rootTypenamesById`) says otherwise.
  */
-export function toNormalizedCacheObject(serialized: Record<string, any>): Record<string, any> {
+export function toNormalizedCacheObject(
+  serialized: Record<string, any>,
+  rootTypenames: Record<string, string> = defaultRootTypenames,
+): Record<string, any> {
   const build = (id: string): any => {
     const node = serialized[id];
-    const root = { value: JSON.parse(JSON.stringify(node.data ?? (node.type === 0 ? {} : null))) };
+    const root = { value: cloneData(node.data ?? (node.type === 0 ? {} : null)) };
     for (const { id: target, path } of node.outbound ?? []) setAt(root, path, { __ref: target });
     for (const { id: target, path } of node.parameterized ?? []) {
-      const args = JSON.parse(target.slice(target.lastIndexOf('❖') + 1));
+      const storeKey = target.slice(target.lastIndexOf('❖') + 1);
       const fieldName = path[path.length - 1];
       const container = objectAt(root, path.slice(0, -1));
-      delete container[fieldName];
-      container[`${fieldName}(${stableStringify(args)})`] = build(target);
+      // (Fields with keyArgs may also be stored under their field name.)
+      if (container[fieldName] == null) delete container[fieldName];
+      const storeFieldName = storeKey.startsWith('{')
+        ? `${fieldName}(${stableStringify(JSON.parse(storeKey))})`
+        : storeKey;
+      container[storeFieldName] = build(target);
     }
     return root.value;
   };
@@ -61,7 +75,30 @@ export function toNormalizedCacheObject(serialized: Record<string, any>): Record
   return normalized;
 }
 
-const rootTypenames: Record<string, string> = {
+/**
+ * Copies JSON data like a JSON round trip, except that missing list items
+ * stay missing (rather than becoming null), like InMemoryCache's sparse lists.
+ */
+function cloneData(value: any): any {
+  if (value && typeof value.toJSON === 'function') return JSON.parse(JSON.stringify(value));
+  if (Array.isArray(value)) {
+    const copy = new Array(value.length);
+    value.forEach((item, index) => {
+      if (item !== undefined) copy[index] = cloneData(item);
+    });
+    return copy;
+  }
+  if (value && typeof value === 'object') {
+    const copy: Record<string, any> = {};
+    for (const key of Object.keys(value)) {
+      if (value[key] !== undefined) copy[key] = cloneData(value[key]);
+    }
+    return copy;
+  }
+  return value;
+}
+
+const defaultRootTypenames: Record<string, string> = {
   ROOT_QUERY: 'Query',
   ROOT_MUTATION: 'Mutation',
   ROOT_SUBSCRIPTION: 'Subscription',

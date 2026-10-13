@@ -1,20 +1,24 @@
+import { gql } from 'graphql-tag';
 import { assign, cloneDeep } from 'lodash';
-import gql from 'graphql-tag';
+import { Observable } from 'rxjs';
+import type { TypedDocumentNode } from '@apollo/client';
+import { ApolloClient, ApolloLink, CombinedGraphQLErrors, NetworkStatus } from '@apollo/client';
+import type { ApolloCache, FieldMergeFunction } from '@apollo/client/cache';
+import { Defer20220824Handler } from '@apollo/client/incremental';
+import { MockLink, MockSubscriptionLink } from '@apollo/client/testing';
+import { concatPagination, offsetLimitPagination } from '@apollo/client/utilities';
+import { InvariantError } from '@apollo/client/utilities/invariant';
+
 import {
-  ApolloClient,
-  ApolloLink,
-  NetworkStatus,
-  TypedDocumentNode,
-  Observable,
-  ApolloCache,
-  FieldMergeFunction,
-} from '@apollo/client';
-import { offsetLimitPagination, concatPagination } from '@apollo/client/utilities';
-import { MockedResponse, mockSingleLink } from '@apollo/client/testing';
-import { ObservableStream, setupPaginatedCase } from '@apollo/client/testing/internal';
+  markAsStreaming,
+  mockDefer20220824,
+  ObservableStream,
+  setupPaginatedCase,
+} from '@apollo/client/testing/internal';
 
 import { Hermes } from '../../../src';
 import { CacheContext } from '../../../src/context';
+import { toNormalizedCacheObject } from '../../helpers/serialization';
 
 describe('updateQuery on a simple query', () => {
   const query = gql`
@@ -37,10 +41,12 @@ describe('updateQuery on a simple query', () => {
   };
 
   it('triggers new result from updateQuery', async () => {
-    const link = mockSingleLink({
-      request: { query },
-      result,
-    });
+    const link = new MockLink([
+      {
+        request: { query },
+        result,
+      },
+    ]);
 
     const client = new ApolloClient({
       link,
@@ -50,8 +56,20 @@ describe('updateQuery on a simple query', () => {
     const observable = client.watchQuery({ query });
     const stream = new ObservableStream(observable);
 
-    await expect(stream).toEmitMatchedValue({
-      data: { entry: { value: 1 } },
+    await expect(stream).toEmitTypedValue({
+      data: undefined,
+      dataState: 'empty',
+      loading: true,
+      networkStatus: NetworkStatus.loading,
+      partial: true,
+    });
+
+    await expect(stream).toEmitTypedValue({
+      data: { __typename: 'Query', entry: { __typename: 'Entry', value: 1 } },
+      dataState: 'complete',
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+      partial: false,
     });
 
     observable.updateQuery((prevResult: any) => {
@@ -60,8 +78,12 @@ describe('updateQuery on a simple query', () => {
       return res;
     });
 
-    await expect(stream).toEmitMatchedValue({
-      data: { entry: { value: 2 } },
+    await expect(stream).toEmitTypedValue({
+      data: { __typename: 'Query', entry: { __typename: 'Entry', value: 2 } },
+      dataState: 'complete',
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+      partial: false,
     });
   });
 });
@@ -92,13 +114,16 @@ describe('updateQuery on a query with required and optional variables', () => {
   };
 
   it('triggers new result from updateQuery', async () => {
-    const link = mockSingleLink({
-      request: {
-        query,
-        variables,
+    const link = new MockLink([
+      {
+        request: {
+          query,
+          variables,
+        },
+        result,
+        delay: 20,
       },
-      result,
-    });
+    ]);
 
     const client = new ApolloClient({
       link,
@@ -112,8 +137,20 @@ describe('updateQuery on a query with required and optional variables', () => {
 
     const stream = new ObservableStream(observable);
 
-    await expect(stream).toEmitMatchedValue({
-      data: { entry: { value: 1 } },
+    await expect(stream).toEmitTypedValue({
+      data: undefined,
+      dataState: 'empty',
+      loading: true,
+      networkStatus: NetworkStatus.loading,
+      partial: true,
+    });
+
+    await expect(stream).toEmitTypedValue({
+      data: { __typename: 'Query', entry: { __typename: 'Entry', value: 1 } },
+      dataState: 'complete',
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+      partial: false,
     });
 
     observable.updateQuery((prevResult: any) => {
@@ -122,8 +159,12 @@ describe('updateQuery on a query with required and optional variables', () => {
       return res;
     });
 
-    await expect(stream).toEmitMatchedValue({
-      data: { entry: { value: 2 } },
+    await expect(stream).toEmitTypedValue({
+      data: { __typename: 'Query', entry: { __typename: 'Entry', value: 2 } },
+      dataState: 'complete',
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+      partial: false,
     });
   });
 });
@@ -156,7 +197,7 @@ describe('fetchMore on an observable query', () => {
       }
     }
   `;
-  const query2: TypedDocumentNode<TCommentData['entry'], Omit<TCommentVars, 'repoName'>> = gql`
+  const query2: TypedDocumentNode<Omit<TCommentData['entry'], '__typename'>, Omit<TCommentVars, 'repoName'>> = gql`
     query NewComments($start: Int!, $limit: Int!) {
       comments(start: $start, limit: $limit) {
         text
@@ -176,9 +217,8 @@ describe('fetchMore on an observable query', () => {
     limit: 20,
   };
 
-  const result: any = {
+  const result: { data: TCommentData } = {
     data: {
-      __typename: 'Query',
       entry: {
         __typename: 'Entry',
         comments: [],
@@ -188,7 +228,6 @@ describe('fetchMore on an observable query', () => {
   const resultMore = cloneDeep(result);
   const result2: any = {
     data: {
-      __typename: 'Query',
       comments: [],
     },
   };
@@ -209,8 +248,8 @@ describe('fetchMore on an observable query', () => {
     });
   }
 
-  function setup(...mockedResponses: MockedResponse[]) {
-    const link = mockSingleLink(
+  function setup(...mockedResponses: MockLink.MockedResponse[]) {
+    const link = new MockLink([
       {
         request: {
           query,
@@ -219,7 +258,7 @@ describe('fetchMore on an observable query', () => {
         result,
       },
       ...mockedResponses,
-    );
+    ]);
 
     const client = new ApolloClient({
       link,
@@ -244,7 +283,7 @@ describe('fetchMore on an observable query', () => {
 
   function setupWithCacheConfig(cacheConfig: CacheContext.Configuration, ...mockedResponses: any[]) {
     const client = new ApolloClient({
-      link: mockSingleLink(
+      link: new MockLink([
         {
           request: {
             query,
@@ -253,7 +292,7 @@ describe('fetchMore on an observable query', () => {
           result,
         },
         ...mockedResponses,
-      ),
+      ]),
       cache: new Hermes(cacheConfig),
     });
 
@@ -275,12 +314,23 @@ describe('fetchMore on an observable query', () => {
 
       const stream = new ObservableStream(observable);
 
-      {
-        const result = await stream.takeNext();
+      await expect(stream).toEmitTypedValue({
+        data: undefined,
+        dataState: 'empty',
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        partial: true,
+      });
 
-        expect(result.loading).toBe(false);
-        expect(result.data.entry.comments).toHaveLength(10);
-      }
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: commentsInRange(1, 10) },
+        },
+        dataState: 'complete',
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        partial: false,
+      });
 
       {
         const fetchMoreResult = await observable.fetchMore({
@@ -296,26 +346,37 @@ describe('fetchMore on an observable query', () => {
         });
 
         // This is the server result
-        expect(fetchMoreResult.loading).toBe(false);
-        expect(fetchMoreResult.data.entry.comments).toHaveLength(10);
+        expect(fetchMoreResult).toStrictEqualTyped({
+          data: {
+            entry: { __typename: 'Entry', comments: commentsInRange(11, 20) },
+          },
+        });
       }
 
-      {
-        const result = await stream.takeNext();
-        const combinedComments = result.data.entry.comments;
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: commentsInRange(1, 10) },
+        },
+        dataState: 'complete',
+        loading: true,
+        networkStatus: NetworkStatus.fetchMore,
+        partial: false,
+      });
 
-        expect(combinedComments).toHaveLength(20);
-
-        for (let i = 1; i <= 20; i++) {
-          expect(combinedComments[i - 1].text).toEqual(`comment ${i}`);
-        }
-      }
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: commentsInRange(1, 20) },
+        },
+        dataState: 'complete',
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        partial: false,
+      });
 
       await expect(stream).not.toEmitAnything();
     });
 
-    // Hermes: no keyArgs support, so pages fetched with other arguments are not merged by concatPagination
-    it.skip('field policy', async () => {
+    it('field policy', async () => {
       const observable = setupWithCacheConfig(
         {
           typePolicies: {
@@ -334,12 +395,23 @@ describe('fetchMore on an observable query', () => {
 
       const stream = new ObservableStream(observable);
 
-      {
-        const result = await stream.takeNext();
+      await expect(stream).toEmitTypedValue({
+        data: undefined,
+        dataState: 'empty',
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        partial: true,
+      });
 
-        expect(result.loading).toBe(false);
-        expect(result.data.entry.comments).toHaveLength(10);
-      }
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: expect.arrayWithLength(10) },
+        },
+        dataState: 'complete',
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        partial: false,
+      });
 
       {
         const fetchMoreResult = await observable.fetchMore({
@@ -348,21 +420,32 @@ describe('fetchMore on an observable query', () => {
         });
 
         // This is the server result
-        expect(fetchMoreResult.loading).toBe(false);
-        expect(fetchMoreResult.data.entry.comments).toHaveLength(10);
-      }
-
-      {
-        const result = await stream.takeNext();
-        const combinedComments = result.data.entry.comments;
-
-        expect(result.loading).toBe(false);
-        expect(combinedComments).toHaveLength(20);
-
-        combinedComments.forEach((comment, i) => {
-          expect(comment.text).toEqual(`comment ${i + 1}`);
+        expect(fetchMoreResult).toStrictEqualTyped({
+          data: {
+            entry: { __typename: 'Entry', comments: commentsInRange(11, 20) },
+          },
         });
       }
+
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: expect.arrayWithLength(10) },
+        },
+        dataState: 'complete',
+        loading: true,
+        networkStatus: NetworkStatus.fetchMore,
+        partial: false,
+      });
+
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: expect.arrayWithLength(20) },
+        },
+        dataState: 'complete',
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        partial: false,
+      });
 
       await expect(stream).not.toEmitAnything();
     });
@@ -380,12 +463,23 @@ describe('fetchMore on an observable query', () => {
 
       const stream = new ObservableStream(observable);
 
-      {
-        const result = await stream.takeNext();
+      await expect(stream).toEmitTypedValue({
+        data: undefined,
+        dataState: 'empty',
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        partial: true,
+      });
 
-        expect(result.loading).toBe(false);
-        expect(result.data.entry.comments).toHaveLength(10);
-      }
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: commentsInRange(1, 10) },
+        },
+        dataState: 'complete',
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        partial: false,
+      });
 
       {
         const fetchMoreResult = await observable.fetchMore({
@@ -398,32 +492,37 @@ describe('fetchMore on an observable query', () => {
           },
         });
 
-        const fetchMoreComments = fetchMoreResult.data.entry.comments;
-
-        expect(fetchMoreResult.loading).toBe(false);
-        expect(fetchMoreComments).toHaveLength(10);
-        fetchMoreComments.forEach((comment, i) => {
-          expect(comment.text).toEqual(`comment ${i + 11}`);
+        expect(fetchMoreResult).toStrictEqualTyped({
+          data: {
+            entry: { __typename: 'Entry', comments: commentsInRange(11, 20) },
+          },
         });
       }
 
-      {
-        const result = await stream.takeNext();
-        const combinedComments = result.data.entry.comments;
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: expect.arrayWithLength(10) },
+        },
+        dataState: 'complete',
+        loading: true,
+        networkStatus: NetworkStatus.fetchMore,
+        partial: false,
+      });
 
-        expect(result.loading).toBe(false);
-        expect(combinedComments).toHaveLength(20);
-
-        combinedComments.forEach((comment, i) => {
-          expect(comment.text).toEqual(`comment ${i + 1}`);
-        });
-      }
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: commentsInRange(1, 20) },
+        },
+        dataState: 'complete',
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        partial: false,
+      });
 
       await expect(stream).not.toEmitAnything();
     });
 
-    // Hermes: no keyArgs support, so pages fetched with other arguments are not merged by concatPagination
-    it.skip('field policy', async () => {
+    it('field policy', async () => {
       const observable = setupWithCacheConfig(
         {
           typePolicies: {
@@ -445,12 +544,23 @@ describe('fetchMore on an observable query', () => {
 
       const stream = new ObservableStream(observable);
 
-      {
-        const result = await stream.takeNext();
+      await expect(stream).toEmitTypedValue({
+        data: undefined,
+        dataState: 'empty',
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        partial: true,
+      });
 
-        expect(result.loading).toBe(false);
-        expect(result.data.entry.comments).toHaveLength(10);
-      }
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: commentsInRange(1, 10) },
+        },
+        dataState: 'complete',
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        partial: false,
+      });
 
       {
         const fetchMoreResult = await observable.fetchMore({
@@ -458,21 +568,32 @@ describe('fetchMore on an observable query', () => {
           variables: { start: 10 },
         });
 
-        expect(fetchMoreResult.loading).toBe(false);
-        expect(fetchMoreResult.data.entry.comments).toHaveLength(10); // this is the server result
-      }
-
-      {
-        const result = await stream.takeNext();
-        const combinedComments = result.data.entry.comments;
-
-        expect(result.loading).toBe(false);
-        expect(combinedComments).toHaveLength(20);
-
-        combinedComments.forEach((comment, i) => {
-          expect(comment.text).toEqual(`comment ${i + 1}`);
+        expect(fetchMoreResult).toStrictEqualTyped({
+          data: {
+            entry: { __typename: 'Entry', comments: commentsInRange(11, 20) },
+          },
         });
       }
+
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: commentsInRange(1, 10) },
+        },
+        dataState: 'complete',
+        loading: true,
+        networkStatus: NetworkStatus.fetchMore,
+        partial: false,
+      });
+
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: commentsInRange(1, 20) },
+        },
+        dataState: 'complete',
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        partial: false,
+      });
 
       await expect(stream).not.toEmitAnything();
     });
@@ -500,7 +621,7 @@ describe('fetchMore on an observable query', () => {
     `;
 
     function makeClient(): {
-      client: ApolloClient<any>;
+      client: ApolloClient;
       linkRequests: Array<{
         operationName: string;
         offset: number;
@@ -522,7 +643,7 @@ describe('fetchMore on an observable query', () => {
               } = operation;
 
               linkRequests.push({
-                operationName: operation.operationName,
+                operationName: operation.operationName!,
                 offset,
                 limit,
               });
@@ -554,30 +675,28 @@ describe('fetchMore on an observable query', () => {
       };
     }
 
-    function checkCacheExtract1234678(cache: ApolloCache<any>) {
-      // Hermes: extract() wraps node data, and stores the TODO list's references
-      // as outbound/inbound edges (with placeholders in the array) instead of { __ref }s.
-      const todoIds = [1, 2, 3, 4, 6, 7, 8];
-      const task = (id: number, index: number) => ({
-        type: 0,
-        data: tasks[id - 1],
-        inbound: [{ id: 'ROOT_QUERY', path: ['TODO', index] }],
-      });
-      expect(cache.extract()).toEqual({
+    function checkCacheExtract1234678(cache: ApolloCache) {
+      // Hermes: extract() is Hermes' serialization; compare its InMemoryCache-shaped equivalent.
+      expect(toNormalizedCacheObject((cache as Hermes).extract())).toEqual({
         ROOT_QUERY: {
-          type: 0,
-          data: {
-            TODO: todoIds.map(() => undefined),
-          },
-          outbound: todoIds.map((id, index) => ({ id: `Task:${id}`, path: ['TODO', index] })),
+          __typename: 'Query',
+          TODO: [
+            { __ref: 'Task:1' },
+            { __ref: 'Task:2' },
+            { __ref: 'Task:3' },
+            { __ref: 'Task:4' },
+            { __ref: 'Task:6' },
+            { __ref: 'Task:7' },
+            { __ref: 'Task:8' },
+          ],
         },
-        'Task:1': task(1, 0),
-        'Task:2': task(2, 1),
-        'Task:3': task(3, 2),
-        'Task:4': task(4, 3),
-        'Task:6': task(6, 4),
-        'Task:7': task(7, 5),
-        'Task:8': task(8, 6),
+        'Task:1': tasks[0],
+        'Task:2': tasks[1],
+        'Task:3': tasks[2],
+        'Task:4': tasks[3],
+        'Task:6': tasks[5],
+        'Task:7': tasks[6],
+        'Task:8': tasks[7],
       });
     }
 
@@ -597,12 +716,14 @@ describe('fetchMore on an observable query', () => {
 
       const stream = new ObservableStream(observable);
 
-      await expect(stream).toEmitValue({
+      await expect(stream).toEmitTypedValue({
         loading: false,
         networkStatus: NetworkStatus.ready,
         data: {
           TODO: tasks.slice(0, 2),
         },
+        dataState: 'complete',
+        partial: false,
       });
 
       expect(linkRequests).toEqual([{ operationName: 'GetTODOs', offset: 0, limit: 2 }]);
@@ -614,21 +735,27 @@ describe('fetchMore on an observable query', () => {
           },
         });
 
-        expect(fetchMoreResult).toEqual({
-          loading: false,
-          networkStatus: NetworkStatus.ready,
-          data: {
-            TODO: tasks.slice(2, 4),
-          },
+        expect(fetchMoreResult).toStrictEqualTyped({
+          data: { TODO: tasks.slice(2, 4) },
         });
       }
 
-      await expect(stream).toEmitValue({
+      await expect(stream).toEmitTypedValue({
+        data: { TODO: tasks.slice(0, 2) },
+        dataState: 'complete',
+        loading: true,
+        networkStatus: NetworkStatus.fetchMore,
+        partial: false,
+      });
+
+      await expect(stream).toEmitTypedValue({
         loading: false,
         networkStatus: NetworkStatus.ready,
         data: {
           TODO: tasks.slice(0, 4),
         },
+        dataState: 'complete',
+        partial: false,
       });
 
       expect(linkRequests).toEqual([
@@ -644,21 +771,29 @@ describe('fetchMore on an observable query', () => {
           },
         });
 
-        expect(fetchMoreResult).toEqual({
-          loading: false,
-          networkStatus: NetworkStatus.ready,
+        expect(fetchMoreResult).toStrictEqualTyped({
           data: {
             TODO: tasks.slice(5, 8),
           },
         });
       }
 
-      await expect(stream).toEmitValue({
+      await expect(stream).toEmitTypedValue({
+        data: { TODO: tasks.slice(0, 4) },
+        dataState: 'complete',
+        loading: true,
+        networkStatus: NetworkStatus.fetchMore,
+        partial: false,
+      });
+
+      await expect(stream).toEmitTypedValue({
         loading: false,
         networkStatus: NetworkStatus.ready,
         data: {
           TODO: [...tasks.slice(0, 4), ...tasks.slice(5, 8)],
         },
+        dataState: 'complete',
+        partial: false,
       });
 
       expect(linkRequests).toEqual([
@@ -689,12 +824,14 @@ describe('fetchMore on an observable query', () => {
 
       const stream = new ObservableStream(observable);
 
-      await expect(stream).toEmitValue({
+      await expect(stream).toEmitTypedValue({
         loading: false,
         networkStatus: NetworkStatus.ready,
         data: {
           TODO: tasks.slice(0, 2),
         },
+        dataState: 'complete',
+        partial: false,
       });
 
       expect(linkRequests).toEqual([{ operationName: 'GetTODOs', offset: 0, limit: 2 }]);
@@ -706,29 +843,31 @@ describe('fetchMore on an observable query', () => {
           },
         });
 
-        expect(fetchMoreResult).toEqual({
-          loading: false,
-          networkStatus: NetworkStatus.ready,
+        expect(fetchMoreResult).toStrictEqualTyped({
           data: {
             TODO: tasks.slice(2, 4),
           },
         });
       }
 
-      await expect(stream).toEmitValue({
+      await expect(stream).toEmitTypedValue({
         loading: true,
         networkStatus: NetworkStatus.fetchMore,
         data: {
           TODO: tasks.slice(0, 2),
         },
+        dataState: 'complete',
+        partial: false,
       });
 
-      await expect(stream).toEmitValue({
+      await expect(stream).toEmitTypedValue({
         loading: false,
         networkStatus: NetworkStatus.ready,
         data: {
           TODO: tasks.slice(0, 4),
         },
+        dataState: 'complete',
+        partial: false,
       });
 
       expect(linkRequests).toEqual([
@@ -744,29 +883,31 @@ describe('fetchMore on an observable query', () => {
           },
         });
 
-        expect(fetchMoreResult).toEqual({
-          loading: false,
-          networkStatus: NetworkStatus.ready,
+        expect(fetchMoreResult).toStrictEqualTyped({
           data: {
             TODO: tasks.slice(5, 8),
           },
         });
       }
 
-      await expect(stream).toEmitValue({
+      await expect(stream).toEmitTypedValue({
         loading: true,
         networkStatus: NetworkStatus.fetchMore,
         data: {
           TODO: tasks.slice(0, 4),
         },
+        dataState: 'complete',
+        partial: false,
       });
 
-      await expect(stream).toEmitValue({
+      await expect(stream).toEmitTypedValue({
         loading: false,
         networkStatus: NetworkStatus.ready,
         data: {
           TODO: [...tasks.slice(0, 4), ...tasks.slice(5, 8)],
         },
+        dataState: 'complete',
+        partial: false,
       });
 
       expect(linkRequests).toEqual([
@@ -796,12 +937,14 @@ describe('fetchMore on an observable query', () => {
 
       const stream = new ObservableStream(observable);
 
-      await expect(stream).toEmitValue({
+      await expect(stream).toEmitTypedValue({
         loading: false,
         networkStatus: NetworkStatus.ready,
         data: {
           TODO: tasks.slice(0, 2),
         },
+        dataState: 'complete',
+        partial: false,
       });
 
       expect(linkRequests).toEqual([{ operationName: 'GetTODOs', offset: 0, limit: 2 }]);
@@ -813,21 +956,29 @@ describe('fetchMore on an observable query', () => {
           },
         });
 
-        expect(fetchMoreResult).toEqual({
-          loading: false,
-          networkStatus: NetworkStatus.ready,
+        expect(fetchMoreResult).toStrictEqualTyped({
           data: {
             TODO: tasks.slice(2, 4),
           },
         });
       }
 
-      await expect(stream).toEmitValue({
+      await expect(stream).toEmitTypedValue({
+        data: { TODO: tasks.slice(0, 2) },
+        dataState: 'complete',
+        loading: true,
+        networkStatus: NetworkStatus.fetchMore,
+        partial: false,
+      });
+
+      await expect(stream).toEmitTypedValue({
         loading: false,
         networkStatus: NetworkStatus.ready,
         data: {
           TODO: tasks.slice(0, 4),
         },
+        dataState: 'complete',
+        partial: false,
       });
 
       expect(linkRequests).toEqual([
@@ -843,21 +994,29 @@ describe('fetchMore on an observable query', () => {
           },
         });
 
-        expect(fetchMoreResult).toEqual({
-          loading: false,
-          networkStatus: NetworkStatus.ready,
+        expect(fetchMoreResult).toStrictEqualTyped({
           data: {
             TODO: tasks.slice(5, 8),
           },
         });
       }
 
-      await expect(stream).toEmitValue({
+      await expect(stream).toEmitTypedValue({
+        data: { TODO: tasks.slice(0, 4) },
+        dataState: 'complete',
+        loading: true,
+        networkStatus: NetworkStatus.fetchMore,
+        partial: false,
+      });
+
+      await expect(stream).toEmitTypedValue({
         loading: false,
         networkStatus: NetworkStatus.ready,
         data: {
           TODO: [...tasks.slice(0, 4), ...tasks.slice(5, 8)],
         },
+        dataState: 'complete',
+        partial: false,
       });
 
       expect(linkRequests).toEqual([
@@ -887,12 +1046,14 @@ describe('fetchMore on an observable query', () => {
 
       const stream = new ObservableStream(observable);
 
-      await expect(stream).toEmitValue({
+      await expect(stream).toEmitTypedValue({
         loading: false,
         networkStatus: NetworkStatus.ready,
         data: {
           TODO: tasks.slice(0, 2),
         },
+        dataState: 'complete',
+        partial: false,
       });
 
       expect(linkRequests).toEqual([{ operationName: 'GetTODOs', offset: 0, limit: 2 }]);
@@ -904,29 +1065,31 @@ describe('fetchMore on an observable query', () => {
           },
         });
 
-        expect(fetchMoreResult).toEqual({
-          loading: false,
-          networkStatus: NetworkStatus.ready,
+        expect(fetchMoreResult).toStrictEqualTyped({
           data: {
             TODO: tasks.slice(2, 4),
           },
         });
       }
 
-      await expect(stream).toEmitValue({
+      await expect(stream).toEmitTypedValue({
         loading: true,
         networkStatus: NetworkStatus.fetchMore,
         data: {
           TODO: tasks.slice(0, 2),
         },
+        dataState: 'complete',
+        partial: false,
       });
 
-      await expect(stream).toEmitValue({
+      await expect(stream).toEmitTypedValue({
         loading: false,
         networkStatus: NetworkStatus.ready,
         data: {
           TODO: tasks.slice(0, 4),
         },
+        dataState: 'complete',
+        partial: false,
       });
 
       expect(linkRequests).toEqual([
@@ -942,29 +1105,31 @@ describe('fetchMore on an observable query', () => {
           },
         });
 
-        expect(fetchMoreResult).toEqual({
-          loading: false,
-          networkStatus: NetworkStatus.ready,
+        expect(fetchMoreResult).toStrictEqualTyped({
           data: {
             TODO: tasks.slice(5, 8),
           },
         });
       }
 
-      await expect(stream).toEmitValue({
+      await expect(stream).toEmitTypedValue({
         loading: true,
         networkStatus: NetworkStatus.fetchMore,
         data: {
           TODO: tasks.slice(0, 4),
         },
+        dataState: 'complete',
+        partial: false,
       });
 
-      await expect(stream).toEmitValue({
+      await expect(stream).toEmitTypedValue({
         loading: false,
         networkStatus: NetworkStatus.ready,
         data: {
           TODO: [...tasks.slice(0, 4), ...tasks.slice(5, 8)],
         },
+        dataState: 'complete',
+        partial: false,
       });
 
       expect(linkRequests).toEqual([
@@ -978,12 +1143,11 @@ describe('fetchMore on an observable query', () => {
     });
   });
 
-  // Hermes: no keyArgs support, so pages fetched with other arguments are not merged by offsetLimitPagination
-  it.skip('fetchMore passes new args to field merge function', async () => {
+  it('fetchMore passes new args to field merge function', async () => {
     const mergeArgsHistory: (Record<string, any> | null)[] = [];
     const groceriesFieldPolicy = offsetLimitPagination();
     const { merge } = groceriesFieldPolicy;
-    groceriesFieldPolicy.merge = function mergeWithArgsHistory(existing, incoming, options) {
+    groceriesFieldPolicy.merge = function (existing, incoming, options) {
       mergeArgsHistory.push(options.args);
       return (merge as FieldMergeFunction<any>).call(this, existing, incoming, options);
     };
@@ -1058,7 +1222,7 @@ describe('fetchMore on an observable query', () => {
 
     const client = new ApolloClient({
       cache,
-      link: mockSingleLink(
+      link: new MockLink([
         {
           request: {
             query,
@@ -1081,7 +1245,7 @@ describe('fetchMore on an observable query', () => {
             },
           },
         },
-      ),
+      ]),
     });
 
     const observable = client.watchQuery({
@@ -1091,12 +1255,22 @@ describe('fetchMore on an observable query', () => {
 
     const stream = new ObservableStream(observable);
 
-    await expect(stream).toEmitValue({
+    await expect(stream).toEmitTypedValue({
+      data: undefined,
+      dataState: 'empty',
+      loading: true,
+      networkStatus: NetworkStatus.loading,
+      partial: true,
+    });
+
+    await expect(stream).toEmitTypedValue({
       loading: false,
       networkStatus: NetworkStatus.ready,
       data: {
         groceries: initialGroceries,
       },
+      dataState: 'complete',
+      partial: false,
     });
 
     expect(mergeArgsHistory).toEqual([{ offset: 0, limit: 2 }]);
@@ -1109,9 +1283,7 @@ describe('fetchMore on an observable query', () => {
         },
       });
 
-      expect(fetchMoreResult).toEqual({
-        loading: false,
-        networkStatus: NetworkStatus.ready,
+      expect(fetchMoreResult).toStrictEqualTyped({
         data: {
           groceries: additionalGroceries,
         },
@@ -1120,15 +1292,25 @@ describe('fetchMore on an observable query', () => {
       expect(observable.options.fetchPolicy).toBe('cache-first');
     }
 
+    await expect(stream).toEmitTypedValue({
+      data: { groceries: initialGroceries },
+      dataState: 'complete',
+      loading: true,
+      networkStatus: NetworkStatus.fetchMore,
+      partial: false,
+    });
+
     // This result comes entirely from the cache, without updating the
     // original variables for the ObservableQuery, because the
     // offsetLimitPagination field policy has keyArgs:false.
-    await expect(stream).toEmitValue({
+    await expect(stream).toEmitTypedValue({
       loading: false,
       networkStatus: NetworkStatus.ready,
       data: {
         groceries: finalGroceries,
       },
+      dataState: 'complete',
+      partial: false,
     });
 
     expect(mergeArgsHistory).toEqual([
@@ -1150,12 +1332,23 @@ describe('fetchMore on an observable query', () => {
 
     const stream = new ObservableStream(observable);
 
-    {
-      const result = await stream.takeNext();
+    await expect(stream).toEmitTypedValue({
+      data: undefined,
+      dataState: 'empty',
+      loading: true,
+      networkStatus: NetworkStatus.loading,
+      partial: true,
+    });
 
-      expect(result.loading).toBe(false);
-      expect(result.data.entry.comments).toHaveLength(10);
-    }
+    await expect(stream).toEmitTypedValue({
+      data: {
+        entry: { __typename: 'Entry', comments: commentsInRange(1, 10) },
+      },
+      dataState: 'complete',
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+      partial: false,
+    });
 
     {
       const fetchMoreResult = await observable.fetchMore({
@@ -1168,24 +1361,38 @@ describe('fetchMore on an observable query', () => {
         },
       });
 
-      expect(fetchMoreResult.loading).toBe(false);
-      expect(fetchMoreResult.data.comments).toHaveLength(10);
+      expect(fetchMoreResult).toStrictEqualTyped({
+        data: {
+          comments: commentsInRange(11, 20, i => `new comment ${i}`),
+        },
+      });
     }
 
-    {
-      const result = await stream.takeNext();
-      const combinedComments = result.data.entry.comments;
+    await expect(stream).toEmitTypedValue({
+      data: {
+        entry: {
+          __typename: 'Entry',
+          comments: expect.arrayWithLength(10),
+        },
+      },
+      dataState: 'complete',
+      loading: true,
+      networkStatus: NetworkStatus.fetchMore,
+      partial: false,
+    });
 
-      expect(result.loading).toBe(false);
-      expect(combinedComments).toHaveLength(20);
-
-      for (let i = 1; i <= 10; i++) {
-        expect(combinedComments[i - 1].text).toEqual(`comment ${i}`);
-      }
-      for (let i = 11; i <= 20; i++) {
-        expect(combinedComments[i - 1].text).toEqual(`new comment ${i}`);
-      }
-    }
+    await expect(stream).toEmitTypedValue({
+      data: {
+        entry: {
+          __typename: 'Entry',
+          comments: commentsInRange(1, 20, i => (i <= 10 ? `comment ${i}` : `new comment ${i}`)),
+        },
+      },
+      dataState: 'complete',
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+      partial: false,
+    });
 
     await expect(stream).not.toEmitAnything();
   });
@@ -1193,7 +1400,7 @@ describe('fetchMore on an observable query', () => {
   describe('will not get an error from `fetchMore` if thrown', () => {
     it('updateQuery', async () => {
       const fetchMoreError = new Error('Uh, oh!');
-      const link = mockSingleLink(
+      const link = new MockLink([
         {
           request: { query, variables },
           result,
@@ -1204,25 +1411,33 @@ describe('fetchMore on an observable query', () => {
           error: fetchMoreError,
           delay: 5,
         },
-      );
+      ]);
 
       const client = new ApolloClient({
         link,
         cache: new Hermes(),
       });
 
-      const observable = client.watchQuery({
-        query,
-        variables,
-        notifyOnNetworkStatusChange: true,
-      });
-
+      const observable = client.watchQuery({ query, variables });
       const stream = new ObservableStream(observable);
 
-      const { data, networkStatus } = await stream.takeNext();
+      await expect(stream).toEmitTypedValue({
+        data: undefined,
+        dataState: 'empty',
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        partial: true,
+      });
 
-      expect(networkStatus).toBe(NetworkStatus.ready);
-      expect(data.entry.comments.length).toBe(10);
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: commentsInRange(1, 10) },
+        },
+        dataState: 'complete',
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        partial: false,
+      });
 
       const error = await observable
         .fetchMore({
@@ -1233,12 +1448,12 @@ describe('fetchMore on an observable query', () => {
         })
         .catch(error => error);
 
-      expect(error.networkError).toBe(fetchMoreError);
+      expect(error).toBe(fetchMoreError);
     });
 
     it('field policy', async () => {
       const fetchMoreError = new Error('Uh, oh!');
-      const link = mockSingleLink(
+      const link = new MockLink([
         {
           request: { query, variables },
           result,
@@ -1249,7 +1464,7 @@ describe('fetchMore on an observable query', () => {
           error: fetchMoreError,
           delay: 5,
         },
-      );
+      ]);
 
       const calledFetchMore = false;
 
@@ -1274,18 +1489,26 @@ describe('fetchMore on an observable query', () => {
         }),
       });
 
-      const observable = client.watchQuery({
-        query,
-        variables,
-        notifyOnNetworkStatusChange: true,
-      });
-
+      const observable = client.watchQuery({ query, variables });
       const stream = new ObservableStream(observable);
 
-      const { data, networkStatus } = await stream.takeNext();
+      await expect(stream).toEmitTypedValue({
+        data: undefined,
+        dataState: 'empty',
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        partial: true,
+      });
 
-      expect(networkStatus).toBe(NetworkStatus.ready);
-      expect(data.entry.comments.length).toBe(10);
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: commentsInRange(1, 10) },
+        },
+        dataState: 'complete',
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        partial: false,
+      });
 
       const error = await observable
         .fetchMore({
@@ -1293,7 +1516,7 @@ describe('fetchMore on an observable query', () => {
         })
         .catch(error => error);
 
-      expect(error.networkError).toBe(fetchMoreError);
+      expect(error).toBe(fetchMoreError);
     });
   });
 
@@ -1307,14 +1530,19 @@ describe('fetchMore on an observable query', () => {
     });
 
     function count(): number {
-      return (observable as any).queryManager.queries.size;
+      const qm = observable['queryManager'];
+      return qm.obsQueries.size + qm['fetchCancelFns'].size;
     }
 
     const beforeQueryCount = count();
 
-    await observable.fetchMore({
+    const promise = observable.fetchMore({
       variables: { start: 10 }, // rely on the fact that the original variables had limit: 10
     });
+
+    expect(count()).toBeGreaterThan(beforeQueryCount);
+
+    await promise;
 
     expect(count()).toBe(beforeQueryCount);
   });
@@ -1348,55 +1576,272 @@ describe('fetchMore on an observable query', () => {
       },
     };
 
-    const link = mockSingleLink(emptyItemsMock, emptyItemsMock, emptyItemsMock);
+    const link = new MockLink([emptyItemsMock, emptyItemsMock, emptyItemsMock]);
 
     const client = new ApolloClient({
       link,
       cache: new Hermes(),
     });
 
-    const observable = client.watchQuery({
-      query,
-      variables,
-      notifyOnNetworkStatusChange: true,
-    });
+    const observable = client.watchQuery({ query, variables });
 
     const stream = new ObservableStream(observable);
 
-    await expect(stream).toEmitValue({
+    await expect(stream).toEmitTypedValue({
+      data: undefined,
+      dataState: 'empty',
+      loading: true,
+      networkStatus: NetworkStatus.loading,
+      partial: true,
+    });
+
+    await expect(stream).toEmitTypedValue({
       loading: false,
       networkStatus: NetworkStatus.ready,
       data: {
         emptyItems: [],
       },
+      dataState: 'complete',
+      partial: false,
     });
 
     const fetchMoreResult = await observable.fetchMore({
       variables,
     });
 
-    expect(fetchMoreResult).toEqual({
-      loading: false,
-      networkStatus: NetworkStatus.ready,
+    expect(fetchMoreResult).toStrictEqualTyped({
       data: { emptyItems: [] },
     });
 
-    await expect(stream).toEmitValue({
+    await expect(stream).toEmitTypedValue({
       loading: true,
       networkStatus: NetworkStatus.fetchMore,
       data: {
         emptyItems: [],
       },
+      dataState: 'complete',
+      partial: false,
     });
 
-    await expect(stream).toEmitValue({
+    await expect(stream).toEmitTypedValue({
       loading: false,
       networkStatus: NetworkStatus.ready,
       data: {
         emptyItems: [],
       },
+      dataState: 'complete',
+      partial: false,
     });
 
+    await expect(stream).not.toEmitAnything();
+  });
+
+  it('`errorPolicy` defaults to `none`', async () => {
+    const query = gql`
+      query {
+        fail
+      }
+    `;
+    const observable = setup({
+      request: { query },
+      error: new Error('This is an error'),
+    });
+    const stream = new ObservableStream(observable);
+    await expect(stream).toEmitTypedValue({
+      data: undefined,
+      dataState: 'empty',
+      loading: true,
+      networkStatus: NetworkStatus.loading,
+      partial: true,
+    });
+    await expect(stream).toEmitTypedValue({
+      data: result.data,
+      dataState: 'complete',
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+      partial: false,
+    });
+
+    const updateQuery = jest.fn();
+    const promise = observable.fetchMore({
+      query,
+      updateQuery,
+    });
+    await expect(promise).rejects.toThrow('This is an error');
+    expect(updateQuery).not.toHaveBeenCalled();
+    await expect(stream).toEmitSimilarValue({
+      expected: previous => ({
+        ...previous,
+        loading: true,
+        networkStatus: NetworkStatus.fetchMore,
+      }),
+    });
+    await expect(stream).toEmitSimilarValue({
+      expected: previous => ({
+        ...previous,
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+      }),
+    });
+    await expect(stream).not.toEmitAnything();
+  });
+
+  it('`errorPolicy` can be overwritten to `ignore`', async () => {
+    const query = gql`
+      query {
+        fail
+      }
+    `;
+    const observable = setup({
+      request: { query },
+      error: new Error('This is an error'),
+    });
+    const stream = new ObservableStream(observable);
+    await expect(stream).toEmitTypedValue({
+      data: undefined,
+      dataState: 'empty',
+      loading: true,
+      networkStatus: NetworkStatus.loading,
+      partial: true,
+    });
+    await expect(stream).toEmitTypedValue({
+      data: result.data,
+      dataState: 'complete',
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+      partial: false,
+    });
+
+    const fallbackResult: TCommentData = {
+      entry: {
+        ...result.data.entry,
+        comments: result.data.entry.comments.concat({
+          __typename: 'Comment',
+          text: 'fallback comment',
+        }),
+      },
+    };
+
+    const updateQuery = jest.fn((previousResult: TCommentData): TCommentData => fallbackResult);
+    const promise = observable.fetchMore({
+      query,
+      updateQuery,
+      errorPolicy: 'ignore',
+    });
+    await expect(promise).resolves.toStrictEqualTyped({ data: undefined });
+    expect(updateQuery).toHaveBeenCalledTimes(1);
+    expect(updateQuery).toHaveBeenNthCalledWith(1, result.data, {
+      fetchMoreResult: undefined,
+      variables: undefined,
+    });
+    await expect(stream).toEmitSimilarValue({
+      expected: previous => ({
+        ...previous,
+        loading: true,
+        networkStatus: NetworkStatus.fetchMore,
+      }),
+    });
+    await expect(stream).toEmitSimilarValue({
+      expected: previous => ({
+        ...previous,
+        data: fallbackResult,
+        dataState: 'complete',
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+      }),
+    });
+    await expect(stream).not.toEmitAnything();
+  });
+
+  it('`errorPolicy` can be overwritten to `all`', async () => {
+    const query = gql`
+      query {
+        fail
+      }
+    `;
+    const observable = setup({
+      request: { query },
+      result: {
+        data: {
+          entry: {
+            __typename: 'Entry',
+          },
+        },
+        errors: [{ message: 'This is an error' }],
+      },
+    });
+    const stream = new ObservableStream(observable);
+    await expect(stream).toEmitTypedValue({
+      data: undefined,
+      dataState: 'empty',
+      loading: true,
+      networkStatus: NetworkStatus.loading,
+      partial: true,
+    });
+    await expect(stream).toEmitTypedValue({
+      data: result.data,
+      dataState: 'complete',
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+      partial: false,
+    });
+
+    const fallbackResult: TCommentData = {
+      entry: {
+        ...result.data.entry,
+        comments: result.data.entry.comments.concat({
+          __typename: 'Comment',
+          text: 'fallback comment',
+        }),
+      },
+    };
+
+    const updateQuery = jest.fn((previousResult: TCommentData): TCommentData => fallbackResult);
+    const promise = observable.fetchMore({
+      query,
+      updateQuery,
+      errorPolicy: 'all',
+    });
+    await expect(promise).resolves.toStrictEqual({
+      data: {
+        entry: {
+          __typename: 'Entry',
+        },
+      },
+      error: new CombinedGraphQLErrors({
+        data: {
+          entry: {
+            __typename: 'Entry',
+          },
+        },
+        errors: [{ message: 'This is an error' }],
+      }),
+    });
+    expect(updateQuery).toHaveBeenCalledTimes(1);
+    expect(updateQuery).toHaveBeenNthCalledWith(1, result.data, {
+      fetchMoreResult: {
+        entry: {
+          __typename: 'Entry',
+        },
+      },
+      variables: undefined,
+    });
+    await expect(stream).toEmitSimilarValue({
+      expected: previous => ({
+        ...previous,
+        loading: true,
+        networkStatus: NetworkStatus.fetchMore,
+      }),
+    });
+    await expect(stream).toEmitSimilarValue({
+      expected: previous => ({
+        ...previous,
+        data: fallbackResult,
+        dataState: 'complete',
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+      }),
+    });
     await expect(stream).not.toEmitAnything();
   });
 });
@@ -1448,7 +1893,6 @@ describe('fetchMore on an observable query with connection', () => {
 
   const result: any = {
     data: {
-      __typename: 'Query',
       entry: {
         __typename: 'Entry',
         comments: [],
@@ -1470,8 +1914,8 @@ describe('fetchMore on an observable query with connection', () => {
     });
   }
 
-  function setup(...mockedResponses: MockedResponse[]) {
-    const link = mockSingleLink(
+  function setup(...mockedResponses: MockLink.MockedResponse[]) {
+    const link = new MockLink([
       {
         request: {
           query: transformedQuery,
@@ -1480,7 +1924,7 @@ describe('fetchMore on an observable query with connection', () => {
         result,
       },
       ...mockedResponses,
-    );
+    ]);
 
     const client = new ApolloClient({
       link,
@@ -1505,7 +1949,7 @@ describe('fetchMore on an observable query with connection', () => {
 
   function setupWithCacheConfig(cacheConfig: CacheContext.Configuration, ...mockedResponses: any[]) {
     const client = new ApolloClient({
-      link: mockSingleLink(
+      link: new MockLink([
         {
           request: {
             query: transformedQuery,
@@ -1514,7 +1958,7 @@ describe('fetchMore on an observable query with connection', () => {
           result,
         },
         ...mockedResponses,
-      ),
+      ]),
       cache: new Hermes(cacheConfig),
     });
 
@@ -1536,12 +1980,23 @@ describe('fetchMore on an observable query with connection', () => {
 
       const stream = new ObservableStream(observable);
 
-      {
-        const result = await stream.takeNext();
+      await expect(stream).toEmitTypedValue({
+        data: undefined,
+        dataState: 'empty',
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        partial: true,
+      });
 
-        expect(result.loading).toBe(false);
-        expect(result.data.entry.comments).toHaveLength(10);
-      }
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: commentsInRange(1, 10) },
+        },
+        dataState: 'complete',
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        partial: false,
+      });
 
       {
         const fetchMoreResult = await observable.fetchMore({
@@ -1553,25 +2008,37 @@ describe('fetchMore on an observable query with connection', () => {
           },
         });
 
-        expect(fetchMoreResult.data.entry.comments).toHaveLength(10);
-        expect(fetchMoreResult.loading).toBe(false);
-      }
-
-      {
-        const result = await stream.takeNext();
-        const combinedComments = result.data.entry.comments;
-
-        expect(combinedComments).toHaveLength(20);
-        combinedComments.forEach((comment, i) => {
-          expect(comment.text).toBe(`comment ${i + 1}`);
+        expect(fetchMoreResult).toStrictEqualTyped({
+          data: {
+            entry: { __typename: 'Entry', comments: commentsInRange(11, 20) },
+          },
         });
       }
+
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: commentsInRange(1, 10) },
+        },
+        dataState: 'complete',
+        loading: true,
+        networkStatus: NetworkStatus.fetchMore,
+        partial: false,
+      });
+
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: commentsInRange(1, 20) },
+        },
+        dataState: 'complete',
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        partial: false,
+      });
 
       await expect(stream).not.toEmitAnything();
     });
 
-    // Hermes: no @connection support, so each page of entry is stored under its own start/limit arguments
-    it.skip('field policy', async () => {
+    it('field policy', async () => {
       const observable = setupWithCacheConfig(
         {
           typePolicies: {
@@ -1593,12 +2060,23 @@ describe('fetchMore on an observable query with connection', () => {
 
       const stream = new ObservableStream(observable);
 
-      {
-        const result = await stream.takeNext();
+      await expect(stream).toEmitTypedValue({
+        data: undefined,
+        dataState: 'empty',
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        partial: true,
+      });
 
-        expect(result.loading).toBe(false);
-        expect(result.data.entry.comments).toHaveLength(10);
-      }
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: commentsInRange(1, 10) },
+        },
+        dataState: 'complete',
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        partial: false,
+      });
 
       {
         const fetchMoreResult = await observable.fetchMore({
@@ -1607,19 +2085,35 @@ describe('fetchMore on an observable query with connection', () => {
         });
 
         // this is the server result
-        expect(fetchMoreResult.loading).toBe(false);
-        expect(fetchMoreResult.data.entry.comments).toHaveLength(10);
-      }
-
-      {
-        const result = await stream.takeNext();
-
-        const combinedComments = result.data.entry.comments;
-        expect(combinedComments).toHaveLength(20);
-        combinedComments.forEach((comment, i) => {
-          expect(comment.text).toBe(`comment ${i + 1}`);
+        expect(fetchMoreResult).toStrictEqualTyped({
+          data: {
+            entry: { __typename: 'Entry', comments: commentsInRange(11, 20) },
+          },
         });
       }
+
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: {
+            __typename: 'Entry',
+            comments: expect.arrayWithLength(10),
+          },
+        },
+        dataState: 'complete',
+        loading: true,
+        networkStatus: NetworkStatus.fetchMore,
+        partial: false,
+      });
+
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: commentsInRange(1, 20) },
+        },
+        dataState: 'complete',
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        partial: false,
+      });
 
       await expect(stream).not.toEmitAnything();
     });
@@ -1627,7 +2121,7 @@ describe('fetchMore on an observable query with connection', () => {
 
   describe('will set the network status to `fetchMore`', () => {
     it('updateQuery', async () => {
-      const link = mockSingleLink(
+      const link = new MockLink([
         {
           request: { query: transformedQuery, variables },
           result,
@@ -1638,27 +2132,34 @@ describe('fetchMore on an observable query with connection', () => {
           result: resultMore,
           delay: 5,
         },
-      );
+      ]);
 
       const client = new ApolloClient({
         link,
         cache: new Hermes(),
       });
 
-      const observable = client.watchQuery({
-        query,
-        variables,
-        notifyOnNetworkStatusChange: true,
-      });
+      const observable = client.watchQuery({ query, variables });
 
       const stream = new ObservableStream(observable);
 
-      {
-        const { data, networkStatus } = await stream.takeNext();
+      await expect(stream).toEmitTypedValue({
+        data: undefined,
+        dataState: 'empty',
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        partial: true,
+      });
 
-        expect(networkStatus).toBe(NetworkStatus.ready);
-        expect(data.entry.comments.length).toBe(10);
-      }
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: commentsInRange(1, 10) },
+        },
+        dataState: 'complete',
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        partial: false,
+      });
 
       void observable.fetchMore({
         variables: { start: 10 },
@@ -1669,26 +2170,31 @@ describe('fetchMore on an observable query with connection', () => {
         },
       });
 
-      {
-        const { data, networkStatus } = await stream.takeNext();
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: commentsInRange(1, 10) },
+        },
+        dataState: 'complete',
+        loading: true,
+        networkStatus: NetworkStatus.fetchMore,
+        partial: false,
+      });
 
-        expect(networkStatus).toBe(NetworkStatus.fetchMore);
-        expect(data.entry.comments.length).toBe(10);
-      }
-
-      {
-        const { data, networkStatus } = await stream.takeNext();
-
-        expect(networkStatus).toBe(NetworkStatus.ready);
-        expect((data as any).entry.comments.length).toBe(20);
-      }
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: commentsInRange(1, 20) },
+        },
+        dataState: 'complete',
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        partial: false,
+      });
 
       await expect(stream).not.toEmitAnything();
     });
 
-    // Hermes: no @connection support, so each page of entry is stored under its own start/limit arguments
-    it.skip('field policy', async () => {
-      const link = mockSingleLink(
+    it('field policy', async () => {
+      const link = new MockLink([
         {
           request: { query: transformedQuery, variables },
           result,
@@ -1699,7 +2205,7 @@ describe('fetchMore on an observable query with connection', () => {
           result: resultMore,
           delay: 5,
         },
-      );
+      ]);
 
       const client = new ApolloClient({
         link,
@@ -1714,38 +2220,51 @@ describe('fetchMore on an observable query with connection', () => {
         }),
       });
 
-      const observable = client.watchQuery({
-        query,
-        variables,
-        notifyOnNetworkStatusChange: true,
-      });
+      const observable = client.watchQuery({ query, variables });
 
       const stream = new ObservableStream(observable);
 
-      {
-        const { data, networkStatus } = await stream.takeNext();
+      await expect(stream).toEmitTypedValue({
+        data: undefined,
+        dataState: 'empty',
+        loading: true,
+        networkStatus: NetworkStatus.loading,
+        partial: true,
+      });
 
-        expect(networkStatus).toBe(NetworkStatus.ready);
-        expect((data as any).entry.comments.length).toBe(10);
-      }
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: commentsInRange(1, 10) },
+        },
+        dataState: 'complete',
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        partial: false,
+      });
 
       void observable.fetchMore({
         variables: { start: 10 },
       });
 
-      {
-        const { data, networkStatus } = await stream.takeNext();
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: commentsInRange(1, 10) },
+        },
+        dataState: 'complete',
+        loading: true,
+        networkStatus: NetworkStatus.fetchMore,
+        partial: false,
+      });
 
-        expect(networkStatus).toBe(NetworkStatus.fetchMore);
-        expect(data.entry.comments.length).toBe(10);
-      }
-
-      {
-        const { data, networkStatus } = await stream.takeNext();
-
-        expect(networkStatus).toBe(NetworkStatus.ready);
-        expect(data.entry.comments.length).toBe(20);
-      }
+      await expect(stream).toEmitTypedValue({
+        data: {
+          entry: { __typename: 'Entry', comments: commentsInRange(1, 20) },
+        },
+        dataState: 'complete',
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        partial: false,
+      });
 
       await expect(stream).not.toEmitAnything();
     });
@@ -1760,21 +2279,30 @@ it('uses updateQuery to update the result of the query with no-cache queries', a
   const observable = client.watchQuery({
     query,
     fetchPolicy: 'no-cache',
-    notifyOnNetworkStatusChange: true,
     variables: { limit: 2 },
   });
 
   const stream = new ObservableStream(observable);
 
-  await expect(stream).toEmitApolloQueryResult({
+  await expect(stream).toEmitTypedValue({
+    data: undefined,
+    dataState: 'empty',
+    loading: true,
+    networkStatus: NetworkStatus.loading,
+    partial: true,
+  });
+
+  await expect(stream).toEmitTypedValue({
     data: {
       letters: [
         { __typename: 'Letter', letter: 'A', position: 1 },
         { __typename: 'Letter', letter: 'B', position: 2 },
       ],
     },
+    dataState: 'complete',
     loading: false,
     networkStatus: NetworkStatus.ready,
+    partial: false,
   });
 
   let fetchMoreResult = await observable.fetchMore({
@@ -1784,29 +2312,29 @@ it('uses updateQuery to update the result of the query with no-cache queries', a
     }),
   });
 
-  expect(fetchMoreResult).toEqualApolloQueryResult({
+  expect(fetchMoreResult).toStrictEqualTyped({
     data: {
       letters: [
         { __typename: 'Letter', letter: 'C', position: 3 },
         { __typename: 'Letter', letter: 'D', position: 4 },
       ],
     },
-    loading: false,
-    networkStatus: NetworkStatus.ready,
   });
 
-  await expect(stream).toEmitApolloQueryResult({
+  await expect(stream).toEmitTypedValue({
     data: {
       letters: [
         { __typename: 'Letter', letter: 'A', position: 1 },
         { __typename: 'Letter', letter: 'B', position: 2 },
       ],
     },
+    dataState: 'complete',
     loading: true,
     networkStatus: NetworkStatus.fetchMore,
+    partial: false,
   });
 
-  await expect(stream).toEmitApolloQueryResult({
+  await expect(stream).toEmitTypedValue({
     data: {
       letters: [
         { __typename: 'Letter', letter: 'A', position: 1 },
@@ -1815,12 +2343,14 @@ it('uses updateQuery to update the result of the query with no-cache queries', a
         { __typename: 'Letter', letter: 'D', position: 4 },
       ],
     },
+    dataState: 'complete',
     loading: false,
     networkStatus: NetworkStatus.ready,
+    partial: false,
   });
 
   // Ensure we store the merged result as the last result
-  expect(observable.getCurrentResult(false)).toEqualApolloQueryResult({
+  expect(observable.getCurrentResult()).toStrictEqualTyped({
     data: {
       letters: [
         { __typename: 'Letter', letter: 'A', position: 1 },
@@ -1829,8 +2359,10 @@ it('uses updateQuery to update the result of the query with no-cache queries', a
         { __typename: 'Letter', letter: 'D', position: 4 },
       ],
     },
+    dataState: 'complete',
     loading: false,
     networkStatus: NetworkStatus.ready,
+    partial: false,
   });
 
   await expect(stream).not.toEmitAnything();
@@ -1840,18 +2372,16 @@ it('uses updateQuery to update the result of the query with no-cache queries', a
     updateQuery: (_, { fetchMoreResult }) => fetchMoreResult,
   });
 
-  expect(fetchMoreResult).toEqualApolloQueryResult({
+  expect(fetchMoreResult).toStrictEqualTyped({
     data: {
       letters: [
         { __typename: 'Letter', letter: 'E', position: 5 },
         { __typename: 'Letter', letter: 'F', position: 6 },
       ],
     },
-    loading: false,
-    networkStatus: NetworkStatus.ready,
   });
 
-  await expect(stream).toEmitApolloQueryResult({
+  await expect(stream).toEmitTypedValue({
     data: {
       letters: [
         { __typename: 'Letter', letter: 'A', position: 1 },
@@ -1860,31 +2390,364 @@ it('uses updateQuery to update the result of the query with no-cache queries', a
         { __typename: 'Letter', letter: 'D', position: 4 },
       ],
     },
+    dataState: 'complete',
     loading: true,
     networkStatus: NetworkStatus.fetchMore,
+    partial: false,
   });
 
-  await expect(stream).toEmitApolloQueryResult({
+  await expect(stream).toEmitTypedValue({
     data: {
       letters: [
         { __typename: 'Letter', letter: 'E', position: 5 },
         { __typename: 'Letter', letter: 'F', position: 6 },
       ],
     },
+    dataState: 'complete',
     loading: false,
     networkStatus: NetworkStatus.ready,
+    partial: false,
   });
 
-  expect(observable.getCurrentResult(false)).toEqualApolloQueryResult({
+  expect(observable.getCurrentResult()).toStrictEqualTyped({
     data: {
       letters: [
         { __typename: 'Letter', letter: 'E', position: 5 },
         { __typename: 'Letter', letter: 'F', position: 6 },
       ],
     },
+    dataState: 'complete',
     loading: false,
     networkStatus: NetworkStatus.ready,
+    partial: false,
   });
 
   await expect(stream).not.toEmitAnything();
 });
+
+it("calling `fetchMore` on an ObservableQuery that hasn't finished deferring yet will not put it into completed state", async () => {
+  const defer = mockDefer20220824();
+  const baseLink = new MockSubscriptionLink();
+
+  const client = new ApolloClient({
+    cache: new Hermes(),
+    link: ApolloLink.split(op => op.operationName === 'DeferQuery', defer.httpLink, baseLink),
+    incrementalHandler: new Defer20220824Handler(),
+  });
+
+  const deferredQuery = gql`
+    query DeferQuery {
+      people(from: 1, count: 2) {
+        id
+        ... @defer {
+          name
+        }
+      }
+    }
+  `;
+
+  const fetchMoreQuery = gql`
+    query FetchMoreQuery {
+      people(from: 2, count: 1) {
+        id
+        name
+      }
+    }
+  `;
+
+  const observable = client.watchQuery({
+    query: deferredQuery,
+    variables: {},
+    fetchPolicy: 'no-cache',
+  });
+
+  const stream = new ObservableStream(observable);
+
+  await expect(stream).toEmitTypedValue({
+    data: undefined,
+    dataState: 'empty',
+    loading: true,
+    networkStatus: NetworkStatus.loading,
+    partial: true,
+  });
+
+  const initialData = {
+    people: [
+      {
+        __typename: 'Person',
+        id: 1,
+      },
+      {
+        __typename: 'Person',
+        id: 2,
+      },
+    ],
+  };
+
+  defer.enqueueInitialChunk({ data: initialData, hasNext: true });
+
+  await expect(stream).toEmitTypedValue({
+    data: markAsStreaming(initialData),
+    dataState: 'streaming',
+    loading: true,
+    networkStatus: NetworkStatus.streaming,
+    partial: true,
+  });
+
+  defer.enqueueSubsequentChunk({
+    incremental: [
+      {
+        data: {
+          name: 'Alice',
+        },
+        path: ['people', 0],
+      },
+    ],
+    hasNext: true,
+  });
+
+  await expect(stream).toEmitTypedValue({
+    data: markAsStreaming({
+      people: [
+        {
+          __typename: 'Person',
+          id: 1,
+          name: 'Alice',
+        },
+        {
+          __typename: 'Person',
+          id: 2,
+        },
+      ],
+    }),
+    dataState: 'streaming',
+    loading: true,
+    networkStatus: NetworkStatus.streaming,
+    partial: true,
+  });
+
+  void observable.fetchMore<any>({
+    query: fetchMoreQuery,
+    updateQuery(previousQueryResult: any, options) {
+      const newPeople = options.fetchMoreResult.people;
+      return {
+        ...previousQueryResult,
+        people: [...previousQueryResult.people, ...newPeople],
+      };
+    },
+  });
+
+  await expect(stream).toEmitSimilarValue({
+    expected: previous => ({
+      ...previous,
+      loading: true,
+      networkStatus: NetworkStatus.fetchMore,
+    }),
+  });
+
+  baseLink.simulateResult(
+    {
+      result: {
+        data: {
+          people: [
+            {
+              __typename: 'Person',
+              id: 3,
+              name: 'Charles',
+            },
+          ],
+        },
+      },
+    },
+    true,
+  );
+
+  await expect(stream).toEmitTypedValue({
+    data: markAsStreaming({
+      people: [
+        {
+          __typename: 'Person',
+          id: 1,
+          name: 'Alice',
+        },
+        {
+          __typename: 'Person',
+          id: 2,
+        },
+        {
+          __typename: 'Person',
+          id: 3,
+          name: 'Charles',
+        },
+      ],
+    }),
+    dataState: 'streaming',
+    loading: true,
+    // TODO: This should be streaming. Should be fixed with
+    // https://github.com/apollographql/apollo-client/issues/12668
+    networkStatus: NetworkStatus.loading,
+    partial: true,
+  });
+});
+
+it('does not allow fetchMore on a cache-only query', async () => {
+  const query = gql`
+    query Comment($repoName: String!, $start: Int!, $limit: Int!) {
+      entry(repoFullName: $repoName) {
+        comments(start: $start, limit: $limit) {
+          text
+          __typename
+        }
+        __typename
+      }
+    }
+  `;
+
+  const client = new ApolloClient({
+    link: ApolloLink.empty(),
+    cache: new Hermes(),
+  });
+
+  const observable = client.watchQuery({ query, fetchPolicy: 'cache-only' });
+  const stream = new ObservableStream(observable);
+
+  await expect(stream).toEmitTypedValue({
+    data: undefined,
+    dataState: 'empty',
+    loading: false,
+    networkStatus: NetworkStatus.ready,
+    partial: true,
+  });
+
+  expect(() => observable.fetchMore({ variables: { start: 10, limit: 10 } })).toThrow(
+    new InvariantError(
+      "Cannot execute `fetchMore` for 'cache-only' query 'Comment'. Please use a different fetch policy.",
+    ),
+  );
+
+  await expect(stream).not.toEmitAnything();
+});
+
+it('provides extensions in merge functions', async () => {
+  const query = gql`
+    query Comment($repoName: String!, $start: Int!, $limit: Int!) {
+      entry(repoFullName: $repoName) {
+        comments(start: $start, limit: $limit) {
+          text
+        }
+      }
+    }
+  `;
+
+  const merge = jest.fn((existing = [], incoming) => existing.concat(incoming));
+
+  const client = new ApolloClient({
+    cache: new Hermes({
+      typePolicies: {
+        Entry: {
+          fields: {
+            comments: {
+              keyArgs: false,
+              merge,
+            },
+          },
+        },
+      },
+    }),
+    link: new MockLink([
+      {
+        request: {
+          query,
+          variables: { repoName: 'apollo-client', start: 1, limit: 10 },
+        },
+        result: {
+          data: {
+            entry: { __typename: 'Entry', comments: commentsInRange(1, 10) },
+          },
+          extensions: { pagination: { isComplete: false } },
+        },
+      },
+      {
+        request: {
+          query,
+          variables: { repoName: 'apollo-client', start: 11, limit: 10 },
+        },
+        result: {
+          data: {
+            entry: { __typename: 'Entry', comments: commentsInRange(11, 20) },
+          },
+          extensions: { pagination: { isComplete: true } },
+        },
+      },
+    ]),
+  });
+
+  const observable = client.watchQuery({
+    query,
+    variables: { repoName: 'apollo-client', start: 1, limit: 10 },
+  });
+  const stream = new ObservableStream(observable);
+
+  await expect(stream).toEmitTypedValue({
+    data: undefined,
+    dataState: 'empty',
+    loading: true,
+    networkStatus: NetworkStatus.loading,
+    partial: true,
+  });
+
+  await expect(stream).toEmitTypedValue({
+    data: { entry: { __typename: 'Entry', comments: commentsInRange(1, 10) } },
+    dataState: 'complete',
+    loading: false,
+    networkStatus: NetworkStatus.ready,
+    partial: false,
+  });
+
+  expect(merge).toHaveBeenCalledTimes(1);
+  expect(merge).toHaveBeenCalledWith(
+    undefined,
+    commentsInRange(1, 10),
+    expect.objectContaining({
+      extensions: { pagination: { isComplete: false } },
+    }),
+  );
+
+  merge.mockClear();
+
+  await expect(observable.fetchMore({ variables: { start: 11, limit: 10 } })).resolves.toStrictEqualTyped({
+    data: { entry: { __typename: 'Entry', comments: commentsInRange(11, 20) } },
+  });
+
+  await expect(stream).toEmitSimilarValue({
+    expected: previous => ({
+      ...previous,
+      loading: true,
+      networkStatus: NetworkStatus.fetchMore,
+    }),
+  });
+
+  await expect(stream).toEmitTypedValue({
+    data: { entry: { __typename: 'Entry', comments: commentsInRange(1, 20) } },
+    dataState: 'complete',
+    loading: false,
+    networkStatus: NetworkStatus.ready,
+    partial: false,
+  });
+
+  expect(merge).toHaveBeenCalledTimes(1);
+  expect(merge).toHaveBeenCalledWith(
+    commentsInRange(1, 10),
+    commentsInRange(11, 20),
+    expect.objectContaining({
+      extensions: { pagination: { isComplete: true } },
+    }),
+  );
+});
+
+function commentsInRange(start: number, end: number, textGen: (i: number) => string = i => `comment ${i}`) {
+  return Array.from({ length: end - start + 1 }).map((_, i) => ({
+    __typename: 'Comment',
+    text: textGen(i + start),
+  }));
+}

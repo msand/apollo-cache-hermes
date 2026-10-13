@@ -1,4 +1,4 @@
-import { Cache } from '@apollo/client';
+import type { Cache } from '@apollo/client/cache';
 import isEqual from '@wry/equality';
 
 import { CacheContext } from '../context';
@@ -7,11 +7,9 @@ import { JsonObject } from '../primitive';
 import { NodeId, RawOperation } from '../schema';
 import { Hermes } from '../apollo';
 
-import { QueryResult, read } from './read';
+import { QueryResult, read, toDiffResult } from './read';
 
-import WatchOptions = Cache.WatchOptions;
-
-const EMPTY_RESULT: JsonObject = Object.freeze({});
+type WatchOptions = Cache.WatchOptions;
 
 /**
  * Observes a query, triggering a callback when nodes within it have changed.
@@ -25,28 +23,23 @@ export class QueryObserver<TSerialized> {
   private _query: RawOperation;
   /** The most recent result */
   private _result: QueryResult;
+  /** The most recent result, as the Cache.DiffResult delivered to the callback. */
+  private _diff: Cache.DiffResult<unknown> | undefined;
   /** The callback to trigger when observed nodes have changed. */
   private _options: WatchOptions;
   /** Whether the next broadcast should re-read the query regardless of edits. */
   private _dirty = false;
   /** Whether onWatchUpdated cancelled delivering the last computed result. */
   private _cancelled = false;
-  /**
-   * Whether field policies may make the result depend on any field (e.g. a
-   * read function reading other fields), rather than just the selected ones.
-   */
-  private _hasFieldPolicies: boolean;
 
   constructor(context: CacheContext<TSerialized>, query: RawOperation, snapshot: GraphSnapshot, options: WatchOptions) {
     this._context = context;
     this._query = query;
     this._options = options;
-    this._hasFieldPolicies = Object.values(context.typePolicies ?? {}).some(
-      policy => Object.keys(policy?.fields ?? {}).length > 0,
-    );
     if (options.immediate) {
       this._result = read(context, query, snapshot, Object.create(null), context.strict);
-      options.lastDiff = this._result;
+      this._diff = toDiffResult(this._result, options.returnPartialData);
+      options.lastDiff = this._diff;
       this._update();
     } else {
       this._result = {
@@ -104,20 +97,22 @@ export class QueryObserver<TSerialized> {
     // This effectively circumvents the logic in _hasUpdate (entityIds will be
     // undefined).
     const operation = this._context.parseOperation(this._query);
-    let readResult = read(this._context, this._query, snapshot, Object.create(null), this._context.strict);
-    if (fromOptimisticTransaction) readResult = { ...readResult, fromOptimisticTransaction };
-    // Like InMemoryCache (and Hermes#diff), an empty read is an empty object.
-    if (readResult.result === undefined) readResult = { ...readResult, result: EMPTY_RESULT };
+    const readResult = read(this._context, this._query, snapshot, Object.create(null), this._context.strict);
     this._result = readResult;
-    const result = readResult.result;
-    this._options.lastDiff = readResult;
+    // Like InMemoryCache (and Hermes#diff), the watch's diff has a null result
+    // when incomplete, unless partial data is requested and some was found.
+    // (Not spread into a new object, which would build its lazy missing error.)
+    const diff = toDiffResult(readResult, this._options.returnPartialData, fromOptimisticTransaction);
+    this._diff = diff;
+    const result = diff.result as JsonObject | null;
+    this._options.lastDiff = diff;
     const rootKeys = Object.keys(operation.parsedQuery);
-    const lastResult = lastDiff?.result;
+    const lastResult = lastDiff?.result as JsonObject | null | undefined;
     // Skip empty incomplete results, unless they are the watcher's first result (like
     // InMemoryCache, which delivers a watch's first diff), or replace data the watcher has seen
     // (e.g. after evicting every root field), so Apollo can refetch like it does with InMemoryCache.
     const hadRootKeys = !!lastResult && rootKeys.some(key => key in lastResult);
-    if (lastDiff && !readResult.complete && (!result || !rootKeys.some(key => key in result)) && !hadRootKeys) {
+    if (lastDiff && !diff.complete && (!result || !rootKeys.some(key => key in result)) && !hadRootKeys) {
       return;
     }
     const sameAsBefore = result && lastResult && rootKeys.every(key => isEqual(result[key], lastResult[key]));
@@ -127,7 +122,7 @@ export class QueryObserver<TSerialized> {
     if (sameAsBefore && !(dirtyKeys && rootKeys.some(key => dirtyKeys.has(key)))) {
       return;
     }
-    const shouldCancel = onWatchUpdated?.call(cacheInstance, this._options, readResult, lastDiff) === false;
+    const shouldCancel = onWatchUpdated?.call(cacheInstance, this._options, diff, lastDiff) === false;
     if (shouldCancel) {
       // Returning false from the onWatchUpdated callback will prevent
       // calling c.callback(diff) for this watcher.  Like InMemoryCache, the
@@ -163,7 +158,9 @@ export class QueryObserver<TSerialized> {
       if (
         nodeId === rootId &&
         changedRootFields &&
-        !this._hasFieldPolicies &&
+        // Field policies may make the result depend on any field (e.g. a
+        // read function reading other fields), rather than just the selected ones.
+        !this._context.policies.hasFieldPolicies &&
         !this._selectsAny(changedRootFields.get(rootId))
       ) {
         continue;
@@ -181,7 +178,9 @@ export class QueryObserver<TSerialized> {
     if (!fields || !fields.size) return false;
     const { parsedQuery } = this._context.parseOperation(this._query);
     for (const key of Object.keys(parsedQuery)) {
-      if (fields.has(key) || fields.has(parsedQuery[key].schemaName!)) return true;
+      const node = parsedQuery[key];
+      if (fields.has(key) || fields.has(node.schemaName!)) return true;
+      if (node.alternatives?.some(alternative => fields.has(alternative.schemaName!))) return true;
     }
     return false;
   }
@@ -190,6 +189,6 @@ export class QueryObserver<TSerialized> {
    * Trigger the callback.
    */
   private _update(): void {
-    this._options.callback(this._result);
+    this._options.callback(this._diff!);
   }
 }

@@ -50,12 +50,11 @@ describe(`operations.write`, () => {
       jestExpect(snapshot.getNodeData(QueryRootId).foo).toEqual(null);
     });
 
-    // TODO: Detect this case, and actually make it work.  Mark & sweep? :(
-    it.skip(`garbage collects the orphaned subgraph`, () => {
-      jestExpect(snapshot.allNodeIds()).toEqual(jestExpect.arrayContaining([QueryRootId]));
+    it(`garbage collects the orphaned subgraph`, () => {
+      jestExpect(snapshot.allNodeIds()).toEqual([QueryRootId]);
     });
 
-    it.skip(`marks all nodes as edited`, () => {
+    it(`marks all nodes as edited`, () => {
       jestExpect(Array.from(editedNodeIds)).toEqual(jestExpect.arrayContaining([QueryRootId, '1', '2']));
     });
   });

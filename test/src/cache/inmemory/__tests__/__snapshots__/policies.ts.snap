@@ -818,10 +818,10 @@ Object {
   "ROOT_QUERY": Object {
     "__typename": "Query",
     "todos": Object {
+      "__typename": "TodosConnection",
       "edges": Array [
         Object {
           "__ref": "TodoEdge:edge1",
-          "cursor": "YXJyYXljb25uZWN0aW9uOjI=",
         },
       ],
       "pageInfo": Object {
@@ -854,10 +854,10 @@ Object {
   "ROOT_QUERY": Object {
     "__typename": "Query",
     "todos": Object {
+      "__typename": "TodosConnection",
       "edges": Array [
         Object {
           "__ref": "TodoEdge:edge1",
-          "cursor": "YXJyYXljb25uZWN0aW9uOjI=",
         },
       ],
       "extraMetaData": "extra",

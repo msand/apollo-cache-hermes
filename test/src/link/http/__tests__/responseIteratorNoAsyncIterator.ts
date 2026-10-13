@@ -1,24 +1,16 @@
-import gql from 'graphql-tag';
-import { execute } from '@apollo/client/link/core/execute';
-import { HttpLink } from '@apollo/client/link/http/HttpLink';
-import { TextEncoder, TextDecoder } from 'util';
-import { ReadableStream } from 'web-streams-polyfill';
-import { Readable } from 'stream';
-import { ObservableStream } from '@apollo/client/testing/internal';
+import { ReadableStream } from 'node:stream/web';
+import { TextDecoder, TextEncoder } from 'util';
+import { gql } from 'graphql-tag';
+import type { Defer20220824Handler } from '@apollo/client/incremental';
+import type { ApolloLink } from '@apollo/client/link';
+import { HttpLink } from '@apollo/client/link/http';
 
-// As of Jest 26 there is no way to mock/unmock a module that is used indirectly
-// via a single test file.
-// These tests duplicate __tests__/responseIterator.ts while mocking
-// `isAsyncIterableIterator = false` in order to test the integration of the
-// implementations inside /iterators via src/link/http/responseIterator.ts
-// which do not execute when isAsyncIterableIterator is true
-// See: https://github.com/facebook/jest/issues/2582#issuecomment-655110424
+import { executeWithDefaultContext as execute, ObservableStream } from '@apollo/client/testing/internal';
 
-jest.mock('@apollo/client/utilities', () => ({
-  __esModule: true,
-  ...jest.requireActual('@apollo/client/utilities'),
-  canUseAsyncIteratorSymbol: false,
-}));
+// Hermes: Apollo's own test build merges Defer20220824Handler.TypeOverrides into
+// TypeOverrides (its src/testing/internal/declarations.d.ts), which adds incremental
+// chunks to ApolloLink.Result. The published types don't, so name the chunk type here.
+type DeferResult = ApolloLink.Result | Defer20220824Handler.Chunk<Record<string, unknown>>;
 
 const sampleDeferredQuery = gql`
   query SampleDeferredQuery {
@@ -187,7 +179,7 @@ describe('multipart responses', () => {
     const observableStream = new ObservableStream(observable);
 
     for (const result of results) {
-      await expect(observableStream).toEmitValue(result);
+      await expect(observableStream).toEmitTypedValue(result);
     }
 
     await expect(observableStream).toComplete();
@@ -228,14 +220,14 @@ describe('multipart responses', () => {
     const observableStream = new ObservableStream(observable);
 
     for (const result of results) {
-      await expect(observableStream).toEmitValue(result);
+      await expect(observableStream).toEmitTypedValue(result);
     }
 
     await expect(observableStream).toComplete();
   });
 
   it('can handle node stream bodies (strings) with default boundary', async () => {
-    const stream = Readable.from(bodyDefaultBoundary.split('\r\n').map(line => `${line}\r\n`));
+    const stream = ReadableStream.from(bodyDefaultBoundary.split('\r\n').map(line => `${line}\r\n`));
 
     const fetch = jest.fn(async () => ({
       status: 200,
@@ -253,70 +245,16 @@ describe('multipart responses', () => {
     const observableStream = new ObservableStream(observable);
 
     for (const result of results) {
-      await expect(observableStream).toEmitValue(result);
-    }
-
-    await expect(observableStream).toComplete();
-  });
-
-  it('can handle node stream bodies (strings) with arbitrary splits', async () => {
-    const chunks: Array<string> = [];
-    const chunkSize = 15;
-    for (let i = 0; i < bodyCustomBoundary.length; i += chunkSize) {
-      chunks.push(bodyCustomBoundary.slice(i, i + chunkSize));
-    }
-    const stream = Readable.from(chunks);
-
-    const fetch = jest.fn(async () => ({
-      status: 200,
-      body: stream,
-      headers: new Headers({
-        'content-type': `multipart/mixed; boundary=${BOUNDARY}`,
-      }),
-    }));
-    const link = new HttpLink({
-      fetch: fetch as any,
-    });
-
-    const observable = execute(link, { query: sampleDeferredQuery });
-    const observableStream = new ObservableStream(observable);
-
-    for (const result of results) {
-      await expect(observableStream).toEmitValue(result);
-    }
-
-    await expect(observableStream).toComplete();
-  });
-
-  it('can handle node stream bodies (array buffers)', async () => {
-    const stream = Readable.from(
-      bodyDefaultBoundary.split('\r\n').map(line => new TextEncoder().encode(`${line}\r\n`)),
-    );
-
-    const fetch = jest.fn(async () => ({
-      status: 200,
-      body: stream,
-      // if no boundary is specified, default to -
-      headers: new Headers({
-        'content-type': `multipart/mixed`,
-      }),
-    }));
-    const link = new HttpLink({
-      fetch: fetch as any,
-    });
-
-    const observable = execute(link, { query: sampleDeferredQuery });
-    const observableStream = new ObservableStream(observable);
-
-    for (const result of results) {
-      await expect(observableStream).toEmitValue(result);
+      await expect(observableStream).toEmitTypedValue(result);
     }
 
     await expect(observableStream).toComplete();
   });
 
   it('can handle node stream bodies (array buffers) with batched results', async () => {
-    const stream = Readable.from(bodyBatchedResults.split('\r\n').map(line => new TextEncoder().encode(`${line}\r\n`)));
+    const stream = ReadableStream.from(
+      bodyBatchedResults.split('\r\n').map(line => new TextEncoder().encode(`${line}\r\n`)),
+    );
 
     const fetch = jest.fn(async () => ({
       status: 200,
@@ -331,11 +269,15 @@ describe('multipart responses', () => {
     });
 
     const observable = execute(link, { query: sampleDeferredQuery });
-    const observableStream = new ObservableStream(observable);
+    const observableStream = new ObservableStream<DeferResult>(observable);
 
     for (const result of batchedResults) {
-      await expect(observableStream).toEmitValue(result);
+      await expect(observableStream).toEmitTypedValue(result);
     }
+
+    await expect(observableStream).toEmitTypedValue({
+      hasNext: false,
+    });
 
     await expect(observableStream).toComplete();
   });

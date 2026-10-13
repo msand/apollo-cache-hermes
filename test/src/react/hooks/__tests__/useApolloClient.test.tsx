@@ -1,8 +1,9 @@
-import * as React from 'react';
 import { render } from '@testing-library/react';
-import { InvariantError } from 'ts-invariant';
-import { ApolloClient, ApolloLink, ApolloProvider } from '@apollo/client';
-import { useApolloClient } from '@apollo/client/react/hooks/useApolloClient';
+import React from 'react';
+import { ApolloClient } from '@apollo/client';
+import { ApolloLink } from '@apollo/client/link';
+import { ApolloProvider, useApolloClient } from '@apollo/client/react';
+import { InvariantError } from '@apollo/client/utilities/invariant';
 
 import { Hermes } from '../../../../../src';
 

@@ -9,7 +9,6 @@ import {
   fragmentMapForDocument,
   getOperationOrDie,
   variableDefaultsInOperation,
-  variablesInOperation,
 } from '../util';
 import { GraphSnapshot } from '../GraphSnapshot';
 
@@ -30,8 +29,6 @@ export class QueryInfo<TSerialized = GraphSnapshot> {
   public readonly operationType: OperationTypeNode;
   /** The name of the operation. */
   public readonly operationName?: string;
-  /** The GQL source of the operation */
-  public readonly operationSource?: string;
   /** All fragments in the document, indexed by name. */
   public readonly fragmentMap: FragmentMap;
   /**
@@ -43,9 +40,10 @@ export class QueryInfo<TSerialized = GraphSnapshot> {
   public readonly variables: Set<string>;
   public readonly propMap: { [p: string]: string } | undefined;
   /**
-   * Default values for the variables used by this query.
+   * The declared default values of the variables used by this query.
    *
-   * Variables not present in this map are considered required.
+   * Like InMemoryCache, variables without one (that aren't passed) are
+   * undefined.
    */
   public readonly variableDefaults: { [Key: string]: JsonValue };
   /**
@@ -61,7 +59,6 @@ export class QueryInfo<TSerialized = GraphSnapshot> {
     this.operation = getOperationOrDie(raw.document);
     this.operationType = this.operation.operation;
     this.operationName = this.operation.name && this.operation.name.value;
-    this.operationSource = this.operation.loc && this.operation.loc.source.body;
     this.fragmentMap = fragmentMapForDocument(raw.document);
 
     const { parsedQuery, variables, propMap } = parseQuery(context, this.fragmentMap, this.operation.selectionSet);
@@ -69,34 +66,7 @@ export class QueryInfo<TSerialized = GraphSnapshot> {
     this.variables = variables;
     this.propMap = propMap;
     this.variableDefaults = variableDefaultsInOperation(this.operation);
-
-    // Skip verification if rawOperation is constructed from fragments
-    // (e.g readFragment/writeFragment) because fragment will not declare
-    // variables. Users will have to know to provide `variables` parameter
-    if (!raw.fromFragmentDocument) {
-      const declaredVariables = variablesInOperation(this.operation);
-      for (const key of Object.keys(raw.variables ?? {})) {
-        declaredVariables.add(key);
-      }
-      this._assertValid(declaredVariables);
-    }
-  }
-
-  private _assertValid(declaredVariables: Set<string>) {
-    const messages: string[] = [];
-
-    this._assertAllVariablesDeclared(messages, declaredVariables);
-
-    if (!messages.length) return;
-    const mainMessage = `Validation errors in ${this.operationType} ${this.operationName || '<unknown>'}`;
-    throw new Error(`${mainMessage}:${messages.map(m => `\n * ${m}`).join('')}`);
-  }
-
-  private _assertAllVariablesDeclared(messages: string[], declaredVariables: Set<string>) {
-    for (const name of this.variables) {
-      if (!declaredVariables.has(name)) {
-        messages.push(`Variable $${name} is used, but not declared`);
-      }
-    }
+    // Like InMemoryCache, variables the operation uses without declaring (and
+    // the caller doesn't pass) are not an error: they read as undefined.
   }
 }

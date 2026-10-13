@@ -32,7 +32,9 @@ OPTIONS=(
 DEBUGGING=false
 
 # toBeGarbageCollected needs global.gc; Jest workers inherit these flags.
-NODE_OPTIONS=(--expose-gc)
+# --no-sparkplug works around a V8 garbage collector crash in Node 24 (SIGSEGV in
+# ClearStaleLeftTrimmedPointerVisitor, https://github.com/nodejs/node/issues/62393).
+NODE_OPTIONS=(--expose-gc --no-sparkplug)
 # Jest doesn't handle debugger flags directly.
 for option in "${OPTIONS_FLAGS[@]}"; do
   if [[ "${option}" =~ ^--(inspect|debug-brk) ]]; then

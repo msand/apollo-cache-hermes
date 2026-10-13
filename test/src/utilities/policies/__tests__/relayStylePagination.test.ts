@@ -1,6 +1,8 @@
-import { FieldFunctionOptions, InMemoryCache } from '@apollo/client';
-import { isReference, makeReference, StoreObject } from '@apollo/client/cache';
-import { relayStylePagination, TRelayPageInfo } from '@apollo/client/utilities/policies/pagination';
+import type { FieldFunctionOptions, InMemoryCache, StoreObject } from '@apollo/client/cache';
+import { isReference } from '@apollo/client/cache';
+import { relayStylePagination } from '@apollo/client/utilities';
+import { makeReference } from '@apollo/client/utilities/internal';
+import type { TRelayPageInfo } from '@apollo/client/utilities/policies/pagination';
 
 import { Hermes } from '../../../../../src';
 
@@ -181,6 +183,7 @@ describe('relayStylePagination', () => {
       isReference,
       toReference: () => undefined,
       storage: {},
+      // Hermes: these tests call the policy functions directly; any cache instance will do.
       cache: new Hermes() as unknown as InMemoryCache,
       readField: () => undefined,
       canRead: () => false,
@@ -196,7 +199,11 @@ describe('relayStylePagination', () => {
           endCursor: 'xyz',
         },
       };
-      const result = merge(undefined, incoming, options);
+      const result = merge(undefined, incoming, {
+        ...options,
+        extensions: undefined,
+        existingData: undefined,
+      });
       expect(result).toEqual({
         edges: [],
         pageInfo: {
@@ -213,16 +220,18 @@ describe('relayStylePagination', () => {
 
       const incomingEdges = [{ cursor: 'omega', node: makeReference('fakeOmega') }];
 
-      const result = merge(
-        {
-          edges: existingEdges,
-          pageInfo: {
-            hasPreviousPage: false,
-            hasNextPage: true,
-            startCursor: 'alpha',
-            endCursor: 'alpha',
-          },
+      const existing = {
+        edges: existingEdges,
+        pageInfo: {
+          hasPreviousPage: false,
+          hasNextPage: true,
+          startCursor: 'alpha',
+          endCursor: 'alpha',
         },
+      };
+
+      const result = merge(
+        existing,
         {
           edges: incomingEdges,
           pageInfo: {
@@ -237,6 +246,8 @@ describe('relayStylePagination', () => {
           args: {
             after: 'alpha',
           },
+          extensions: undefined,
+          existingData: existing,
         },
       );
 
@@ -271,6 +282,8 @@ describe('relayStylePagination', () => {
         args: {
           after: 'alpha',
         },
+        extensions: undefined,
+        existingData: fakeExisting,
       };
 
       const result = merge(fakeExisting, fakeIncoming, fakeOptions);
@@ -294,6 +307,8 @@ describe('relayStylePagination', () => {
         args: {
           after: 'alpha',
         },
+        extensions: undefined,
+        existingData: null,
       });
 
       expect(result).toEqual(incoming);
@@ -304,17 +319,19 @@ describe('relayStylePagination', () => {
 
       const incomingEdges = [{ cursor: 'omega', node: makeReference('fakeOmega') }];
 
+      const existing = {
+        edges: existingEdges,
+        pageInfo: {
+          hasPreviousPage: false,
+          hasNextPage: true,
+          startCursor: 'alpha',
+          endCursor: 'alpha',
+          extra: 'existing.pageInfo.extra',
+        } as TRelayPageInfo,
+      };
+
       const result = merge(
-        {
-          edges: existingEdges,
-          pageInfo: {
-            hasPreviousPage: false,
-            hasNextPage: true,
-            startCursor: 'alpha',
-            endCursor: 'alpha',
-            extra: 'existing.pageInfo.extra',
-          } as TRelayPageInfo,
-        },
+        existing,
         {
           edges: incomingEdges,
           pageInfo: {
@@ -330,6 +347,8 @@ describe('relayStylePagination', () => {
           args: {
             after: 'alpha',
           },
+          extensions: undefined,
+          existingData: existing,
         },
       );
 

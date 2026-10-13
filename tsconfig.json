@@ -5,23 +5,25 @@
     "noUnusedParameters": false,
     "noUnusedLocals": false,
     "skipLibCheck": true,
-    "moduleResolution": "node",
+    "moduleResolution": "nodenext",
     "importHelpers": true,
     "declaration": true,
     "declarationMap": true,
     "target": "es2017",
-    "module": "commonjs",
+    "module": "nodenext",
     "esModuleInterop": true,
     "experimentalDecorators": true,
     "inlineSourceMap": true,
-    "lib": ["dom", "es2017", "esnext.asynciterable", "ES2021.WeakRef", "scripthost"],
+    "lib": ["dom", "dom.asynciterable", "es2023", "esnext.asynciterable", "scripthost"],
     "newLine": "LF",
     "noImplicitReturns": false,
     "noImplicitThis": true,
     "pretty": true,
     "jsx": "react",
     "strict": true,
-    "types": ["jest", "node"]
+    "types": ["jest", "node"],
+    // Apollo Client 4 does not publish its test support code; the vendored tests use a copy.
+    "paths": { "@apollo/client/testing/internal": ["./test/src/testing/internal/index.ts"] }
   },
-  "exclude": ["node_modules", "apollo-client", "dist", ".claude"]
+  "exclude": ["node_modules", "apollo-client", "dist", ".claude", "test/src"]
 }

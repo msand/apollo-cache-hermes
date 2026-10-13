@@ -5,10 +5,40 @@ import { JsonObject, PathPart } from '../primitive';
 import { NodeId } from '../schema';
 
 /**
+ * The reference maps that node snapshots share with the snapshots they were
+ * cloned from (see cloneNodeSnapshot): the functions below copy them before
+ * changing them.
+ */
+const sharedReferences = new WeakSet<object>();
+
+/** Marks the reference maps of a node snapshot as shared (with a clone of it). */
+export function shareReferences(snapshot: NodeSnapshot) {
+  if (snapshot.inbound) sharedReferences.add(snapshot.inbound);
+  if (snapshot.outbound) sharedReferences.add(snapshot.outbound);
+  if (snapshot.parameterized) sharedReferences.add(snapshot.parameterized);
+}
+
+function ownInbound(snapshot: NodeSnapshot) {
+  const map = snapshot.inbound;
+  return map && sharedReferences.has(map) ? (snapshot.inbound = new Map(map)) : map;
+}
+
+function ownOutbound(snapshot: NodeSnapshot) {
+  const map = snapshot.outbound;
+  return map && sharedReferences.has(map) ? (snapshot.outbound = new Map(map)) : map;
+}
+
+/** (The lists in the map are shared too: they are copied before they are changed.) */
+function ownParameterized(snapshot: NodeSnapshot) {
+  const map = snapshot.parameterized;
+  return map && sharedReferences.has(map) ? (snapshot.parameterized = new Map(map)) : map;
+}
+
+/**
  * Mutates a snapshot, removing a reference from it.
  */
 export function removeInboundReference(snapshot: NodeSnapshot, id: NodeId, path: PathPart[]) {
-  const map = snapshot.inbound;
+  const map = ownInbound(snapshot);
   if (!map) return;
 
   const key = toInKey(id, path);
@@ -20,7 +50,7 @@ export function removeInboundReference(snapshot: NodeSnapshot, id: NodeId, path:
   }
 }
 export function removeOutboundReference(snapshot: NodeSnapshot, path: PathPart[]) {
-  const map = snapshot.outbound;
+  const map = ownOutbound(snapshot);
   if (!map) return;
 
   const key = toOutKey(path);
@@ -32,16 +62,17 @@ export function removeOutboundReference(snapshot: NodeSnapshot, path: PathPart[]
   }
 }
 export function removeParameterizedReference(snapshot: NodeSnapshot, id: NodeId, path: PathPart[]) {
-  const map = snapshot.parameterized;
+  const map = ownParameterized(snapshot);
   if (!map) return;
 
   const key = toParamKey(path);
-  const refs = map.get(key);
+  let refs = map.get(key);
   if (!refs) return;
 
   const index = getIndexOfGivenReference(refs, id, path);
   if (index !== -1) {
-    refs.splice(index, 1);
+    refs = refs.filter((_ref, i) => i !== index);
+    map.set(key, refs);
   }
 
   if (refs.length === 0) {
@@ -59,7 +90,7 @@ export function removeParameterizedReference(snapshot: NodeSnapshot, id: NodeId,
  */
 export function addInboundReference(snapshot: NodeSnapshot, id: NodeId, path: PathPart[]) {
   const node: NodeReference = { id, path };
-  let references = snapshot.inbound;
+  let references = ownInbound(snapshot);
   if (!references) {
     references = snapshot.inbound = new Map();
   }
@@ -68,7 +99,7 @@ export function addInboundReference(snapshot: NodeSnapshot, id: NodeId, path: Pa
 }
 export function addOutboundReference(snapshot: NodeSnapshot, id: NodeId, path: PathPart[]) {
   const node: NodeReference = { id, path };
-  let references = snapshot.outbound;
+  let references = ownOutbound(snapshot);
   if (!references) {
     references = snapshot.outbound = new Map();
   }
@@ -76,7 +107,7 @@ export function addOutboundReference(snapshot: NodeSnapshot, id: NodeId, path: P
   references.set(key, node);
 }
 export function addParameterizedReference(snapshot: NodeSnapshot, id: NodeId, path: PathPart[]) {
-  let references = snapshot.parameterized;
+  let references = ownParameterized(snapshot);
   if (!references) {
     references = snapshot.parameterized = new Map();
   }
@@ -85,7 +116,7 @@ export function addParameterizedReference(snapshot: NodeSnapshot, id: NodeId, pa
   if (refs === undefined) {
     references.set(key, [{ id, path }]);
   } else if (getIndexOfGivenReference(refs, id, path) === -1) {
-    refs.push({ id, path });
+    references.set(key, [...refs, { id, path }]);
   }
 }
 
@@ -158,7 +189,8 @@ export function toInKey(id: NodeId, path: PathPart[]) {
   return `${id}.${path.join('.')}`;
 }
 export function toOutKey(path: PathPart[]) {
-  return path.join('.');
+  // (The common case: a field of an entity.)
+  return path.length === 1 ? String(path[0]) : path.join('.');
 }
 export function toParamKey(path: PathPart[]) {
   return path[0].toString();

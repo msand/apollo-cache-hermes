@@ -1,198 +1,1179 @@
-import gql from 'graphql-tag';
-import { execute } from '@apollo/client';
-import { MockLink, MockedResponse } from '@apollo/client/testing/core/mocking/mockLink';
-import { ObservableStream, enableFakeTimers, spyOnConsole } from '@apollo/client/testing/internal';
+import { gql } from 'graphql-tag';
+import { MockLink, realisticDelay } from '@apollo/client/testing';
+import { InvariantError } from '@apollo/client/utilities/invariant';
+// This isn't a public API and won't be exposed
+// eslint-disable-next-line import/no-unresolved -- Hermes: a module internal to the published package
+import { stringifyMockedResponse } from '@apollo/client/testing/core/mocking/mockLink';
 
-describe('MockedResponse.newData', () => {
-  const setup = () => {
-    const weaklyTypedMockResponse: MockedResponse = {
-      request: {
-        query: gql`
-          query A {
-            a
-          }
-        `,
-      },
-    };
+import {
+  enableFakeTimers,
+  executeWithDefaultContext as execute,
+  ObservableStream,
+  spyOnConsole,
+  withCleanup,
+} from '@apollo/client/testing/internal';
 
-    const stronglyTypedMockResponse: MockedResponse<{ a: string }, { input: string }> = {
-      request: {
-        query: gql`
-          query A {
-            a
-          }
-        `,
-      },
-    };
+const withRestoredDefaults = function () {
+  const originalDefaults = MockLink.defaultOptions;
 
-    return {
-      weaklyTypedMockResponse,
-      stronglyTypedMockResponse,
-    };
-  };
-
-  it("returned 'data' can be any object with untyped response", () => {
-    const { weaklyTypedMockResponse } = setup();
-
-    weaklyTypedMockResponse.newData = ({ fake: { faker } }) => ({
-      data: {
-        pretend: faker,
-      },
-    });
+  return withCleanup(originalDefaults, originalDefaults => {
+    MockLink.defaultOptions = originalDefaults;
   });
-
-  it("can't return output that doesn't match TData", () => {
-    const { stronglyTypedMockResponse } = setup();
-
-    // @ts-expect-error return type does not match `TData`
-    stronglyTypedMockResponse.newData = () => ({
-      data: {
-        a: 123,
-      },
-    });
-  });
-
-  it("can't use input variables that don't exist in TVariables", () => {
-    const { stronglyTypedMockResponse } = setup();
-
-    // @ts-expect-error unknown variables
-    stronglyTypedMockResponse.newData = ({ fake: { faker } }) => ({
-      data: {
-        a: faker,
-      },
-    });
-  });
-});
+};
 
 /*
 We've chosen this value as the MAXIMUM_DELAY since values that don't fit into a 32-bit signed int cause setTimeout to fire immediately
 */
 const MAXIMUM_DELAY = 0x7f_ff_ff_ff;
 
-describe('mockLink', () => {
+const query = gql`
+  query A {
+    a
+  }
+`;
+
+it('should not require a result or error when delay equals Infinity', async () => {
+  using _fakeTimers = enableFakeTimers();
+
+  const mockLink = new MockLink([
+    {
+      request: {
+        query,
+      },
+      delay: Infinity,
+    },
+  ]);
+
+  const observable = execute(mockLink, { query });
+
+  const subscription = observable.subscribe(
+    () => fail('onNext was called'),
+    () => fail('onError was called'),
+    () => fail('onComplete was called'),
+  );
+  jest.advanceTimersByTime(MAXIMUM_DELAY);
+  subscription.unsubscribe();
+});
+
+it('should require result or error when delay is just large', async () => {
+  const invalidResponse = { request: { query }, delay: MAXIMUM_DELAY };
+  const expectedError = new Error(
+    `Mocked response should contain either \`result\`, \`error\` or a \`delay\` of \`Infinity\`:\n${stringifyMockedResponse(
+      invalidResponse,
+    )}`,
+  );
+
+  {
+    const link = new MockLink([invalidResponse]);
+    const stream = new ObservableStream(execute(link, { query }));
+
+    await expect(stream).toEmitError(expectedError);
+  }
+
+  {
+    const link = new MockLink([]);
+    link.addMockedResponse(invalidResponse);
+
+    const stream = new ObservableStream(execute(link, { query }));
+
+    await expect(stream).toEmitError(expectedError);
+  }
+});
+
+it('waits to return result based on static delay', async () => {
+  const query = gql`
+    query {
+      a
+    }
+  `;
+  const link = new MockLink([
+    {
+      request: { query },
+      result: { data: { a: 'a' } },
+      delay: 100,
+    },
+  ]);
+
+  const stream = new ObservableStream(execute(link, { query }));
+
+  await expect(stream).not.toEmitAnything({ timeout: 80 });
+  await expect(stream).toEmitNext({ timeout: 30 });
+  await expect(stream).toComplete();
+});
+
+it('waits to return result based on delay returned from callback function', async () => {
+  const query = gql`
+    query {
+      a
+    }
+  `;
+  const delay = jest.fn().mockReturnValue(100);
+  const link = new MockLink([
+    {
+      request: { query },
+      result: { data: { a: 'a' } },
+      delay,
+    },
+  ]);
+
+  const stream = new ObservableStream(execute(link, { query }));
+
+  await expect(stream).not.toEmitAnything({ timeout: 95 });
+  await expect(stream).toEmitNext({ timeout: 6 });
+  await expect(stream).toComplete();
+
+  expect(delay).toHaveBeenCalledTimes(1);
+  expect(delay).toHaveBeenCalledWith(expect.objectContaining({ query }));
+});
+
+it('can set min/max for realisticDelay', async () => {
+  const query = gql`
+    query {
+      a
+    }
+  `;
+  const link = new MockLink([
+    {
+      request: { query },
+      result: { data: { a: 'a' } },
+      delay: realisticDelay({ min: 50, max: 100 }),
+    },
+  ]);
+
+  const stream = new ObservableStream(execute(link, { query }));
+
+  await expect(stream).not.toEmitAnything({ timeout: 45 });
+  await expect(stream).toEmitNext({ timeout: 56 });
+  await expect(stream).toComplete();
+});
+
+it('returns matched mock', async () => {
+  const query = gql`
+    query {
+      a
+    }
+  `;
+  const link = new MockLink([
+    { request: { query }, result: { data: { a: 'a' } } },
+    {
+      request: {
+        query: gql`
+          query {
+            b
+          }
+        `,
+      },
+      result: { data: { b: 'b' } },
+    },
+  ]);
+
+  const stream = new ObservableStream(execute(link, { query }));
+
+  await expect(stream).toEmitTypedValue({ data: { a: 'a' } });
+  await expect(stream).toComplete();
+});
+
+it('allows global default static delay to be defined for all instances of MockLink', async () => {
+  using _ = withRestoredDefaults();
+
+  MockLink.defaultOptions = {
+    delay: 50,
+  };
+
+  const aQuery = gql`
+    query {
+      a
+    }
+  `;
+  const bQuery = gql`
+    query {
+      b
+    }
+  `;
+
+  {
+    const link = new MockLink([
+      {
+        request: { query: aQuery },
+        result: { data: { a: 'a' } },
+      },
+      {
+        request: { query: bQuery },
+        result: { data: { a: 'b' } },
+      },
+    ]);
+
+    const streamA = new ObservableStream(execute(link, { query: aQuery }));
+
+    await expect(streamA).not.toEmitAnything({ timeout: 45 });
+    await expect(streamA).toEmitNext({ timeout: 6 });
+    await expect(streamA).toComplete();
+
+    const streamB = new ObservableStream(execute(link, { query: bQuery }));
+    await expect(streamB).not.toEmitAnything({ timeout: 45 });
+    await expect(streamB).toEmitNext({ timeout: 6 });
+    await expect(streamB).toComplete();
+  }
+
+  {
+    const link = new MockLink([
+      {
+        request: { query: aQuery },
+        result: { data: { a: 'a' } },
+      },
+      {
+        request: { query: bQuery },
+        result: { data: { a: 'b' } },
+      },
+    ]);
+
+    const streamA = new ObservableStream(execute(link, { query: aQuery }));
+
+    await expect(streamA).not.toEmitAnything({ timeout: 45 });
+    await expect(streamA).toEmitNext({ timeout: 6 });
+    await expect(streamA).toComplete();
+
+    const streamB = new ObservableStream(execute(link, { query: bQuery }));
+    await expect(streamB).not.toEmitAnything({ timeout: 45 });
+    await expect(streamB).toEmitNext({ timeout: 6 });
+    await expect(streamB).toComplete();
+  }
+});
+
+it('allows global default dynamic delay to be defined for all instances of MockLink', async () => {
+  using _ = withRestoredDefaults();
+
+  MockLink.defaultOptions = {
+    delay: operation => (operation.operationName === 'A' ? 50 : 20),
+  };
+
+  const aQuery = gql`
+    query A {
+      a
+    }
+  `;
+  const bQuery = gql`
+    query B {
+      b
+    }
+  `;
+
+  {
+    const link = new MockLink([
+      {
+        request: { query: aQuery },
+        result: { data: { a: 'a' } },
+      },
+      {
+        request: { query: bQuery },
+        result: { data: { a: 'b' } },
+      },
+    ]);
+
+    const streamA = new ObservableStream(execute(link, { query: aQuery }));
+
+    await expect(streamA).not.toEmitAnything({ timeout: 45 });
+    await expect(streamA).toEmitNext({ timeout: 6 });
+    await expect(streamA).toComplete();
+
+    const streamB = new ObservableStream(execute(link, { query: bQuery }));
+    await expect(streamB).not.toEmitAnything({ timeout: 15 });
+    await expect(streamB).toEmitNext({ timeout: 6 });
+    await expect(streamB).toComplete();
+  }
+
+  {
+    const link = new MockLink([
+      {
+        request: { query: aQuery },
+        result: { data: { a: 'a' } },
+      },
+      {
+        request: { query: bQuery },
+        result: { data: { a: 'b' } },
+      },
+    ]);
+
+    const streamA = new ObservableStream(execute(link, { query: aQuery }));
+
+    await expect(streamA).not.toEmitAnything({ timeout: 45 });
+    await expect(streamA).toEmitNext({ timeout: 6 });
+    await expect(streamA).toComplete();
+
+    const streamB = new ObservableStream(execute(link, { query: bQuery }));
+    await expect(streamB).not.toEmitAnything({ timeout: 15 });
+    await expect(streamB).toEmitNext({ timeout: 6 });
+    await expect(streamB).toComplete();
+  }
+});
+
+it('can change global defaults between creation of instances', async () => {
+  using _ = withRestoredDefaults();
+
+  MockLink.defaultOptions = {
+    delay: 50,
+  };
+
+  const aQuery = gql`
+    query {
+      a
+    }
+  `;
+  const bQuery = gql`
+    query {
+      b
+    }
+  `;
+
+  {
+    const link = new MockLink([
+      {
+        request: { query: aQuery },
+        result: { data: { a: 'a' } },
+      },
+      {
+        request: { query: bQuery },
+        result: { data: { a: 'b' } },
+      },
+    ]);
+
+    const streamA = new ObservableStream(execute(link, { query: aQuery }));
+
+    await expect(streamA).not.toEmitAnything({ timeout: 45 });
+    await expect(streamA).toEmitNext({ timeout: 6 });
+    await expect(streamA).toComplete();
+
+    const streamB = new ObservableStream(execute(link, { query: bQuery }));
+    await expect(streamB).not.toEmitAnything({ timeout: 45 });
+    await expect(streamB).toEmitNext({ timeout: 6 });
+    await expect(streamB).toComplete();
+  }
+
+  MockLink.defaultOptions = {
+    delay: 20,
+  };
+
+  {
+    const link = new MockLink([
+      {
+        request: { query: aQuery },
+        result: { data: { a: 'a' } },
+      },
+      {
+        request: { query: bQuery },
+        result: { data: { a: 'b' } },
+      },
+    ]);
+
+    const streamA = new ObservableStream(execute(link, { query: aQuery }));
+
+    await expect(streamA).toEmitNext({ timeout: 25 });
+    await expect(streamA).toComplete();
+
+    const streamB = new ObservableStream(execute(link, { query: bQuery }));
+
+    await expect(streamB).toEmitNext({ timeout: 25 });
+    await expect(streamB).toComplete();
+  }
+});
+
+it('allows per-instance default static delay to be defined for all mocks', async () => {
+  const aQuery = gql`
+    query {
+      a
+    }
+  `;
+  const bQuery = gql`
+    query {
+      b
+    }
+  `;
+  const link = new MockLink(
+    [
+      {
+        request: { query: aQuery },
+        result: { data: { a: 'a' } },
+      },
+      {
+        request: { query: bQuery },
+        result: { data: { a: 'b' } },
+      },
+    ],
+    { defaultOptions: { delay: 50 } },
+  );
+
+  {
+    const stream = new ObservableStream(execute(link, { query: aQuery }));
+
+    await expect(stream).not.toEmitAnything({ timeout: 45 });
+    await expect(stream).toEmitNext({ timeout: 6 });
+    await expect(stream).toComplete();
+  }
+
+  {
+    const stream = new ObservableStream(execute(link, { query: bQuery }));
+
+    await expect(stream).not.toEmitAnything({ timeout: 45 });
+    await expect(stream).toEmitNext({ timeout: 6 });
+    await expect(stream).toComplete();
+  }
+});
+
+it('allows per-instance default dynamic delay to be defined for all mocks', async () => {
+  const aQuery = gql`
+    query A {
+      a
+    }
+  `;
+  const bQuery = gql`
+    query B {
+      b
+    }
+  `;
+  const link = new MockLink(
+    [
+      {
+        request: { query: aQuery },
+        result: { data: { a: 'a' } },
+      },
+      {
+        request: { query: bQuery },
+        result: { data: { a: 'b' } },
+      },
+    ],
+    {
+      defaultOptions: {
+        delay: operation => (operation.operationName === 'A' ? 50 : 20),
+      },
+    },
+  );
+
+  {
+    const stream = new ObservableStream(execute(link, { query: aQuery }));
+
+    await expect(stream).not.toEmitAnything({ timeout: 45 });
+    await expect(stream).toEmitNext({ timeout: 6 });
+    await expect(stream).toComplete();
+  }
+
+  {
+    const stream = new ObservableStream(execute(link, { query: bQuery }));
+
+    await expect(stream).not.toEmitAnything({ timeout: 15 });
+    await expect(stream).toEmitNext({ timeout: 6 });
+    await expect(stream).toComplete();
+  }
+});
+
+it('prefers configured delay over default delay', async () => {
+  using _ = withRestoredDefaults();
+
+  const query = gql`
+    query {
+      a
+    }
+  `;
+  const link = new MockLink(
+    [
+      {
+        request: { query },
+        result: { data: { a: 'a' } },
+        delay: 20,
+      },
+      {
+        request: { query },
+        result: { data: { a: 'a' } },
+      },
+    ],
+    { defaultOptions: { delay: 50 } },
+  );
+
+  {
+    const stream = new ObservableStream(execute(link, { query }));
+
+    await expect(stream).toEmitNext({ timeout: 25 });
+    await expect(stream).toComplete();
+  }
+
+  // This uses the default delay
+  {
+    const stream = new ObservableStream(execute(link, { query }));
+
+    await expect(stream).not.toEmitAnything({ timeout: 45 });
+    await expect(stream).toEmitNext({ timeout: 6 });
+    await expect(stream).toComplete();
+  }
+});
+
+it('prefers configured delay > instance defaults > global defaults', async () => {
+  using _ = withRestoredDefaults();
+
+  MockLink.defaultOptions = {
+    delay: 50,
+  };
+
+  const query = gql`
+    query {
+      a
+    }
+  `;
+
+  {
+    const link = new MockLink([
+      {
+        request: { query },
+        result: { data: { a: 'a' } },
+        delay: 20,
+      },
+      {
+        request: { query },
+        result: { data: { a: 'a' } },
+      },
+    ]);
+
+    const stream1 = new ObservableStream(execute(link, { query }));
+
+    await expect(stream1).toEmitNext({ timeout: 25 });
+    await expect(stream1).toComplete();
+
+    const stream2 = new ObservableStream(execute(link, { query }));
+
+    await expect(stream2).not.toEmitAnything({ timeout: 45 });
+    await expect(stream2).toEmitNext({ timeout: 6 });
+    await expect(stream2).toComplete();
+  }
+
+  {
+    const link = new MockLink(
+      [
+        {
+          request: { query },
+          result: { data: { a: 'a' } },
+          delay: 20,
+        },
+        {
+          request: { query },
+          result: { data: { a: 'a' } },
+        },
+      ],
+      { defaultOptions: { delay: 30 } },
+    );
+
+    const stream1 = new ObservableStream(execute(link, { query }));
+
+    await expect(stream1).toEmitNext({ timeout: 25 });
+    await expect(stream1).toComplete();
+
+    const stream2 = new ObservableStream(execute(link, { query }));
+
+    await expect(stream2).not.toEmitAnything({ timeout: 25 });
+    await expect(stream2).toEmitNext({ timeout: 6 });
+    await expect(stream2).toComplete();
+  }
+});
+
+it('uses realistic delay by default', async () => {
   const query = gql`
     query A {
       a
     }
   `;
+  const link = new MockLink([{ request: { query }, result: { data: { a: 'a' } } }]);
 
-  it('should not require a result or error when delay equals Infinity', async () => {
-    using _fakeTimers = enableFakeTimers();
+  {
+    const stream = new ObservableStream(execute(link, { query }));
 
-    const mockLink = new MockLink([
-      {
-        request: {
-          query,
+    // The default min is 20 so we don't expect to see anything before then
+    await expect(stream).not.toEmitAnything({ timeout: 15 });
+    // The default max is 50 so we should definitely have a result now
+    await expect(stream).toEmitNext({ timeout: 36 });
+    await expect(stream).toComplete();
+  }
+});
+
+it('matches like mocks sequentially', async () => {
+  const query = gql`
+    query {
+      a
+    }
+  `;
+  const link = new MockLink([
+    { request: { query }, result: { data: { a: 'a' } } },
+    { request: { query }, result: { data: { a: 'b' } } },
+    { request: { query }, result: { data: { a: 'c' } } },
+  ]);
+
+  {
+    const stream = new ObservableStream(execute(link, { query }));
+
+    await expect(stream).toEmitTypedValue({ data: { a: 'a' } });
+    await expect(stream).toComplete();
+  }
+
+  {
+    const stream = new ObservableStream(execute(link, { query }));
+
+    await expect(stream).toEmitTypedValue({ data: { a: 'b' } });
+    await expect(stream).toComplete();
+  }
+
+  {
+    const stream = new ObservableStream(execute(link, { query }));
+
+    await expect(stream).toEmitTypedValue({ data: { a: 'c' } });
+    await expect(stream).toComplete();
+  }
+});
+
+it('matches out-of-order queries', async () => {
+  const aQuery = gql`
+    query {
+      a
+    }
+  `;
+  const bQuery = gql`
+    query {
+      b
+    }
+  `;
+  const link = new MockLink([
+    { request: { query: aQuery }, result: { data: { a: 'a' } } },
+    { request: { query: bQuery }, result: { data: { b: 'b' } } },
+    { request: { query: aQuery }, result: { data: { a: 'c' } } },
+  ]);
+
+  {
+    const stream = new ObservableStream(execute(link, { query: aQuery }));
+
+    await expect(stream).toEmitTypedValue({ data: { a: 'a' } });
+    await expect(stream).toComplete();
+  }
+
+  {
+    const stream = new ObservableStream(execute(link, { query: aQuery }));
+
+    await expect(stream).toEmitTypedValue({ data: { a: 'c' } });
+    await expect(stream).toComplete();
+  }
+
+  {
+    const stream = new ObservableStream(execute(link, { query: bQuery }));
+
+    await expect(stream).toEmitTypedValue({ data: { b: 'b' } });
+    await expect(stream).toComplete();
+  }
+});
+
+it('returns error when no mock matches request', async () => {
+  const query = gql`
+    query {
+      a
+    }
+  `;
+
+  {
+    const link = new MockLink([], { showWarnings: false });
+    const stream = new ObservableStream(execute(link, { query }));
+
+    const error = await stream.takeError();
+    expect(error.message).toMatchSnapshot();
+  }
+
+  {
+    const link = new MockLink(
+      [
+        {
+          request: {
+            query: gql`
+              query {
+                b
+              }
+            `,
+          },
+          result: { data: { b: 'b' } },
         },
-        delay: Infinity,
-      },
-    ]);
-
-    const observable = execute(mockLink, { query });
-
-    const subscription = observable.subscribe(
-      () => fail('onNext was called'),
-      () => fail('onError was called'),
-      () => fail('onComplete was called'),
+      ],
+      { showWarnings: false },
     );
-    jest.advanceTimersByTime(MAXIMUM_DELAY);
-    subscription.unsubscribe();
-  });
+    const stream = new ObservableStream(execute(link, { query }));
 
-  it('should require result or error when delay is just large', done => {
-    using _fakeTimers = enableFakeTimers();
+    const error = await stream.takeError();
+    expect(error.message).toMatchSnapshot();
+  }
+});
 
-    const mockLink = new MockLink([
+it('consumes matched mock', async () => {
+  const query = gql`
+    query {
+      a
+    }
+  `;
+  const link = new MockLink(
+    [
       {
-        request: {
-          query,
-        },
-        delay: MAXIMUM_DELAY,
+        request: { query },
+        result: { data: { a: 'a' } },
       },
-    ]);
+    ],
+    { showWarnings: false },
+  );
 
-    execute(mockLink, { query }).subscribe(
-      () => fail('onNext was called'),
-      error => {
-        expect(error).toBeInstanceOf(Error);
-        expect(error.message).toMatch(
-          /^Mocked response should contain either `result`, `error` or a `delay` of `Infinity`: /,
-        );
-        done();
-      },
-    );
+  {
+    const stream = new ObservableStream(execute(link, { query }));
 
-    jest.advanceTimersByTime(MAXIMUM_DELAY);
-  });
+    await expect(stream).toEmitTypedValue({ data: { a: 'a' } });
+  }
 
-  it('should fill in default variables if they are missing in mocked requests', async () => {
-    const query = gql`
-      query GetTodo($done: Boolean = true, $user: String!) {
-        todo(user: $user, done: $done) {
-          id
-        }
+  {
+    const stream = new ObservableStream(execute(link, { query }));
+
+    const error = await stream.takeError();
+    expect(error.message).toMatchSnapshot();
+  }
+});
+
+it('returns matched mock with variables', async () => {
+  const query = gql`
+    query ($id: ID!) {
+      user(id: $id) {
+        name
       }
-    `;
-    const mocks = [
-      {
-        // default should get filled in here
-        request: { query, variables: { user: 'Tim' } },
-        result: {
-          data: { todo: { id: 1 } },
-        },
-      },
-      {
-        // we provide our own `done`, so it should not get filled in
-        request: { query, variables: { user: 'Tim', done: false } },
-        result: {
-          data: { todo: { id: 2 } },
-        },
-      },
-      {
-        // one more that has a different user variable and should never match
-        request: { query, variables: { user: 'Tom' } },
-        result: {
-          data: { todo: { id: 2 } },
-        },
-      },
-    ];
+    }
+  `;
+  const link = new MockLink([
+    {
+      request: { query, variables: { id: 1 } },
+      result: { data: { user: { __typename: 'User', name: 'User 1' } } },
+    },
+    {
+      request: { query, variables: { id: 2 } },
+      result: { data: { user: { __typename: 'User', name: 'User 2' } } },
+    },
+  ]);
 
-    // Apollo Client will always fill in default values for missing variables
-    // in the operation before calling the Link, so we have to do the same here
-    // when we call `execute`
-    const defaults = { done: true };
-    const link = new MockLink(mocks, false, { showWarnings: false });
-    {
-      // Non-optional variable is missing, should not match.
-      const stream = new ObservableStream(execute(link, { query, variables: { ...defaults } }));
-      await stream.takeError();
-    }
-    {
-      // Execute called incorrectly without a default variable filled in.
-      // This will never happen in Apollo Client since AC always fills these
-      // before calling `execute`, so it's okay if it results in a "no match"
-      // scenario here.
-      const stream = new ObservableStream(execute(link, { query, variables: { user: 'Tim' } }));
-      await stream.takeError();
-    }
-    {
-      // Expect default value to be filled in the mock request.
-      const stream = new ObservableStream(execute(link, { query, variables: { ...defaults, user: 'Tim' } }));
-      const result = await stream.takeNext();
-      expect(result).toEqual({ data: { todo: { id: 1 } } });
-    }
-    {
-      // Test that defaults don't overwrite explicitly different values in a mock request.
-      const stream = new ObservableStream(
-        execute(link, {
-          query,
-          variables: { ...defaults, user: 'Tim', done: false },
-        }),
-      );
-      const result = await stream.takeNext();
-      expect(result).toEqual({ data: { todo: { id: 2 } } });
-    }
+  const stream = new ObservableStream(execute(link, { query, variables: { id: 2 } }));
+
+  await expect(stream).toEmitTypedValue({
+    data: { user: { __typename: 'User', name: 'User 2' } },
   });
+  await expect(stream).toComplete();
+});
+
+it('matches variables with undefined values', async () => {
+  const query = gql`
+    query ($id: ID!) {
+      user(id: $id) {
+        name
+      }
+    }
+  `;
+  const link = new MockLink([
+    {
+      request: { query, variables: { id: 1, foo: undefined } },
+      result: { data: { user: { __typename: 'User', name: 'User 1' } } },
+    },
+  ]);
+
+  const stream = new ObservableStream(execute(link, { query, variables: { id: 1 } }));
+
+  await expect(stream).toEmitTypedValue({
+    data: { user: { __typename: 'User', name: 'User 1' } },
+  });
+  await expect(stream).toComplete();
+});
+
+it('should fill in default variables if they are missing in mocked requests', async () => {
+  const query = gql`
+    query GetTodo($done: Boolean = true, $user: String!) {
+      todo(user: $user, done: $done) {
+        id
+      }
+    }
+  `;
+  const mocks = [
+    {
+      // default should get filled in here
+      request: { query, variables: { user: 'Tim' } },
+      result: {
+        data: { todo: { id: 1 } },
+      },
+    },
+    {
+      // we provide our own `done`, so it should not get filled in
+      request: { query, variables: { user: 'Tim', done: false } },
+      result: {
+        data: { todo: { id: 2 } },
+      },
+    },
+    {
+      // one more that has a different user variable and should never match
+      request: { query, variables: { user: 'Tom' } },
+      result: {
+        data: { todo: { id: 2 } },
+      },
+    },
+  ];
+
+  // Apollo Client will always fill in default values for missing variables
+  // in the operation before calling the Link, so we have to do the same here
+  // when we call `execute`
+  const defaults = { done: true };
+  const link = new MockLink(mocks, { showWarnings: false });
+  {
+    // Non-optional variable is missing, should not match.
+    const stream = new ObservableStream(execute(link, { query, variables: { ...defaults } }));
+    await expect(stream).toEmitError();
+  }
+  {
+    // Execute called incorrectly without a default variable filled in.
+    // This will never happen in Apollo Client since AC always fills these
+    // before calling `execute`, so it's okay if it results in a "no match"
+    // scenario here.
+    const stream = new ObservableStream(execute(link, { query, variables: { user: 'Tim' } }));
+    await expect(stream).toEmitError();
+  }
+  {
+    // Expect default value to be filled in the mock request.
+    const stream = new ObservableStream(execute(link, { query, variables: { ...defaults, user: 'Tim' } }));
+    await expect(stream).toEmitTypedValue({ data: { todo: { id: 1 } } });
+  }
+  {
+    // Test that defaults don't overwrite explicitly different values in a mock request.
+    const stream = new ObservableStream(
+      execute(link, {
+        query,
+        variables: { ...defaults, user: 'Tim', done: false },
+      }),
+    );
+    await expect(stream).toEmitTypedValue({ data: { todo: { id: 2 } } });
+  }
+});
+
+it('does not show variables in error message if none configured', async () => {
+  const query = gql`
+    query {
+      a
+    }
+  `;
+  const link = new MockLink(
+    [
+      {
+        request: { query },
+        result: { data: { user: { __typename: 'User', name: 'User 1' } } },
+      },
+    ],
+    { showWarnings: false },
+  );
+
+  const stream = new ObservableStream(
+    execute(link, {
+      query: gql`
+        query {
+          b
+        }
+      `,
+    }),
+  );
+
+  const error = await stream.takeError();
+  expect(error.message).toMatchSnapshot();
+});
+
+it('shows all configured variables for queries that did not match request', async () => {
+  const query = gql`
+    query ($id: ID!) {
+      user(id: $id) {
+        name
+      }
+    }
+  `;
+  const link = new MockLink(
+    [
+      {
+        request: { query, variables: { id: 1 } },
+        result: { data: { user: { __typename: 'User', name: 'User 1' } } },
+      },
+      {
+        request: { query, variables: { id: 2 } },
+        result: { data: { user: { __typename: 'User', name: 'User 2' } } },
+      },
+      {
+        request: { query, variables: { id: 3 } },
+        result: { data: { user: { __typename: 'User', name: 'User 3' } } },
+      },
+    ],
+    { showWarnings: false },
+  );
+
+  const stream = new ObservableStream(execute(link, { query, variables: { id: 4 } }));
+
+  const error = await stream.takeError();
+  expect(error.message).toMatchSnapshot();
+});
+
+it('shows <undefined> for mocks with no configured variables', async () => {
+  const query = gql`
+    query ($id: ID!) {
+      user(id: $id) {
+        name
+      }
+    }
+  `;
+  const link = new MockLink(
+    [
+      {
+        request: { query },
+        result: { data: { user: { __typename: 'User', name: 'User 1' } } },
+      },
+      {
+        request: { query, variables: { id: 2 } },
+        result: { data: { user: { __typename: 'User', name: 'User 2' } } },
+      },
+    ],
+    { showWarnings: false },
+  );
+
+  const stream = new ObservableStream(execute(link, { query, variables: { id: 3 } }));
+
+  const error = await stream.takeError();
+  expect(error.message).toMatchSnapshot();
+});
+
+it('shows default variables from query in error message for mocks with no configured variables', async () => {
+  const query = gql`
+    query ($id: ID! = 1) {
+      user(id: $id) {
+        name
+      }
+    }
+  `;
+  const link = new MockLink(
+    [
+      {
+        request: { query },
+        result: { data: { user: { __typename: 'User', name: 'User 1' } } },
+      },
+      {
+        request: { query, variables: { id: 2 } },
+        result: { data: { user: { __typename: 'User', name: 'User 2' } } },
+      },
+    ],
+    { showWarnings: false },
+  );
+
+  const stream = new ObservableStream(execute(link, { query, variables: { id: 3 } }));
+
+  const error = await stream.takeError();
+  expect(error.message).toMatchSnapshot();
+});
+
+it('shows empty object for variables when configured with empty vars', async () => {
+  const query = gql`
+    query ($id: ID!) {
+      user(id: $id) {
+        name
+      }
+    }
+  `;
+  const link = new MockLink(
+    [
+      {
+        request: { query, variables: {} },
+        result: { data: { user: { __typename: 'User', name: 'User 1' } } },
+      },
+      {
+        request: { query, variables: { id: 2 } },
+        result: { data: { user: { __typename: 'User', name: 'User 2' } } },
+      },
+    ],
+    { showWarnings: false },
+  );
+
+  const stream = new ObservableStream(execute(link, { query, variables: { id: 3 } }));
+
+  const error = await stream.takeError();
+  expect(error.message).toMatchSnapshot();
+});
+
+it('throws error when a query is not provided', async () => {
+  expect(
+    () =>
+      new MockLink([
+        {
+          // @ts-expect-error
+          request: {},
+          result: { data: null },
+        },
+      ]),
+  ).toThrow(/^Expecting a parsed GraphQL document/);
+});
+
+it('throws error when query is a plain string', async () => {
+  expect(
+    () =>
+      new MockLink([
+        {
+          request: {
+            // @ts-ignore
+            query: `
+              query {
+                foo
+              }
+            `,
+          },
+          result: {
+            data: null,
+          },
+        },
+      ]),
+  ).toThrow(/^Expecting a parsed GraphQL document/);
+});
+
+it('throws error when given a client-only query', async () => {
+  expect(
+    () =>
+      new MockLink([
+        {
+          request: {
+            query: gql`
+              query {
+                foo @client
+              }
+            `,
+          },
+          result: {
+            data: {
+              foo: 'never',
+            },
+          },
+        },
+      ]),
+  ).toThrow(
+    new InvariantError(
+      'Cannot mock a client-only query. Mocked responses should contain at least one non-client field.',
+    ),
+  );
+});
+
+it('throws error when passing maxUsageCount <= 0', async () => {
+  expect(
+    () =>
+      new MockLink([
+        {
+          request: {
+            query: gql`
+              query {
+                foo
+              }
+            `,
+          },
+          maxUsageCount: -1,
+          result: {
+            data: null,
+          },
+        },
+      ]),
+  ).toThrow(new InvariantError('Mocked response `maxUsageCount` must be greater than 0. Given -1'));
+
+  expect(
+    () =>
+      new MockLink([
+        {
+          request: {
+            query: gql`
+              query {
+                foo
+              }
+            `,
+          },
+          maxUsageCount: 0,
+          result: {
+            data: null,
+          },
+        },
+      ]),
+  ).toThrow(new InvariantError('Mocked response `maxUsageCount` must be greater than 0. Given 0'));
+});
+
+it('passes variables to the `variables` callback function', async () => {
+  const query = gql`
+    query ($id: ID!) {
+      user(id: $id) {
+        name
+      }
+    }
+  `;
+
+  const variables = { id: 1 };
+  const variableMatcher = jest.fn().mockReturnValue(true);
+
+  const link = new MockLink([
+    {
+      request: { query, variables: variableMatcher },
+      result: { data: { user: { __typename: 'User', name: 'Test' } } },
+    },
+  ]);
+
+  const stream = new ObservableStream(execute(link, { query, variables }));
+
+  await expect(stream).toEmitTypedValue({
+    data: { user: { __typename: 'User', name: 'Test' } },
+  });
+
+  expect(variableMatcher).toHaveBeenCalledTimes(1);
+  expect(variableMatcher).toHaveBeenCalledWith(variables);
+});
+
+it('uses mock when `variables` as callback returns true', async () => {
+  const query = gql`
+    query ($id: ID!) {
+      user(id: $id) {
+        name
+      }
+    }
+  `;
+
+  const link = new MockLink([
+    {
+      request: { query, variables: ({ id }) => id === 1 },
+      result: { data: { user: { __typename: 'User', name: 'User 1' } } },
+    },
+    {
+      request: { query, variables: ({ id }) => id === 2 },
+      result: { data: { user: { __typename: 'User', name: 'User 2' } } },
+    },
+  ]);
+
+  const stream = new ObservableStream(execute(link, { query, variables: { id: 2 } }));
+
+  await expect(stream).toEmitTypedValue({
+    data: { user: { __typename: 'User', name: 'User 2' } },
+  });
+});
+
+it('fails when variables returns false', async () => {
+  const query = gql`
+    query ($id: ID!) {
+      user(id: $id) {
+        name
+      }
+    }
+  `;
+
+  const link = new MockLink(
+    [
+      {
+        request: { query, variables: () => false },
+        result: { data: { user: { __typename: 'User', name: 'User 1' } } },
+      },
+    ],
+    { showWarnings: false },
+  );
+
+  const stream = new ObservableStream(execute(link, { query, variables: { id: 1 } }));
+
+  const error = await stream.takeError();
+  expect(error.message).toMatchSnapshot();
 });
 
 it('removes @nonreactive directives from fields', async () => {
@@ -234,7 +1215,7 @@ it('removes @nonreactive directives from fields', async () => {
   {
     const stream = new ObservableStream(execute(link, { query: serverQuery }));
 
-    await expect(stream.takeNext()).resolves.toEqual({
+    await expect(stream).toEmitTypedValue({
       data: { a: 1, b: 2, c: 3 },
     });
   }
@@ -242,7 +1223,7 @@ it('removes @nonreactive directives from fields', async () => {
   {
     const stream = new ObservableStream(execute(link, { query: serverQuery }));
 
-    await expect(stream.takeNext()).resolves.toEqual({
+    await expect(stream).toEmitTypedValue({
       data: { a: 4, b: 5, c: 6 },
     });
   }
@@ -287,7 +1268,7 @@ it('removes @connection directives', async () => {
   {
     const stream = new ObservableStream(execute(link, { query: serverQuery }));
 
-    await expect(stream.takeNext()).resolves.toEqual({
+    await expect(stream).toEmitTypedValue({
       data: { a: 1, b: 2, c: 3 },
     });
   }
@@ -295,7 +1276,7 @@ it('removes @connection directives', async () => {
   {
     const stream = new ObservableStream(execute(link, { query: serverQuery }));
 
-    await expect(stream.takeNext()).resolves.toEqual({
+    await expect(stream).toEmitTypedValue({
       data: { a: 4, b: 5, c: 6 },
     });
   }
@@ -338,14 +1319,150 @@ it('removes fields with @client directives', async () => {
   {
     const stream = new ObservableStream(execute(link, { query: serverQuery }));
 
-    await expect(stream.takeNext()).resolves.toEqual({ data: { a: 1, b: 2 } });
+    await expect(stream).toEmitTypedValue({ data: { a: 1, b: 2 } });
   }
 
   {
     const stream = new ObservableStream(execute(link, { query: serverQuery }));
 
-    await expect(stream.takeNext()).resolves.toEqual({ data: { a: 3, b: 4 } });
+    await expect(stream).toEmitTypedValue({ data: { a: 3, b: 4 } });
   }
+});
+
+it('matches mocks against queries with auto-labeled @defer fragments', async () => {
+  const serverQuery = gql`
+    query A {
+      a
+      ... on Query @defer(label: "ac_0") {
+        b
+      }
+      ... on Query @defer(label: "ac_1") {
+        c
+      }
+    }
+  `;
+
+  const link = new MockLink([
+    {
+      request: {
+        query: gql`
+          query A {
+            a
+            ... on Query @defer {
+              b
+            }
+            ... on Query @defer {
+              c
+            }
+          }
+        `,
+      },
+      result: { data: { a: 1, b: 2, c: 3 } },
+    },
+  ]);
+
+  const stream = new ObservableStream(execute(link, { query: serverQuery }));
+
+  await expect(stream).toEmitTypedValue({ data: { a: 1, b: 2, c: 3 } });
+});
+
+it('matches mocks that define their own @defer labels', async () => {
+  const serverQuery = gql`
+    query A {
+      a
+      ... on Query @defer(label: "mine") {
+        b
+      }
+      ... on Query @defer(label: "ac_0") {
+        c
+      }
+    }
+  `;
+
+  const link = new MockLink([
+    {
+      request: {
+        query: gql`
+          query A {
+            a
+            ... on Query @defer(label: "mine") {
+              b
+            }
+            ... on Query @defer {
+              c
+            }
+          }
+        `,
+      },
+      result: { data: { a: 1, b: 2, c: 3 } },
+    },
+  ]);
+
+  const stream = new ObservableStream(execute(link, { query: serverQuery }));
+
+  await expect(stream).toEmitTypedValue({ data: { a: 1, b: 2, c: 3 } });
+});
+
+it('shows warning in console when a mock cannot be matched', async () => {
+  using _ = spyOnConsole('warn');
+  const query = gql`
+    query {
+      foo
+    }
+  `;
+
+  const link = new MockLink([
+    {
+      request: {
+        query: gql`
+          query OtherQuery {
+            otherQuery {
+              id
+            }
+          }
+        `,
+      },
+      result: { data: { otherQuery: { id: 1 } } },
+    },
+  ]);
+
+  const stream = new ObservableStream(execute(link, { query }));
+  await expect(stream).toEmitError();
+
+  expect(console.warn).toHaveBeenCalledTimes(1);
+  expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('No more mocked responses'));
+});
+
+it('silences console warning for unmatched mocks when `showWarnings` is `false`', async () => {
+  using _ = spyOnConsole('warn');
+  const query = gql`
+    query {
+      foo
+    }
+  `;
+
+  const link = new MockLink(
+    [
+      {
+        request: {
+          query: gql`
+            query OtherQuery {
+              otherQuery {
+                id
+              }
+            }
+          `,
+        },
+        result: { data: { otherQuery: { id: 1 } } },
+      },
+    ],
+    { showWarnings: false },
+  );
+
+  const stream = new ObservableStream(execute(link, { query }));
+  await expect(stream).toEmitError();
+
+  expect(console.warn).not.toHaveBeenCalled();
 });
 
 it('shows undefined and NaN in debug messages', async () => {
@@ -374,13 +1491,283 @@ it('shows undefined and NaN in debug messages', async () => {
   expect(error.message).toMatchSnapshot();
 });
 
+it('uses a mock a configured number of times when `maxUsageCount` is configured', async () => {
+  const query = gql`
+    query GetUser($username: String!) {
+      user(username: $username) {
+        id
+      }
+    }
+  `;
+
+  const result = { data: { user: { __typename: 'User', id: 1 } } };
+  const variables = { username: 'username' };
+
+  const link = new MockLink(
+    [
+      {
+        request: { query, variables },
+        maxUsageCount: 2,
+        result,
+      },
+    ],
+    { showWarnings: false },
+  );
+
+  {
+    const stream = new ObservableStream(execute(link, { query, variables }));
+
+    await expect(stream).toEmitTypedValue(result);
+    await expect(stream).toComplete();
+  }
+
+  {
+    const stream = new ObservableStream(execute(link, { query, variables }));
+
+    await expect(stream).toEmitTypedValue(result);
+    await expect(stream).toComplete();
+  }
+
+  {
+    const stream = new ObservableStream(execute(link, { query, variables }));
+
+    const error = await stream.takeError();
+    expect(error.message).toMatchSnapshot();
+  }
+});
+
+it('uses a mock infinite number of times when `maxUsageCount` is configured with Number.POSITIVE_INFINITY', async () => {
+  const query = gql`
+    query GetUser($username: String!) {
+      user(username: $username) {
+        id
+      }
+    }
+  `;
+
+  const result = { data: { user: { __typename: 'User', id: 1 } } };
+  const variables = { username: 'username' };
+
+  const link = new MockLink([
+    {
+      request: { query, variables },
+      maxUsageCount: Number.POSITIVE_INFINITY,
+      result,
+      delay: 0,
+    },
+  ]);
+
+  for (let i = 0; i < 100; i++) {
+    const stream = new ObservableStream(execute(link, { query, variables }));
+
+    await expect(stream).toEmitTypedValue(result);
+    await expect(stream).toComplete();
+  }
+});
+
+it('uses a mock once when `maxUsageCount` is not configured', async () => {
+  const query = gql`
+    query GetUser($username: String!) {
+      user(username: $username) {
+        id
+      }
+    }
+  `;
+
+  const result = { data: { user: { __typename: 'User', id: 1 } } };
+  const variables = { username: 'username' };
+
+  const link = new MockLink([{ request: { query, variables }, result }], {
+    showWarnings: false,
+  });
+
+  {
+    const stream = new ObservableStream(execute(link, { query, variables }));
+
+    await expect(stream).toEmitTypedValue(result);
+    await expect(stream).toComplete();
+  }
+
+  {
+    const stream = new ObservableStream(execute(link, { query, variables }));
+
+    const error = await stream.takeError();
+    expect(error.message).toMatchSnapshot();
+  }
+});
+
+it('can still use other mocks after a mock has been fully consumed', async () => {
+  const query = gql`
+    query GetUser($username: String!) {
+      user(username: $username) {
+        id
+      }
+    }
+  `;
+
+  const result1 = { data: { user: { __typename: 'User', id: 1 } } };
+  const result2 = { data: { user: { __typename: 'User', id: 2 } } };
+  const variables = { username: 'username' };
+
+  const link = new MockLink([
+    {
+      request: { query, variables },
+      maxUsageCount: 2,
+      result: result1,
+    },
+    {
+      request: { query, variables },
+      result: result2,
+    },
+  ]);
+
+  {
+    const stream = new ObservableStream(execute(link, { query, variables }));
+
+    await expect(stream).toEmitTypedValue(result1);
+    await expect(stream).toComplete();
+  }
+
+  {
+    const stream = new ObservableStream(execute(link, { query, variables }));
+
+    await expect(stream).toEmitTypedValue(result1);
+    await expect(stream).toComplete();
+  }
+
+  {
+    const stream = new ObservableStream(execute(link, { query, variables }));
+
+    await expect(stream).toEmitTypedValue(result2);
+    await expect(stream).toComplete();
+  }
+});
+
+it('`result` accepts callback function', async () => {
+  const query = gql`
+    query GetUser($username: String!) {
+      user(username: $username) {
+        username
+      }
+    }
+  `;
+
+  const variables = { username: 'username' };
+
+  const link = new MockLink([
+    {
+      request: { query, variables },
+      result: vars => ({
+        data: { user: { __typename: 'User', name: vars.username } },
+      }),
+    },
+  ]);
+
+  const stream = new ObservableStream(execute(link, { query, variables }));
+
+  await expect(stream).toEmitTypedValue({
+    data: { user: { __typename: 'User', name: variables.username } },
+  });
+  await expect(stream).toComplete();
+});
+
+it('mocks is consumed after running `result` callback function', async () => {
+  const query = gql`
+    query GetUser($username: String!) {
+      user(username: $username) {
+        id
+      }
+    }
+  `;
+
+  const variables = { username: 'username' };
+
+  const link = new MockLink(
+    [
+      {
+        request: { query, variables },
+        result: vars => ({
+          data: { user: { __typename: 'User', name: vars.username } },
+        }),
+      },
+    ],
+    { showWarnings: false },
+  );
+
+  {
+    const stream = new ObservableStream(execute(link, { query, variables }));
+
+    await expect(stream).toEmitTypedValue({
+      data: { user: { __typename: 'User', name: variables.username } },
+    });
+    await expect(stream).toComplete();
+  }
+
+  {
+    const stream = new ObservableStream(execute(link, { query, variables }));
+
+    const error = await stream.takeError();
+    expect(error.message).toMatchSnapshot();
+  }
+});
+
+it('can use `result` as callback with `maxUsageCount`', async () => {
+  const query = gql`
+    query GetUser($username: String!) {
+      user(username: $username) {
+        id
+      }
+    }
+  `;
+
+  const variables = { username: 'username' };
+
+  const link = new MockLink(
+    [
+      {
+        request: { query, variables },
+        result: vars => ({
+          data: { user: { __typename: 'User', name: vars.username } },
+        }),
+        maxUsageCount: 2,
+      },
+    ],
+    { showWarnings: false },
+  );
+
+  {
+    const stream = new ObservableStream(execute(link, { query, variables }));
+
+    await expect(stream).toEmitTypedValue({
+      data: { user: { __typename: 'User', name: variables.username } },
+    });
+    await expect(stream).toComplete();
+  }
+
+  {
+    const stream = new ObservableStream(execute(link, { query, variables }));
+
+    await expect(stream).toEmitTypedValue({
+      data: { user: { __typename: 'User', name: variables.username } },
+    });
+    await expect(stream).toComplete();
+  }
+
+  {
+    const stream = new ObservableStream(execute(link, { query, variables }));
+
+    const error = await stream.takeError();
+    expect(error.message).toMatchSnapshot();
+  }
+});
+
 describe.skip('type tests', () => {
   const ANY = {} as any;
-  it('covariant behaviour: `MockedResponses<X,Y>` should be assignable to `MockedResponse`', () => {
-    let unspecificArray: MockedResponse[] = [];
-    let specificArray: MockedResponse<{ foo: string }, { foo: string }>[] = [];
-    let unspecificResponse: MockedResponse = ANY;
-    let specificResponse: MockedResponse<{ foo: string }, { foo: string }> = ANY;
+  it('covariant behaviour: `MockLink.MockedResponses<X,Y>` should be assignable to `MockLink.MockedResponse`', () => {
+    let unspecificArray: MockLink.MockedResponse[] = [];
+    let specificArray: MockLink.MockedResponse<{ foo: string }, { foo: string }>[] = [];
+    let unspecificResponse: MockLink.MockedResponse = ANY;
+    let specificResponse: MockLink.MockedResponse<{ foo: string }, { foo: string }> = ANY;
 
     unspecificArray.push(specificResponse);
     unspecificArray.push(unspecificResponse);
@@ -402,5 +1789,66 @@ describe.skip('type tests', () => {
     unspecificResponse = specificResponse;
     // @ts-expect-error
     specificResponse = unspecificResponse;
+  });
+
+  describe('MockLink.MockedResponse.result as a callback', () => {
+    const setup = () => {
+      const weaklyTypedMockResponse: MockLink.MockedResponse = {
+        request: {
+          query: gql`
+            query A {
+              a
+            }
+          `,
+        },
+      };
+
+      const stronglyTypedMockResponse: MockLink.MockedResponse<{ a: string }, { input: string }> = {
+        request: {
+          query: gql`
+            query A {
+              a
+            }
+          `,
+        },
+      };
+
+      return {
+        weaklyTypedMockResponse,
+        stronglyTypedMockResponse,
+      };
+    };
+
+    it("returned 'data' can be any object with untyped response", () => {
+      const { weaklyTypedMockResponse } = setup();
+
+      weaklyTypedMockResponse.result = ({ fake: { faker } }) => ({
+        data: {
+          pretend: faker,
+        },
+      });
+    });
+
+    it("can't return output that doesn't match TData", () => {
+      const { stronglyTypedMockResponse } = setup();
+
+      // @ts-expect-error return type does not match `TData`
+      stronglyTypedMockResponse.result = () => ({
+        data: {
+          a: 123,
+        },
+      });
+    });
+
+    it("can't use input variables that don't exist in TVariables", () => {
+      const { stronglyTypedMockResponse } = setup();
+
+      // @ts-expect-error unknown variables
+      stronglyTypedMockResponse.result = ({ fake: { faker } }) => ({
+        data: {
+          a: faker,
+        },
+      });
+    });
   });
 });

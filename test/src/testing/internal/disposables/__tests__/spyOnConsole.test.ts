@@ -1,22 +1,10 @@
-import { spyOnConsole } from '@apollo/client/testing/internal/disposables';
+import { spyOnConsole } from '@apollo/client/testing/internal';
 
 const originalLog = console.log;
 const originalWarn = console.warn;
 const originalError = console.error;
 const originalDebug = console.debug;
 const originalInfo = console.info;
-
-/*
- * Ugly workaround until https://github.com/jestjs/jest/issues/14874 is fixed
- */
-const disposeSymbol: unique symbol = Symbol('Symbol.dispose');
-const asyncDisposeSymbol: unique symbol = Symbol('Symbol.asyncDispose');
-type Writable<T> = {
-  -readonly [TKey in keyof T]: T[TKey];
-};
-(Symbol as Writable<SymbolConstructor>).asyncDispose ??=
-  asyncDisposeSymbol as unknown as SymbolConstructor['asyncDispose'];
-(Symbol as Writable<SymbolConstructor>).dispose ??= disposeSymbol as unknown as SymbolConstructor['dispose'];
 
 describe('spyOnConsole', () => {
   it('intercepts calls to `console.log` and `console.info`', () => {

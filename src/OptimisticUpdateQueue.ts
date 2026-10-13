@@ -1,6 +1,7 @@
 import { CacheContext } from './context';
 import { GraphSnapshot } from './GraphSnapshot';
 import { SnapshotEditor } from './operations';
+import type { IsRetained } from './operations/SnapshotEditor';
 import { JsonObject } from './primitive';
 import { ChangeId, NodeId, CacheDelta } from './schema';
 
@@ -81,12 +82,16 @@ export class OptimisticUpdateQueue {
    * Applies the recorded deltas of the current optimistic updates to a
    * snapshot.  Like InMemoryCache's layers (which keep the fields they wrote
    * when the data beneath them changes), the updates are not re-run here.
+   *
+   * `isRetained` tells the retained nodes (see SnapshotEditor), which the
+   * replayed writes must keep, as the original writes did.
    */
   apply<TSerialized>(
     context: CacheContext<TSerialized>,
     snapshot: GraphSnapshot,
+    isRetained: IsRetained | undefined,
   ): { snapshot: GraphSnapshot; editedNodeIds: Set<NodeId> } {
-    const editor = new SnapshotEditor(context, snapshot);
+    const editor = new SnapshotEditor(context, snapshot, isRetained);
     for (const update of this._updates) {
       applyDeltas(editor, update.deltas);
     }

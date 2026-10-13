@@ -5,6 +5,8 @@
  * left alone, since freezing them would break the live objects they belong to.
  */
 export function deepFreeze<T>(value: T): T {
+  // (Frozen values were frozen deeply already.)
+  if (Object.isFrozen(value)) return value;
   if (Array.isArray(value)) {
     Object.freeze(value);
     for (const item of value) deepFreeze(item);

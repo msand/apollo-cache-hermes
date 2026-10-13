@@ -1,7 +1,8 @@
-import gql from 'graphql-tag';
 import fetchMock from 'fetch-mock';
-import { createOperation } from '@apollo/client/link/utils/createOperation';
-import { parseAndCheckHttpResponse } from '@apollo/client/link/http/parseAndCheckHttpResponse';
+import { gql } from 'graphql-tag';
+import { parseAndCheckHttpResponse } from '@apollo/client/link/http';
+
+import { createOperationWithDefaultContext as createOperation } from '@apollo/client/testing/internal';
 
 const query = gql`
   query SampleQuery {
@@ -11,16 +12,21 @@ const query = gql`
   }
 `;
 
+// Hermes: this repo uses fetch-mock 12 (`mockGlobal`, `hardReset`, `route`). It records
+// absolute urls, so requests use a leading slash and `begin:` matchers start with http://localhost.
 describe('parseAndCheckResponse', () => {
   beforeEach(() => {
     fetchMock.hardReset();
   });
 
-  const operations = [createOperation({}, { query })];
+  const operations = [createOperation({ query })];
 
   it('throws a Server error when response is > 300 with unparsable json', async () => {
     const status = 400;
-    fetchMock.mockGlobal().route('begin:http://localhost/error', status);
+    fetchMock.mockGlobal().route('begin:http://localhost/error', {
+      status,
+      headers: { 'content-type': 'application/json' },
+    });
 
     const error = await fetch('/error')
       .then(parseAndCheckHttpResponse(operations))
@@ -29,12 +35,15 @@ describe('parseAndCheckResponse', () => {
     expect(error.statusCode).toBe(status);
     expect(error.name).toBe('ServerError');
     expect(error).toHaveProperty('response');
-    expect(error.bodyText).toBe(undefined);
+    expect(error.bodyText).toBe('');
   });
 
   it('throws a ServerParse error when response is 200 with unparsable json', async () => {
     const status = 200;
-    fetchMock.mockGlobal().route('begin:http://localhost/error', status);
+    fetchMock.mockGlobal().route('begin:http://localhost/error', {
+      status,
+      headers: { 'content-type': 'application/json' },
+    });
     const error = await fetch('/error')
       .then(parseAndCheckHttpResponse(operations))
       .catch(error => error);
@@ -47,7 +56,7 @@ describe('parseAndCheckResponse', () => {
 
   it('throws a network error with a status code and result', async () => {
     const status = 403;
-    const body = { data: 'fail' }; // does not contain data or errors
+    const body = { data: 'fail' }; //does not contain data or errors
     fetchMock.mockGlobal().route('begin:http://localhost/error', {
       body,
       status,
@@ -59,11 +68,11 @@ describe('parseAndCheckResponse', () => {
     expect(error.statusCode).toBe(status);
     expect(error.name).toBe('ServerError');
     expect(error).toHaveProperty('response');
-    expect(error).toHaveProperty('result');
+    expect(error).toHaveProperty('bodyText');
   });
 
   it('throws a server error on incorrect data', async () => {
-    const data = { hello: 'world' }; //does not contain data or erros
+    const data = { hello: 'world' }; //does not contain data or errors
     fetchMock.mockGlobal().route('begin:http://localhost/incorrect', data);
     const error = await fetch('/incorrect')
       .then(parseAndCheckHttpResponse(operations))
@@ -72,7 +81,7 @@ describe('parseAndCheckResponse', () => {
     expect(error.statusCode).toBe(200);
     expect(error.name).toBe('ServerError');
     expect(error).toHaveProperty('response');
-    expect(error.result).toEqual(data);
+    expect(error.bodyText).toEqual(JSON.stringify(data));
   });
 
   it('is able to return a correct GraphQL result', async () => {

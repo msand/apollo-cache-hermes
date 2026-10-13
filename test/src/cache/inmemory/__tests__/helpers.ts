@@ -1,7 +1,10 @@
-import { Cache, NormalizedCacheObject, isReference } from '@apollo/client';
+import type { Cache, NormalizedCacheObject } from '@apollo/client/cache';
+import { isReference } from '@apollo/client/utilities';
 
 import { Hermes } from '../../../../../src';
 import { CacheContext } from '../../../../../src/context';
+import { parseStoreFieldName } from '../../../../../src/context/storeFieldNames';
+import { nodeIdForParameterizedValue, nodeIdForStoreKey } from '../../../../../src/operations/SnapshotEditor';
 import { toNormalizedCacheObject } from '../../../../helpers';
 
 // Hermes: these helpers stand in for InMemoryCache's StoreWriter, StoreReader
@@ -56,7 +59,10 @@ export function defaultNormalizedCacheFactory(
 /** The inverse of toNormalizedCacheObject (for entity references only). */
 function fromNormalizedCacheObject(normalized: NormalizedCacheObject) {
   type Edge = { id: string; path: (string | number)[] };
-  const serialized: Record<string, { type: 0; data: any; outbound?: Edge[]; inbound?: Edge[] }> = {};
+  const serialized: Record<
+    string,
+    { type: 0 | 1; data: any; outbound?: Edge[]; inbound?: Edge[]; parameterized?: Edge[] }
+  > = {};
   const inbound: Record<string, Edge[]> = {};
   for (const [id, entity] of Object.entries(normalized)) {
     const outbound: Edge[] = [];
@@ -74,8 +80,35 @@ function fromNormalizedCacheObject(normalized: NormalizedCacheObject) {
       }
       return value;
     };
-    serialized[id] = { type: 0, data: strip(entity, []) };
+    // Fields stored per their keyArgs policies (InMemoryCache's `field:...`
+    // store field names) or with arguments (`field({"arg":1})`) are Hermes'
+    // parameterized value nodes. Fields with custom directives
+    // (`field@directive`) are stored like the same fields without them.
+    const data = strip(entity, []);
+    const parameterized: Edge[] = [];
+    for (const key of Object.keys(data ?? {})) {
+      const fieldName = /^[_a-z][_0-9a-z]*/i.exec(key)?.[0];
+      if (!fieldName || fieldName === key) continue;
+      let nodeId: string;
+      if (key.charAt(fieldName.length) === ':') {
+        nodeId = nodeIdForStoreKey(id, [fieldName], key);
+      } else {
+        const storeFieldName = parseStoreFieldName(key);
+        if (!storeFieldName) continue;
+        if (!storeFieldName.args || !Object.keys(storeFieldName.args).length) {
+          data[fieldName] = data[key];
+          delete data[key];
+          continue;
+        }
+        nodeId = nodeIdForParameterizedValue(id, [fieldName], storeFieldName.args);
+      }
+      serialized[nodeId] = { type: 1, data: data[key], inbound: [{ id, path: [fieldName] }] };
+      parameterized.push({ id: nodeId, path: [fieldName] });
+      delete data[key];
+    }
+    serialized[id] = { type: 0, data };
     if (outbound.length) serialized[id].outbound = outbound;
+    if (parameterized.length) serialized[id].parameterized = parameterized;
   }
   for (const [id, edges] of Object.entries(inbound)) {
     if (serialized[id]) serialized[id].inbound = edges;

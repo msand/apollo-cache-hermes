@@ -23,7 +23,11 @@ export const config: Config = {
   testPathIgnorePatterns: [
     '/node_modules/',
     '<rootDir>/test/unit/jest.config.js',
+    // Helpers and fixtures that live in __tests__ folders but contain no tests.
     '<rootDir>/test/src/cache/inmemory/__tests__/helpers.js',
+    '<rootDir>/test/src/local-state/__tests__/LocalState/testUtils.js',
+    '<rootDir>/test/src/local-state/__tests__/LocalState/fixtures/',
+    '/__tests__/[^/]+/testUtils.js$',
   ],
   reporters: ['default', 'jest-junit'],
   transform: {

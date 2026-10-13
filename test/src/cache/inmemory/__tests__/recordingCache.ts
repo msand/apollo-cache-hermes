@@ -1,13 +1,16 @@
-import { NormalizedCacheObject, StoreObject } from '@apollo/client/cache/inmemory/types';
-import { EntityStore } from '@apollo/client/cache/inmemory/entityStore';
-import { Policies } from '@apollo/client/cache/inmemory/policies';
-import type { InMemoryCache } from '@apollo/client/cache/inmemory/inMemoryCache';
+import { EntityStore, Policies } from '@apollo/client/cache';
+import type { InMemoryCache, NormalizedCacheObject, StoreObject } from '@apollo/client/cache';
 
 import { Hermes } from '../../../../../src';
 
 // Hermes: these tests exercise InMemoryCache's internal EntityStore layers. Their
 // Policies only hold on to the cache, which these tests never use, so a Hermes
-// cache stands in for the InMemoryCache.
+// cache stands in for the InMemoryCache. EntityStore reads the cache's (private)
+// config to check for custom scalars, which Hermes does not configure.
+function hermesStandIn() {
+  return Object.assign(new Hermes(), { config: {} }) as unknown as InMemoryCache;
+}
+
 describe('Optimistic EntityStore layering', () => {
   function makeLayer(root: EntityStore) {
     return root.addLayer('whatever', () => {});
@@ -30,7 +33,7 @@ describe('Optimistic EntityStore layering', () => {
     const underlyingStore = new EntityStore.Root({
       seed: data,
       policies: new Policies({
-        cache: new Hermes() as unknown as InMemoryCache,
+        cache: hermesStandIn(),
       }),
     });
 
@@ -73,7 +76,7 @@ describe('Optimistic EntityStore layering', () => {
     const underlyingStore = new EntityStore.Root({
       seed: data,
       policies: new Policies({
-        cache: new Hermes() as unknown as InMemoryCache,
+        cache: hermesStandIn(),
       }),
     });
     let store = makeLayer(underlyingStore);

@@ -27,7 +27,7 @@ describe(`readFragment with multiple fragments`, () => {
       },
       shipment0: {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
-        inbound: [{ id: 123, path: ['shipment'] }],
+        inbound: [{ id: '123', path: ['shipment'] }],
         data: {
           id: 'shipment0',
           destination: 'Seattle',

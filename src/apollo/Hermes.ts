@@ -1,23 +1,27 @@
-import { Transaction, Cache as CacheInterface, makeVar } from '@apollo/client';
-import type { FragmentDefinitionNode, InlineFragmentNode } from 'graphql';
-import { isReference, Reference, StoreObject } from '@apollo/client/utilities';
+import type { OperationVariables } from '@apollo/client';
+import { makeVar } from '@apollo/client/cache';
+import type { Cache as CacheInterface, NormalizedCacheObject, Transaction } from '@apollo/client/cache';
 
 import { CacheContext } from '../context';
 import { Cache, MigrationMap } from '../Cache';
 import { CacheSnapshot } from '../CacheSnapshot';
 import { GraphSnapshot } from '../GraphSnapshot';
-import { NodeId, StaticNodeId } from '../schema';
+import { JsonObject } from '../primitive';
+import { NodeId, Serializable } from '../schema';
 
 import { ApolloQueryable } from './Queryable';
 import { ApolloTransaction } from './Transaction';
 import { buildRawOperationFromQuery } from './util';
 
-import BatchOptions = CacheInterface.BatchOptions;
+type BatchOptions<TCache extends CacheInterface.Implementation, TUpdateResult = void> = CacheInterface.BatchOptions<
+  TCache,
+  TUpdateResult
+>;
 
 /**
  * Apollo-specific interface to the cache.
  */
-export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerialized> {
+export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable {
   /** The underlying Hermes cache. */
   protected _queryable: Cache<TSerialized>;
   public watches = new Set<CacheInterface.WatchOptions>();
@@ -30,29 +34,21 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
     this._queryable = new Cache<TSerialized>(configuration, this);
   }
 
-  identify(object: StoreObject | Reference): string | undefined {
-    if (isReference(object)) return object.__ref;
-    if (object?.__typename === 'Query') return StaticNodeId.QueryRoot;
-    return this._queryable.identify(object);
-  }
-
-  fragmentMatches(fragment: InlineFragmentNode | FragmentDefinitionNode, typename: string): boolean {
-    return this._queryable.fragmentMatches(fragment, typename);
-  }
-
-  lookupFragment(fragmentName: string): FragmentDefinitionNode | null {
-    return this._queryable.lookupFragment(fragmentName);
-  }
-
-  // TODO (yuisu): data can be typed better with update of ApolloCache API
-  restore(data: any, migrationMap?: MigrationMap, verifyOptions?: CacheInterface.ReadOptions): Hermes<TSerialized> {
+  /**
+   * Restores a snapshot from extract(), or (like InMemoryCache#restore) a
+   * normalized cache object extracted from an InMemoryCache.
+   */
+  restore(
+    data: Serializable.GraphSnapshot | NormalizedCacheObject,
+    migrationMap?: MigrationMap,
+    verifyOptions?: CacheInterface.ReadOptions,
+  ): this {
     const verifyQuery = verifyOptions && buildRawOperationFromQuery(verifyOptions.query, verifyOptions.variables);
     this._queryable.restore(data, migrationMap, verifyQuery);
     return this;
   }
 
-  // TODO (yuisu): return can be typed better with update of ApolloCache API
-  extract(optimistic: boolean = false, pruneOptions?: CacheInterface.ReadOptions): any {
+  extract(optimistic: boolean = false, pruneOptions?: CacheInterface.ReadOptions): Serializable.GraphSnapshot {
     const pruneQuery = pruneOptions && buildRawOperationFromQuery(pruneOptions.query, pruneOptions.variables);
     return this._queryable.extract(optimistic, pruneQuery);
   }
@@ -70,18 +66,18 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
     this._queryable.rollback(id);
   }
 
-  performTransaction(transaction: Transaction<TSerialized>, optimisticId?: string | null): void;
+  performTransaction(transaction: Transaction, optimisticId?: string | null): void;
   performTransaction(
-    transaction: Transaction<TSerialized>,
+    transaction: Transaction,
     optimisticId?: string | null,
-    onWatchUpdated?: BatchOptions<any>['onWatchUpdated'],
+    onWatchUpdated?: BatchOptions<Hermes<TSerialized>>['onWatchUpdated'],
     broadcast?: boolean,
   ): void;
 
   performTransaction(
-    transaction: Transaction<TSerialized>,
+    transaction: Transaction,
     optimisticId?: string | null,
-    onWatchUpdated?: BatchOptions<any>['onWatchUpdated'],
+    onWatchUpdated?: BatchOptions<Hermes<TSerialized>>['onWatchUpdated'],
     broadcast: boolean = true,
   ): void {
     this._queryable.transaction(
@@ -92,12 +88,15 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
     );
   }
 
-  recordOptimisticTransaction(transaction: Transaction<TSerialized>, id: string): void {
+  recordOptimisticTransaction(transaction: Transaction, id: string): void {
     this._queryable.transaction(true, id, t => transaction(new ApolloTransaction(t)));
   }
 
-  watch(options: CacheInterface.WatchOptions): () => void {
-    const query = buildRawOperationFromQuery(options.query, options.variables, options.id);
+  watch<TData = unknown, TVariables extends OperationVariables = OperationVariables>(
+    watchOptions: CacheInterface.WatchOptions<TData, TVariables>,
+  ): () => void {
+    const options = watchOptions as unknown as CacheInterface.WatchOptions;
+    const query = buildRawOperationFromQuery(options.query, options.variables as JsonObject | undefined, options.id);
     this.watches.add(options);
     const unwatch = this._queryable.watch(query, options);
     return () => {
@@ -112,7 +111,7 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
 
   private _txCount = 0;
 
-  public batch<TUpdateResult>(options: CacheInterface.BatchOptions<Hermes<TSerialized>, TUpdateResult>): TUpdateResult {
+  public batch<TUpdateResult>(options: BatchOptions<Hermes<TSerialized>, TUpdateResult>): TUpdateResult {
     const { update, optimistic = true, removeOptimistic, onWatchUpdated } = options;
 
     const alreadyDirty = new Set<CacheInterface.WatchOptions>();
@@ -216,6 +215,27 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
     // Reactive variables call broadcastWatches() when they change.
     if (!options) this._queryable.dirtyReactiveReads();
     this._queryable.broadcastWatches(options);
+  }
+
+  /**
+   * Runs a broadcast to the watches, and then the callbacks that
+   * ApolloCache#watchFragment defers with onAfterBroadcast (like
+   * InMemoryCache), so fragment watches see the result of every watch.
+   *
+   * @internal
+   */
+  runBroadcast(broadcast: () => void): void {
+    const prevOnAfterBroadcast = this.onAfterBroadcast;
+    const callbacks = new Set<() => void>();
+    this.onAfterBroadcast = callback => {
+      callbacks.add(callback);
+    };
+    try {
+      broadcast();
+      callbacks.forEach(callback => callback());
+    } finally {
+      this.onAfterBroadcast = prevOnAfterBroadcast;
+    }
   }
 
   gc(): string[] {

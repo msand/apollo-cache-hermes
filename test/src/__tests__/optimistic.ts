@@ -1,22 +1,29 @@
-import { from, ObservableInput } from 'rxjs';
-import { take, toArray, map } from 'rxjs/operators';
+import { gql } from 'graphql-tag';
 import { assign, cloneDeep } from 'lodash';
-import gql from 'graphql-tag';
-import {
-  ApolloClient,
-  ApolloLink,
-  ApolloCache,
-  MutationQueryReducersMap,
-  TypedDocumentNode,
-  ApolloError,
-} from '@apollo/client/core';
-import { QueryManager } from '@apollo/client/core/QueryManager';
-import { Cache } from '@apollo/client/cache';
-import { Observable, addTypenameToDocument } from '@apollo/client/utilities';
-import { MockedResponse, mockSingleLink } from '@apollo/client/testing';
+import { firstValueFrom, from, lastValueFrom, Observable } from 'rxjs';
+import { map, take, toArray } from 'rxjs/operators';
+import type { ApolloCache, MutationQueryReducersMap, TypedDocumentNode } from '@apollo/client';
+import { ApolloClient, ApolloLink } from '@apollo/client';
+import type { Cache, NormalizedCacheObject } from '@apollo/client/cache';
+import { MockLink } from '@apollo/client/testing';
+import { addTypenameToDocument } from '@apollo/client/utilities';
+import type { QueryManager } from '@apollo/client/core/QueryManager';
+
 import { ObservableStream } from '@apollo/client/testing/internal';
 
 import { Hermes } from '../../../src';
+import { toNormalizedCacheObject } from '../../helpers';
+
+// Hermes: extract() is Hermes' serialization: tests that inspect it read each node's fields
+// from `data` and its references from `outbound` edges.
+
+const mutationByAccessIndex = (queryManager: QueryManager) => {
+  return new Proxy(queryManager.mutationStore!, {
+    get: (mutationStore, idx) => {
+      return mutationStore[Object.keys(mutationStore)[(idx as any) - 1]];
+    },
+  });
+};
 
 describe('optimistic mutation results', () => {
   const query = gql`
@@ -102,14 +109,14 @@ describe('optimistic mutation results', () => {
     },
   };
 
-  async function setup(...mockedResponses: MockedResponse[]) {
-    const link = mockSingleLink(
+  async function setup(...mockedResponses: MockLink.MockedResponse[]) {
+    const link = new MockLink([
       {
         request: { query },
         result,
       },
       ...mockedResponses,
-    );
+    ]);
 
     const client = new ApolloClient({
       link,
@@ -134,11 +141,21 @@ describe('optimistic mutation results', () => {
         },
       }),
       // Enable client.queryManager.mutationStore tracking.
-      connectToDevTools: true,
+      devtools: { enabled: true },
     });
 
-    const obsHandle = client.watchQuery({ query });
-    await obsHandle.result();
+    const obsHandle = client.watchQuery({
+      query,
+      notifyOnNetworkStatusChange: false,
+    });
+    // We can't use firstValueFrom here because we need to unsubscribe in the
+    // setTimeout
+    await new Promise(resolve => {
+      const subscription = obsHandle.subscribe(value => {
+        resolve(value);
+        setTimeout(() => subscription.unsubscribe());
+      });
+    });
 
     return client;
   }
@@ -217,15 +234,15 @@ describe('optimistic mutation results', () => {
         });
 
         {
-          const dataInStore = (client.cache as Hermes).extract(true);
+          const dataInStore = client.cache.extract(true) as NormalizedCacheObject;
           expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(4);
           expect((dataInStore['Todo99'] as any).data.text).toBe('Optimistically generated');
         }
 
-        await expect(promise).rejects.toThrow(new ApolloError({ networkError: new Error('forbidden (test error)') }));
+        await expect(promise).rejects.toThrow(new Error('forbidden (test error)'));
 
         {
-          const dataInStore = (client.cache as Hermes).extract(true);
+          const dataInStore = client.cache.extract(true) as NormalizedCacheObject;
           expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(3);
           expect(dataInStore).not.toHaveProperty('Todo99');
         }
@@ -327,7 +344,7 @@ describe('optimistic mutation results', () => {
 
         await expect(stream).toEmitNext();
 
-        const queryManager: QueryManager<any> = (client as any).queryManager;
+        const queryManager = client['queryManager'];
 
         const promise = client
           .mutate({
@@ -338,8 +355,7 @@ describe('optimistic mutation results', () => {
           .then((res: any) => {
             checkBothMutationsAreApplied('This one was created with a mutation.', 'Optimistically generated 2');
 
-            // @ts-ignore
-            const latestState = queryManager.mutationStore!;
+            const latestState = mutationByAccessIndex(queryManager);
             expect(latestState[1].loading).toBe(false);
             expect(latestState[2].loading).toBe(true);
 
@@ -356,15 +372,14 @@ describe('optimistic mutation results', () => {
             checkBothMutationsAreApplied('This one was created with a mutation.', 'Second mutation.');
 
             // @ts-ignore
-            const latestState = queryManager.mutationStore!;
+            const latestState = mutationByAccessIndex(queryManager);
             expect(latestState[1].loading).toBe(false);
             expect(latestState[2].loading).toBe(false);
 
             return res;
           });
 
-        // @ts-ignore
-        const mutationsState = queryManager.mutationStore!;
+        const mutationsState = mutationByAccessIndex(queryManager);
         expect(mutationsState[1].loading).toBe(true);
         expect(mutationsState[2].loading).toBe(true);
 
@@ -429,7 +444,7 @@ describe('optimistic mutation results', () => {
           expect((dataInStore['Todo99'] as any).data.text).toBe('Optimistically generated');
         }
 
-        await expect(promise).rejects.toThrow(new ApolloError({ networkError: new Error('forbidden (test error)') }));
+        await expect(promise).rejects.toThrow(new Error('forbidden (test error)'));
 
         {
           const dataInStore = (client.cache as Hermes).extract(true);
@@ -542,8 +557,7 @@ describe('optimistic mutation results', () => {
           .then((res: any) => {
             checkBothMutationsAreApplied('This one was created with a mutation.', 'Optimistically generated 2');
 
-            // @ts-ignore
-            const latestState = client.queryManager.mutationStore!;
+            const latestState = mutationByAccessIndex(client['queryManager']);
             expect(latestState[1].loading).toBe(false);
             expect(latestState[2].loading).toBe(true);
 
@@ -559,16 +573,14 @@ describe('optimistic mutation results', () => {
           .then((res: any) => {
             checkBothMutationsAreApplied('This one was created with a mutation.', 'Second mutation.');
 
-            // @ts-ignore
-            const latestState = client.queryManager.mutationStore!;
+            const latestState = mutationByAccessIndex(client['queryManager']);
             expect(latestState[1].loading).toBe(false);
             expect(latestState[2].loading).toBe(false);
 
             return res;
           });
 
-        // @ts-ignore
-        const mutationsState = client.queryManager.mutationStore!;
+        const mutationsState = mutationByAccessIndex(client['queryManager']);
         expect(mutationsState[1].loading).toBe(true);
         expect(mutationsState[2].loading).toBe(true);
 
@@ -857,7 +869,7 @@ describe('optimistic mutation results', () => {
         'todos' in initialList &&
         Array.isArray(initialList.todos);
 
-      const initialList = client.cache.extract(true)[id]?.data;
+      const initialList = (client.cache.extract(true) as any)[id]?.data;
 
       if (!isTodoList(initialList)) {
         throw new Error('Expected TodoList');
@@ -898,7 +910,7 @@ describe('optimistic mutation results', () => {
         },
       });
 
-      const list = client.cache.extract(true)[id]?.data;
+      const list = (client.cache.extract(true) as any)[id]?.data;
 
       if (!isTodoList(list)) {
         throw new Error('Expected TodoList');
@@ -908,7 +920,7 @@ describe('optimistic mutation results', () => {
 
       await promise;
 
-      const result = await client.query({ query });
+      const result = await client.query<any>({ query });
 
       stream.unsubscribe();
 
@@ -936,12 +948,15 @@ describe('optimistic mutation results', () => {
 
       const client = new ApolloClient({
         cache: new Hermes(),
+        link: ApolloLink.empty(),
       });
 
-      client.mutate({
-        mutation,
-        optimisticResponse: (vars, { IGNORE }) => IGNORE,
-      });
+      client
+        .mutate({
+          mutation,
+          optimisticResponse: (vars, { IGNORE }) => IGNORE,
+        })
+        .catch(() => {});
     });
   });
 
@@ -1011,12 +1026,43 @@ describe('optimistic mutation results', () => {
     };
 
     it('will insert a single itemAsync to the beginning', async () => {
-      expect.assertions(8);
-      const client = await setup({
-        request: { query: mutation },
-        result: mutationResult,
+      expect.assertions(7);
+      const link = new MockLink([
+        {
+          request: { query },
+          result,
+        },
+        {
+          request: { query: mutation },
+          result: mutationResult,
+        },
+      ]);
+
+      const client = new ApolloClient({
+        link,
+        cache: new Hermes({
+          typePolicies: {
+            TodoList: {
+              fields: {
+                todos: {
+                  // Deliberately silence "Cache data may be lost..."
+                  // warnings by favoring the incoming data, rather than
+                  // (say) concatenating the arrays together.
+                  merge: false,
+                },
+              },
+            },
+          },
+          dataIdFromObject: (obj: any) => {
+            if (obj.id && obj.__typename) {
+              return obj.__typename + obj.id;
+            }
+            return null;
+          },
+        }),
       });
-      const stream = new ObservableStream(client.watchQuery({ query }));
+
+      const stream = new ObservableStream(client.watchQuery({ query, notifyOnNetworkStatusChange: false }));
 
       await expect(stream).toEmitNext();
 
@@ -1202,11 +1248,11 @@ describe('optimistic mutation results', () => {
     });
 
     it('will handle dependent updates', async () => {
-      expect.assertions(1);
-      const link = mockSingleLink(
+      const link = new MockLink([
         {
           request: { query },
           result,
+          delay: 0,
         },
         {
           request: { query: mutation },
@@ -1218,7 +1264,7 @@ describe('optimistic mutation results', () => {
           result: mutationResult2,
           delay: 20,
         },
-      );
+      ]);
 
       const customOptimisticResponse1 = {
         __typename: 'Mutation',
@@ -1267,13 +1313,13 @@ describe('optimistic mutation results', () => {
       });
 
       // wrap the QueryObservable with an rxjs observable
-      const promise = from(client.watchQuery({ query }) as any as ObservableInput<any>)
-        .pipe(
+      const promise = lastValueFrom(
+        client.watchQuery<any>({ query, notifyOnNetworkStatusChange: false }).pipe(
           map(value => value.data.todoList.todos),
           take(5),
           toArray(),
-        )
-        .toPromise();
+        ),
+      );
 
       // Mutations will not trigger a watchQuery with the results of an optimistic response
       // if set in the same tick of the event loop.
@@ -1404,7 +1450,7 @@ describe('optimistic mutation results', () => {
       expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(4);
       expect((dataInStore['Todo99'] as any).data.text).toBe('Optimistically generated');
       await promise;
-      const newResult = await client.query({ query });
+      const newResult = await client.query<any>({ query });
 
       stream.unsubscribe();
       // There should be one more todo item than before
@@ -1603,10 +1649,11 @@ describe('optimistic mutation results', () => {
 
     it('will handle dependent updates', async () => {
       expect.assertions(1);
-      const link = mockSingleLink(
+      const link = new MockLink([
         {
           request: { query },
           result,
+          delay: 0,
         },
         {
           request: { query: mutation },
@@ -1618,7 +1665,7 @@ describe('optimistic mutation results', () => {
           result: mutationResult2,
           delay: 20,
         },
-      );
+      ]);
 
       const customOptimisticResponse1 = {
         __typename: 'Mutation',
@@ -1683,13 +1730,13 @@ describe('optimistic mutation results', () => {
         }),
       });
 
-      const promise = from(client.watchQuery({ query }) as any as ObservableInput<any>)
-        .pipe(
+      const promise = lastValueFrom(
+        client.watchQuery<any>({ query, notifyOnNetworkStatusChange: false }).pipe(
           map(value => value.data.todoList.todos),
           take(5),
           toArray(),
-        )
-        .toPromise();
+        ),
+      );
 
       await new Promise(resolve => setTimeout(resolve));
 
@@ -1733,7 +1780,7 @@ describe('optimistic mutation results', () => {
         ),
       });
 
-      const query = gql`
+      const query: TypedDocumentNode<Data> = gql`
         query {
           items {
             text
@@ -1752,8 +1799,8 @@ describe('optimistic mutation results', () => {
       type Item = ReturnType<typeof makeItem>;
       type Data = { items: Item[] };
 
-      function append(cache: ApolloCache<any>, item: Item) {
-        const data = cache.readQuery<Data>({ query });
+      function append(cache: ApolloCache, item: Item) {
+        const data = cache.readQuery({ query });
         cache.writeQuery({
           query,
           data: {
@@ -1763,21 +1810,6 @@ describe('optimistic mutation results', () => {
         });
         return item;
       }
-      // Hermes: extract() wraps node data, does not store the root nodes'
-      // __typename (so ROOT_MUTATION goes away with its last field), and stores
-      // the addItem(item) field as a parameterized node. Diffs also carry
-      // Hermes' entityIds bookkeeping.
-      const rootQuery = (items: Item[]) => ({ type: 0, data: { items } });
-      const addItemId = 'ROOT_MUTATION❖["addItem"]❖{"item":{"__typename":"Item","text":"mutation 4"}}';
-      const rootMutation = (text: string) => ({
-        ROOT_MUTATION: { type: 0, parameterized: [{ id: addItemId, path: ['addItem'] }] },
-        [addItemId]: {
-          type: 1,
-          inbound: [{ id: 'ROOT_MUTATION', path: ['addItem'] }],
-          data: { __typename: 'Item', text },
-        },
-      });
-
       const cancelFns: (() => any)[] = [];
       const optimisticDiffs: Cache.DiffResult<Data>[] = [];
       const realisticDiffs: Cache.DiffResult<Data>[] = [];
@@ -1816,15 +1848,18 @@ describe('optimistic mutation results', () => {
         append(cache, manualItem2);
       }, 'manual');
 
-      expect(cache.extract(false)).toEqual({});
-      expect(cache.extract(true)).toEqual({
-        ROOT_QUERY: rootQuery(manualItems),
+      // Hermes: extract() is Hermes' serialization; compare its InMemoryCache equivalent.
+      expect(toNormalizedCacheObject(cache.extract(false))).toEqual({});
+      expect(toNormalizedCacheObject(cache.extract(true))).toEqual({
+        ROOT_QUERY: {
+          __typename: 'Query',
+          items: manualItems,
+        },
       });
 
       expect(optimisticDiffs).toEqual([
         {
           complete: true,
-          entityIds: expect.any(Set),
           fromOptimisticTransaction: true,
           result: {
             items: manualItems,
@@ -1835,9 +1870,8 @@ describe('optimistic mutation results', () => {
       expect(realisticDiffs).toEqual([
         {
           complete: false,
-          entityIds: expect.any(Set),
-          missing: [expect.anything()],
-          result: {},
+          missing: expect.anything(),
+          result: null,
         },
       ]);
 
@@ -1873,17 +1907,26 @@ describe('optimistic mutation results', () => {
             append(cache, optimisticItem);
 
             const expected = {
-              ROOT_QUERY: rootQuery([manualItem1, manualItem2, optimisticItem]),
-              // Although ROOT_MUTATION field data gets removed immediately
-              // after the mutation finishes, it is still temporarily visible
-              // to the update function.
-              ...rootMutation('optimistic 3'),
+              ROOT_QUERY: {
+                __typename: 'Query',
+                items: [manualItem1, manualItem2, optimisticItem],
+              },
+              ROOT_MUTATION: {
+                __typename: 'Mutation',
+                // Although ROOT_MUTATION field data gets removed immediately
+                // after the mutation finishes, it is still temporarily visible
+                // to the update function.
+                'addItem({"item":{"__typename":"Item","text":"mutation 4"}})': {
+                  __typename: 'Item',
+                  text: 'optimistic 3',
+                },
+              },
             };
 
             // Since we're in an optimistic update function, reading
             // non-optimistically still returns optimistic data.
-            expect(cache.extract(false)).toEqual(expected);
-            expect(cache.extract(true)).toEqual(expected);
+            expect(toNormalizedCacheObject((cache as Hermes).extract(false))).toEqual(expected);
+            expect(toNormalizedCacheObject((cache as Hermes).extract(true))).toEqual(expected);
           } else if (updateCount === 2) {
             expect(mutationResult).toEqual({
               data: {
@@ -1894,15 +1937,24 @@ describe('optimistic mutation results', () => {
             append(cache, mutationItem);
 
             const expected = {
-              ROOT_QUERY: rootQuery([mutationItem]),
-              ...rootMutation('mutation 4'),
+              ROOT_QUERY: {
+                __typename: 'Query',
+                items: [mutationItem],
+              },
+              ROOT_MUTATION: {
+                __typename: 'Mutation',
+                'addItem({"item":{"__typename":"Item","text":"mutation 4"}})': {
+                  __typename: 'Item',
+                  text: 'mutation 4',
+                },
+              },
             };
 
             // Since we're in the final (non-optimistic) update function,
             // optimistic data is invisible, even if we try to read
             // optimistically.
-            expect(cache.extract(false)).toEqual(expected);
-            expect(cache.extract(true)).toEqual(expected);
+            expect(toNormalizedCacheObject((cache as Hermes).extract(false))).toEqual(expected);
+            expect(toNormalizedCacheObject((cache as Hermes).extract(true))).toEqual(expected);
           } else {
             throw new Error('too many updates');
           }
@@ -1917,44 +1969,56 @@ describe('optimistic mutation results', () => {
 
       // Only the final update function ever touched non-optimistic
       // cache data.
-      expect(cache.extract(false)).toEqual({
-        ROOT_QUERY: rootQuery([mutationItem]),
+      expect(toNormalizedCacheObject(cache.extract(false))).toEqual({
+        ROOT_QUERY: {
+          __typename: 'Query',
+          items: [mutationItem],
+        },
+        // Hermes: root nodes do not store a __typename, so the emptied ROOT_MUTATION is removed entirely.
       });
 
       // Now that the mutation is finished, reading optimistically from
       // the cache should return the manually added items again.
-      expect(cache.extract(true)).toEqual({
-        ROOT_QUERY: rootQuery([
-          // If we wanted to keep optimistic data as up-to-date as
-          // possible, we could rerun all optimistic transactions
-          // after writing to the root (non-optimistic) layer of the
-          // cache, which would result in mutationItem appearing in
-          // this list along with manualItem1 and manualItem2
-          // (presumably in that order). However, rerunning those
-          // optimistic transactions would trigger additional
-          // broadcasts for optimistic query watches, with
-          // intermediate results that (re)combine optimistic and
-          // non-optimistic data. Since rerendering the UI tends to be
-          // expensive, we should prioritize broadcasting states that
-          // matter most, and in this case that means broadcasting the
-          // initial optimistic state (for perceived performance),
-          // followed by the final, authoritative, non-optimistic
-          // state. Other intermediate states are a distraction, as
-          // they will probably soon be superseded by another (more
-          // authoritative) update. This particular state is visible
-          // only because we haven't rolled back this manual Layer
-          // just yet (see cache.removeOptimistic below).
-          manualItem1,
-          manualItem2,
-        ]),
+      expect(toNormalizedCacheObject(cache.extract(true))).toEqual({
+        ROOT_QUERY: {
+          __typename: 'Query',
+          items: [
+            // If we wanted to keep optimistic data as up-to-date as
+            // possible, we could rerun all optimistic transactions
+            // after writing to the root (non-optimistic) layer of the
+            // cache, which would result in mutationItem appearing in
+            // this list along with manualItem1 and manualItem2
+            // (presumably in that order). However, rerunning those
+            // optimistic transactions would trigger additional
+            // broadcasts for optimistic query watches, with
+            // intermediate results that (re)combine optimistic and
+            // non-optimistic data. Since rerendering the UI tends to be
+            // expensive, we should prioritize broadcasting states that
+            // matter most, and in this case that means broadcasting the
+            // initial optimistic state (for perceived performance),
+            // followed by the final, authoritative, non-optimistic
+            // state. Other intermediate states are a distraction, as
+            // they will probably soon be superseded by another (more
+            // authoritative) update. This particular state is visible
+            // only because we haven't rolled back this manual Layer
+            // just yet (see cache.removeOptimistic below).
+            manualItem1,
+            manualItem2,
+          ],
+        },
+        // Hermes: root nodes do not store a __typename, so the emptied ROOT_MUTATION is removed entirely.
       });
 
       cache.removeOptimistic('manual');
 
       // After removing the manual optimistic layer, only the
       // non-optimistic data remains.
-      expect(cache.extract(true)).toEqual({
-        ROOT_QUERY: rootQuery([mutationItem]),
+      expect(toNormalizedCacheObject(cache.extract(true))).toEqual({
+        ROOT_QUERY: {
+          __typename: 'Query',
+          items: [mutationItem],
+        },
+        // Hermes: root nodes do not store a __typename, so the emptied ROOT_MUTATION is removed entirely.
       });
 
       cancelFns.forEach(cancel => cancel());
@@ -1962,7 +2026,6 @@ describe('optimistic mutation results', () => {
       expect(optimisticDiffs).toEqual([
         {
           complete: true,
-          entityIds: expect.any(Set),
           fromOptimisticTransaction: true,
           result: {
             items: manualItems,
@@ -1970,7 +2033,6 @@ describe('optimistic mutation results', () => {
         },
         {
           complete: true,
-          entityIds: expect.any(Set),
           fromOptimisticTransaction: true,
           result: {
             items: [...manualItems, optimisticItem],
@@ -1978,14 +2040,12 @@ describe('optimistic mutation results', () => {
         },
         {
           complete: true,
-          entityIds: expect.any(Set),
           result: {
             items: manualItems,
           },
         },
         {
           complete: true,
-          entityIds: expect.any(Set),
           result: {
             items: [mutationItem],
           },
@@ -1995,13 +2055,11 @@ describe('optimistic mutation results', () => {
       expect(realisticDiffs).toEqual([
         {
           complete: false,
-          entityIds: expect.any(Set),
-          missing: [expect.anything()],
-          result: {},
+          missing: expect.anything(),
+          result: null,
         },
         {
           complete: true,
-          entityIds: expect.any(Set),
           result: {
             items: [mutationItem],
           },
@@ -2064,8 +2122,8 @@ describe('optimistic mutation - githunt comments', () => {
     },
   };
 
-  async function setup(...mockedResponses: MockedResponse[]) {
-    const link = mockSingleLink(
+  async function setup(...mockedResponses: MockLink.MockedResponse[]) {
+    const link = new MockLink([
       {
         request: {
           query: addTypenameToDocument(query),
@@ -2081,7 +2139,7 @@ describe('optimistic mutation - githunt comments', () => {
         result,
       },
       ...mockedResponses,
-    );
+    ]);
 
     const client = new ApolloClient({
       link,
@@ -2098,9 +2156,10 @@ describe('optimistic mutation - githunt comments', () => {
     const obsHandle = client.watchQuery({
       query,
       variables,
+      notifyOnNetworkStatusChange: false,
     });
 
-    await obsHandle.result();
+    await firstValueFrom(from(obsHandle));
 
     return client;
   }

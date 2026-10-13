@@ -1,0 +1,11 @@
+{
+  "name": "bench-impl-hermes-pre-perf",
+  "private": true,
+  "description": "Hermes at e9e5aa27, before the performance work (built by bench/setup.mjs), with Apollo Client 4.",
+  "dependencies": {
+    "@apollo/client": "4.3.3",
+    "graphql": "16.14.2",
+    "msand-apollo-cache-hermes": "file:./hermes.tgz",
+    "rxjs": "7.8.2"
+  }
+}

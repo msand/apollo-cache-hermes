@@ -1,12 +1,17 @@
 import { invariant, InvariantError } from 'ts-invariant';
-import { makeReference } from '@apollo/client';
-import { stringifyForDisplay } from '@apollo/client/utilities';
-import type { FieldFunctionOptions, FieldPolicy, FieldReadFunction } from '@apollo/client/cache/inmemory/policies';
-import type { Reference, StoreValue, TypePolicies } from '@apollo/client';
-import type { ReadFieldOptions } from '@apollo/client/cache/core/types/common';
+import { makeReference, stringifyForDisplay } from '@apollo/client/utilities/internal';
+import type {
+  FieldFunctionOptions,
+  FieldMergeFunctionOptions,
+  ReadFieldOptions,
+  Reference,
+  StoreValue,
+} from '@apollo/client/cache';
 import type { StoreObject } from '@apollo/client/utilities';
+import type { FieldNode } from 'graphql';
 
 import type { CacheContext } from '../context';
+import { storedTypename } from '../context/helpers';
 import type { NodeSnapshot } from '../nodes';
 import type { JsonObject, PathPart } from '../primitive';
 import type { NodeId } from '../schema';
@@ -14,37 +19,18 @@ import * as util from '../util';
 
 import * as snapshotEditor from './SnapshotEditor';
 
-const { deepGet, hasOwn, isReference, lazyImmutableDeepSet, pathBeginsWith, toOutKey } = util;
+const { deepFreeze, deepGet, hasOwn, isReference, lazyImmutableDeepSet, pathBeginsWith, toOutKey } = util;
 
 type ObjectOrReference = StoreObject | Reference;
 type ToReference = FieldFunctionOptions['toReference'];
 
 /**
- * Returns the field policy configured for `typename.fieldName`, if any.
+ * Returns the read function for `typename.fieldName`, if any: the one its
+ * field policy configures, or (for custom scalar fields) the one that parses
+ * its stored value.
  */
-export function getFieldPolicy(
-  typePolicies: TypePolicies | undefined,
-  typename: unknown,
-  fieldName: string,
-): FieldPolicy<any> | FieldReadFunction<any> | undefined {
-  if (!typePolicies || typeof typename !== 'string') return undefined;
-  return typePolicies[typename]?.fields?.[fieldName];
-}
-
-/**
- * Returns the read function configured for `typename.fieldName`, if any.
- */
-export function getReadFunction(typePolicies: TypePolicies | undefined, typename: unknown, fieldName: string) {
-  const policy = getFieldPolicy(typePolicies, typename, fieldName);
-  return typeof policy === 'function' ? policy : policy?.read;
-}
-
-/**
- * The key identifying a field (with its arguments) within its parent object,
- * for the purposes of options.storage.
- */
-export function storageFieldName(fieldName: string, args?: JsonObject | null) {
-  return args && Object.keys(args).length ? `${fieldName}(${JSON.stringify(args)})` : fieldName;
+export function getReadFunction(context: CacheContext<any>, typename: unknown, fieldName: string) {
+  return context.policies.getReadFunction(typename, fieldName) ?? context.scalars.getParseRead(typename, fieldName);
 }
 
 /**
@@ -91,8 +77,8 @@ function isNonNullObject(value: unknown): value is object {
  * stored by InMemoryCache: with References in place of the entities that the
  * node points to.
  *
- * Hermes (unlike InMemoryCache's default dataIdFromObject) also normalizes
- * objects without a __typename; those are left as data.
+ * Objects without a __typename (which a custom dataIdFromObject may still
+ * normalize) are left as data.
  */
 export function withReferences(snapshot: Readonly<NodeSnapshot> | undefined, path: PathPart[], value: any): any {
   const outbound = snapshot?.outbound;
@@ -109,7 +95,9 @@ export function withReferences(snapshot: Readonly<NodeSnapshot> | undefined, pat
       result = lazyImmutableDeepSet(result, value, relativePath, makeReference(id));
     }
   }
-  return result;
+  // Like InMemoryCache's (frozen) store values, the copy is frozen if the
+  // stored value is.
+  return result !== value && Object.isFrozen(value) ? deepFreeze(result) : result;
 }
 
 function isUntypedObject(value: unknown) {
@@ -119,11 +107,31 @@ function isUntypedObject(value: unknown) {
 /**
  * Per-field storage objects shared by read and merge functions, keyed by the
  * identity of the object containing the field (and the path to it).
+ *
+ * The storage of a node's fields (whose keys start with the node's id) is
+ * dropped when the node is removed from the cache (see delete), and all of it
+ * when the cache is reset.
  */
 export class FieldStorage {
   private _strong?: Map<unknown, FieldStorage>;
   private _weak?: WeakMap<object, FieldStorage>;
   private _storage?: Record<string, any>;
+
+  /** Drops the storage objects whose keys start with `key` (e.g. a node's id). */
+  delete(key: unknown): void {
+    if (key !== null && typeof key === 'object') {
+      this._weak?.delete(key);
+    } else {
+      this._strong?.delete(key);
+    }
+  }
+
+  /** Drops every storage object. */
+  clear(): void {
+    this._strong = undefined;
+    this._weak = undefined;
+    this._storage = undefined;
+  }
 
   get(keys: unknown[]): Record<string, any> {
     let node: FieldStorage = this;
@@ -165,7 +173,8 @@ export class FieldFunctions<TSerialized> {
     this.mergeObjects = makeMergeObjects(value => this.getFieldValue(value, '__typename'), mergeIntoEntity);
   }
 
-  // Hermes nulls out references to deleted entities, so null can't be read.
+  // Like InMemoryCache: a Reference can be read if its entity exists (references
+  // to deleted entities are kept, dangling), and other values if they are objects.
   canRead = (value: StoreValue): boolean => {
     return isReference(value) ? this._getNodeSnapshot(value.__ref) !== undefined : isNonNullObject(value);
   };
@@ -173,15 +182,24 @@ export class FieldFunctions<TSerialized> {
   /**
    * Reads the stored value of a field (with References for any entities).
    */
-  getFieldValue(from: ObjectOrReference, fieldName: string, args?: JsonObject | null): StoreValue {
+  getFieldValue(
+    from: ObjectOrReference,
+    fieldName: string,
+    args?: JsonObject | null,
+    typename?: unknown,
+    field?: FieldNode | null,
+  ): StoreValue {
     if (!isReference(from)) return from[fieldName];
 
     const id = from.__ref;
     const snapshot = this._getNodeSnapshot(id);
     if (!snapshot) return undefined;
 
-    if (args && Object.keys(args).length) {
-      const fieldId = snapshotEditor.nodeIdForParameterizedValue(id, [fieldName], args);
+    // Fields are stored as their keyArgs policies say (by default, under all
+    // their arguments).
+    const storeKey = this.storeKey(id, snapshot, fieldName, args, typename, field);
+    if (storeKey !== undefined) {
+      const fieldId = snapshotEditor.nodeIdForStoreKey(id, [fieldName], storeKey);
       const fieldSnapshot = this._getNodeSnapshot(fieldId);
       return fieldSnapshot && withReferences(fieldSnapshot, [], fieldSnapshot.data);
     }
@@ -192,14 +210,25 @@ export class FieldFunctions<TSerialized> {
     }
     const out = snapshot.outbound?.get(fieldName);
     if (out) return makeReference(out.id);
-    // Fields with arguments read without them resolve to (one of) their values.
-    const parameterized = snapshot.parameterized?.get(fieldName)?.[0];
-    if (parameterized) {
-      const fieldSnapshot = this._getNodeSnapshot(parameterized.id);
-      return fieldSnapshot && withReferences(fieldSnapshot, [], fieldSnapshot.data);
-    }
-    if (id === 'ROOT_QUERY' && fieldName === '__typename') return 'Query';
+    // (Like InMemoryCache, a field stored only under arguments other than
+    // `args` has no value.)
+    if (fieldName === '__typename') return this._context.rootTypename(id);
     return undefined;
+  }
+
+  /**
+   * The store key (see StoreKey) of a field of the entity `id`.
+   */
+  storeKey(
+    id: NodeId,
+    snapshot: Readonly<NodeSnapshot> | undefined,
+    fieldName: string,
+    args: JsonObject | null | undefined,
+    typename?: unknown,
+    field?: FieldNode | null,
+  ) {
+    if (typename === undefined) typename = storedTypename(this._context.policies, id, snapshot?.data);
+    return this._context.storeFieldNames.storeKey(typename, fieldName, args, field, this._variables);
   }
 
   /**
@@ -230,14 +259,25 @@ export class FieldFunctions<TSerialized> {
 
     const typename = options.typename ?? this.getFieldValue(objectOrRef, '__typename');
     const args = (options.args as JsonObject | undefined) ?? null;
-    const existing = this.getFieldValue(objectOrRef, fieldName, args);
-    const read = getReadFunction(this._context.typePolicies, typename, fieldName);
+    const field = options.field ?? null;
+    const existing = this.getFieldValue(objectOrRef, fieldName, args, typename, field);
+    // (Like InMemoryCache, the scalar policies of fields with selection sets are ignored.)
+    const read = field?.selectionSet
+      ? this._context.policies.getReadFunction(typename, fieldName)
+      : getReadFunction(this._context, typename, fieldName);
     if (!read) return existing;
 
+    const storeFieldName = this._context.storeFieldNames.storeFieldName(
+      typename,
+      fieldName,
+      args,
+      field,
+      this._variables,
+    );
     const storageKey = isReference(objectOrRef) ? objectOrRef.__ref : objectOrRef;
     return read(
       existing,
-      this.options(objectOrRef, fieldName, fieldName, args, [storageKey, storageFieldName(fieldName, args)]),
+      this.options(objectOrRef, fieldName, storeFieldName, args, [storageKey, storeFieldName], field),
     );
   }
 
@@ -250,13 +290,14 @@ export class FieldFunctions<TSerialized> {
     storeFieldName: string,
     args: JsonObject | null,
     storageKeys: unknown[],
+    field: FieldNode | null = null,
   ): FieldFunctionOptions {
     const readField = (...readFieldArgs: any[]) => this.readField(readFieldArgs, objectOrReference);
     return {
       args,
       cache: null as any,
       canRead: this.canRead,
-      field: null,
+      field,
       fieldName,
       isReference,
       mergeObjects: this.mergeObjects,
@@ -266,5 +307,29 @@ export class FieldFunctions<TSerialized> {
       toReference: this.toReference,
       variables: this._variables,
     };
+  }
+
+  /**
+   * Builds the options for a merge function call; like InMemoryCache, they
+   * include the write's extensions, the existing value and (for the chunks of
+   * `@stream` fields) the chunk's streamFieldInfo.
+   */
+  mergeOptions(
+    fieldName: string,
+    storeFieldName: string,
+    args: JsonObject | null,
+    storageKeys: unknown[],
+    extensions: Record<string, unknown> | undefined,
+    existingData: unknown,
+    field?: FieldNode | null,
+    streamFieldInfo?: FieldMergeFunctionOptions['streamFieldInfo'],
+  ): FieldMergeFunctionOptions {
+    const options: FieldMergeFunctionOptions = {
+      ...this.options(undefined, fieldName, storeFieldName, args, storageKeys, field),
+      extensions,
+      existingData,
+    };
+    if (streamFieldInfo) options.streamFieldInfo = streamFieldInfo;
+    return options;
   }
 }

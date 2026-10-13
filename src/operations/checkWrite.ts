@@ -1,29 +1,60 @@
-import { invariant, InvariantError } from '@apollo/client/utilities/globals';
+import { invariant, InvariantError } from '@apollo/client/utilities/invariant';
+import { addTypenameToDocument, getMainDefinition, isReference } from '@apollo/client/utilities';
 import {
-  addTypenameToDocument,
   argumentsObjectFromField,
+  checkDocument,
   createFragmentMap,
   getDefaultValues,
   getFragmentDefinitions,
   getFragmentFromSelection,
-  getMainDefinition,
   getOperationDefinition,
   isField,
-  isReference,
   resultKeyNameFromField,
   shouldInclude,
-  stringifyForDisplay,
-} from '@apollo/client/utilities';
-import type { FragmentMap } from '@apollo/client/utilities';
+} from '@apollo/client/utilities/internal';
+import type { FragmentMap } from '@apollo/client/utilities/internal';
 import type { FieldNode, FragmentDefinitionNode, InlineFragmentNode, SelectionNode, SelectionSetNode } from 'graphql';
-import { selectionSetMatchesResult } from '@apollo/client/cache/inmemory/helpers';
 
 import type { CacheContext } from '../context';
+import { isDev } from '../context/helpers';
 import type { JsonObject, JsonValue } from '../primitive';
 import type { DocumentNode } from '../util';
 
+/**
+ * Whether a result has every field a selection set selects (fragments aside),
+ * like InMemoryCache's selectionSetMatchesResult (which @apollo/client 4 no
+ * longer exports).
+ */
+function selectionSetMatchesResult(
+  selectionSet: SelectionSetNode,
+  result: unknown,
+  variables?: Record<string, unknown>,
+): boolean {
+  if (typeof result !== 'object' || result === null) return false;
+  if (Array.isArray(result)) return result.every(item => selectionSetMatchesResult(selectionSet, item, variables));
+  return selectionSet.selections.every(field => {
+    if (isField(field) && shouldInclude(field, variables)) {
+      const key = resultKeyNameFromField(field);
+      return (
+        Object.prototype.hasOwnProperty.call(result, key) &&
+        (!field.selectionSet ||
+          selectionSetMatchesResult(field.selectionSet, (result as Record<string, unknown>)[key], variables))
+      );
+    }
+    // Skipped selections do not count against matching, and fragments are
+    // matched when they are visited.
+    return true;
+  });
+}
+
 /** Errors that must escape the cache transaction they are thrown in. */
 const uncaughtErrors = new WeakSet<object>();
+
+/** Marks an error thrown while writing as one that propagates to the caller (see isUncaughtWriteError). */
+export function uncaughtWriteError<T extends object>(error: T): T {
+  uncaughtErrors.add(error);
+  return error;
+}
 
 /**
  * Whether an error thrown while writing should propagate to the caller (like
@@ -34,36 +65,17 @@ export function isUncaughtWriteError(error: unknown): boolean {
 }
 
 /**
- * The error InMemoryCache throws when an object is missing one of the
- * keyFields of its type policy.
+ * Validates a written document (e.g. that it does not alias a field to
+ * __typename), like InMemoryCache, whose writes throw these errors to the
+ * caller rather than rolling back a transaction.
  */
-export function missingKeyFieldError(fieldName: string, object: JsonObject): InvariantError {
-  return new InvariantError(
-    `Missing field '${fieldName}' while extracting keyFields from ${stringifyForDisplay(object, 2)}`,
-  );
-}
-
-/**
- * The first keyField (of a type policy with a keyFields array) that `object`
- * does not provide, if any, when the object cannot be identified otherwise.
- */
-export function missingKeyField<TSerialized>(
-  context: CacheContext<TSerialized>,
-  object: JsonObject,
-  storeObject: JsonObject = object,
-): string | undefined {
-  const { __typename } = object;
-  if (typeof __typename !== 'string') return undefined;
-  const keyFields = context.typePolicies?.[__typename]?.keyFields;
-  if (!Array.isArray(keyFields)) return undefined;
-  for (const keyField of keyFields) {
-    if (typeof keyField !== 'string') continue;
-    if (storeObject[keyField] === undefined && object[keyField] === undefined) {
-      // A custom entityIdForNode/dataIdFromObject may identify it anyway.
-      return context.entityIdForValue({ ...object, ...storeObject }) === undefined ? keyField : undefined;
-    }
+export function checkWriteDocument(document: DocumentNode): void {
+  try {
+    checkDocument(document);
+  } catch (error) {
+    if (typeof error === 'object' && error !== null) uncaughtErrors.add(error);
+    throw error;
   }
-  return undefined;
 }
 
 interface FieldContext {
@@ -75,8 +87,9 @@ interface FieldContext {
  * Walks a result about to be written, like InMemoryCache's StoreWriter does:
  * in development, it reports the selected fields missing from the result
  * (other than @client and deferred fields, the __typename fields added by the
- * cache, and fields with read functions), and it throws when an object misses
- * one of its keyFields.
+ * cache, and fields with read functions); and it infers the fuzzy
+ * possibleTypes subtypes that fragments match. (Objects missing one of their
+ * keyFields are reported by the SnapshotEditor, which identifies them anyway.)
  */
 export function checkWrite<TSerialized>(
   context: CacheContext<TSerialized>,
@@ -85,16 +98,10 @@ export function checkWrite<TSerialized>(
   result: JsonObject,
   rootTypename: string | undefined,
 ): void {
-  const dev = (globalThis as { __DEV__?: boolean }).__DEV__ !== false;
-  // In production, there is only something to check with keyFields policies (or
-  // fuzzy possibleTypes subtypes to infer).
-  if (
-    !dev &&
-    !context.hasFuzzySubtypes &&
-    !Object.values(context.typePolicies ?? {}).some(policy => Array.isArray(policy.keyFields))
-  ) {
-    return;
-  }
+  const dev = isDev();
+  // In production, there is only something to check with fuzzy possibleTypes
+  // subtypes to infer.
+  if (!dev && !context.policies.hasFuzzySubtypes) return;
   const allVariables = { ...getDefaultValues(getOperationDefinition(document)), ...variables };
   const fragmentMap: FragmentMap = createFragmentMap(getFragmentDefinitions(document));
   const lookupFragment = (name: string) => fragmentMap[name];
@@ -112,10 +119,9 @@ export function checkWrite<TSerialized>(
         selectionSetMatchesResult(fragment.selectionSet, object, allVariables),
       ));
 
-  const hasReadFunction = (typename: string | undefined, fieldName: string) => {
-    const policy = typename ? context.typePolicies?.[typename]?.fields?.[fieldName] : undefined;
-    return typeof policy === 'function' || typeof policy?.read === 'function';
-  };
+  // Like InMemoryCache, scalar fields have no read functions.
+  const hasReadFunction = (typename: string | undefined, fieldName: string) =>
+    !!context.policies.getReadFunction(typename, fieldName);
 
   // Hermes writes do not fail on @skip/@include variables that are not provided.
   const included = (selection: SelectionNode) => {
@@ -183,27 +189,19 @@ export function checkWrite<TSerialized>(
     return fieldMap;
   }
 
-  function checkValue(value: JsonValue | undefined, selectionSet: SelectionSetNode) {
+  function checkValue(value: JsonValue | undefined, selectionSet: SelectionSetNode): void {
     if (Array.isArray(value)) {
       for (const item of value) checkValue(item, selectionSet);
     } else if (value && typeof value === 'object' && !isReference(value)) {
-      checkObject(value as JsonObject, selectionSet, undefined, false);
+      checkObject(value as JsonObject, selectionSet, undefined);
     }
   }
 
-  function checkObject(
-    object: JsonObject,
-    selectionSet: SelectionSetNode,
-    typename: string | undefined,
-    isRoot: boolean,
-  ) {
+  function checkObject(object: JsonObject, selectionSet: SelectionSetNode, typename: string | undefined): void {
     if (typeof object.__typename === 'string') typename = object.__typename;
-    // The fields of the object by their schema names (rather than aliases).
-    const storeObject: JsonObject = {};
     flattenFields(selectionSet, typename, object).forEach(({ clientOnly, deferred }, field) => {
       const value = object[resultKeyNameFromField(field)];
       if (value !== undefined) {
-        storeObject[field.name.value] = value;
         if (field.selectionSet) checkValue(value, field.selectionSet);
       } else if (
         dev &&
@@ -216,15 +214,7 @@ export function checkWrite<TSerialized>(
         invariant.error(`Missing field '%s' while writing result %o`, resultKeyNameFromField(field), object);
       }
     });
-
-    // Like InMemoryCache, the written root object has an id already.
-    const keyField = isRoot ? undefined : missingKeyField(context, object, storeObject);
-    if (keyField !== undefined) {
-      const error = missingKeyFieldError(keyField, object);
-      uncaughtErrors.add(error);
-      throw error;
-    }
   }
 
-  checkObject(result, getMainDefinition(document).selectionSet, rootTypename, true);
+  checkObject(result, getMainDefinition(document).selectionSet, rootTypename);
 }

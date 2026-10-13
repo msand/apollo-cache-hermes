@@ -1,5 +1,6 @@
-import { Observable } from '@apollo/client/utilities';
-import { ObservableStream } from '@apollo/client/testing/internal/ObservableStream';
+import { Observable } from 'rxjs';
+
+import { ObservableStream } from '@apollo/client/testing/internal';
 
 it('allows to step through an observable until completion', async () => {
   const stream = new ObservableStream(
@@ -55,11 +56,13 @@ it.each([
     new Observable<number>(observer => {
       observer.next(1);
       observer.next(2);
+      // @ts-ignore
       observer[gotten](3);
     }),
   );
   await expect(stream.takeNext()).resolves.toBe(1);
   await expect(stream.takeNext()).resolves.toBe(2);
+  // @ts-ignore
   await expect(stream[expected]()).rejects.toEqual(expect.any(Error));
 });
 
@@ -72,10 +75,12 @@ it.each([
     new Observable<number>(observer => {
       observer.next(1);
       observer.next(2);
+      // @ts-ignore
       observer[gotten](3);
     }),
   );
   await expect(stream.takeNext()).resolves.toBe(1);
   await expect(stream.takeNext()).resolves.toBe(2);
+  // @ts-ignore this should just not throw
   await stream[expected]();
 });

@@ -1,44 +1,51 @@
 /** @jest-environment node */
-// We run this in a node environment because:
-// A) JSDOM doesn't yet support the TextEncoder/TextDecoder globals added in node 11, meaning certain imports (e.g. reactSSR) will fail (See https://github.com/jsdom/jsdom/issues/2524)
-// B) We're just testing imports/exports, so no reason not to use Node for slightly better performance.
+// We run this in a node environment because we're just testing imports/exports,
+// so no reason not to use Node for slightly better performance.
 
+import { execFile } from 'node:child_process';
+import { resolve } from 'node:path';
+import { promisify } from 'node:util';
+// eslint-disable-next-line import/no-duplicates
+import * as client from '@apollo/client';
 import * as cache from '@apollo/client/cache';
-import * as client from '@apollo/client/.';
+// eslint-disable-next-line import/no-duplicates
 import * as core from '@apollo/client/core';
 import * as dev from '@apollo/client/dev';
 import * as errors from '@apollo/client/errors';
+import * as incremental from '@apollo/client/incremental';
+import * as linkCore from '@apollo/client/link';
 import * as linkBatch from '@apollo/client/link/batch';
 import * as linkBatchHTTP from '@apollo/client/link/batch-http';
+import * as linkClientAwareness from '@apollo/client/link/client-awareness';
 import * as linkContext from '@apollo/client/link/context';
-import * as linkCore from '@apollo/client/link/core';
 import * as linkError from '@apollo/client/link/error';
 import * as linkHTTP from '@apollo/client/link/http';
 import * as linkPersistedQueries from '@apollo/client/link/persisted-queries';
-import * as linkRetry from '@apollo/client/link/retry';
 import * as linkRemoveTypename from '@apollo/client/link/remove-typename';
+import * as linkRetry from '@apollo/client/link/retry';
 import * as linkSchema from '@apollo/client/link/schema';
 import * as linkSubscriptions from '@apollo/client/link/subscriptions';
 import * as linkUtils from '@apollo/client/link/utils';
 import * as linkWS from '@apollo/client/link/ws';
+import * as localState from '@apollo/client/local-state';
 import * as masking from '@apollo/client/masking';
 import * as react from '@apollo/client/react';
-import * as reactComponents from '@apollo/client/react/components';
-import * as reactContext from '@apollo/client/react/context';
-import * as reactHOC from '@apollo/client/react/hoc';
-import * as reactHooks from '@apollo/client/react/hooks';
 import * as reactInternal from '@apollo/client/react/internal';
-import * as reactParser from '@apollo/client/react/parser';
+import * as compilerRuntime from '@apollo/client/react/internal/compiler-runtime';
 import * as reactSSR from '@apollo/client/react/ssr';
 import * as testing from '@apollo/client/testing';
-import * as testingCore from '@apollo/client/testing/core';
-import * as testingExperimental from '@apollo/client/testing/experimental';
+import * as testingReact from '@apollo/client/testing/react';
 import * as utilities from '@apollo/client/utilities';
-import * as utilitiesGlobals from '@apollo/client/utilities/globals';
-import * as urqlUtilities from '@apollo/client/utilities/subscriptions/urql';
+import * as utilitiesEnvironment from '@apollo/client/utilities/environment';
+import * as utilitiesInternal from '@apollo/client/utilities/internal';
+import * as utilitiesInternalGlobals from '@apollo/client/utilities/internal/globals';
+import * as utilitiesInternalPonyfills from '@apollo/client/utilities/internal/ponyfills';
+import * as utilitiesInvariant from '@apollo/client/utilities/invariant';
+import * as v4_migration from '@apollo/client/v4-migration';
 
-// eslint-disable-next-line import/no-commonjs
-const entryPoints = require('../../config/entryPoints');
+import * as testingInternal from '@apollo/client/testing/internal';
+
+import { entryPoints } from '../../config/entryPoints';
 
 type Namespace = object;
 
@@ -51,16 +58,36 @@ describe('exports of public entry points', () => {
       expect(Object.keys(ns).sort()).toMatchSnapshot();
     });
   }
+  function checkWithConditions(id: string, conditions: string[]) {
+    it(`${id} with conditions [${conditions.join(',')}]`, async () => {
+      // Hermes: zx and Apollo's config/listImports.ts are not available here; this runs the same
+      // import listing inline against the installed package.
+      const exports = await promisify(execFile)(
+        process.execPath,
+        [
+          '--no-warnings',
+          ...conditions.flatMap(condition => [`--conditions`, condition]),
+          '--input-type=module',
+          '--eval',
+          `Object.keys(await import(${JSON.stringify(id)})).sort().forEach((i) => console.log(i));`,
+        ],
+        { cwd: resolve(__dirname, '../../') },
+      );
+      expect(exports.stdout.split('\n').filter(x => x.trim() !== '')).toMatchSnapshot();
+    });
+  }
 
   check('@apollo/client', client);
   check('@apollo/client/cache', cache);
   check('@apollo/client/core', core);
   check('@apollo/client/dev', dev);
   check('@apollo/client/errors', errors);
+  check('@apollo/client/incremental', incremental);
   check('@apollo/client/link/batch', linkBatch);
   check('@apollo/client/link/batch-http', linkBatchHTTP);
+  check('@apollo/client/link/client-awareness', linkClientAwareness);
   check('@apollo/client/link/context', linkContext);
-  check('@apollo/client/link/core', linkCore);
+  check('@apollo/client/link', linkCore);
   check('@apollo/client/link/error', linkError);
   check('@apollo/client/link/http', linkHTTP);
   check('@apollo/client/link/persisted-queries', linkPersistedQueries);
@@ -70,21 +97,26 @@ describe('exports of public entry points', () => {
   check('@apollo/client/link/subscriptions', linkSubscriptions);
   check('@apollo/client/link/utils', linkUtils);
   check('@apollo/client/link/ws', linkWS);
+  check('@apollo/client/local-state', localState);
   check('@apollo/client/masking', masking);
   check('@apollo/client/react', react);
-  check('@apollo/client/react/components', reactComponents);
-  check('@apollo/client/react/context', reactContext);
-  check('@apollo/client/react/hoc', reactHOC);
-  check('@apollo/client/react/hooks', reactHooks);
   check('@apollo/client/react/internal', reactInternal);
-  check('@apollo/client/react/parser', reactParser);
+  check('@apollo/client/react/internal/compiler-runtime', compilerRuntime);
   check('@apollo/client/react/ssr', reactSSR);
   check('@apollo/client/testing', testing);
-  check('@apollo/client/testing/core', testingCore);
-  check('@apollo/client/testing/experimental', testingExperimental);
+  check('@apollo/client/testing/internal', testingInternal);
+  check('@apollo/client/testing/react', testingReact);
   check('@apollo/client/utilities', utilities);
-  check('@apollo/client/utilities/globals', utilitiesGlobals);
-  check('@apollo/client/utilities/subscriptions/urql', urqlUtilities);
+  check('@apollo/client/utilities/internal', utilitiesInternal);
+  check('@apollo/client/utilities/internal/globals', utilitiesInternalGlobals);
+  check('@apollo/client/utilities/internal/ponyfills', utilitiesInternalPonyfills);
+  check('@apollo/client/utilities/invariant', utilitiesInvariant);
+  check('@apollo/client/utilities/environment', utilitiesEnvironment);
+  check('@apollo/client/v4-migration', v4_migration);
+
+  checkWithConditions('@apollo/client/react', ['react-server']);
+
+  expect(client).toStrictEqual(core);
 
   it('completeness', () => {
     const { join } = require('path').posix;

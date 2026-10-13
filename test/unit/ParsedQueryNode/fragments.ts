@@ -200,6 +200,59 @@ describe(`parseQuery for queries with fragments`, () => {
     });
   });
 
+  it(`keeps the child selections of fields selected under different type conditions apart`, () => {
+    const operation = `
+      query getThings {
+        foo {
+          bar { id }
+          ... on Foo {
+            bar { name }
+          }
+          ... on Baz {
+            bar { size }
+          }
+        }
+      }
+    `;
+    const onBaz = [{ typeConditions: ['Baz'] }];
+    expect(parseOperation(operation)).to.deep.eq({
+      parsedQuery: {
+        foo: new ParsedQueryNode({
+          bar: new ParsedQueryNode(
+            { id: new ParsedQueryNode(), name: new ParsedQueryNode(), size: new ParsedQueryNode() },
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            [
+              { conditions: undefined, children: { id: new ParsedQueryNode() } },
+              { conditions: onFoo, children: { name: new ParsedQueryNode() } },
+              { conditions: onBaz, children: { size: new ParsedQueryNode() } },
+            ],
+          ),
+        }),
+      },
+      variables: new Set(),
+    });
+  });
+
+  it(`does not keep variants for fields selected under the same conditions`, () => {
+    const operation = `
+      query getThings {
+        foo {
+          ... on Foo {
+            bar { id }
+          }
+          ... on Foo {
+            bar { name }
+          }
+        }
+      }
+    `;
+    expect(parseOperation(operation).parsedQuery.foo.children!.bar.variants).to.eq(undefined);
+  });
+
   it(`complains if fragments are not declared`, () => {
     const operation = `
       query getThings {

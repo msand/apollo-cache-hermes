@@ -31,32 +31,20 @@ describe(`writeFragment directly to root query`, () => {
     baseline = hermes.getCurrentCacheSnapshot().baseline;
   });
 
-  it(`correctly modify root query`, () => {
+  // Like InMemoryCache, the fields are written to the root object itself: it
+  // is not identified as an entity by its data.
+  it(`writes the fields to the root query itself`, () => {
     expect(baseline.getNodeSnapshot(QueryRootId)).to.deep.eq(
-      new EntitySnapshot(
-        {
-          id: 123,
-          name: 'Gouda',
-          __typename: 'Viewer',
-        },
-        /* inbound */ undefined,
-        [{ id: '123', path: [] }],
-      ),
+      new EntitySnapshot({
+        id: 123,
+        name: 'Gouda',
+        __typename: 'Viewer',
+      }),
     );
-    expect(baseline.getNodeData(QueryRootId)).to.eq(baseline.getNodeData('123'));
   });
 
-  it(`correctly add new reference`, () => {
-    expect(baseline.getNodeSnapshot('123')).to.deep.eq(
-      new EntitySnapshot(
-        {
-          id: 123,
-          name: 'Gouda',
-          __typename: 'Viewer',
-        },
-        [{ id: QueryRootId, path: [] }],
-        /* outbound */ undefined,
-      ),
-    );
+  it(`does not add an entity for the data`, () => {
+    expect(baseline.getNodeSnapshot('123')).to.eq(undefined);
+    expect(baseline.allNodeIds()).to.deep.eq([QueryRootId]);
   });
 });

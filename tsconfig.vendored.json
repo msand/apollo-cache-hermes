@@ -1,0 +1,18 @@
+// Apollo Client's vendored test suite (test/src). It is compiled as its own
+// program because it resolves @apollo/client differently (see `paths`).
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "declaration": false,
+    "declarationMap": false,
+    // Apollo Client's tests import internals that its package.json exports map
+    // leaves out, so resolve every @apollo/client path to its ES module declarations.
+    "paths": {
+      "@apollo/client/testing/internal": ["./test/src/testing/internal/index.ts"],
+      "@apollo/client": ["./node_modules/@apollo/client/core/index.d.ts"],
+      "@apollo/client/*": ["./node_modules/@apollo/client/*/index.d.ts", "./node_modules/@apollo/client/*.d.ts"]
+    }
+  },
+  "include": ["test/src/**/*.ts", "test/src/**/*.tsx", "typings/**/*.d.ts"],
+  "exclude": ["node_modules", "apollo-client", "dist", ".claude"]
+}
