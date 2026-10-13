@@ -1419,7 +1419,10 @@ export class SnapshotEditor<TSerialized> {
     // references to point to the new version.
     this._rebuildInboundReferences();
 
-    const snapshot = this._buildNewSnapshot();
+    // When nothing changed (e.g. the same values were written again), keep the
+    // snapshot, along with its cached reads (so their results keep their identity).
+    const unchanged = !this._editedNodeIds.size && !Object.keys(this._newNodes).length;
+    const snapshot = unchanged ? this._parent : this._buildNewSnapshot();
     if (this._context.freezeSnapshots) {
       snapshot.freeze();
     }
