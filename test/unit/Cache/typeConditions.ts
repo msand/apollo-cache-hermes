@@ -116,7 +116,11 @@ describe(`fields selected under several type conditions`, () => {
       writeIncomplete(cache, query, { search: [{ id: 'x', details: { pages: 1 } }] });
 
       expect(diff(cache, query).complete).toBe(false);
-      expect(missingFields(cache, query)).toEqual({ 'search.0.details.runtime': 'runtime' });
+      // Like InMemoryCache, the `__typename` the query selects is missing too.
+      expect(missingFields(cache, query)).toEqual({
+        'search.0.__typename': '__typename',
+        'search.0.details.runtime': 'runtime',
+      });
     });
   });
 
