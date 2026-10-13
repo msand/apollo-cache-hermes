@@ -8,6 +8,7 @@ import {
   expandVariables,
   ParsedQueryNode,
   parseQuery,
+  ParsedQueryVariant,
   VariableArgument,
 } from '../../../src/ParsedQueryNode';
 import { fragmentMapForDocument, getOperationOrDie } from '../../../src/util';
@@ -160,12 +161,45 @@ describe(`parseQuery for response keys with alternative fields`, () => {
       );
     });
 
+    it(`throws for different fields under type conditions that possibleTypes relate`, () => {
+      const withPossibleTypes = new CacheContext({ ...strictConfig, possibleTypes: { Media: ['Movie'] } });
+      const document = gql(`{ search { ... on Media { size: pages } ... on Movie { size: runtime } } }`);
+      expect(() =>
+        parseQuery(withPossibleTypes, fragmentMapForDocument(document), getOperationOrDie(document).selectionSet),
+      ).to.throw(ConflictingFieldsError, /alias mismatch/);
+    });
+
+    it(`keeps alternatives under type conditions that possibleTypes does not relate`, () => {
+      const withPossibleTypes = new CacheContext({ ...strictConfig, possibleTypes: { Media: ['Book', 'Movie'] } });
+      const document = gql(`{ search { ... on Book { size: pages } ... on Movie { size: runtime } } }`);
+      const { parsedQuery } = parseQuery(
+        withPossibleTypes,
+        fragmentMapForDocument(document),
+        getOperationOrDie(document).selectionSet,
+      );
+      expect(parsedQuery.search.children!.size.alternatives!.map(node => node.schemaName)).to.deep.eq(['runtime']);
+    });
+
     it(`throws for conflicting child selections under the same type condition`, () => {
       expectConflict(
         `{ search { ... on Book { info { size: pages } } ... on Book { info { size: runtime } } } }`,
         /alias mismatch/,
       );
     });
+  });
+
+  it(`merges the selections of a field that also overlaps other alternatives, for objects of unknown type`, () => {
+    // (GraphQL would reject the document; Hermes is lenient for the children
+    // of fields selected under disjoint type conditions.)
+    const parsed = parseOperation(`{
+      search {
+        ... on Book { info { ... on Book { size: pages { a } } ... on Movie { size: runtime } } }
+        ... on Movie { info { size: pages { b } } }
+      }
+    }`);
+    const size = parsed.search.children!.info.children!.size;
+    expect(size.schemaName).to.eq('pages');
+    expect(Object.keys(size.children!)).to.have.members(['a', 'b']);
   });
 
   describe(`expandVariables`, () => {
@@ -184,6 +218,27 @@ describe(`parseQuery for response keys with alternative fields`, () => {
       expect(withoutBooks.args).to.deep.eq({ limit: 3 });
       expect(withoutBooks.alternatives).to.eq(undefined);
       expect(withoutBooks.conditions).to.deep.eq(on('Movie'));
+    });
+  });
+
+  describe(`expandVariables of fields with variants`, () => {
+    it(`keeps their variants when their conditions' directives are resolved`, () => {
+      const variants: ParsedQueryVariant<any>[] = [
+        { conditions: [{ typeConditions: ['Book'] }], children: { a: new ParsedQueryNode() } },
+        { conditions: [{ typeConditions: ['Movie'] }], children: { b: new ParsedQueryNode() } },
+      ];
+      const node = new ParsedQueryNode<any>(
+        { a: new ParsedQueryNode(), b: new ParsedQueryNode() },
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        [{ directives: [{ variable: 'x', include: true }] }],
+        variants,
+      );
+      const expanded = expandVariables({ info: node }, { x: true }).info;
+      expect(expanded.conditions).to.eq(undefined);
+      expect(expanded.variants).to.eq(variants);
     });
   });
 });
