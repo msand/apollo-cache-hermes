@@ -101,7 +101,9 @@ export abstract class ApolloQueryable extends ApolloCache {
     // TODO: Support nested fragments.
     const rawOperation = buildRawOperationFromFragment(
       options.fragment,
-      this._fragmentRootId(options)!,
+      // Like InMemoryCache, fragments without an id (or with a `from` that
+      // can't be identified) are read from ROOT_QUERY.
+      this._fragmentRootId(options) ?? StaticNodeId.QueryRoot,
       options.variables as JsonObject | undefined,
       options.fragmentName,
     );

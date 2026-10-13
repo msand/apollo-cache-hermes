@@ -3,8 +3,6 @@ import type { Cache, FieldReadFunction, MissingTree, Reference, StoreValue } fro
 import { makeReference } from '@apollo/client/utilities/internal';
 import { invariant, InvariantError } from '@apollo/client/utilities/invariant';
 import type { StoreObject } from '@apollo/client/utilities';
-import { addTypenameToDocument } from '@apollo/client/utilities';
-import type { DocumentNode, SelectionSetNode } from 'graphql';
 
 import type { CacheContext, QueryInfo } from '../context';
 import { storeFieldNameOf } from '../context/storeFieldNames';
@@ -23,13 +21,10 @@ import * as snapshotEditor from './SnapshotEditor';
 import { FieldFunctions, getReadFunction, withReferences } from './fieldFunctions';
 
 const makeRef = makeReference;
-const { StaticNodeId } = schema;
+const { isRootNodeId } = schema;
 const { cloneNodeSnapshot, EntitySnapshot, ParameterizedValueSnapshot } = nodes;
 const { nodeIdForStoreKey } = snapshotEditor;
 const { deepGet, isNil, isObject, isReference, lazyImmutableDeepSet, safeStringify } = util;
-
-export { MissingFieldError };
-export type { MissingTree };
 
 export interface QueryResult {
   /** The value of the root requested by a query. */
@@ -40,8 +35,17 @@ export interface QueryResult {
   entityIds?: Set<NodeId>;
   /** The ids of nodes overlaid on top of static cache results. */
   dynamicNodeIds?: Set<NodeId>;
-  /** What is missing from an incomplete result. */
+  /**
+   * What is missing from an incomplete result (built when first accessed, like
+   * InMemoryCache's diff.missing).
+   */
   missing?: MissingFieldError;
+  /**
+   * Whether an incomplete result has a value for any field the query selects
+   * at its root. (Hermes' results can hold other fields of the root object,
+   * which do not count.)
+   */
+  hasSelectedData?: boolean;
 }
 
 /** The (shared, frozen) result of a complete read that selects no fields. */
@@ -50,25 +54,38 @@ const EMPTY_RESULT: JsonObject = Object.freeze({});
 /**
  * The Apollo Client 4 Cache.DiffResult for a read, like InMemoryCache's: an
  * incomplete result is null unless partial data is requested (the default)
- * and at least one field was found.
+ * and at least one selected field was found.
  */
 export function toDiffResult<TData = unknown>(
-  { result, complete, missing }: QueryResult,
+  queryResult: QueryResult,
   returnPartialData = true,
+  fromOptimisticTransaction?: boolean,
 ): Cache.DiffResult<TData> {
-  // Like InMemoryCache, a complete result has a `missing: undefined` property,
-  // and a read that selects no fields (they are all skipped) has an empty
-  // result, even when nothing was written.
-  if (complete) return { result: (result ?? EMPTY_RESULT) as any, complete: true, missing: undefined };
-  const keepResult = returnPartialData && !!result && Object.keys(result).length > 0;
-  // Like InMemoryCache, missing is a getter (which it uses to build the error lazily).
-  return {
-    result: keepResult ? (result as any) : null,
-    complete: false,
-    get missing() {
-      return missing;
-    },
-  };
+  const { result, complete } = queryResult;
+  let diff: Cache.DiffResult<TData>;
+  if (complete) {
+    // Like InMemoryCache, a complete result has a `missing: undefined` property,
+    // and a read that selects no fields (they are all skipped) has an empty
+    // result, even when nothing was written.
+    diff = { result: (result ?? EMPTY_RESULT) as any, complete: true, missing: undefined };
+  } else {
+    const keepResult = returnPartialData && !!result && hasSelectedData(queryResult);
+    diff = {
+      result: keepResult ? (result as any) : null,
+      complete: false,
+      // Like InMemoryCache, missing is a getter (which builds the error lazily).
+      get missing() {
+        return queryResult.missing;
+      },
+    };
+  }
+  if (fromOptimisticTransaction) diff.fromOptimisticTransaction = true;
+  return diff;
+}
+
+/** Whether a (possibly incomplete) result has a value for any field the query selects at its root. */
+function hasSelectedData({ result, hasSelectedData: selected }: QueryResult): boolean {
+  return selected ?? (!!result && Object.keys(result).length > 0);
 }
 
 export interface QueryResultWithNodeIds extends QueryResult {
@@ -135,13 +152,13 @@ function _read<TSerialized>(
   if (!queryResult.result) {
     cacheHit = false;
     const rootSnapshot = snapshot.getNodeSnapshot(operation.rootId);
-    if (!rootSnapshot && !isRootId(operation.rootId)) {
+    if (!rootSnapshot && !isRootNodeId(operation.rootId)) {
       // Like InMemoryCache, reading from a missing entity reports a dangling
       // reference, with an empty result.
-      const message = `Dangling reference to missing ${operation.rootId} object`;
       queryResult.result = {};
       queryResult.complete = false;
-      queryResult.missing = new MissingFieldError(message, message, operation.document, operation.variables ?? {});
+      queryResult.hasSelectedData = false;
+      setMissing(queryResult, operation, `Dangling reference to missing ${operation.rootId} object`);
       queryResult.entityIds = includeNodeIds ? new Set([operation.rootId]) : undefined;
     } else {
       const { data, outbound, parameterized } = rootSnapshot ?? {};
@@ -154,7 +171,7 @@ function _read<TSerialized>(
           (data || outbound || parameterized || context.policies.hasFieldPolicies)) ||
         (operation.parsedQuery.__typename &&
           // An empty root (e.g. after writing `{}`) still reads its __typename.
-          (data || isRootId(operation.rootId)) &&
+          (data || isRootNodeId(operation.rootId)) &&
           !(data && '__typename' in (data as JsonObject)) &&
           selectsRootTypename(operation.info))
       ) {
@@ -184,9 +201,8 @@ function _read<TSerialized>(
           danglingFields,
         });
         queryResult.complete = checked.complete;
-        if (checked.missing) {
-          queryResult.missing = checked.missing;
-        }
+        if (!checked.complete) queryResult.hasSelectedData = checked.hasSelectedData;
+        if (checked.missing) setMissing(queryResult, operation, checked.missing);
         if (checked.result !== queryResult.result) {
           queryResult.result = checked.result;
           if (context.freezeSnapshots) util.deepFreeze(queryResult.result);
@@ -197,15 +213,13 @@ function _read<TSerialized>(
 
   // We can potentially ask for results without node ids first, and then follow
   // up with an ask for them.  In that case, we need to fill in the cache a bit
-  // more.
+  // more. (Only the ids: the first read, which knew which fields' read
+  // functions returned dangling references, determined completeness.)
   if (includeNodeIds && !queryResult.entityIds) {
     cacheHit = false;
     const entityIds = new Set<NodeId>([operation.rootId]);
-    if (snapshot.getNodeSnapshot(operation.rootId) || isRootId(operation.rootId)) {
-      queryResult.complete = _visitSelection(operation, context, queryResult.result, entityIds, {
-        snapshot,
-        tempStore,
-      }).complete;
+    if (snapshot.getNodeSnapshot(operation.rootId) || isRootNodeId(operation.rootId)) {
+      _visitSelection(operation, context, queryResult.result, entityIds, { snapshot, tempStore });
     }
     queryResult.entityIds = entityIds;
   }
@@ -220,7 +234,13 @@ function _read<TSerialized>(
 
 class OverlayWalkNode {
   constructor(
+    /** The result object being built (a copy of `source`, which the walk overlays). */
     public readonly value: JsonObject,
+    /**
+     * The object `value` was copied from, which the walk reads fields from
+     * (so that overlaying a key never changes what other keys read).
+     */
+    public readonly source: JsonObject,
     public readonly containerId: NodeId,
     public readonly parsedMap: ParsedQuery,
     public readonly path: PathPart[],
@@ -246,11 +266,11 @@ const hasOwn = Object.prototype.hasOwnProperty;
  * Walks a parameterized field map, overlaying values at those paths on top of
  * existing results.
  *
- * Overlaid values are objects with prototypes pointing to the original results,
- * and new properties pointing to the parameterized values (or objects that
- * contain them).
+ * Overlaid values are (shallow) copies of the original results' objects, with
+ * their own properties set to the parameterized values (or copies of the
+ * objects that contain them); the original results are left untouched.
  */
-export function _walkAndOverlayDynamicValues<TSerialized>(
+function _walkAndOverlayDynamicValues<TSerialized>(
   query: OperationInstance<TSerialized>,
   context: CacheContext<TSerialized>,
   snapshot: GraphSnapshot,
@@ -263,9 +283,7 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
   // snapshot, but we should also preemptively stop walking if there are no
   // dynamic values to be overlaid
   const id = query.rootId;
-  const rootSnapshot: Readonly<NodeSnapshot> | undefined =
-    (snapshot.getNodeSnapshot(id) ?? isRootId(id)) ? {} : undefined;
-  if (isNil(rootSnapshot)) return result;
+  if (!snapshot.getNodeSnapshot(id) && !isRootNodeId(id)) return result;
 
   // TODO: A better approach here might be to walk the outbound references from
   // each node, rather than walking the result set.  We'd have to store the path
@@ -275,7 +293,7 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
   // TODO: This logic sucks.  We'd do much better if we had knowledge of the
   // schema.  Can we layer that on in such a way that we can support uses w/ and
   // w/o a schema compilation step?
-  const queue = [new OverlayWalkNode(newResult, id, query.parsedQuery, [])];
+  const queue = [new OverlayWalkNode(newResult, result ?? {}, id, query.parsedQuery, [])];
 
   function getSnapshot(nodeId: string) {
     return tempStore[nodeId] ?? snapshot.getNodeSnapshot(nodeId);
@@ -290,9 +308,6 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
     if (!fields) danglingFields.set(value, (fields = new Map()));
     fields.set(key, ref);
   }
-
-  // The missing entity a read function's (Reference) result points to.
-  let danglingResult: NodeId | undefined;
 
   const ensureNewSnapshot = (nodeId: NodeId): NodeSnapshot => {
     const parent = getSnapshot(nodeId);
@@ -334,7 +349,7 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
     if (data !== null && typeof data === 'object') resolvedIds.set(data, ref.__ref);
     return data;
   };
-  const isDangling = (value: unknown) => isReference(value) && !getSnapshot(value.__ref) && !isRootId(value.__ref);
+  const isDangling = (value: unknown) => isReference(value) && !getSnapshot(value.__ref) && !isRootNodeId(value.__ref);
 
   // Replaces References (returned by read functions) with the data of the
   // entities they point to.  Like InMemoryCache, lists of objects (with
@@ -362,7 +377,7 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
   // Walk breadth-first, so read functions run in the order of the results.
   for (let q = 0; q < queue.length; q++) {
     const walkNode = queue[q];
-    const { value, parsedMap, unnormalized } = walkNode;
+    const { value, source, parsedMap, unnormalized } = walkNode;
     let { containerId, path } = walkNode;
     // The object read from (e.g. a root object, which may have an id field) is
     // not identified by its data.
@@ -393,13 +408,15 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
       path.length === 0 && !(containerSnapshot instanceof ParameterizedValueSnapshot)
         ? makeRef(containerId)
         : (unnormalized ?? withReferences(containerSnapshot, path, deepGet(containerSnapshot?.data, path)) ?? value);
+    // The value a read function returns (with its References resolved), or the
+    // missing entity its (Reference) result points to.
     const callReadFunction = (
       readFn: FieldReadFunction,
       existing: StoreValue,
       fieldName: string,
       node: ParsedQueryNode,
       storeKey: StoreKey,
-    ) => {
+    ): { value: any; dangling?: undefined } | { value?: undefined; dangling: NodeId } => {
       const args = (node.args as JsonObject | undefined) ?? null;
       const storeFieldName = storeFieldNameOf(fieldName, storeKey, args);
       const storageKeys = [containerId, ...path, storeFieldName];
@@ -407,8 +424,8 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
         existing,
         fieldFunctions.options(currentObject, fieldName, storeFieldName, args, storageKeys, fieldNodeOf(node)),
       );
-      danglingResult = isDangling(readResult) ? (readResult as Reference).__ref : undefined;
-      return resolveReferences(readResult, !!node.children);
+      if (isDangling(readResult)) return { dangling: (readResult as Reference).__ref };
+      return { value: resolveReferences(readResult, !!node.children) };
     };
 
     for (const key in parsedMap) {
@@ -437,13 +454,7 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
 
       // Fields are stored under their arguments, or as their keyArgs policies
       // (or @connection directives) say.
-      const storeKey = context.storeFieldNames.storeKey(
-        typeName,
-        fieldName,
-        node.args as JsonObject | undefined,
-        fieldNodeOf(node),
-        query.variables,
-      );
+      const storeKey = storeKeyOf(context, typeName, fieldName, node, query.variables);
 
       // The field's value within an object returned by a read function: like
       // InMemoryCache, under its store field name.
@@ -464,11 +475,12 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
           const existing = hasUnnormalizedValue
             ? unnormalized![storeFieldName]
             : childSnapshot && withReferences(childSnapshot, [], childSnapshot.data);
-          child = callReadFunction(readFn, existing, fieldName, node, storeKey);
-          if (danglingResult !== undefined) {
-            markDangling(value, key, danglingResult);
+          const read = callReadFunction(readFn, existing, fieldName, node, storeKey);
+          if (read.dangling !== undefined) {
+            markDangling(value, key, read.dangling);
             continue;
           }
+          child = read.value;
         } else {
           if (!childSnapshot) {
             // Should we fall back to a redirect?
@@ -500,14 +512,15 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
         nextPath = [];
       } else {
         nextPath = [...path, fieldName];
-        child = unnormalized ? unnormalized[fieldName] : value[fieldName];
+        child = unnormalized ? unnormalized[fieldName] : source[fieldName];
         if (readFn) {
           const existing = unnormalized ? child : withReferences(containerSnapshot, nextPath, child);
-          child = callReadFunction(readFn, existing, fieldName, node, storeKey);
-          if (danglingResult !== undefined) {
-            markDangling(value, key, danglingResult);
+          const read = callReadFunction(readFn, existing, fieldName, node, storeKey);
+          if (read.dangling !== undefined) {
+            markDangling(value, key, read.dangling);
             continue;
           }
+          child = read.value;
         }
       }
 
@@ -526,7 +539,7 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
         child = resolveReferences(child, true);
       } else if (child === undefined) {
         const reference = getSnapshot(nextContainerId)?.outbound?.get(nextPath.join('.'));
-        if (reference && !getSnapshot(reference.id) && !isRootId(reference.id)) {
+        if (reference && !getSnapshot(reference.id) && !isRootNodeId(reference.id)) {
           markDangling(value, key, reference.id);
           continue;
         }
@@ -564,6 +577,7 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
           queue.push(
             new OverlayWalkNode(
               item.value,
+              isObject(originalItem) ? originalItem : item.value,
               nextContainerId,
               children,
               item.path,
@@ -581,11 +595,15 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
         // Like InMemoryCache, the root __typename is only read when the document
         // the caller passed in selects it (not when Hermes' addTypename adds it).
         value.__typename = typeName;
-      } else if (readFn) {
+      } else if (readFn || key !== fieldName) {
         // Like InMemoryCache, a read function returning undefined makes the
-        // field missing, even when the cache holds a value for it.
+        // field missing, even when the cache holds a value for it. (So does a
+        // missing aliased field, even when the result holds a stored field
+        // named like its alias.)
         delete value[key];
-        delete value[fieldName];
+        // Nor is the field's stored value (under its schema name) part of the
+        // result, unless another selection's response key is that name.
+        if (readFn && key !== fieldName && !(fieldName in parsedMap)) delete value[fieldName];
       }
     }
   }
@@ -700,20 +718,12 @@ function identifyStored<TSerialized>(
  * Fields (by result object and key) whose value is a reference to a missing
  * entity, as returned by a read function.
  */
-export type DanglingFields = WeakMap<JsonObject, Map<string, NodeId>>;
-
-/**
- * Whether `id` is one of the root ids, which InMemoryCache never reports as
- * dangling references.
- */
-export function isRootId(id: NodeId) {
-  return schema.isRootNodeId(id);
-}
+type DanglingFields = WeakMap<JsonObject, Map<string, NodeId>>;
 
 /** Whether a parsed __typename field was selected by the document itself, not added by addTypenameToDocument. */
 function selectsTypename(node: ParsedQueryNode): boolean {
   const field = fieldNodeOf(node);
-  return !!field && !addTypenameToDocument.added(field);
+  return !!field && util.isSelectedByCaller(field);
 }
 
 const rootTypenameSelections = new WeakMap<QueryInfo<any>, boolean>();
@@ -726,28 +736,14 @@ const rootTypenameSelections = new WeakMap<QueryInfo<any>, boolean>();
 function selectsRootTypename(info: QueryInfo<any>): boolean {
   let selects = rootTypenameSelections.get(info);
   if (selects === undefined) {
-    selects = false;
-    const visited = new Set<SelectionSetNode>();
-    const visit = (selectionSet: SelectionSetNode) => {
-      if (visited.has(selectionSet)) return;
-      visited.add(selectionSet);
-      for (const selection of selectionSet.selections) {
-        if (selection.kind === 'Field') {
-          if (
-            selection.name.value === '__typename' &&
-            (info.pretransformed || !addTypenameToDocument.added(selection))
-          ) {
-            selects = true;
-          }
-        } else if (selection.kind === 'InlineFragment') {
-          visit(selection.selectionSet);
-        } else {
-          const fragment = info.fragmentMap[selection.name.value];
-          if (fragment) visit(fragment.selectionSet);
-        }
-      }
-    };
-    visit(info.operation.selectionSet);
+    selects = util.someSelection(
+      [info.operation.selectionSet],
+      name => info.fragmentMap[name]?.selectionSet,
+      selection =>
+        selection.kind === 'Field' &&
+        selection.name.value === '__typename' &&
+        util.isSelectedByCaller(selection, info.pretransformed),
+    );
     rootTypenameSelections.set(info, selects);
   }
   return selects;
@@ -766,7 +762,7 @@ function firstMissing(tree: MissingTree): string {
   return '';
 }
 
-function setMissing(tree: MissingTree | undefined, path: PathPart[], message: string): MissingTree {
+function addMissingField(tree: MissingTree | undefined, path: PathPart[], message: string): MissingTree {
   if (!path.length) return message;
   const root = (tree && typeof tree === 'object' ? tree : {}) as { [key: string]: MissingTree };
   let node = root;
@@ -782,7 +778,7 @@ function setMissing(tree: MissingTree | undefined, path: PathPart[], message: st
   return root;
 }
 
-export interface VisitSelectionOptions {
+interface VisitSelectionOptions {
   /** The snapshot read from, used to identify dangling references. */
   snapshot?: GraphSnapshot;
   /** Nodes pending creation by read functions. */
@@ -799,16 +795,18 @@ export interface VisitSelectionOptions {
  * the cache) are reported as missing, except in lists, where they are dropped
  * from the returned result.
  */
-export function _visitSelection<TSerialized>(
+function _visitSelection<TSerialized>(
   query: OperationInstance<TSerialized>,
   context: CacheContext<TSerialized>,
   result?: JsonObject,
   nodeIds?: Set<NodeId>,
   options: VisitSelectionOptions = {},
-): { complete: boolean; missing?: MissingFieldError; result?: JsonObject } {
+): { complete: boolean; missing?: MissingTree; hasSelectedData: boolean; result?: JsonObject } {
   const { snapshot, tempStore, danglingFields } = options;
   let complete = true;
   let missingTree: MissingTree | undefined;
+  // Whether the result has a value for any field selected at its root.
+  let hasSelectedData = false;
   // Result paths of dangling references, and of lists holding them (with their indexes).
   const danglingObjects: PathPart[][] = [];
   const danglingItems = new Map<string, { path: PathPart[]; indexes: Set<number> }>();
@@ -821,11 +819,11 @@ export function _visitSelection<TSerialized>(
   const getOutbound = (containerId: NodeId, path: PathPart[]) => getNode(containerId)?.outbound?.get(path.join('.'));
   const missingTarget = (containerId: NodeId, path: PathPart[]) => {
     const reference = getOutbound(containerId, path);
-    return reference && !getNode(reference.id) && !isRootId(reference.id) ? reference.id : undefined;
+    return reference && !getNode(reference.id) && !isRootNodeId(reference.id) ? reference.id : undefined;
   };
   const addMissing = (path: PathPart[], message: string) => {
     complete = false;
-    missingTree = setMissing(missingTree, path, message);
+    missingTree = addMissingField(missingTree, path, message);
   };
 
   function visitObject(
@@ -854,6 +852,8 @@ export function _visitSelection<TSerialized>(
       }
       const fieldValue = value[key];
       const danglingId = danglingFieldIds?.get(key);
+      // (Dangling references read as empty objects.)
+      if (fieldValue !== undefined && !resultPath.length) hasSelectedData = true;
 
       if (danglingId !== undefined) {
         addMissing([...resultPath, key], `Dangling reference to missing ${danglingId} object`);
@@ -869,14 +869,6 @@ export function _visitSelection<TSerialized>(
       }
 
       const fieldName = node.schemaName ?? key;
-      const fieldPath = [...containerPath, fieldName];
-      const storeKey = context.storeFieldNames.storeKey(
-        typeName,
-        fieldName,
-        node.args as JsonObject | undefined,
-        fieldNodeOf(node),
-        query.variables,
-      );
       if (fieldValue === undefined) {
         // Like InMemoryCache, only a __typename the document selects itself (not
         // one added by addTypenameToDocument) can be missing; roots always have one.
@@ -887,19 +879,18 @@ export function _visitSelection<TSerialized>(
           continue;
         let target;
         if (snapshot) {
-          target =
-            storeKey !== undefined
-              ? missingTarget(nodeIdForStoreKey(containerId, fieldPath, storeKey), [])
-              : missingTarget(containerId, fieldPath);
+          const [fieldContainerId, fieldPath] = fieldLocation(typeName, fieldName, node, containerId, containerPath);
+          target = missingTarget(fieldContainerId, fieldPath);
         }
         let message;
         if (target !== undefined) {
           message = `Dangling reference to missing ${target} object`;
+          if (!resultPath.length) hasSelectedData = true;
           // Like InMemoryCache, a dangling reference reads as an empty object.
           danglingObjects.push([...resultPath, key]);
         } else {
           const isEntity =
-            !containerPath.length && (isRootId(containerId) || getNode(containerId) instanceof EntitySnapshot);
+            !containerPath.length && (isRootNodeId(containerId) || getNode(containerId) instanceof EntitySnapshot);
           // Like InMemoryCache's store objects, __typename comes first.
           const shown = '__typename' in value ? { __typename: value.__typename, ...value } : value;
           const objOrNodeId = isEntity ? `${containerId} object` : `object ${safeStringify(shown)}`;
@@ -912,13 +903,27 @@ export function _visitSelection<TSerialized>(
       const children = childrenForType(context, node, typeName);
       if (!children) continue;
 
-      if (storeKey !== undefined) {
-        const fieldId = nodeIdForStoreKey(containerId, fieldPath, storeKey);
-        visitValue(fieldValue, children, fieldId, [], [...resultPath, key]);
-      } else {
-        visitValue(fieldValue, children, containerId, fieldPath, [...resultPath, key]);
-      }
+      const [fieldContainerId, fieldPath] = fieldLocation(typeName, fieldName, node, containerId, containerPath);
+      visitValue(fieldValue, children, fieldContainerId, fieldPath, [...resultPath, key]);
     }
+  }
+
+  /**
+   * The node a field's value is stored in, and its path there: a parameterized
+   * value node for fields stored under a key, the container otherwise.
+   */
+  function fieldLocation(
+    typeName: unknown,
+    fieldName: string,
+    node: ParsedQueryNode,
+    containerId: NodeId,
+    containerPath: PathPart[],
+  ): [NodeId, PathPart[]] {
+    const fieldPath = [...containerPath, fieldName];
+    const storeKey = storeKeyOf(context, typeName, fieldName, node, query.variables);
+    return storeKey !== undefined
+      ? [nodeIdForStoreKey(containerId, fieldPath, storeKey), []]
+      : [containerId, fieldPath];
   }
 
   function visitValue(
@@ -978,16 +983,7 @@ export function _visitSelection<TSerialized>(
     containerPath: PathPart[],
   ) {
     const fieldName = node.schemaName ?? key;
-    const storeKey = context.storeFieldNames.storeKey(
-      typeName,
-      fieldName,
-      node.args as JsonObject | undefined,
-      fieldNodeOf(node),
-      query.variables,
-    );
-    const fieldPath = [...containerPath, fieldName];
-    const [fieldContainerId, path] =
-      storeKey !== undefined ? [nodeIdForStoreKey(containerId, fieldPath, storeKey), []] : [containerId, fieldPath];
+    const [fieldContainerId, path] = fieldLocation(typeName, fieldName, node, containerId, containerPath);
     for (const reference of getNode(fieldContainerId)?.outbound?.values() ?? []) {
       if (reference.path.length > path.length && util.pathBeginsWith(reference.path, path)) {
         const data = getNode(reference.id)?.data;
@@ -1015,10 +1011,40 @@ export function _visitSelection<TSerialized>(
     }
   }
 
-  const missing =
-    missingTree === undefined
-      ? undefined
-      : new MissingFieldError(firstMissing(missingTree), missingTree, query.document, query.variables ?? {});
+  return { complete, missing: missingTree, hasSelectedData, result: filteredResult };
+}
 
-  return { complete, missing, result: filteredResult };
+/**
+ * Sets the MissingFieldError of a result, describing what is missing
+ * (`missing`); like InMemoryCache's, the error is only built when accessed.
+ */
+function setMissing(queryResult: Partial<QueryResult>, operation: OperationInstance<any>, missing: MissingTree) {
+  let error: MissingFieldError | undefined;
+  Object.defineProperty(queryResult, 'missing', {
+    configurable: true,
+    enumerable: true,
+    get: () =>
+      (error ??= new MissingFieldError(firstMissing(missing), missing, operation.document, operation.variables ?? {})),
+  });
+}
+
+/**
+ * The store key of a field (see StoreFieldNames#storeKey). Without arguments
+ * or field policies (which configure keyArgs), it is stored under its name.
+ */
+function storeKeyOf<TSerialized>(
+  context: CacheContext<TSerialized>,
+  typeName: unknown,
+  fieldName: string,
+  node: ParsedQueryNode,
+  variables: JsonObject | undefined,
+): StoreKey {
+  if (!node.args && !context.policies.hasFieldPolicies) return undefined;
+  return context.storeFieldNames.storeKey(
+    typeName,
+    fieldName,
+    node.args as JsonObject | undefined,
+    fieldNodeOf(node),
+    variables,
+  );
 }

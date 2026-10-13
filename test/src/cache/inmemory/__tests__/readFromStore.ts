@@ -704,14 +704,12 @@ describe('reading from the store', () => {
     expect(cache.readQuery({ query: bQuery })).toBe(null);
     expect(cache.readQuery({ query: abQuery })).toBe(null);
 
-    // Hermes: reads return a superset of the selected fields (by design), so
-    // the partial result includes the stored (but unselected) field a.
     expect(
       cache.readQuery({
         query: bQuery,
         returnPartialData: true,
       }),
-    ).toEqual({ a: 123 });
+    ).toEqual(null);
 
     expect(
       cache.readQuery({

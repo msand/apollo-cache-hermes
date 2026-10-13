@@ -39,7 +39,7 @@ describe('reading from the store', () => {
         query: bQuery,
         returnPartialData: true,
       }),
-    ).toMatchObject({});
+    ).toBe(null);
 
     jestExpect(
       cache.readQuery({

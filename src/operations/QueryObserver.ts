@@ -101,8 +101,8 @@ export class QueryObserver<TSerialized> {
     this._result = readResult;
     // Like InMemoryCache (and Hermes#diff), the watch's diff has a null result
     // when incomplete, unless partial data is requested and some was found.
-    let diff = toDiffResult(readResult, this._options.returnPartialData);
-    if (fromOptimisticTransaction) diff = { ...diff, fromOptimisticTransaction };
+    // (Not spread into a new object, which would build its lazy missing error.)
+    const diff = toDiffResult(readResult, this._options.returnPartialData, fromOptimisticTransaction);
     this._diff = diff;
     const result = diff.result as JsonObject | null;
     this._options.lastDiff = diff;
