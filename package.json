@@ -16,7 +16,9 @@
     "**/*.md",
     "src/**/**.js",
     "src/**/**.d.ts",
-    "tsconfig.json"
+    "tsconfig.json",
+    "!apollo-client/**",
+    "!.claude/**"
   ],
   "main": "./src/index.js",
   "typings": "./src/index.d.ts",
