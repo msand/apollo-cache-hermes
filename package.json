@@ -39,7 +39,9 @@
     "test-audit": "node ./node_modules/.bin/audit-ci --config .audit-ci.json --pass-enoaudit",
     "format": "prettier --write .",
     "test-format": "prettier --check .",
-    "prepare": "node ./scripts/patch-graphql-17-alpha9.js"
+    "prepare": "node ./scripts/patch-graphql-17-alpha9.js",
+    "bench:setup": "node ./bench/setup.mjs",
+    "bench": "node ./bench/run.mjs"
   },
   "devDependencies": {
     "@apollo/client": "^4.3.3",

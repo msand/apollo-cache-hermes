@@ -1,0 +1,11 @@
+{
+  "name": "bench-impl-hermes-branch",
+  "private": true,
+  "description": "This checkout's Hermes (packed by bench/setup.mjs) with Apollo Client 4.",
+  "dependencies": {
+    "@apollo/client": "4.3.3",
+    "graphql": "16.14.2",
+    "msand-apollo-cache-hermes": "file:./hermes.tgz",
+    "rxjs": "7.8.2"
+  }
+}

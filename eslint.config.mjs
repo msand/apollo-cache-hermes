@@ -187,5 +187,14 @@ export default tseslint.config(
     },
   },
 
+  {
+    // The benchmark harness: plain Node scripts.
+    files: ['bench/**/*.mjs'],
+
+    languageOptions: {
+      globals: { ...globals.node },
+    },
+  },
+
   prettier,
 );
