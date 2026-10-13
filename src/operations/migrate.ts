@@ -3,13 +3,7 @@ import { GraphSnapshot } from '../GraphSnapshot';
 import { EntitySnapshot, ParameterizedValueSnapshot } from '../nodes';
 import { JsonObject, JsonValue, PathPart } from '../primitive';
 import { NodeId } from '../schema';
-import {
-  isObject,
-  deepGet,
-  toParamKey,
-  addInboundReference,
-  addParameterizedReference,
-} from '../util';
+import { isObject, deepGet, toParamKey, addInboundReference, addParameterizedReference } from '../util';
 
 import { nodeIdForParameterizedValue, NodeSnapshotMap } from './SnapshotEditor';
 
@@ -22,27 +16,27 @@ import { nodeIdForParameterizedValue, NodeSnapshotMap } from './SnapshotEditor';
 export type FieldMigration = (previous: JsonValue) => any;
 export type EntityMigrations = {
   [typeName: string]: {
-    [fieldName: string]: FieldMigration,
-  },
+    [fieldName: string]: FieldMigration;
+  };
 };
 
 export type ParameterizedMigrationEntry = {
-  path: PathPart[],
-  args: JsonObject | undefined,
-  defaultReturn: any,
+  path: PathPart[];
+  args: JsonObject | undefined;
+  defaultReturn: any;
   copyFrom?: {
-    path: PathPart[],
-    args: JsonObject | undefined,
-  },
+    path: PathPart[];
+    args: JsonObject | undefined;
+  };
 };
 export type ParameterizedMigrations = {
   // typename is the typename of the container
-  [typeName: string]: ParameterizedMigrationEntry[],
+  [typeName: string]: ParameterizedMigrationEntry[];
 };
 
 export type MigrationMap = {
-  _entities?: EntityMigrations,
-  _parameterized?: ParameterizedMigrations,
+  _entities?: EntityMigrations;
+  _parameterized?: ParameterizedMigrations;
 };
 
 /**
@@ -54,16 +48,15 @@ function migrateEntity(
   snapshot: EntitySnapshot,
   nodesToAdd: NodeSnapshotMap,
   migrationMap?: MigrationMap,
-  allNodes?: NodeSnapshotMap
+  allNodes?: NodeSnapshotMap,
 ): EntitySnapshot {
-
   // Only if object and if valid MigrationMap is provided
   if (!isObject(snapshot.data)) return snapshot;
 
   const entityMigrations = deepGet(migrationMap, ['_entities']) as EntityMigrations;
   const parameterizedMigrations = deepGet(migrationMap, ['_parameterized']) as ParameterizedMigrations;
 
-  const typeName = snapshot.data.__typename as string || 'Query';
+  const typeName = (snapshot.data.__typename as string) || 'Query';
 
   if (entityMigrations && entityMigrations[typeName]) {
     for (const field in entityMigrations[typeName]) {
@@ -79,7 +72,7 @@ function migrateEntity(
       const fieldId = nodeIdForParameterizedValue(id, parameterizedPath, parameterized.args);
       // create a parameterized value snapshot if container doesn't know of the
       // parameterized field we expect
-      if (!snapshot.parameterized?.get(toParamKey(parameterizedPath))?.find(s =>  s.id === fieldId)) {
+      if (!snapshot.parameterized?.get(toParamKey(parameterizedPath))?.find(s => s.id === fieldId)) {
         let newData = parameterized.defaultReturn;
         const copyFrom = parameterized.copyFrom;
         if (allNodes && copyFrom) {

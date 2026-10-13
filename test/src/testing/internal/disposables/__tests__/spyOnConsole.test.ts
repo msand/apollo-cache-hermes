@@ -14,10 +14,9 @@ const asyncDisposeSymbol: unique symbol = Symbol('Symbol.asyncDispose');
 type Writable<T> = {
   -readonly [TKey in keyof T]: T[TKey];
 };
-(Symbol as Writable<SymbolConstructor>).asyncDispose
-    ??= asyncDisposeSymbol as unknown as SymbolConstructor['asyncDispose'];
-(Symbol as Writable<SymbolConstructor>).dispose
-    ??= disposeSymbol as unknown as SymbolConstructor['dispose'];
+(Symbol as Writable<SymbolConstructor>).asyncDispose ??=
+  asyncDisposeSymbol as unknown as SymbolConstructor['asyncDispose'];
+(Symbol as Writable<SymbolConstructor>).dispose ??= disposeSymbol as unknown as SymbolConstructor['dispose'];
 
 describe('spyOnConsole', () => {
   it('intercepts calls to `console.log` and `console.info`', () => {
@@ -30,13 +29,7 @@ describe('spyOnConsole', () => {
 
   it('restores the original `console` methods', () => {
     {
-      using _consoleSpies = spyOnConsole(
-        'log',
-        'info',
-        'warn',
-        'error',
-        'debug'
-      );
+      using _consoleSpies = spyOnConsole('log', 'info', 'warn', 'error', 'debug');
       expect(console.log).not.toBe(originalLog);
       expect(console.warn).not.toBe(originalWarn);
       expect(console.error).not.toBe(originalError);

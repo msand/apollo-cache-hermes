@@ -5,7 +5,6 @@ import { Cache } from '../../../src';
 import { RawOperation } from '../../../src/schema';
 
 describe(`readCache carry-forward`, () => {
-
   const thingQuery = query(`
     query thing($id: ID!) {
       thing(id: $id) {
@@ -23,7 +22,6 @@ describe(`readCache carry-forward`, () => {
   }
 
   describe(`with strict mode enabled`, () => {
-
     let cache: Cache;
     beforeEach(() => {
       cache = new Cache(strictConfig);
@@ -60,11 +58,9 @@ describe(`readCache carry-forward`, () => {
       cache.write({ ...thingQuery, variables: { id: 'a' } }, { thing: { id: 'b', ref: { id: 1 } } });
       expect(cache.getSnapshot().baseline.readCache.size).to.eq(0);
     });
-
   });
 
   describe(`with strict mode disabled`, () => {
-
     let cache: Cache;
     beforeEach(() => {
       cache = new Cache({ ...strictConfig, strict: false });
@@ -101,5 +97,4 @@ describe(`readCache carry-forward`, () => {
       });
     });
   });
-
 });

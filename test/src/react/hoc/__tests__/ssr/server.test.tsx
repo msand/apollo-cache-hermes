@@ -106,19 +106,19 @@ describe('SSR', () => {
     // XXX mock all queries
     it('should work on a non trivial example', () => {
       const apolloClient = new ApolloClient({
-        link: new ApolloLink((config) => {
-          return new Observable((observer) => {
+        link: new ApolloLink(config => {
+          return new Observable(observer => {
             execute({
               schema: Schema,
               source: print(config.query),
               variableValues: config.variables,
               operationName: config.operationName,
             })
-              .then((result) => {
+              .then(result => {
                 observer.next(result);
                 observer.complete();
               })
-              .catch((e) => {
+              .catch(e => {
                 observer.error(e);
               });
           });
@@ -133,7 +133,7 @@ describe('SSR', () => {
               title
             }
           }
-        ` as DocumentNode
+        ` as DocumentNode,
       )
       class Film extends React.Component<any, any> {
         render(): React.ReactNode {
@@ -146,8 +146,8 @@ describe('SSR', () => {
 
       interface ShipData {
         ship: {
-          name: string,
-          films: { id: string }[],
+          name: string;
+          films: { id: string }[];
         };
       }
 
@@ -165,11 +165,9 @@ describe('SSR', () => {
               }
             }
           }
-        ` as DocumentNode
+        ` as DocumentNode,
       )
-      class Starship extends React.Component<
-        ChildProps<ShipVariables, ShipData, ShipVariables>
-      > {
+      class Starship extends React.Component<ChildProps<ShipVariables, ShipData, ShipVariables>> {
         render(): React.ReactNode {
           const { data } = this.props;
           if (!data || data.loading || !data.ship) return null;
@@ -201,7 +199,7 @@ describe('SSR', () => {
               id
             }
           }
-        ` as DocumentNode
+        ` as DocumentNode,
       )
       class AllShips extends React.Component<ChildProps<{}, AllShipsData>> {
         render(): React.ReactNode {
@@ -232,7 +230,7 @@ describe('SSR', () => {
               name
             }
           }
-        ` as DocumentNode
+        ` as DocumentNode,
       )
       class AllPlanets extends React.Component<ChildProps<{}, AllPlanetsData>> {
         render(): React.ReactNode {
@@ -272,7 +270,7 @@ describe('SSR', () => {
         </ApolloProvider>
       );
 
-      return renderToStringWithData(app).then((markup) => {
+      return renderToStringWithData(app).then(markup => {
         expect(markup).toMatch(/CR90 corvette/);
         expect(markup).toMatch(/Return of the Jedi/);
         expect(markup).toMatch(/A New Hope/);

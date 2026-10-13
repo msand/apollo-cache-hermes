@@ -2,12 +2,7 @@ import gql from 'graphql-tag';
 import { cloneDeep } from 'lodash';
 
 import { getQueryDefinition } from '../getFromAST';
-import {
-  shouldInclude,
-  hasDirectives,
-  hasAnyDirectives,
-  hasAllDirectives,
-} from '../directives';
+import { shouldInclude, hasDirectives, hasAnyDirectives, hasAllDirectives } from '../directives';
 
 describe('hasDirectives', () => {
   it('should allow searching the ast for a directive', () => {
@@ -54,7 +49,7 @@ describe('hasDirectives', () => {
       }
     `;
 
-    [query, mutation, subscription].forEach((x) => {
+    [query, mutation, subscription].forEach(x => {
       expect(hasDirectives(['live'], x)).toBe(true);
       expect(hasDirectives(['defer'], x)).toBe(false);
     });
@@ -109,8 +104,8 @@ describe('hasDirectives', () => {
               }
             }
           }
-        `
-      )
+        `,
+      ),
     ).toBe(true);
 
     expect(
@@ -125,8 +120,8 @@ describe('hasDirectives', () => {
               }
             }
           }
-        `
-      )
+        `,
+      ),
     ).toBe(false);
 
     expect(
@@ -142,8 +137,8 @@ describe('hasDirectives', () => {
               }
             }
           }
-        `
-      )
+        `,
+      ),
     ).toBe(true);
 
     expect(
@@ -160,8 +155,8 @@ describe('hasDirectives', () => {
               }
             }
           }
-        `
-      )
+        `,
+      ),
     ).toBe(false);
 
     expect(
@@ -176,8 +171,8 @@ describe('hasDirectives', () => {
               }
             }
           }
-        `
-      )
+        `,
+      ),
     ).toBe(false);
 
     expect(
@@ -193,8 +188,8 @@ describe('hasDirectives', () => {
               }
             }
           }
-        `
-      )
+        `,
+      ),
     ).toBe(false);
 
     expect(
@@ -212,8 +207,8 @@ describe('hasDirectives', () => {
               }
             }
           }
-        `
-      )
+        `,
+      ),
     ).toBe(true);
 
     expect(
@@ -231,8 +226,8 @@ describe('hasDirectives', () => {
               }
             }
           }
-        `
-      )
+        `,
+      ),
     ).toBe(false);
 
     expect(
@@ -250,8 +245,8 @@ describe('hasDirectives', () => {
               id
             }
           }
-        `
-      )
+        `,
+      ),
     ).toBe(true);
   });
 
@@ -266,8 +261,8 @@ describe('hasDirectives', () => {
               foo
             }
           }
-        `
-      )
+        `,
+      ),
     ).toBe(true);
 
     expect(
@@ -280,8 +275,8 @@ describe('hasDirectives', () => {
               foo
             }
           }
-        `
-      )
+        `,
+      ),
     ).toBe(true);
 
     expect(
@@ -294,8 +289,8 @@ describe('hasDirectives', () => {
               foo @include(if: true)
             }
           }
-        `
-      )
+        `,
+      ),
     ).toBe(false);
 
     expect(
@@ -308,8 +303,8 @@ describe('hasDirectives', () => {
               foo @include(if: true)
             }
           }
-        `
-      )
+        `,
+      ),
     ).toBe(false);
 
     expect(
@@ -324,8 +319,8 @@ describe('hasDirectives', () => {
               }
             }
           }
-        `
-      )
+        `,
+      ),
     ).toBe(true);
   });
 });

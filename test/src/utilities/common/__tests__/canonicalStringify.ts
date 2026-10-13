@@ -1,16 +1,13 @@
 import { canonicalStringify } from '../canonicalStringify';
 
-function forEachPermutation(
-  keys: string[],
-  callback: (permutation: string[]) => void
-) {
+function forEachPermutation(keys: string[], callback: (permutation: string[]) => void) {
   if (keys.length <= 1) {
     callback(keys);
     return;
   }
   const first = keys[0];
   const rest = keys.slice(1);
-  forEachPermutation(rest, (permutation) => {
+  forEachPermutation(rest, permutation => {
     for (let i = 0; i <= permutation.length; ++i) {
       callback([...permutation.slice(0, i), first, ...permutation.slice(i)]);
     }
@@ -20,9 +17,9 @@ function forEachPermutation(
 function allObjectPermutations<T extends Record<string, any>>(obj: T) {
   const keys = Object.keys(obj);
   const permutations: T[] = [];
-  forEachPermutation(keys, (permutation) => {
+  forEachPermutation(keys, permutation => {
     const permutationObj = Object.create(Object.getPrototypeOf(obj));
-    permutation.forEach((key) => {
+    permutation.forEach(key => {
       permutationObj[key] = obj[key];
     });
     permutations.push(permutationObj);
@@ -43,7 +40,7 @@ describe('canonicalStringify', () => {
 
   it('forEachPermutation should work', () => {
     const permutations: string[][] = [];
-    forEachPermutation(['a', 'b', 'c'], (permutation) => {
+    forEachPermutation(['a', 'b', 'c'], permutation => {
       permutations.push(permutation);
     });
     expect(permutations).toEqual([
@@ -64,7 +61,7 @@ describe('canonicalStringify', () => {
       c: 3,
       a: 1,
       b: 2,
-    }).forEach((obj) => {
+    }).forEach(obj => {
       unstableStrings.add(JSON.stringify(obj));
       stableStrings.add(canonicalStringify(obj));
 
@@ -74,10 +71,8 @@ describe('canonicalStringify', () => {
         z: 'z',
         y: ['y', obj, 'why'],
         x: 'x',
-      }).forEach((parent) => {
-        expect(canonicalStringify(parent)).toBe(
-          '{"x":"x","y":["y",{"a":1,"b":2,"c":3},"why"],"z":"z"}'
-        );
+      }).forEach(parent => {
+        expect(canonicalStringify(parent)).toBe('{"x":"x","y":["y",{"a":1,"b":2,"c":3},"why"],"z":"z"}');
       });
     });
 
@@ -103,8 +98,6 @@ describe('canonicalStringify', () => {
 
     expect(Object.keys(obj.y)).toEqual(['z', 'y', 'x', 'b', 'a', 'c']);
 
-    expect(canonicalStringify(obj)).toBe(
-      '{"x":"x","y":{"z":"z","y":"y","x":"x","b":"b","a":"a","c":"c"},"z":"z"}'
-    );
+    expect(canonicalStringify(obj)).toBe('{"x":"x","y":{"z":"z","y":"y","x":"x","b":"b","a":"a","c":"c"},"z":"z"}');
   });
 });

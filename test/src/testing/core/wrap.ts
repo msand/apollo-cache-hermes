@@ -1,9 +1,6 @@
 // I'm not sure why mocha doesn't provide something like this, you can't
 // always use promises
-export default <TArgs extends any[], TResult>(
-  reject: (reason: any) => any,
-  cb: (...args: TArgs) => TResult
-) =>
+export default <TArgs extends any[], TResult>(reject: (reason: any) => any, cb: (...args: TArgs) => TResult) =>
   (...args: TArgs) => {
     try {
       return cb(...args);

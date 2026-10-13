@@ -6,7 +6,6 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.extract`, () => {
   describe(`multiple references hanging off a root`, () => {
-
     let extractResult: Serializable.GraphSnapshot;
     beforeAll(() => {
       const cacheContext = createStrictCacheContext();
@@ -25,7 +24,7 @@ describe(`operations.extract`, () => {
           bar { id name }
           foo { id name }
         }`,
-        cacheContext
+        cacheContext,
       );
 
       extractResult = extract(snapshot, cacheContext);
@@ -56,6 +55,5 @@ describe(`operations.extract`, () => {
         },
       });
     });
-
   });
 });

@@ -37,7 +37,7 @@ describe(`operations.prune`, () => {
           }
         }
       }`,
-      cacheContext
+      cacheContext,
     );
   });
 
@@ -70,9 +70,7 @@ describe(`operations.prune`, () => {
           { id: QueryRootId, path: ['foo'] },
           { id: '2', path: ['fizz'] },
         ],
-        outbound: [
-          { id: '2', path: ['bar'] },
-        ],
+        outbound: [{ id: '2', path: ['bar'] }],
         data: {
           id: 1,
           name: 'Foo',
@@ -123,12 +121,8 @@ describe(`operations.prune`, () => {
       },
       '1': {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
-        inbound: [
-          { id: QueryRootId, path: ['foo'] },
-        ],
-        outbound: [
-          { id: '2', path: ['bar'] },
-        ],
+        inbound: [{ id: QueryRootId, path: ['foo'] }],
+        outbound: [{ id: '2', path: ['bar'] }],
         data: {
           id: 1,
           name: 'Foo',
@@ -141,9 +135,7 @@ describe(`operations.prune`, () => {
           { id: '1', path: ['bar'] },
           { id: '2', path: ['buzz'] },
         ],
-        outbound: [
-          { id: '2', path: ['buzz'] },
-        ],
+        outbound: [{ id: '2', path: ['buzz'] }],
         data: {
           id: 2,
           name: 'Bar',
@@ -152,5 +144,4 @@ describe(`operations.prune`, () => {
       },
     });
   });
-
 });

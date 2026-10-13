@@ -1,4 +1,6 @@
+import '@testing-library/jest-dom';
 import gql from 'graphql-tag';
+import { loadDevMessages } from '@apollo/client/dev';
 
 import { loadErrorMessageHandler } from '../src/dev/loadErrorMessageHandler';
 import '../src/testing/matchers/index';
@@ -9,6 +11,8 @@ gql.disableFragmentWarnings();
 process.on('unhandledRejection', () => {});
 
 loadErrorMessageHandler();
+// Readable warnings from the @apollo/client package; Hermes tests assert its production error messages.
+loadDevMessages();
 
 function fail(reason = 'fail was called in a test.') {
   expect(reason).toBe(undefined);

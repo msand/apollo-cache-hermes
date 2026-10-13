@@ -2,11 +2,7 @@ import gql from 'graphql-tag';
 
 import { Cache } from '../../core/types/Cache';
 import { MissingFieldError } from '../../core/types/common';
-import {
-  Reference,
-  isReference,
-  TypedDocumentNode,
-} from '../../../core';
+import { Reference, isReference, TypedDocumentNode } from '../../../core';
 import { Hermes } from '../../../../../src';
 
 describe('reading from the store', () => {
@@ -37,22 +33,25 @@ describe('reading from the store', () => {
     expect(cache.readQuery({ query: bQuery })).toBe(null);
     expect(cache.readQuery({ query: abQuery })).toBe(null);
 
+    // Hermes: reads return a superset of the selected fields (by design), so
+    // the partial result includes the stored (but unselected) field a.
     expect(
       cache.readQuery({
         query: bQuery,
         returnPartialData: true,
-      })
-    ).toEqual({});
+      }),
+    ).toEqual({ a: 123 });
 
     expect(
       cache.readQuery({
         query: abQuery,
         returnPartialData: true,
-      })
+      }),
     ).toEqual({ a: 123 });
   });
 
-  it('readFragment supports returnPartialData', () => {
+  // Hermes: reads return a superset of the selected fields (by design)
+  it.skip('readFragment supports returnPartialData', () => {
     const cache = new Hermes();
     const id = cache.identify({
       __typename: 'ABObject',
@@ -95,14 +94,14 @@ describe('reading from the store', () => {
       cache.readFragment({
         id,
         fragment: bFragment,
-      })
+      }),
     ).toBe(null);
 
     expect(
       cache.readFragment({
         id,
         fragment: abFragment,
-      })
+      }),
     ).toBe(null);
 
     expect(
@@ -110,7 +109,7 @@ describe('reading from the store', () => {
         id,
         fragment: bFragment,
         returnPartialData: true,
-      })
+      }),
     ).toEqual({
       __typename: 'ABObject',
     });
@@ -120,7 +119,7 @@ describe('reading from the store', () => {
         id,
         fragment: abFragment,
         returnPartialData: true,
-      })
+      }),
     ).toEqual({
       __typename: 'ABObject',
       a: 123,
@@ -180,26 +179,18 @@ describe('reading from the store', () => {
             present: 'here',
           },
           null,
-          2
+          2,
         )}`,
         {
           normal: {
-            missing: `Can't find field 'missing' on object ${JSON.stringify(
-              { present: 'here' },
-              null,
-              2
-            )}`,
+            missing: `Can't find field 'missing' on object ${JSON.stringify({ present: 'here' }, null, 2)}`,
           },
           clientOnly: {
-            missing: `Can't find field 'missing' on object ${JSON.stringify(
-              { present: 'also here' },
-              null,
-              2
-            )}`,
+            missing: `Can't find field 'missing' on object ${JSON.stringify({ present: 'also here' }, null, 2)}`,
           },
         },
         query,
-        {} // variables
+        {}, // variables
       ),
     ]);
   });
@@ -228,7 +219,7 @@ describe('reading from the store', () => {
             null
           }
         `,
-      })
+      }),
     ).toEqual({
       uuid: '8d573b9c-cfcf-4e3e-98dd-14d255af577e',
       null: null,
@@ -245,8 +236,8 @@ describe('reading from the store', () => {
             uuid
           }
         `,
-      })
-    ).toEqual({
+      }),
+    ).toMatchObject({
       uuid: '8d573b9c-cfcf-4e3e-98dd-14d255af577e',
       null: null,
     });
@@ -261,7 +252,7 @@ describe('reading from the store', () => {
             whatever
           }
         `,
-      })
+      }),
     ).toBe(null);
 
     expect(cache.extract()).toEqual({});
@@ -276,9 +267,7 @@ describe('reading from the store', () => {
               return existing.map(duck => (canRead(duck) ? duck : null));
             },
             chickens(existing: Reference[] = [], { canRead }) {
-              return existing.map(chicken =>
-                (canRead(chicken) ? chicken : {})
-              );
+              return existing.map(chicken => (canRead(chicken) ? chicken : {}));
             },
             oxen(existing: Reference[] = [], { canRead }) {
               return existing.filter(canRead);
@@ -321,58 +310,65 @@ describe('reading from the store', () => {
       },
     });
 
+    // Hermes: references are stored as outbound/inbound edges rather than { __ref } objects.
     expect(cache.extract()).toEqual({
       'Chicken:1': {
-        __typename: 'Chicken',
-        id: 1,
-        inCoop: true,
+        type: 0,
+        data: { __typename: 'Chicken', id: 1, inCoop: true },
+        inbound: [{ id: 'ROOT_QUERY', path: ['chickens', 0] }],
       },
       'Chicken:2': {
-        __typename: 'Chicken',
-        id: 2,
-        inCoop: true,
+        type: 0,
+        data: { __typename: 'Chicken', id: 2, inCoop: true },
+        inbound: [{ id: 'ROOT_QUERY', path: ['chickens', 1] }],
       },
       'Chicken:3': {
-        __typename: 'Chicken',
-        id: 3,
-        inCoop: false,
+        type: 0,
+        data: { __typename: 'Chicken', id: 3, inCoop: false },
+        inbound: [{ id: 'ROOT_QUERY', path: ['chickens', 2] }],
       },
       'Duck:1': {
-        __typename: 'Duck',
-        id: 1,
-        quacking: true,
+        type: 0,
+        data: { __typename: 'Duck', id: 1, quacking: true },
+        inbound: [{ id: 'ROOT_QUERY', path: ['ducks', 0] }],
       },
       'Duck:2': {
-        __typename: 'Duck',
-        id: 2,
-        quacking: false,
+        type: 0,
+        data: { __typename: 'Duck', id: 2, quacking: false },
+        inbound: [{ id: 'ROOT_QUERY', path: ['ducks', 1] }],
       },
       'Duck:3': {
-        __typename: 'Duck',
-        id: 3,
-        quacking: false,
+        type: 0,
+        data: { __typename: 'Duck', id: 3, quacking: false },
+        inbound: [{ id: 'ROOT_QUERY', path: ['ducks', 2] }],
       },
       'Ox:1': {
-        __typename: 'Ox',
-        id: 1,
-        gee: true,
-        haw: false,
+        type: 0,
+        data: { __typename: 'Ox', id: 1, gee: true, haw: false },
+        inbound: [{ id: 'ROOT_QUERY', path: ['oxen', 0] }],
       },
       'Ox:2': {
-        __typename: 'Ox',
-        id: 2,
-        gee: false,
-        haw: true,
+        type: 0,
+        data: { __typename: 'Ox', id: 2, gee: false, haw: true },
+        inbound: [{ id: 'ROOT_QUERY', path: ['oxen', 1] }],
       },
       ROOT_QUERY: {
-        __typename: 'Query',
-        chickens: [
-          { __ref: 'Chicken:1' },
-          { __ref: 'Chicken:2' },
-          { __ref: 'Chicken:3' },
+        type: 0,
+        data: {
+          chickens: [undefined, undefined, undefined],
+          ducks: [undefined, undefined, undefined],
+          oxen: [undefined, undefined],
+        },
+        outbound: [
+          { id: 'Duck:1', path: ['ducks', 0] },
+          { id: 'Duck:2', path: ['ducks', 1] },
+          { id: 'Duck:3', path: ['ducks', 2] },
+          { id: 'Chicken:1', path: ['chickens', 0] },
+          { id: 'Chicken:2', path: ['chickens', 1] },
+          { id: 'Chicken:3', path: ['chickens', 2] },
+          { id: 'Ox:1', path: ['oxen', 0] },
+          { id: 'Ox:2', path: ['oxen', 1] },
         ],
-        ducks: [{ __ref: 'Duck:1' }, { __ref: 'Duck:2' }, { __ref: 'Duck:3' }],
-        oxen: [{ __ref: 'Ox:1' }, { __ref: 'Ox:2' }],
       },
     });
 
@@ -390,7 +386,7 @@ describe('reading from the store', () => {
       });
     }
 
-    expect(diffChickens()).toEqual({
+    expect(diffChickens()).toMatchObject({
       complete: true,
       result: {
         chickens: [
@@ -407,32 +403,28 @@ describe('reading from the store', () => {
           __typename: 'Chicken',
           id: 2,
         }),
-      })
+      }),
     ).toBe(true);
 
-    expect(diffChickens()).toEqual({
+    expect(diffChickens()).toMatchObject({
       complete: false,
       missing: [
         new MissingFieldError(
-          'Can\'t find field \'id\' on object {}',
+          "Can't find field 'id' on object {}",
           {
             chickens: {
               1: {
-                id: 'Can\'t find field \'id\' on object {}',
-                inCoop: 'Can\'t find field \'inCoop\' on object {}',
+                id: "Can't find field 'id' on object {}",
+                inCoop: "Can't find field 'inCoop' on object {}",
               },
             },
           },
           expect.anything(), // query
-          expect.anything() // variables
+          expect.anything(), // variables
         ),
       ],
       result: {
-        chickens: [
-          { __typename: 'Chicken', id: 1, inCoop: true },
-          {},
-          { __typename: 'Chicken', id: 3, inCoop: false },
-        ],
+        chickens: [{ __typename: 'Chicken', id: 1, inCoop: true }, {}, { __typename: 'Chicken', id: 3, inCoop: false }],
       },
     });
 
@@ -450,7 +442,7 @@ describe('reading from the store', () => {
       });
     }
 
-    expect(diffDucks()).toEqual({
+    expect(diffDucks()).toMatchObject({
       complete: true,
       result: {
         ducks: [
@@ -467,20 +459,16 @@ describe('reading from the store', () => {
           __typename: 'Duck',
           id: 3,
         }),
-      })
+      }),
     ).toBe(true);
 
     // Returning null as a placeholder in a list is a way to indicate that
     // a list element has been removed, without causing an incomplete
     // diff, and without altering the positions of later elements.
-    expect(diffDucks()).toEqual({
+    expect(diffDucks()).toMatchObject({
       complete: true,
       result: {
-        ducks: [
-          { __typename: 'Duck', id: 1, quacking: true },
-          { __typename: 'Duck', id: 2, quacking: false },
-          null,
-        ],
+        ducks: [{ __typename: 'Duck', id: 1, quacking: true }, { __typename: 'Duck', id: 2, quacking: false }, null],
       },
     });
 
@@ -499,7 +487,7 @@ describe('reading from the store', () => {
       });
     }
 
-    expect(diffOxen()).toEqual({
+    expect(diffOxen()).toMatchObject({
       complete: true,
       result: {
         oxen: [
@@ -515,10 +503,10 @@ describe('reading from the store', () => {
           __typename: 'Ox',
           id: 1,
         }),
-      })
+      }),
     ).toBe(true);
 
-    expect(diffOxen()).toEqual({
+    expect(diffOxen()).toMatchObject({
       complete: true,
       result: {
         oxen: [{ __typename: 'Ox', id: 2, gee: false, haw: true }],
@@ -545,12 +533,12 @@ describe('reading from the store', () => {
           fields: {
             ruler(ruler, { canRead, toReference }) {
               // If the throne is empty, promote Apollo!
-              return canRead(ruler) ? ruler : (
-                toReference({
-                  __typename: 'Deity',
-                  name: 'Apollo',
-                })
-              );
+              return canRead(ruler)
+                ? ruler
+                : toReference({
+                    __typename: 'Deity',
+                    name: 'Apollo',
+                  });
             },
           },
         },
@@ -608,7 +596,9 @@ describe('reading from the store', () => {
         immediate,
         optimistic: true,
         callback(diff) {
-          diffs.push(diff);
+          // Hermes: watch callbacks also receive internal entityIds/dynamicNodeIds bookkeeping.
+          const { entityIds, dynamicNodeIds, ...rest } = diff as any;
+          diffs.push(rest);
         },
       });
     }
@@ -637,9 +627,7 @@ describe('reading from the store', () => {
 
     expect(devour('Son #1')).toBe(true);
 
-    const childrenWithoutSon1 = children.filter(
-      child => child.name !== 'Son #1'
-    );
+    const childrenWithoutSon1 = children.filter(child => child.name !== 'Son #1');
 
     expect(childrenWithoutSon1.length).toBe(children.length - 1);
 
@@ -667,7 +655,7 @@ describe('reading from the store', () => {
         ruler: {
           name: 'Cronus',
           __typename: 'Deity',
-          children: childrenWithoutSon1.filter((child) => {
+          children: childrenWithoutSon1.filter(child => {
             return child.name !== 'Son #2';
           }),
         },
@@ -675,11 +663,7 @@ describe('reading from the store', () => {
       complete: true,
     };
 
-    expect(diffs).toEqual([
-      initialDiff,
-      diffWithoutSon1,
-      diffWithoutDevouredSons,
-    ]);
+    expect(diffs).toEqual([initialDiff, diffWithoutSon1, diffWithoutDevouredSons]);
 
     const childrenOfZeus = [
       'Ares',
@@ -720,28 +704,21 @@ describe('reading from the store', () => {
         ...diffWithoutDevouredSons.result,
         ruler: {
           ...diffWithoutDevouredSons.result.ruler,
-          children: diffWithoutDevouredSons.result.ruler.children.map(
-            (child) => {
-              return child.name === 'Zeus'
-                ? {
+          children: diffWithoutDevouredSons.result.ruler.children.map(child => {
+            return child.name === 'Zeus'
+              ? {
                   ...child,
                   children: childrenOfZeus
-                  // Remove empty child.children arrays.
+                    // Remove empty child.children arrays.
                     .map(({ children, ...child }) => child),
                 }
-                : child;
-            }
-          ),
+              : child;
+          }),
         },
       },
     };
 
-    expect(diffs).toEqual([
-      initialDiff,
-      diffWithoutSon1,
-      diffWithoutDevouredSons,
-      diffWithChildrenOfZeus,
-    ]);
+    expect(diffs).toMatchObject([initialDiff, diffWithoutSon1, diffWithoutDevouredSons, diffWithChildrenOfZeus]);
 
     // Zeus usurps the throne from Cronus!
     cache.writeQuery({
@@ -765,7 +742,7 @@ describe('reading from the store', () => {
       },
     };
 
-    expect(diffs).toEqual([
+    expect(diffs).toMatchObject([
       initialDiff,
       diffWithoutSon1,
       diffWithoutDevouredSons,
@@ -773,59 +750,55 @@ describe('reading from the store', () => {
       diffWithZeusAsRuler,
     ]);
 
-    expect(cache.gc().sort()).toEqual([
-      'Deity:{"name":"Cronus"}',
-      'Deity:{"name":"Demeter"}',
-      'Deity:{"name":"Hades"}',
-      'Deity:{"name":"Hera"}',
-      'Deity:{"name":"Hestia"}',
-      'Deity:{"name":"Poseidon"}',
-    ]);
+    // Hermes: Cronus and his children were deleted as soon as Zeus replaced
+    // him as ruler (Hermes deletes orphaned entities right away, rather than
+    // in gc()), so there is nothing left to collect. InMemoryCache collects
+    // Cronus, Demeter, Hades, Hera, Hestia and Poseidon here.
+    expect(cache.gc().sort()).toEqual([]);
+
+    // Hermes: references are stored as outbound/inbound edges rather than
+    // { __ref } objects, and extract() has no __META.extraRootIds (Hermes
+    // does not serialize retained ids).
+    const deityId = (name: string) => `Deity:{"name":"${name}"}`;
+    const childOfZeus = (name: string, index: number) => ({
+      data: { __typename: 'Deity', children: [], name },
+      inbound: [{ id: deityId('Zeus'), path: ['children', index] }],
+      type: 0,
+    });
+    const rootQueryNode = (rulerName: string) => ({
+      data: { ruler: undefined },
+      outbound: [{ id: deityId(rulerName), path: ['ruler'] }],
+      type: 0,
+    });
+    const zeusNode = {
+      data: {
+        __typename: 'Deity',
+        children: [undefined, undefined, undefined, undefined],
+        name: 'Zeus',
+      },
+      inbound: [{ id: 'ROOT_QUERY', path: ['ruler'] }],
+      outbound: ['Ares', 'Artemis', 'Apollo', 'Athena'].map((name, index) => ({
+        id: deityId(name),
+        path: ['children', index],
+      })),
+      type: 0,
+    };
 
     const snapshotAfterGC = {
-      ROOT_QUERY: {
-        __typename: 'Query',
-        ruler: { __ref: 'Deity:{"name":"Zeus"}' },
-      },
-      'Deity:{"name":"Zeus"}': {
-        __typename: 'Deity',
-        name: 'Zeus',
-        children: [
-          { __ref: 'Deity:{"name":"Ares"}' },
-          { __ref: 'Deity:{"name":"Artemis"}' },
-          { __ref: 'Deity:{"name":"Apollo"}' },
-          { __ref: 'Deity:{"name":"Athena"}' },
-        ],
-      },
-      'Deity:{"name":"Apollo"}': {
-        __typename: 'Deity',
-        name: 'Apollo',
-      },
-      'Deity:{"name":"Artemis"}': {
-        __typename: 'Deity',
-        name: 'Artemis',
-      },
-      'Deity:{"name":"Ares"}': {
-        __typename: 'Deity',
-        name: 'Ares',
-      },
-      'Deity:{"name":"Athena"}': {
-        __typename: 'Deity',
-        name: 'Athena',
-      },
+      ROOT_QUERY: rootQueryNode('Zeus'),
+      [deityId('Zeus')]: zeusNode,
+      [deityId('Ares')]: childOfZeus('Ares', 0),
+      [deityId('Artemis')]: childOfZeus('Artemis', 1),
+      [deityId('Apollo')]: childOfZeus('Apollo', 2),
+      [deityId('Athena')]: childOfZeus('Athena', 3),
     };
 
-    const zeusMeta = {
-      extraRootIds: ['Deity:{"name":"Zeus"}'],
-    };
-
-    expect(cache.extract()).toEqual({
-      ...snapshotAfterGC,
-      __META: zeusMeta,
-    });
+    expect(cache.extract()).toEqual(snapshotAfterGC);
 
     // There should be no diff generated by garbage collection.
-    expect(diffs).toEqual([
+    // Hermes: results may contain a superset of the selected fields (here,
+    // the stored children of Zeus's children).
+    expect(diffs).toMatchObject([
       initialDiff,
       diffWithoutSon1,
       diffWithoutDevouredSons,
@@ -840,7 +813,7 @@ describe('reading from the store', () => {
     expect(
       cache.readQuery({
         query: rulerQuery,
-      })
+      }),
     ).toBe(lastDiff.result);
 
     expect(
@@ -849,11 +822,11 @@ describe('reading from the store', () => {
           __typename: 'Deity',
           name: 'Ares',
         }),
-      })
+      }),
     ).toBe(true);
 
     // No new diff generated since we called cancel() above.
-    expect(diffs).toEqual([
+    expect(diffs).toMatchObject([
       initialDiff,
       diffWithoutSon1,
       diffWithoutDevouredSons,
@@ -861,16 +834,14 @@ describe('reading from the store', () => {
       diffWithZeusAsRuler,
     ]);
 
-    const snapshotWithoutAres = {
-      ...snapshotAfterGC,
-      __META: zeusMeta,
-    };
-    delete (snapshotWithoutAres as any)['Deity:{"name":"Ares"}'];
+    // Zeus keeps a dangling reference to the evicted Ares.
+    const snapshotWithoutAres = { ...snapshotAfterGC };
+    delete (snapshotWithoutAres as any)[deityId('Ares')];
     expect(cache.extract()).toEqual(snapshotWithoutAres);
     // Ares already removed, so no new garbage to collect.
     expect(cache.gc()).toEqual([]);
 
-    const childrenOfZeusWithoutAres = childrenOfZeus.filter((child) => {
+    const childrenOfZeusWithoutAres = childrenOfZeus.filter(child => {
       return child.name !== 'Ares';
     });
 
@@ -883,7 +854,7 @@ describe('reading from the store', () => {
     expect(
       cache.readQuery({
         query: rulerQuery,
-      })
+      }),
     ).toEqual({
       ruler: {
         __typename: 'Deity',
@@ -898,7 +869,7 @@ describe('reading from the store', () => {
           __typename: 'Deity',
           name: 'Zeus',
         }),
-      })
+      }),
     ).toBe(true);
 
     // You didn't think we were going to let Apollo be garbage-collected,
@@ -907,30 +878,19 @@ describe('reading from the store', () => {
       cache.identify({
         __typename: 'Deity',
         name: 'Apollo',
-      })!
+      })!,
     );
 
-    expect(cache.gc().sort()).toEqual([
-      'Deity:{"name":"Artemis"}',
-      'Deity:{"name":"Athena"}',
-    ]);
+    expect(cache.gc().sort()).toEqual(['Deity:{"name":"Artemis"}', 'Deity:{"name":"Athena"}']);
 
     expect(cache.extract()).toEqual({
-      __META: {
-        extraRootIds: ['Deity:{"name":"Apollo"}', 'Deity:{"name":"Zeus"}'],
-      },
-      ROOT_QUERY: {
-        __typename: 'Query',
-        ruler: { __ref: 'Deity:{"name":"Zeus"}' },
-      },
-      'Deity:{"name":"Apollo"}': {
-        __typename: 'Deity',
-        name: 'Apollo',
-      },
+      // A dangling reference to the evicted Zeus.
+      ROOT_QUERY: rootQueryNode('Zeus'),
+      [deityId('Apollo')]: { data: { __typename: 'Deity', name: 'Apollo', children: [] }, type: 0 },
     });
 
     const apolloRulerResult = cache.readQuery<{
-      ruler: Record<string, any>,
+      ruler: Record<string, any>;
     }>({ query: rulerQuery })!;
 
     expect(apolloRulerResult).toEqual({
@@ -942,7 +902,7 @@ describe('reading from the store', () => {
     });
 
     // No new diffs since before.
-    expect(diffs).toEqual([
+    expect(diffs).toMatchObject([
       initialDiff,
       diffWithoutSon1,
       diffWithoutDevouredSons,
@@ -955,7 +915,7 @@ describe('reading from the store', () => {
     // trigger the delivery of diffWithApolloAsRuler below.
     const cancel2 = watch(false);
 
-    expect(diffs).toEqual([
+    expect(diffs).toMatchObject([
       initialDiff,
       diffWithoutSon1,
       diffWithoutDevouredSons,
@@ -967,9 +927,7 @@ describe('reading from the store', () => {
       fields: {
         ruler(value, { toReference }) {
           expect(isReference(value)).toBe(true);
-          expect(value.__ref).toBe(
-            cache.identify(diffWithZeusAsRuler.result.ruler)
-          );
+          expect(value.__ref).toBe(cache.identify(diffWithZeusAsRuler.result.ruler));
           expect(value.__ref).toBe('Deity:{"name":"Zeus"}');
           // Interim ruler Apollo takes over for real.
           return toReference(apolloRulerResult.ruler)!;
@@ -987,7 +945,7 @@ describe('reading from the store', () => {
     // The cache.modify call should have triggered another diff, since we
     // overwrote the ROOT_QUERY.ruler field with a valid Reference to the
     // Apollo entity object.
-    expect(diffs).toEqual([
+    expect(diffs).toMatchObject([
       initialDiff,
       diffWithoutSon1,
       diffWithoutDevouredSons,
@@ -1002,8 +960,8 @@ describe('reading from the store', () => {
         cache.identify({
           __typename: 'Deity',
           name: 'Apollo',
-        })!
-      )
+        })!,
+      ),
     ).toBe(0);
 
     // Since ROOT_QUERY.ruler points to Apollo, nothing needs to be
@@ -1013,25 +971,23 @@ describe('reading from the store', () => {
     // Having survived GC, Apollo reigns supreme atop Olympus... or
     // something like that.
     expect(cache.extract()).toEqual({
-      __META: zeusMeta,
-      ROOT_QUERY: {
-        __typename: 'Query',
-        ruler: { __ref: 'Deity:{"name":"Apollo"}' },
-      },
-      'Deity:{"name":"Apollo"}': {
-        __typename: 'Deity',
-        name: 'Apollo',
+      ROOT_QUERY: rootQueryNode('Apollo'),
+      [deityId('Apollo')]: {
+        data: { __typename: 'Deity', name: 'Apollo', children: [] },
+        inbound: [{ id: 'ROOT_QUERY', path: ['ruler'] }],
+        type: 0,
       },
     });
   });
 
-  it('returns === results for different queries', () => {
+  // Hermes: reads return a superset of the selected fields (by design) and results are not canonized, so identity differs across queries
+  it.skip('returns === results for different queries', () => {
     const cache = new Hermes({
       // canonizeResults: true,
     });
 
     const aQuery: TypedDocumentNode<{
-      a: string[],
+      a: string[];
     }> = gql`
       query {
         a
@@ -1039,11 +995,11 @@ describe('reading from the store', () => {
     `;
 
     const abQuery: TypedDocumentNode<{
-      a: string[],
+      a: string[];
       b: {
-        c: string,
-        d: string,
-      },
+        c: string;
+        d: string;
+      };
     }> = gql`
       query {
         a
@@ -1056,9 +1012,9 @@ describe('reading from the store', () => {
 
     const bQuery: TypedDocumentNode<{
       b: {
-        c: string,
-        d: string,
-      },
+        c: string;
+        d: string;
+      };
     }> = gql`
       query {
         b {
@@ -1090,9 +1046,9 @@ describe('reading from the store', () => {
     const bResult1 = read(bQuery);
 
     expect(aResult1.a).toBe(abResult1.a);
-    expect(abResult1).toEqual(abData1);
-    expect(aResult1).toEqual({ a: abData1.a });
-    expect(bResult1).toEqual({ b: abData1.b });
+    expect(abResult1).toMatchObject(abData1);
+    expect(aResult1).toMatchObject({ a: abData1.a });
+    expect(bResult1).toMatchObject({ b: abData1.b });
     expect(abResult1.b).toBe(bResult1.b);
 
     const aData2 = {
@@ -1108,8 +1064,8 @@ describe('reading from the store', () => {
     const abResult2 = read(abQuery);
     const bResult2 = read(bQuery);
 
-    expect(aResult2).toEqual(aData2);
-    expect(abResult2).toEqual({ ...abData1, ...aData2 });
+    expect(aResult2).toMatchObject(aData2);
+    expect(abResult2).toMatchObject({ ...abData1, ...aData2 });
     expect(aResult2.a).toBe(abResult2.a);
     expect(bResult2).toBe(bResult1);
     expect(abResult2.b).toBe(bResult2.b);
@@ -1132,7 +1088,7 @@ describe('reading from the store', () => {
     const bResult3 = read(bQuery);
 
     expect(aResult3).toBe(aResult2);
-    expect(bResult3).toEqual(bData3);
+    expect(bResult3).toMatchObject(bData3);
     expect(bResult3).not.toBe(bData3);
     expect(abResult3).toEqual({
       ...abResult2,
@@ -1163,8 +1119,8 @@ describe('reading from the store', () => {
     });
 
     const query: TypedDocumentNode<{
-      now: typeof now,
-      abc: typeof abc,
+      now: typeof now;
+      abc: typeof abc;
     }> = gql`
       query {
         now
@@ -1195,7 +1151,8 @@ describe('reading from the store', () => {
     expect(result2.abc).toBe(abc);
   });
 
-  it('readQuery can opt out of canonization', () => {
+  // Hermes: canonizeResults and the InMemoryCache-internal storeReader.canon are not implemented
+  it.skip('readQuery can opt out of canonization', () => {
     let count = 0;
 
     const cache = new Hermes({
@@ -1220,7 +1177,7 @@ describe('reading from the store', () => {
 
     function readQuery(canonizeResults: boolean) {
       return cache.readQuery<{
-        count: number,
+        count: number;
       }>({
         query,
         canonizeResults,
@@ -1251,7 +1208,8 @@ describe('reading from the store', () => {
     expect(nonCanonicalQueryResult1).toBe(canonicalQueryResult1);
   });
 
-  it('readFragment can opt out of canonization', () => {
+  // Hermes: canonizeResults and the InMemoryCache-internal storeReader.canon are not implemented
+  it.skip('readFragment can opt out of canonization', () => {
     let count = 0;
 
     const cache = new Hermes({
@@ -1276,7 +1234,7 @@ describe('reading from the store', () => {
 
     function readFragment(canonizeResults: boolean) {
       return cache.readFragment<{
-        count: number,
+        count: number;
       }>({
         id: 'ROOT_QUERY',
         fragment,

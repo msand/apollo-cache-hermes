@@ -27,7 +27,7 @@ describe(`operations.prune`, () => {
           extra
         }
       }`,
-      cacheContext
+      cacheContext,
     );
 
     const pruneQuery = query(`{ rows { value }}`);
@@ -41,18 +41,11 @@ describe(`operations.prune`, () => {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
         data: {
           rows: [
-            [
-              { value: 1 },
-              { value: 2 },
-            ],
-            [
-              { value: 3 },
-              { value: 4 },
-            ],
+            [{ value: 1 }, { value: 2 }],
+            [{ value: 3 }, { value: 4 }],
           ],
         },
       },
     });
   });
-
 });

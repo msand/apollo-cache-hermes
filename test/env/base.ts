@@ -1,6 +1,4 @@
-import chai from 'chai';
-import chaiAsPromised from 'chai-as-promised';
-import chaiJestDiff from 'chai-jest-diff';
+import { config } from 'chai';
 
 // Chai
 
@@ -12,13 +10,4 @@ import chaiJestDiff from 'chai-jest-diff';
 global.jestExpect = global.expect;
 
 // Give us all the info!
-chai.config.truncateThreshold = 0;
-
-// Pretty expectation output for Chai assertions
-chai.use(chaiJestDiff());
-
-// Promise-aware chai assertions (that return promises themselves):
-//
-//   await expect(promise).to.be.rejectedWith(/error/i);
-//
-chai.use(chaiAsPromised);
+config.truncateThreshold = 0;

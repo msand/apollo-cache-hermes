@@ -10,18 +10,17 @@ import { responseIterator } from './responseIterator';
 const { hasOwnProperty } = Object.prototype;
 
 export type ServerParseError = Error & {
-  response: Response,
-  statusCode: number,
-  bodyText: string,
+  response: Response;
+  statusCode: number;
+  bodyText: string;
 };
 
-export async function readMultipartBody<
-  T extends object = Record<string, unknown>,
->(response: Response, nextValue: (value: T) => void) {
+export async function readMultipartBody<T extends object = Record<string, unknown>>(
+  response: Response,
+  nextValue: (value: T) => void,
+) {
   if (TextDecoder === undefined) {
-    throw new Error(
-      'TextDecoder must be defined in the environment: please import a polyfill.'
-    );
+    throw new Error('TextDecoder must be defined in the environment: please import a polyfill.');
   }
   const decoder = new TextDecoder('utf-8');
   const contentType = response.headers?.get('content-type');
@@ -31,14 +30,13 @@ export async function readMultipartBody<
   // https://www.rfc-editor.org/rfc/rfc9110.html#name-parameters
   // e.g. multipart/mixed;boundary="graphql";deferSpec=20220824
   // if no boundary is specified, default to -
-  const boundaryVal
-    = contentType?.includes(delimiter)
-      ? contentType
+  const boundaryVal = contentType?.includes(delimiter)
+    ? contentType
         ?.substring(contentType?.indexOf(delimiter) + delimiter.length)
         .replace(/['"]/g, '')
         .replace(/;(.*)/gm, '')
         .trim()
-      : '-';
+    : '-';
 
   const boundary = `\r\n--${boundaryVal}`;
   let buffer = '';
@@ -55,20 +53,12 @@ export async function readMultipartBody<
 
     while (bi > -1) {
       let message: string;
-      [message, buffer] = [
-        buffer.slice(0, bi),
-        buffer.slice(bi + boundary.length),
-      ];
+      [message, buffer] = [buffer.slice(0, bi), buffer.slice(bi + boundary.length)];
       const i = message.indexOf('\r\n\r\n');
       const headers = parseHeaders(message.slice(0, i));
       const contentType = headers['content-type'];
-      if (
-        contentType &&
-        contentType.toLowerCase().indexOf('application/json') === -1
-      ) {
-        throw new Error(
-          'Unsupported patch content type: application/json is required.'
-        );
+      if (contentType && contentType.toLowerCase().indexOf('application/json') === -1) {
+        throw new Error('Unsupported patch content type: application/json is required.');
       }
       // nb: Technically you'd want to slice off the beginning "\r\n" but since
       // this is going to be `JSON.parse`d there is no need.
@@ -123,7 +113,7 @@ export async function readMultipartBody<
 
 export function parseHeaders(headerText: string): Record<string, string> {
   const headersInit: Record<string, string> = {};
-  headerText.split('\n').forEach((line) => {
+  headerText.split('\n').forEach(line => {
     const i = line.indexOf(':');
     if (i > -1) {
       // normalize headers to lowercase
@@ -145,11 +135,7 @@ export function parseJsonBody<T>(response: Response, bodyText: string): T {
         return bodyText;
       }
     };
-    throwServerError(
-      response,
-      getResult(),
-      `Response not successful: Received status code ${response.status}`
-    );
+    throwServerError(response, getResult(), `Response not successful: Received status code ${response.status}`);
   }
 
   try {
@@ -210,20 +196,14 @@ export function parseAndCheckHttpResponse(operations: Operation | Operation[]) {
       .text()
       .then(bodyText => parseJsonBody(response, bodyText))
       .then((result: any) => {
-        if (
-          !Array.isArray(result) &&
-          !hasOwnProperty.call(result, 'data') &&
-          !hasOwnProperty.call(result, 'errors')
-        ) {
+        if (!Array.isArray(result) && !hasOwnProperty.call(result, 'data') && !hasOwnProperty.call(result, 'errors')) {
           // Data error
           throwServerError(
             response,
             result,
             `Server response was missing for query '${
-              Array.isArray(operations)
-                ? operations.map(op => op.operationName)
-                : operations.operationName
-            }'.`
+              Array.isArray(operations) ? operations.map(op => op.operationName) : operations.operationName
+            }'.`,
           );
         }
         return result;

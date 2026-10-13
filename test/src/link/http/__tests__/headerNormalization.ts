@@ -1,10 +1,7 @@
 import gql from 'graphql-tag';
 
 import { createOperation } from '../../utils/createOperation';
-import {
-  selectHttpOptionsAndBody,
-  fallbackHttpConfig,
-} from '../selectHttpOptionsAndBody';
+import { selectHttpOptionsAndBody, fallbackHttpConfig } from '../selectHttpOptionsAndBody';
 
 const query = gql`
   query SampleQuery {
@@ -25,11 +22,7 @@ describe('headerNormalization', () => {
       },
     };
 
-    const { options, body } = selectHttpOptionsAndBody(
-      createOperation({}, { query }),
-      fallbackHttpConfig,
-      config
-    );
+    const { options, body } = selectHttpOptionsAndBody(createOperation({}, { query }), fallbackHttpConfig, config);
 
     expect(body).toHaveProperty('query');
     expect(body).not.toHaveProperty('extensions');
@@ -51,11 +44,7 @@ describe('headerNormalization', () => {
       http: { preserveHeaderCase: true },
     };
 
-    const { options } = selectHttpOptionsAndBody(
-      createOperation({}, { query }),
-      fallbackHttpConfig,
-      config
-    );
+    const { options } = selectHttpOptionsAndBody(createOperation({}, { query }), fallbackHttpConfig, config);
 
     expect(options.headers).toEqual({
       ACCEPT: 'text/html',
@@ -82,7 +71,7 @@ describe('headerNormalization', () => {
       createOperation({}, { query }),
       fallbackHttpConfig,
       linkConfig,
-      contextConfig
+      contextConfig,
     );
 
     expect(options.headers).toEqual({
@@ -110,7 +99,7 @@ describe('headerNormalization', () => {
       createOperation({}, { query }),
       fallbackHttpConfig,
       linkConfig,
-      contextConfig
+      contextConfig,
     );
 
     expect(options.headers).toEqual({
@@ -138,7 +127,7 @@ describe('headerNormalization', () => {
       createOperation({}, { query }),
       fallbackHttpConfig,
       linkConfig,
-      contextConfig
+      contextConfig,
     );
 
     expect(options.headers).toEqual({

@@ -1,8 +1,12 @@
+import { loadErrorMessages } from '@apollo/client/dev';
 import { ApolloClient, ApolloLink, gql, InMemoryCache, NetworkStatus } from '@apollo/client';
 
 import { getFragmentDefinitions, Observable } from '../../../utilities';
 import { createFragmentRegistry } from '../../index';
 import { itAsync, subscribeAndCount } from '../../../testing';
+
+// These tests assert the @apollo/client error text rather than its production placeholder.
+loadErrorMessages();
 
 describe('FragmentRegistry', () => {
   it('can be passed to Hermes', () => {
@@ -52,11 +56,11 @@ describe('FragmentRegistry', () => {
       cache,
       link: new ApolloLink(
         operation =>
-          new Observable((observer) => {
+          new Observable(observer => {
             expect(
               getFragmentDefinitions(operation.query)
                 .map(def => def.name.value)
-                .sort()
+                .sort(),
             ).toEqual([
               // Proof that the missing SourceFragment definition was appended to
               // operation.query before it was passed into the link.
@@ -70,7 +74,7 @@ describe('FragmentRegistry', () => {
             });
 
             observer.complete();
-          })
+          }),
       ),
     });
 
@@ -121,7 +125,7 @@ describe('FragmentRegistry', () => {
         } else {
           reject(`Unexpectedly many results (${count})`);
         }
-      }
+      },
     );
   });
 
@@ -213,7 +217,7 @@ describe('FragmentRegistry', () => {
     expect(
       cache.readQuery({
         query: queryWithFragment,
-      })
+      }),
     ).toEqual({
       me: {
         __typename: 'Person',

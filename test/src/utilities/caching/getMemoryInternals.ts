@@ -1,25 +1,16 @@
 import type { OptimisticWrapperFunction } from 'optimism';
-import {
-  InMemoryCache,
-  ApolloLink,
-  ApolloCache,
-  ApolloClient,
-  DocumentTransform,
-} from '@apollo/client';
+import { InMemoryCache, ApolloLink, ApolloCache, ApolloClient, DocumentTransform } from '@apollo/client';
 
 import type { CacheSizes } from './sizes';
 import { cacheSizes, defaultCacheSizes } from './sizes';
 
 const globalCaches: {
-  print?: () => number,
-  parser?: () => number,
-  canonicalStringify?: () => number,
+  print?: () => number;
+  parser?: () => number;
+  canonicalStringify?: () => number;
 } = {};
 
-export function registerGlobalCache(
-  name: keyof typeof globalCaches,
-  getSize: () => number
-) {
+export function registerGlobalCache(name: keyof typeof globalCaches, getSize: () => number) {
   globalCaches[name] = getSize;
 }
 
@@ -65,34 +56,25 @@ type RemoveThis<T> = T extends (this: any) => infer R ? () => R : never;
  * For internal purposes only - please call `ApolloClient.getMemoryInternals` instead
  * @internal
  */
-export const getApolloClientMemoryInternals
-  = __DEV__
-    ? (_getApolloClientMemoryInternals as RemoveThis<
-      typeof _getApolloClientMemoryInternals
-    >)
-    : undefined;
+export const getApolloClientMemoryInternals = __DEV__
+  ? (_getApolloClientMemoryInternals as RemoveThis<typeof _getApolloClientMemoryInternals>)
+  : undefined;
 
 /**
  * For internal purposes only - please call `ApolloClient.getMemoryInternals` instead
  * @internal
  */
-export const getInMemoryCacheMemoryInternals
-  = __DEV__
-    ? (_getInMemoryCacheMemoryInternals as RemoveThis<
-      typeof _getInMemoryCacheMemoryInternals
-    >)
-    : undefined;
+export const getInMemoryCacheMemoryInternals = __DEV__
+  ? (_getInMemoryCacheMemoryInternals as RemoveThis<typeof _getInMemoryCacheMemoryInternals>)
+  : undefined;
 
 /**
  * For internal purposes only - please call `ApolloClient.getMemoryInternals` instead
  * @internal
  */
-export const getApolloCacheMemoryInternals
-  = __DEV__
-    ? (_getApolloCacheMemoryInternals as RemoveThis<
-      typeof _getApolloCacheMemoryInternals
-    >)
-    : undefined;
+export const getApolloCacheMemoryInternals = __DEV__
+  ? (_getApolloCacheMemoryInternals as RemoveThis<typeof _getApolloCacheMemoryInternals>)
+  : undefined;
 
 function getCurrentCacheSizes() {
   // `defaultCacheSizes` is a `const enum` that will be inlined during build, so we have to reconstruct it's shape here
@@ -101,32 +83,19 @@ function getCurrentCacheSizes() {
     canonicalStringify: defaultCacheSizes['canonicalStringify'],
     print: defaultCacheSizes['print'],
     'documentTransform.cache': defaultCacheSizes['documentTransform.cache'],
-    'queryManager.getDocumentInfo':
-      defaultCacheSizes['queryManager.getDocumentInfo'],
-    'PersistedQueryLink.persistedQueryHashes':
-      defaultCacheSizes['PersistedQueryLink.persistedQueryHashes'],
-    'fragmentRegistry.transform':
-      defaultCacheSizes['fragmentRegistry.transform'],
+    'queryManager.getDocumentInfo': defaultCacheSizes['queryManager.getDocumentInfo'],
+    'PersistedQueryLink.persistedQueryHashes': defaultCacheSizes['PersistedQueryLink.persistedQueryHashes'],
+    'fragmentRegistry.transform': defaultCacheSizes['fragmentRegistry.transform'],
     'fragmentRegistry.lookup': defaultCacheSizes['fragmentRegistry.lookup'],
-    'fragmentRegistry.findFragmentSpreads':
-      defaultCacheSizes['fragmentRegistry.findFragmentSpreads'],
-    'cache.fragmentQueryDocuments':
-      defaultCacheSizes['cache.fragmentQueryDocuments'],
+    'fragmentRegistry.findFragmentSpreads': defaultCacheSizes['fragmentRegistry.findFragmentSpreads'],
+    'cache.fragmentQueryDocuments': defaultCacheSizes['cache.fragmentQueryDocuments'],
     'removeTypenameFromVariables.getVariableDefinitions':
       defaultCacheSizes['removeTypenameFromVariables.getVariableDefinitions'],
-    'inMemoryCache.maybeBroadcastWatch':
-      defaultCacheSizes['inMemoryCache.maybeBroadcastWatch'],
-    'inMemoryCache.executeSelectionSet':
-      defaultCacheSizes['inMemoryCache.executeSelectionSet'],
-    'inMemoryCache.executeSubSelectedArray':
-      defaultCacheSizes['inMemoryCache.executeSubSelectedArray'],
+    'inMemoryCache.maybeBroadcastWatch': defaultCacheSizes['inMemoryCache.maybeBroadcastWatch'],
+    'inMemoryCache.executeSelectionSet': defaultCacheSizes['inMemoryCache.executeSelectionSet'],
+    'inMemoryCache.executeSubSelectedArray': defaultCacheSizes['inMemoryCache.executeSubSelectedArray'],
   };
-  return Object.fromEntries(
-    Object.entries(defaults).map(([k, v]) => [
-      k,
-      cacheSizes[k as keyof CacheSizes] || v,
-    ])
-  );
+  return Object.fromEntries(Object.entries(defaults).map(([k, v]) => [k, cacheSizes[k as keyof CacheSizes] || v]));
 }
 
 function _getApolloClientMemoryInternals(this: ApolloClient<any>) {
@@ -141,13 +110,9 @@ function _getApolloClientMemoryInternals(this: ApolloClient<any>) {
       links: linkInfo(this.link),
       queryManager: {
         getDocumentInfo: this['queryManager']['transformCache'].size,
-        documentTransforms: transformInfo(
-          this['queryManager'].documentTransform
-        ),
+        documentTransforms: transformInfo(this['queryManager'].documentTransform),
       },
-      ...(this.cache.getMemoryInternals?.() as Partial<
-        ReturnType<typeof _getApolloCacheMemoryInternals>
-      > &
+      ...(this.cache.getMemoryInternals?.() as Partial<ReturnType<typeof _getApolloCacheMemoryInternals>> &
         Partial<ReturnType<typeof _getInMemoryCacheMemoryInternals>>),
     },
   };
@@ -165,27 +130,21 @@ function _getInMemoryCacheMemoryInternals(this: InMemoryCache) {
   const fragments = this.config.fragments as
     | undefined
     | {
-        findFragmentSpreads?: Function,
-        transform?: Function,
-        lookup?: Function,
+        findFragmentSpreads?: Function;
+        transform?: Function;
+        lookup?: Function;
       };
 
   return {
     ..._getApolloCacheMemoryInternals.apply(this as any),
     addTypenameDocumentTransform: transformInfo(this['addTypenameTransform']),
     inMemoryCache: {
-      executeSelectionSet: getWrapperInformation(
-        this['storeReader']['executeSelectionSet']
-      ),
-      executeSubSelectedArray: getWrapperInformation(
-        this['storeReader']['executeSubSelectedArray']
-      ),
+      executeSelectionSet: getWrapperInformation(this['storeReader']['executeSelectionSet']),
+      executeSubSelectedArray: getWrapperInformation(this['storeReader']['executeSubSelectedArray']),
       maybeBroadcastWatch: getWrapperInformation(this['maybeBroadcastWatch']),
     },
     fragmentRegistry: {
-      findFragmentSpreads: getWrapperInformation(
-        fragments?.findFragmentSpreads
-      ),
+      findFragmentSpreads: getWrapperInformation(fragments?.findFragmentSpreads),
       lookup: getWrapperInformation(fragments?.lookup),
       transform: getWrapperInformation(fragments?.transform),
     },
@@ -211,19 +170,15 @@ function transformInfo(transform?: DocumentTransform) {
 function recurseTransformInfo(transform?: DocumentTransform): number[] {
   return transform
     ? [
-      getWrapperInformation(transform?.['performWork']),
-      ...recurseTransformInfo(transform?.['left']),
-      ...recurseTransformInfo(transform?.['right']),
-    ].filter(isDefined)
+        getWrapperInformation(transform?.['performWork']),
+        ...recurseTransformInfo(transform?.['left']),
+        ...recurseTransformInfo(transform?.['right']),
+      ].filter(isDefined)
     : [];
 }
 
 function linkInfo(link?: ApolloLink): unknown[] {
   return link
-    ? [
-      link?.getMemoryInternals?.(),
-      ...linkInfo(link?.left),
-      ...linkInfo(link?.right),
-    ].filter(isDefined)
+    ? [link?.getMemoryInternals?.(), ...linkInfo(link?.left), ...linkInfo(link?.right)].filter(isDefined)
     : [];
 }

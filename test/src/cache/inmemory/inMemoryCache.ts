@@ -31,10 +31,7 @@ import { makeVar, forgetCache, recallCache } from './reactiveVars';
 import { Policies } from './policies';
 import { hasOwn, normalizeConfig, shouldCanonizeResults } from './helpers';
 
-type BroadcastOptions = Pick<
-  Cache.BatchOptions<InMemoryCache>,
-  'optimistic' | 'onWatchUpdated'
->;
+type BroadcastOptions = Pick<Cache.BatchOptions<InMemoryCache>, 'optimistic' | 'onWatchUpdated'>;
 
 export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
   private data!: EntityStore;
@@ -113,13 +110,10 @@ export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
         addTypename: this.addTypename,
         resultCacheMaxSize: this.config.resultCacheMaxSize,
         canonizeResults: shouldCanonizeResults(this.config),
-        canon:
-          resetResultIdentities ? void 0 : (
-            previousReader && previousReader.canon
-          ),
+        canon: resetResultIdentities ? void 0 : previousReader && previousReader.canon,
         fragments,
       })),
-      fragments
+      fragments,
     );
 
     this.maybeBroadcastWatch = wrap(
@@ -146,19 +140,17 @@ export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
               // separation is to include c.callback in the cache key for
               // maybeBroadcastWatch calls. See issue #5733.
               c.callback,
-              canonicalStringify({ optimistic, id, variables })
+              canonicalStringify({ optimistic, id, variables }),
             );
           }
         },
-      }
+      },
     );
 
     // Since we have thrown away all the cached functions that depend on the
     // CacheGroup dependencies maintained by EntityStore, we should also reset
     // all CacheGroup dependency information.
-    new Set([this.data.group, this.optimisticData.group]).forEach(group =>
-      group.resetCaching()
-    );
+    new Set([this.data.group, this.optimisticData.group]).forEach(group => group.resetCaching());
   }
 
   public restore(data: NormalizedCacheObject): this {
@@ -219,7 +211,7 @@ export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
   }
 
   public modify<Entity extends Record<string, any> = Record<string, any>>(
-    options: Cache.ModifyOptions<Entity>
+    options: Cache.ModifyOptions<Entity>,
   ): boolean {
     if (hasOwn.call(options, 'id') && !options.id) {
       // To my knowledge, TypeScript does not currently provide a way to
@@ -233,12 +225,9 @@ export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
       // that nothing was modified.
       return false;
     }
-    const store
-      = (
-        options.optimistic // Defaults to false.
-      )
-        ? this.optimisticData
-        : this.data;
+    const store = options.optimistic // Defaults to false.
+      ? this.optimisticData
+      : this.data;
     try {
       ++this.txCount;
       return store.modify(options.id || 'ROOT_QUERY', options.fields);
@@ -250,7 +239,7 @@ export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
   }
 
   public diff<TData, TVariables extends OperationVariables = any>(
-    options: Cache.DiffOptions<TData, TVariables>
+    options: Cache.DiffOptions<TData, TVariables>,
   ): Cache.DiffResult<TData> {
     return this.storeReader.diffQueryAgainstStore({
       ...options,
@@ -260,9 +249,7 @@ export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
     });
   }
 
-  public watch<TData = any, TVariables = any>(
-    watch: Cache.WatchOptions<TData, TVariables>
-  ): () => void {
+  public watch<TData = any, TVariables = any>(watch: Cache.WatchOptions<TData, TVariables>): () => void {
     if (!this.watches.size) {
       // In case we previously called forgetCache(this) because
       // this.watches became empty (see below), reattach this cache to any
@@ -297,11 +284,11 @@ export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
   public gc(options?: {
     // If true, also free non-essential result cache memory by bulk-releasing
     // this.{store{Reader,Writer},maybeBroadcastWatch}. Defaults to false.
-    resetResultCache?: boolean,
+    resetResultCache?: boolean;
     // If resetResultCache is true, this.storeReader.canon will be preserved by
     // default, but can also be discarded by passing resetResultIdentities:true.
     // Defaults to false.
-    resetResultIdentities?: boolean,
+    resetResultIdentities?: boolean;
   }) {
     canonicalStringify.reset();
     print.reset();
@@ -413,15 +400,8 @@ export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
 
   private txCount = 0;
 
-  public batch<TUpdateResult>(
-    options: Cache.BatchOptions<InMemoryCache, TUpdateResult>
-  ): TUpdateResult {
-    const {
-      update,
-      optimistic = true,
-      removeOptimistic,
-      onWatchUpdated,
-    } = options;
+  public batch<TUpdateResult>(options: Cache.BatchOptions<InMemoryCache, TUpdateResult>): TUpdateResult {
+    const { update, optimistic = true, removeOptimistic, onWatchUpdated } = options;
 
     let updateResult: TUpdateResult;
     const perform = (layer?: EntityStore): TUpdateResult => {
@@ -514,10 +494,7 @@ export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
     return updateResult!;
   }
 
-  public performTransaction(
-    update: (cache: InMemoryCache) => any,
-    optimisticId?: string | null
-  ) {
+  public performTransaction(update: (cache: InMemoryCache) => any, optimisticId?: string | null) {
     return this.batch({
       update,
       optimistic: optimisticId || optimisticId !== null,
@@ -568,10 +545,7 @@ export class InMemoryCache extends ApolloCache<NormalizedCacheObject> {
         diff.fromOptimisticTransaction = true;
       }
 
-      if (
-        options.onWatchUpdated &&
-        options.onWatchUpdated.call(this, c, diff, lastDiff) === false
-      ) {
+      if (options.onWatchUpdated && options.onWatchUpdated.call(this, c, diff, lastDiff) === false) {
         // Returning false from the onWatchUpdated callback will prevent
         // calling c.callback(diff) for this watcher.
         return;

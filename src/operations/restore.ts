@@ -9,30 +9,25 @@ import * as util from '../util';
 
 import { nodeIdForParameterizedValue } from './SnapshotEditor';
 
-const {
-  getInbound,
-  getOutbound,
-  getParameterized,
-  isNumber,
-  isObject,
-  isReference,
-  isScalar,
-  iterRefs,
-  refToInKey,
-} = util;
+const { getInbound, getOutbound, getParameterized, isNumber, isObject, isReference, isScalar, iterRefs, refToInKey } =
+  util;
 
 /**
  * Restore GraphSnapshot from serializable representation.
  *
  * The parameter 'serializedState' is likely to be result running JSON.stringify
  * on a result of 'extract' method. This function will directly reference object
- * in the serializedState.
+ * in the serializedState, except for the data of nodes with references, which
+ * it copies before patching (so the serializedState itself is never modified).
  *
  * @throws Will throw an error if 'type' in serializedState cannot be mapped to
  *    different sub-class of NodeSnapshot.
  * @throws Will throw an error if there is undefined in sparse array
  */
-export function restore<TSerialized>(serializedState: Serializable.GraphSnapshot, cacheContext: CacheContext<TSerialized>) {
+export function restore<TSerialized>(
+  serializedState: Serializable.GraphSnapshot,
+  cacheContext: CacheContext<TSerialized>,
+) {
   const { nodesMap, editedNodeIds } = createGraphSnapshotNodes(serializedState, cacheContext);
   const graphSnapshot = new GraphSnapshot(nodesMap);
 
@@ -42,7 +37,10 @@ export function restore<TSerialized>(serializedState: Serializable.GraphSnapshot
   };
 }
 
-function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.GraphSnapshot, cacheContext: CacheContext<TSerialized>) {
+function createGraphSnapshotNodes<TSerialized>(
+  serializedState: Serializable.GraphSnapshot,
+  cacheContext: CacheContext<TSerialized>,
+) {
   const nodesMap: NodeSnapshotMap = Object.create(null);
   const editedNodeIds = new Set<NodeId>();
 
@@ -56,10 +54,20 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
     let nodeSnapshot;
     switch (type) {
       case Serializable.NodeSnapshotType.EntitySnapshot:
-        nodeSnapshot = new EntitySnapshot(data as JsonObject, getInbound(inbound), getOutbound(outbound), getParameterized(parameterized));
+        nodeSnapshot = new EntitySnapshot(
+          (outbound || parameterized ? cloneJson(data) : data) as JsonObject,
+          getInbound(inbound),
+          getOutbound(outbound),
+          getParameterized(parameterized),
+        );
         break;
       case Serializable.NodeSnapshotType.ParameterizedValueSnapshot:
-        nodeSnapshot = new ParameterizedValueSnapshot(data as JsonValue, getInbound(inbound), getOutbound(outbound), getParameterized(parameterized));
+        nodeSnapshot = new ParameterizedValueSnapshot(
+          (outbound || parameterized ? cloneJson(data) : data) as JsonValue,
+          getInbound(inbound),
+          getOutbound(outbound),
+          getParameterized(parameterized),
+        );
         break;
       case undefined: {
         const parsed: JsonObject = {};
@@ -73,8 +81,8 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
             const path = [key];
             nodesMap[fieldId] = new ParameterizedValueSnapshot(
               val as JsonValue,
-              [...missingPointers.get(nodeId) ?? [], { id: nodeId, path }],
-              []
+              [...(missingPointers.get(nodeId) ?? []), { id: nodeId, path }],
+              [],
             );
             editedNodeIds.add(fieldId);
             parsedParameterized.push({ id: fieldId, path });
@@ -97,7 +105,12 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
             parsed[key] = val;
           }
         }
-        nodeSnapshot = new EntitySnapshot(parsed as JsonObject, getInbound(parsedIn), getOutbound(parsedOut), getParameterized(parsedParameterized));
+        nodeSnapshot = new EntitySnapshot(
+          parsed as JsonObject,
+          getInbound(parsedIn),
+          getOutbound(parsedOut),
+          getParameterized(parsedParameterized),
+        );
         break;
       }
       default:
@@ -112,6 +125,24 @@ function createGraphSnapshotNodes<TSerialized>(serializedState: Serializable.Gra
   restoreEntityReferences(nodesMap, cacheContext);
 
   return { nodesMap, editedNodeIds };
+}
+
+/**
+ * Deep copies JSON-like data (arrays and plain objects), preserving holes and
+ * undefined values.
+ */
+function cloneJson<T>(value: T): T {
+  if (Array.isArray(value)) {
+    const copy = new Array(value.length);
+    value.forEach((item, index) => (copy[index] = cloneJson(item)));
+    return copy as T;
+  }
+  if (isObject(value)) {
+    const copy: Record<string, unknown> = {};
+    for (const key of Object.keys(value)) copy[key] = cloneJson((value as Record<string, unknown>)[key]);
+    return copy as T;
+  }
+  return value;
 }
 
 function set(data: NestedArray<JsonScalar> | NestedObject<JsonScalar>, path: PathPart[], value: JsonValue | undefined) {
@@ -145,7 +176,14 @@ function restoreEntityReferences<TSerialized>(nodesMap: NodeSnapshotMap, cacheCo
 
     for (const { id: referenceId, path } of iterRefs(outbound, parameterized)) {
       const referenceNode = nodesMap[referenceId];
-      if (referenceNode instanceof EntitySnapshot && data === null) {
+      if (!referenceNode) {
+        // A dangling reference (to a deleted entity) has no data.
+        if (!path.length) {
+          nodesMap[nodeId].data = undefined;
+        } else if (Array.isArray(data) || isObject(data)) {
+          set(data, path, undefined);
+        }
+      } else if (referenceNode instanceof EntitySnapshot && data === null) {
         // data is a reference.
         nodesMap[nodeId].data = referenceNode.data;
       } else if (referenceNode instanceof ParameterizedValueSnapshot) {
@@ -183,7 +221,11 @@ function restoreEntityReferences<TSerialized>(nodesMap: NodeSnapshotMap, cacheCo
  * JSON.stringify to 'null' and will preserve the structure along the path
  *
  */
-function tryRestoreSparseArray(data: NestedValue<JsonValue | undefined>, possibleSparseArrayPaths: PathPart[], idx: number) {
+function tryRestoreSparseArray(
+  data: NestedValue<JsonValue | undefined>,
+  possibleSparseArrayPaths: PathPart[],
+  idx: number,
+) {
   if (data === undefined) {
     // There should never be 'undefined'
     throw new Error(`Unexpected 'undefined' in the path [${possibleSparseArrayPaths}] at index ${idx}`);

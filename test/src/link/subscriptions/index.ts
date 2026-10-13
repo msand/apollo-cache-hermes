@@ -51,13 +51,13 @@ export class GraphQLWsLink extends ApolloLink {
   }
 
   public request(operation: Operation): Observable<FetchResult> {
-    return new Observable((observer) => {
+    return new Observable(observer => {
       return this.client.subscribe<FetchResult>(
         { ...operation, query: print(operation.query) },
         {
           next: observer.next.bind(observer),
           complete: observer.complete.bind(observer),
-          error: (err) => {
+          error: err => {
             if (err instanceof Error) {
               return observer.error(err);
             }
@@ -66,20 +66,18 @@ export class GraphQLWsLink extends ApolloLink {
               return observer.error(
                 // reason will be available on clean closes
                 new Error(
-                  `Socket closed${likeClose ? ` with event ${err.code}` : ''}${
-                    likeClose ? ` ${err.reason}` : ''
-                  }`
-                )
+                  `Socket closed${likeClose ? ` with event ${err.code}` : ''}${likeClose ? ` ${err.reason}` : ''}`,
+                ),
               );
             }
 
             return observer.error(
               new ApolloError({
                 graphQLErrors: Array.isArray(err) ? err : [err],
-              })
+              }),
             );
           },
-        }
+        },
       );
     });
   }

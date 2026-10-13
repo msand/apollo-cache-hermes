@@ -6,15 +6,10 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.extract`, () => {
   describe(`simple leaf-values hanging off a root`, () => {
-
     let extractResult: Serializable.GraphSnapshot;
     beforeAll(() => {
       const cacheContext = createStrictCacheContext();
-      const snapshot = createGraphSnapshot(
-        { foo: {}, bar: [] },
-        `{ foo bar }`,
-        cacheContext
-      );
+      const snapshot = createGraphSnapshot({ foo: {}, bar: [] }, `{ foo bar }`, cacheContext);
 
       extractResult = extract(snapshot, cacheContext);
     });
@@ -27,6 +22,5 @@ describe(`operations.extract`, () => {
         },
       });
     });
-
   });
 });

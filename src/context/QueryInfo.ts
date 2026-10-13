@@ -22,7 +22,6 @@ import { CacheContext } from './CacheContext';
  * that information.
  */
 export class QueryInfo<TSerialized = GraphSnapshot> {
-
   /** The original document (after __typename fields are injected). */
   public readonly document: DocumentNode;
   /** The primary operation in the document. */
@@ -93,5 +92,4 @@ export class QueryInfo<TSerialized = GraphSnapshot> {
       }
     }
   }
-
 }

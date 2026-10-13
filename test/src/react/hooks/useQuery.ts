@@ -1,31 +1,22 @@
-
 import * as React from 'rehackt';
 import { equal } from '@wry/equality';
 import { ApolloClient, ObservableQuery } from '@apollo/client';
 
 import { invariant } from '../../utilities/globals/index';
-import type { OperationVariables,
+import type {
+  OperationVariables,
   WatchQueryFetchPolicy,
-
   ApolloQueryResult,
   DocumentNode,
   TypedDocumentNode,
-  WatchQueryOptions } from '../../core/index';
-import { mergeOptions,
-  canUseWeakMap,
-  compact,
-  isNonEmptyArray,
-  maybeDeepFreeze } from '../../utilities/index';
+  WatchQueryOptions,
+} from '../../core/index';
+import { mergeOptions, canUseWeakMap, compact, isNonEmptyArray, maybeDeepFreeze } from '../../utilities/index';
 import type { ApolloContextValue } from '../context/index';
 import { getApolloContext } from '../context/index';
 import { ApolloError } from '../../errors/index';
 import { NetworkStatus } from '../../core/index';
-import type {
-  QueryHookOptions,
-  QueryResult,
-  ObservableQueryFields,
-  NoInfer,
-} from '../types/types';
+import type { QueryHookOptions, QueryResult, ObservableQueryFields, NoInfer } from '../types/types';
 import { DocumentType, verifyDocumentType } from '../parser/index';
 
 import { useSyncExternalStore } from './useSyncExternalStore';
@@ -70,38 +61,23 @@ const {
  * @param options - Options to control how the query is executed.
  * @returns Query result object
  */
-export function useQuery<
-  TData = any,
-  TVariables extends OperationVariables = OperationVariables,
->(
+export function useQuery<TData = any, TVariables extends OperationVariables = OperationVariables>(
   query: DocumentNode | TypedDocumentNode<TData, TVariables>,
-  options: QueryHookOptions<
-    NoInfer<TData>,
-    NoInfer<TVariables>
-  > = Object.create(null)
+  options: QueryHookOptions<NoInfer<TData>, NoInfer<TVariables>> = Object.create(null),
 ): QueryResult<TData, TVariables> {
-  return wrapHook(
-    'useQuery',
-    _useQuery,
-    useApolloClient(options && options.client)
-  )(query, options);
+  return wrapHook('useQuery', _useQuery, useApolloClient(options && options.client))(query, options);
 }
 
-function _useQuery<
-  TData = any,
-  TVariables extends OperationVariables = OperationVariables,
->(
+function _useQuery<TData = any, TVariables extends OperationVariables = OperationVariables>(
   query: DocumentNode | TypedDocumentNode<TData, TVariables>,
-  options: QueryHookOptions<NoInfer<TData>, NoInfer<TVariables>>
+  options: QueryHookOptions<NoInfer<TData>, NoInfer<TVariables>>,
 ) {
-  return useInternalState(useApolloClient(options.client), query).useQuery(
-    options
-  );
+  return useInternalState(useApolloClient(options.client), query).useQuery(options);
 }
 
 export function useInternalState<TData, TVariables extends OperationVariables>(
   client: ApolloClient<any>,
-  query: DocumentNode | TypedDocumentNode<TData, TVariables>
+  query: DocumentNode | TypedDocumentNode<TData, TVariables>,
 ): InternalState<TData, TVariables> {
   // By default, InternalState.prototype.forceUpdate is an empty function, but
   // we replace it here (before anyone has had a chance to see this state yet)
@@ -136,7 +112,7 @@ class InternalState<TData, TVariables extends OperationVariables> {
   constructor(
     public readonly client: ReturnType<typeof useApolloClient>,
     public readonly query: DocumentNode | TypedDocumentNode<TData, TVariables>,
-    previous?: InternalState<TData, TVariables>
+    previous?: InternalState<TData, TVariables>,
   ) {
     verifyDocumentType(query, DocumentType.Query);
 
@@ -158,9 +134,7 @@ class InternalState<TData, TVariables extends OperationVariables> {
    *  */
   forceUpdateState() {
     // Replaced (in useInternalState) with a method that triggers an update.
-    invariant.warn(
-      'Calling default no-op implementation of InternalState#forceUpdate'
-    );
+    invariant.warn('Calling default no-op implementation of InternalState#forceUpdate');
   }
 
   /**
@@ -171,20 +145,16 @@ class InternalState<TData, TVariables extends OperationVariables> {
 
   executeQuery(
     options: QueryHookOptions<TData, TVariables> & {
-      query?: DocumentNode,
-    }
+      query?: DocumentNode;
+    },
   ) {
     if (options.query) {
       Object.assign(this, { query: options.query });
     }
 
-    this.watchQueryOptions = this.createWatchQueryOptions(
-      (this.queryHookOptions = options)
-    );
+    this.watchQueryOptions = this.createWatchQueryOptions((this.queryHookOptions = options));
 
-    const concast = this.observable.reobserveAsConcast(
-      this.getObsQueryOptions()
-    );
+    const concast = this.observable.reobserveAsConcast(this.getObsQueryOptions());
 
     // Make sure getCurrentResult returns a fresh ApolloQueryResult<TData>,
     // but save the current data as this.previousData, just like setResult
@@ -193,7 +163,7 @@ class InternalState<TData, TVariables extends OperationVariables> {
     this.result = void 0;
     this.forceUpdate();
 
-    return new Promise<QueryResult<TData, TVariables>>((resolve) => {
+    return new Promise<QueryResult<TData, TVariables>>(resolve => {
       let result: ApolloQueryResult<TData>;
 
       // Subscribe to the concast independently of the ObservableQuery in case
@@ -201,7 +171,7 @@ class InternalState<TData, TVariables extends OperationVariables> {
       // the concast from terminating early and resolving with `undefined` when
       // there are no more subscribers for the concast.
       concast.subscribe({
-        next: (value) => {
+        next: value => {
           result = value;
         },
         error: () => {
@@ -233,7 +203,7 @@ class InternalState<TData, TVariables extends OperationVariables> {
 
     const result = useSyncExternalStore(
       React.useCallback(
-        (handleStoreChange) => {
+        handleStoreChange => {
           if (this.renderPromises) {
             return () => {};
           }
@@ -269,11 +239,7 @@ class InternalState<TData, TVariables extends OperationVariables> {
             }
 
             const previousResult = this.result;
-            if (
-              !previousResult ||
-              (previousResult && previousResult.loading) ||
-              !equal(error, previousResult.error)
-            ) {
+            if (!previousResult || (previousResult && previousResult.loading) || !equal(error, previousResult.error)) {
               this.setResult({
                 data: (previousResult && previousResult.data) as TData,
                 error: error as ApolloError,
@@ -304,11 +270,11 @@ class InternalState<TData, TVariables extends OperationVariables> {
           obsQuery,
           this.renderPromises,
           this.client.disableNetworkFetches,
-        ]
+        ],
       ),
 
       () => this.getCurrentResult(),
-      () => this.getCurrentResult()
+      () => this.getCurrentResult(),
     );
 
     // TODO Remove this method when we remove support for options.partialRefetch.
@@ -326,9 +292,7 @@ class InternalState<TData, TVariables extends OperationVariables> {
   private watchQueryOptions!: WatchQueryOptions<TVariables, TData>;
 
   private useOptions(options: QueryHookOptions<TData, TVariables>) {
-    const watchQueryOptions = this.createWatchQueryOptions(
-      (this.queryHookOptions = options)
-    );
+    const watchQueryOptions = this.createWatchQueryOptions((this.queryHookOptions = options));
 
     // Update this.watchQueryOptions, but only when they have changed, which
     // allows us to depend on the referential stability of
@@ -363,8 +327,7 @@ class InternalState<TData, TVariables extends OperationVariables> {
     // Like the forceUpdate method, the versions of these methods inherited from
     // InternalState.prototype are empty no-ops, but we can override them on the
     // base state object (without modifying the prototype).
-    this.onCompleted
-      = options.onCompleted || InternalState.prototype.onCompleted;
+    this.onCompleted = options.onCompleted || InternalState.prototype.onCompleted;
     this.onError = options.onError || InternalState.prototype.onError;
 
     if (
@@ -375,10 +338,7 @@ class InternalState<TData, TVariables extends OperationVariables> {
       // If SSR has been explicitly disabled, and this function has been called
       // on the server side, return the default loading state.
       this.result = this.ssrDisabledResult;
-    } else if (
-      this.queryHookOptions.skip ||
-      this.watchQueryOptions.fetchPolicy === 'standby'
-    ) {
+    } else if (this.queryHookOptions.skip || this.watchQueryOptions.fetchPolicy === 'standby') {
       // When skipping a query (ie. we're not querying for data but still want to
       // render children), make sure the `data` is cleared out and `loading` is
       // set to `false` (since we aren't loading anything).
@@ -390,10 +350,7 @@ class InternalState<TData, TVariables extends OperationVariables> {
       // changing this is breaking, so we'll have to wait until Apollo Client 4.0
       // to address this.
       this.result = this.skipStandbyResult;
-    } else if (
-      this.result === this.ssrDisabledResult ||
-      this.result === this.skipStandbyResult
-    ) {
+    } else if (this.result === this.ssrDisabledResult || this.result === this.skipStandbyResult) {
       this.result = void 0;
     }
   }
@@ -418,12 +375,7 @@ class InternalState<TData, TVariables extends OperationVariables> {
     // (if provided) should be merged, to ensure individual defaulted
     // variables always have values, if not otherwise defined in
     // observable.options or watchQueryOptions.
-    toMerge.push(
-      compact(
-        this.observable && this.observable.options,
-        this.watchQueryOptions
-      )
-    );
+    toMerge.push(compact(this.observable && this.observable.options, this.watchQueryOptions));
 
     return toMerge.reduce(mergeOptions) as WatchQueryOptions<TVariables, TData>;
   }
@@ -453,19 +405,14 @@ class InternalState<TData, TVariables extends OperationVariables> {
     // makes otherOptions almost a WatchQueryOptions object, except for the
     // query property that we add below.
     ...otherOptions
-  }: QueryHookOptions<TData, TVariables> = {}): WatchQueryOptions<
-    TVariables,
-    TData
-  > {
+  }: QueryHookOptions<TData, TVariables> = {}): WatchQueryOptions<TVariables, TData> {
     // This Object.assign is safe because otherOptions is a fresh ...rest object
     // that did not exist until just now, so modifications are still allowed.
-    const watchQueryOptions: WatchQueryOptions<TVariables, TData>
-      = Object.assign(otherOptions, { query: this.query });
+    const watchQueryOptions: WatchQueryOptions<TVariables, TData> = Object.assign(otherOptions, { query: this.query });
 
     if (
       this.renderPromises &&
-      (watchQueryOptions.fetchPolicy === 'network-only' ||
-        watchQueryOptions.fetchPolicy === 'cache-and-network')
+      (watchQueryOptions.fetchPolicy === 'network-only' || watchQueryOptions.fetchPolicy === 'cache-and-network')
     ) {
       // this behavior was added to react-apollo without explanation in this PR
       // https://github.com/apollographql/react-apollo/pull/1579
@@ -477,10 +424,7 @@ class InternalState<TData, TVariables extends OperationVariables> {
     }
 
     if (skip) {
-      const {
-        fetchPolicy = this.getDefaultFetchPolicy(),
-        initialFetchPolicy = fetchPolicy,
-      } = watchQueryOptions;
+      const { fetchPolicy = this.getDefaultFetchPolicy(), initialFetchPolicy = fetchPolicy } = watchQueryOptions;
 
       // When skipping, we set watchQueryOptions.fetchPolicy initially to
       // "standby", but we also need/want to preserve the initial non-standby
@@ -490,9 +434,7 @@ class InternalState<TData, TVariables extends OperationVariables> {
         fetchPolicy: 'standby',
       });
     } else if (!watchQueryOptions.fetchPolicy) {
-      watchQueryOptions.fetchPolicy
-        = this.observable?.options.initialFetchPolicy ||
-        this.getDefaultFetchPolicy();
+      watchQueryOptions.fetchPolicy = this.observable?.options.initialFetchPolicy || this.getDefaultFetchPolicy();
     }
 
     return watchQueryOptions;
@@ -514,18 +456,14 @@ class InternalState<TData, TVariables extends OperationVariables> {
   private onError(error: ApolloError) {}
 
   private observable!: ObservableQuery<TData, TVariables>;
-  public obsQueryFields!: Omit<
-    ObservableQueryFields<TData, TVariables>,
-    'variables'
-  >;
+  public obsQueryFields!: Omit<ObservableQueryFields<TData, TVariables>, 'variables'>;
 
   private useObservableQuery() {
     // See if there is an existing observable that was used to fetch the same
     // data and if so, use it instead since it will contain the proper queryId
     // to fetch the result set. This is used during SSR.
-    const obsQuery = (this.observable
-      = (this.renderPromises &&
-        this.renderPromises.getSSRObservable(this.watchQueryOptions)) ||
+    const obsQuery = (this.observable =
+      (this.renderPromises && this.renderPromises.getSSRObservable(this.watchQueryOptions)) ||
       this.observable || // Reuse this.observable if possible (and not SSR)
       this.client.watchQuery(this.getObsQueryOptions()));
 
@@ -539,12 +477,10 @@ class InternalState<TData, TVariables extends OperationVariables> {
         stopPolling: obsQuery.stopPolling.bind(obsQuery),
         subscribeToMore: obsQuery.subscribeToMore.bind(obsQuery),
       }),
-      [obsQuery]
+      [obsQuery],
     );
 
-    const ssrAllowed = !(
-      this.queryHookOptions.ssr === false || this.queryHookOptions.skip
-    );
+    const ssrAllowed = !(this.queryHookOptions.ssr === false || this.queryHookOptions.skip);
 
     if (this.renderPromises && ssrAllowed) {
       this.renderPromises.registerSSRObservable(obsQuery);
@@ -575,10 +511,7 @@ class InternalState<TData, TVariables extends OperationVariables> {
     this.handleErrorOrCompleted(nextResult, previousResult);
   }
 
-  private handleErrorOrCompleted(
-    result: ApolloQueryResult<TData>,
-    previousResult?: ApolloQueryResult<TData>
-  ) {
+  private handleErrorOrCompleted(result: ApolloQueryResult<TData>, previousResult?: ApolloQueryResult<TData>) {
     if (!result.loading) {
       const error = this.toApolloError(result);
 
@@ -595,18 +528,14 @@ class InternalState<TData, TVariables extends OperationVariables> {
             this.onCompleted(result.data);
           }
         })
-        .catch((error) => {
+        .catch(error => {
           invariant.warn(error);
         });
     }
   }
 
-  private toApolloError(
-    result: ApolloQueryResult<TData>
-  ): ApolloError | undefined {
-    return isNonEmptyArray(result.errors)
-      ? new ApolloError({ graphQLErrors: result.errors })
-      : result.error;
+  private toApolloError(result: ApolloQueryResult<TData>): ApolloError | undefined {
+    return isNonEmptyArray(result.errors) ? new ApolloError({ graphQLErrors: result.errors }) : result.error;
   }
 
   private getCurrentResult(): ApolloQueryResult<TData> {
@@ -614,9 +543,7 @@ class InternalState<TData, TVariables extends OperationVariables> {
     // the same (===) result object, unless state.setResult has been called, or
     // we're doing server rendering and therefore override the result below.
     if (!this.result) {
-      this.handleErrorOrCompleted(
-        (this.result = this.observable.getCurrentResult())
-      );
+      this.handleErrorOrCompleted((this.result = this.observable.getCurrentResult()));
     }
     return this.result;
   }
@@ -629,9 +556,7 @@ class InternalState<TData, TVariables extends OperationVariables> {
     QueryResult<TData, TVariables>
   >();
 
-  toQueryResult(
-    result: ApolloQueryResult<TData>
-  ): QueryResult<TData, TVariables> {
+  toQueryResult(result: ApolloQueryResult<TData>): QueryResult<TData, TVariables> {
     let queryResult = this.toQueryResultCache.get(result);
     if (queryResult) return queryResult;
 
@@ -647,7 +572,7 @@ class InternalState<TData, TVariables extends OperationVariables> {
         variables: this.observable.variables,
         called: !this.queryHookOptions.skip,
         previousData: this.previousData,
-      })
+      }),
     );
 
     if (!queryResult.error && isNonEmptyArray(result.errors)) {

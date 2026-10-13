@@ -1,4 +1,3 @@
-
 import * as React from 'rehackt';
 import type { DocumentNode } from 'graphql';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
@@ -12,14 +11,8 @@ import {
   MutationOptions,
 } from '@apollo/client';
 
-import type {
-  MutationResult,
-  NoInfer,
-} from '../types/types';
-import type {
-  DefaultContext,
-  OperationVariables,
-} from '../../core/index';
+import type { MutationResult, NoInfer } from '../types/types';
+import type { DefaultContext, OperationVariables } from '../../core/index';
 import { DocumentType, verifyDocumentType } from '../parser/index';
 import { ApolloError } from '../../errors/index';
 
@@ -80,12 +73,7 @@ export function useMutation<
   TCache extends ApolloCache<any> = ApolloCache<any>,
 >(
   mutation: DocumentNode | TypedDocumentNode<TData, TVariables>,
-  options?: MutationHookOptions<
-    NoInfer<TData>,
-    NoInfer<TVariables>,
-    TContext,
-    TCache
-  >
+  options?: MutationHookOptions<NoInfer<TData>, NoInfer<TVariables>, TContext, TCache>,
 ): MutationTuple<TData, TVariables, TContext, TCache> {
   const client = useApolloClient(options?.client);
   verifyDocumentType(mutation, DocumentType.Mutation);
@@ -109,23 +97,12 @@ export function useMutation<
   });
 
   const execute = React.useCallback(
-    (
-      executeOptions: MutationFunctionOptions<
-        TData,
-        TVariables,
-        TContext,
-        TCache
-      > = {}
-    ) => {
+    (executeOptions: MutationFunctionOptions<TData, TVariables, TContext, TCache> = {}) => {
       const { options, mutation } = ref.current;
       const baseOptions = { ...options, mutation };
       const client = executeOptions.client || ref.current.client;
 
-      if (
-        !ref.current.result.loading &&
-        !baseOptions.ignoreResults &&
-        ref.current.isMounted
-      ) {
+      if (!ref.current.result.loading && !baseOptions.ignoreResults && ref.current.isMounted) {
         setResult(
           (ref.current.result = {
             loading: true,
@@ -133,7 +110,7 @@ export function useMutation<
             data: void 0,
             called: true,
             client,
-          })
+          }),
         );
       }
 
@@ -142,27 +119,17 @@ export function useMutation<
 
       return client
         .mutate(clientOptions as MutationOptions<TData, OperationVariables>)
-        .then((response) => {
+        .then(response => {
           const { data, errors } = response;
-          const error
-            = errors && errors.length > 0
-              ? new ApolloError({ graphQLErrors: errors })
-              : void 0;
+          const error = errors && errors.length > 0 ? new ApolloError({ graphQLErrors: errors }) : void 0;
 
-          const onError
-            = executeOptions.onError || ref.current.options?.onError;
+          const onError = executeOptions.onError || ref.current.options?.onError;
 
           if (error && onError) {
-            onError(
-              error,
-              clientOptions as MutationOptions<TData, OperationVariables>
-            );
+            onError(error, clientOptions as MutationOptions<TData, OperationVariables>);
           }
 
-          if (
-            mutationId === ref.current.mutationId &&
-            !clientOptions.ignoreResults
-          ) {
+          if (mutationId === ref.current.mutationId && !clientOptions.ignoreResults) {
             const result = {
               called: true,
               loading: false,
@@ -176,19 +143,15 @@ export function useMutation<
             }
           }
 
-          const onCompleted
-            = executeOptions.onCompleted || ref.current.options?.onCompleted;
+          const onCompleted = executeOptions.onCompleted || ref.current.options?.onCompleted;
 
           if (!error) {
-            onCompleted?.(
-              response.data!,
-              clientOptions as MutationOptions<TData, OperationVariables>
-            );
+            onCompleted?.(response.data!, clientOptions as MutationOptions<TData, OperationVariables>);
           }
 
           return response;
         })
-        .catch((error) => {
+        .catch(error => {
           if (mutationId === ref.current.mutationId && ref.current.isMounted) {
             const result = {
               loading: false,
@@ -203,14 +166,10 @@ export function useMutation<
             }
           }
 
-          const onError
-            = executeOptions.onError || ref.current.options?.onError;
+          const onError = executeOptions.onError || ref.current.options?.onError;
 
           if (onError) {
-            onError(
-              error,
-              clientOptions as MutationOptions<TData, OperationVariables>
-            );
+            onError(error, clientOptions as MutationOptions<TData, OperationVariables>);
 
             // TODO(brian): why are we returning this here???
             return { data: void 0, errors: error };
@@ -219,7 +178,7 @@ export function useMutation<
           throw error;
         });
     },
-    []
+    [],
   );
 
   const reset = React.useCallback(() => {

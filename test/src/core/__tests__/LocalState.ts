@@ -23,7 +23,7 @@ const setupClientWithLocalQueryResolver = (localQueryResolver: any) => {
 };
 
 describe('LocalState', () => {
-  it('resolver info field provides information about named fragments', async() => {
+  it('resolver info field provides information about named fragments', async () => {
     // Create client with local resolver
     const localQueryResolver = jest.fn().mockReturnValue({
       __typename: 'LocalQueryResponse',
@@ -49,15 +49,13 @@ describe('LocalState', () => {
     expect(localResolverInfoParam.fragmentMap).toBeDefined();
 
     // Verify local resolver can see "namedFragmentField" selected from named fragment
-    expect(
-      localResolverInfoParam.fragmentMap.NamedFragment.selectionSet.selections
-    ).toContainEqual(
+    expect(localResolverInfoParam.fragmentMap.NamedFragment.selectionSet.selections).toContainEqual(
       expect.objectContaining({
         name: {
           kind: 'Name',
           value: 'namedFragmentField',
         },
-      })
+      }),
     );
   });
 });

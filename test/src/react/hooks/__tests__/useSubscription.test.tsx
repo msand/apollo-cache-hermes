@@ -3,10 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import gql from 'graphql-tag';
 import { ApolloClient, ApolloProvider, ApolloLink, concat } from '@apollo/client';
 
-import {
-  ApolloError,
-  TypedDocumentNode,
-} from '../../../core';
+import { ApolloError, TypedDocumentNode } from '../../../core';
 import { PROTOCOL_ERRORS_SYMBOL } from '../../../errors';
 import { MockSubscriptionLink } from '../../../testing';
 import { useSubscription } from '../useSubscription';
@@ -14,7 +11,7 @@ import { spyOnConsole } from '../../../testing/internal';
 import { Hermes } from '../../../../../src';
 
 describe('useSubscription Hook', () => {
-  it('should handle a simple subscription properly', async() => {
+  it('should handle a simple subscription properly', async () => {
     const subscription = gql`
       subscription {
         car {
@@ -34,9 +31,7 @@ describe('useSubscription Hook', () => {
     });
 
     const { result } = renderHook(() => useSubscription(subscription), {
-      wrapper: ({ children }) => (
-        <ApolloProvider client={client}>{children}</ApolloProvider>
-      ),
+      wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
     });
 
     expect(result.current.loading).toBe(true);
@@ -47,7 +42,7 @@ describe('useSubscription Hook', () => {
       () => {
         expect(result.current.data).toEqual(results[0].result.data);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     expect(result.current.loading).toBe(false);
     setTimeout(() => link.simulateResult(results[1]));
@@ -55,7 +50,7 @@ describe('useSubscription Hook', () => {
       () => {
         expect(result.current.data).toEqual(results[1].result.data);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     expect(result.current.loading).toBe(false);
     setTimeout(() => link.simulateResult(results[2]));
@@ -63,7 +58,7 @@ describe('useSubscription Hook', () => {
       () => {
         expect(result.current.data).toEqual(results[2].result.data);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     expect(result.current.loading).toBe(false);
     setTimeout(() => link.simulateResult(results[3]));
@@ -71,12 +66,12 @@ describe('useSubscription Hook', () => {
       () => {
         expect(result.current.data).toEqual(results[3].result.data);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     expect(result.current.loading).toBe(false);
   });
 
-  it('should call onError after error results', async() => {
+  it('should call onError after error results', async () => {
     const subscription = gql`
       subscription {
         car {
@@ -101,14 +96,9 @@ describe('useSubscription Hook', () => {
     });
 
     const onError = jest.fn();
-    const { result } = renderHook(
-      () => useSubscription(subscription, { onError }),
-      {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
-      }
-    );
+    const { result } = renderHook(() => useSubscription(subscription, { onError }), {
+      wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+    });
 
     expect(result.current.loading).toBe(true);
     expect(result.current.error).toBe(undefined);
@@ -118,7 +108,7 @@ describe('useSubscription Hook', () => {
       () => {
         expect(result.current.loading).toBe(false);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     expect(result.current.loading).toBe(false);
     expect(result.current.data).toEqual(results[0].result.data);
@@ -127,11 +117,11 @@ describe('useSubscription Hook', () => {
       () => {
         expect(onError).toHaveBeenCalledTimes(1);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
   });
 
-  it('should call onComplete after subscription is complete', async() => {
+  it('should call onComplete after subscription is complete', async () => {
     const subscription = gql`
       subscription {
         car {
@@ -154,9 +144,7 @@ describe('useSubscription Hook', () => {
 
     const onComplete = jest.fn();
     renderHook(() => useSubscription(subscription, { onComplete }), {
-      wrapper: ({ children }) => (
-        <ApolloProvider client={client}>{children}</ApolloProvider>
-      ),
+      wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
     });
 
     link.simulateResult(results[0]);
@@ -166,11 +154,11 @@ describe('useSubscription Hook', () => {
       () => {
         expect(onComplete).toHaveBeenCalledTimes(1);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
   });
 
-  it('should cleanup after the subscription component has been unmounted', async() => {
+  it('should cleanup after the subscription component has been unmounted', async () => {
     const subscription = gql`
       subscription {
         car {
@@ -198,10 +186,8 @@ describe('useSubscription Hook', () => {
           onData,
         }),
       {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
-      }
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
     );
 
     expect(result.current.loading).toBe(true);
@@ -212,7 +198,7 @@ describe('useSubscription Hook', () => {
       () => {
         expect(result.current.loading).toBe(false);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     expect(result.current.error).toBe(undefined);
     expect(result.current.data).toBe(results[0].result.data);
@@ -230,7 +216,7 @@ describe('useSubscription Hook', () => {
     expect(onData).toHaveBeenCalledTimes(1);
   });
 
-  it('should never execute a subscription with the skip option', async() => {
+  it('should never execute a subscription with the skip option', async () => {
     const subscription = gql`
       subscription {
         car {
@@ -262,10 +248,8 @@ describe('useSubscription Hook', () => {
             foo: 'bar',
           },
         },
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
-      }
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
     );
 
     expect(result.current.loading).toBe(false);
@@ -278,8 +262,8 @@ describe('useSubscription Hook', () => {
         () => {
           expect(result.current.data).not.toBe(undefined);
         },
-        { interval: 1, timeout: 20 }
-      )
+        { interval: 1, timeout: 20 },
+      ),
     ).rejects.toThrow();
 
     expect(onSetup).toHaveBeenCalledTimes(0);
@@ -287,7 +271,7 @@ describe('useSubscription Hook', () => {
     unmount();
   });
 
-  it('should create a subscription after skip has changed from true to a falsy value', async() => {
+  it('should create a subscription after skip has changed from true to a falsy value', async () => {
     const subscription = gql`
       subscription {
         car {
@@ -310,15 +294,10 @@ describe('useSubscription Hook', () => {
       link,
       cache: new Hermes({ addTypename: false }),
     });
-    const { result, rerender } = renderHook(
-      ({ skip }) => useSubscription(subscription, { skip }),
-      {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
-        initialProps: { skip: true },
-      }
-    );
+    const { result, rerender } = renderHook(({ skip }) => useSubscription(subscription, { skip }), {
+      wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      initialProps: { skip: true },
+    });
 
     expect(result.current.loading).toBe(false);
     expect(result.current.data).toBe(undefined);
@@ -337,7 +316,7 @@ describe('useSubscription Hook', () => {
       () => {
         expect(result.current.loading).toBe(false);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     expect(result.current.data).toEqual(results[0].result.data);
     expect(result.current.error).toBe(undefined);
@@ -359,8 +338,8 @@ describe('useSubscription Hook', () => {
         () => {
           expect(result.current.data).not.toBe(undefined);
         },
-        { interval: 1, timeout: 20 }
-      )
+        { interval: 1, timeout: 20 },
+      ),
     ).rejects.toThrow();
 
     // ensure state persists across rerenders
@@ -377,13 +356,13 @@ describe('useSubscription Hook', () => {
       () => {
         expect(result.current.loading).toBe(false);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     expect(result.current.data).toEqual(results[1].result.data);
     expect(result.current.error).toBe(undefined);
   });
 
-  it('should share context set in options', async() => {
+  it('should share context set in options', async () => {
     const subscription = gql`
       subscription {
         car {
@@ -413,10 +392,8 @@ describe('useSubscription Hook', () => {
           context: { make: 'Audi' },
         }),
       {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
-      }
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
     );
 
     expect(result.current.loading).toBe(true);
@@ -430,7 +407,7 @@ describe('useSubscription Hook', () => {
       () => {
         expect(result.current.data).toEqual(results[0].result.data);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     expect(result.current.loading).toBe(false);
     expect(result.current.error).toBe(undefined);
@@ -443,7 +420,7 @@ describe('useSubscription Hook', () => {
       () => {
         expect(result.current.data).toEqual(results[1].result.data);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     expect(result.current.loading).toBe(false);
     expect(result.current.error).toBe(undefined);
@@ -451,7 +428,7 @@ describe('useSubscription Hook', () => {
     expect(context!).toBe('Audi');
   });
 
-  it('should handle multiple subscriptions properly', async() => {
+  it('should handle multiple subscriptions properly', async () => {
     const subscription = gql`
       subscription {
         car {
@@ -476,10 +453,8 @@ describe('useSubscription Hook', () => {
         sub2: useSubscription(subscription),
       }),
       {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
-      }
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
     );
 
     expect(result.current.sub1.loading).toBe(true);
@@ -497,7 +472,7 @@ describe('useSubscription Hook', () => {
       () => {
         expect(result.current.sub1.data).toEqual(results[0].result.data);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     expect(result.current.sub1.loading).toBe(false);
     expect(result.current.sub1.error).toBe(undefined);
@@ -513,7 +488,7 @@ describe('useSubscription Hook', () => {
       () => {
         expect(result.current.sub1.data).toEqual(results[1].result.data);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     expect(result.current.sub1.loading).toBe(false);
     expect(result.current.sub1.error).toBe(undefined);
@@ -522,7 +497,7 @@ describe('useSubscription Hook', () => {
     expect(result.current.sub2.data).toEqual(results[1].result.data);
   });
 
-  it('should handle immediate completions gracefully', async() => {
+  it('should handle immediate completions gracefully', async () => {
     using consoleSpy = spyOnConsole('error');
 
     const subscription = gql`
@@ -540,9 +515,7 @@ describe('useSubscription Hook', () => {
     });
 
     const { result } = renderHook(() => useSubscription(subscription), {
-      wrapper: ({ children }) => (
-        <ApolloProvider client={client}>{children}</ApolloProvider>
-      ),
+      wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
     });
 
     setTimeout(() => {
@@ -557,20 +530,16 @@ describe('useSubscription Hook', () => {
       () => {
         expect(result.current.loading).toBe(false);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     expect(result.current.error).toBe(undefined);
     expect(result.current.data).toBe(null);
 
-    expect(consoleSpy.error).toHaveBeenCalledTimes(1);
-    expect(consoleSpy.error.mock.calls[0]).toStrictEqual([
-      'Missing field \'%s\' while writing result %o',
-      'car',
-      Object.create(null),
-    ]);
+    // Hermes: does not emit InMemoryCache's "Missing field ... while writing result" warning.
+    expect(consoleSpy.error).not.toHaveBeenCalled();
   });
 
-  it('should handle immediate completions with multiple subscriptions gracefully', async() => {
+  it('should handle immediate completions with multiple subscriptions gracefully', async () => {
     using consoleSpy = spyOnConsole('error');
     const subscription = gql`
       subscription {
@@ -593,10 +562,8 @@ describe('useSubscription Hook', () => {
         sub3: useSubscription(subscription),
       }),
       {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
-      }
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
     );
 
     expect(result.current.sub1.loading).toBe(true);
@@ -618,7 +585,7 @@ describe('useSubscription Hook', () => {
       () => {
         expect(result.current.sub1.loading).toBe(false);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
 
     expect(result.current.sub1.error).toBe(undefined);
@@ -630,25 +597,11 @@ describe('useSubscription Hook', () => {
     expect(result.current.sub3.error).toBe(undefined);
     expect(result.current.sub3.data).toBe(null);
 
-    expect(consoleSpy.error).toHaveBeenCalledTimes(3);
-    expect(consoleSpy.error.mock.calls[0]).toStrictEqual([
-      'Missing field \'%s\' while writing result %o',
-      'car',
-      Object.create(null),
-    ]);
-    expect(consoleSpy.error.mock.calls[1]).toStrictEqual([
-      'Missing field \'%s\' while writing result %o',
-      'car',
-      Object.create(null),
-    ]);
-    expect(consoleSpy.error.mock.calls[2]).toStrictEqual([
-      'Missing field \'%s\' while writing result %o',
-      'car',
-      Object.create(null),
-    ]);
+    // Hermes: does not emit InMemoryCache's "Missing field ... while writing result" warning.
+    expect(consoleSpy.error).not.toHaveBeenCalled();
   });
 
-  it('should warn when using \'onSubscriptionData\' and \'onData\' together', () => {
+  it("should warn when using 'onSubscriptionData' and 'onData' together", () => {
     using consoleSpy = spyOnConsole('warn');
     const subscription = gql`
       subscription {
@@ -671,21 +624,17 @@ describe('useSubscription Hook', () => {
           onSubscriptionData: jest.fn(),
         }),
       {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
-      }
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
     );
 
     expect(consoleSpy.warn).toHaveBeenCalledTimes(1);
     expect(consoleSpy.warn).toHaveBeenCalledWith(
-      expect.stringContaining(
-        'supports only the \'onSubscriptionData\' or \'onData\' option'
-      )
+      expect.stringContaining("supports only the 'onSubscriptionData' or 'onData' option"),
     );
   });
 
-  it('prefers \'onData\' when using \'onSubscriptionData\' and \'onData\' together', async() => {
+  it("prefers 'onData' when using 'onSubscriptionData' and 'onData' together", async () => {
     jest.spyOn(console, 'warn').mockImplementation(() => {});
     const subscription = gql`
       subscription {
@@ -717,10 +666,8 @@ describe('useSubscription Hook', () => {
           onSubscriptionData,
         }),
       {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
-      }
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
     );
 
     setTimeout(() => link.simulateResult(results[0]));
@@ -728,12 +675,12 @@ describe('useSubscription Hook', () => {
       () => {
         expect(onData).toHaveBeenCalledTimes(1);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     expect(onSubscriptionData).toHaveBeenCalledTimes(0);
   });
 
-  it('uses \'onSubscriptionData\' when \'onData\' is absent', async() => {
+  it("uses 'onSubscriptionData' when 'onData' is absent", async () => {
     using _consoleSpy = spyOnConsole('warn');
     const subscription = gql`
       subscription {
@@ -763,10 +710,8 @@ describe('useSubscription Hook', () => {
           onSubscriptionData,
         }),
       {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
-      }
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
     );
 
     setTimeout(() => link.simulateResult(results[0]));
@@ -774,7 +719,7 @@ describe('useSubscription Hook', () => {
       () => {
         expect(onSubscriptionData).toHaveBeenCalledTimes(1);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
   });
 
@@ -800,10 +745,8 @@ describe('useSubscription Hook', () => {
           onSubscriptionData: jest.fn(),
         }),
       {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
-      }
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
     );
 
     rerender();
@@ -811,7 +754,7 @@ describe('useSubscription Hook', () => {
     expect(consoleSpy.warn).toHaveBeenCalledTimes(1);
   });
 
-  it('should warn when using \'onComplete\' and \'onSubscriptionComplete\' together', () => {
+  it("should warn when using 'onComplete' and 'onSubscriptionComplete' together", () => {
     using consoleSpy = spyOnConsole('warn');
     const subscription = gql`
       subscription {
@@ -834,21 +777,17 @@ describe('useSubscription Hook', () => {
           onSubscriptionComplete: jest.fn(),
         }),
       {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
-      }
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
     );
 
     expect(consoleSpy.warn).toHaveBeenCalledTimes(1);
     expect(consoleSpy.warn).toHaveBeenCalledWith(
-      expect.stringContaining(
-        'supports only the \'onSubscriptionComplete\' or \'onComplete\' option'
-      )
+      expect.stringContaining("supports only the 'onSubscriptionComplete' or 'onComplete' option"),
     );
   });
 
-  it('prefers \'onComplete\' when using \'onComplete\' and \'onSubscriptionComplete\' together', async() => {
+  it("prefers 'onComplete' when using 'onComplete' and 'onSubscriptionComplete' together", async () => {
     using _consoleSpy = spyOnConsole('warn');
     const subscription = gql`
       subscription {
@@ -880,10 +819,8 @@ describe('useSubscription Hook', () => {
           onSubscriptionComplete,
         }),
       {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
-      }
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
     );
 
     link.simulateResult(results[0]);
@@ -893,12 +830,12 @@ describe('useSubscription Hook', () => {
       () => {
         expect(onComplete).toHaveBeenCalledTimes(1);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     expect(onSubscriptionComplete).toHaveBeenCalledTimes(0);
   });
 
-  it('uses \'onSubscriptionComplete\' when \'onComplete\' is absent', async() => {
+  it("uses 'onSubscriptionComplete' when 'onComplete' is absent", async () => {
     using _consoleSpy = spyOnConsole('warn');
     const subscription = gql`
       subscription {
@@ -928,10 +865,8 @@ describe('useSubscription Hook', () => {
           onSubscriptionComplete,
         }),
       {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
-      }
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
     );
 
     link.simulateResult(results[0]);
@@ -941,7 +876,7 @@ describe('useSubscription Hook', () => {
       () => {
         expect(onSubscriptionComplete).toHaveBeenCalledTimes(1);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
   });
 
@@ -967,10 +902,8 @@ describe('useSubscription Hook', () => {
           onSubscriptionComplete: jest.fn(),
         }),
       {
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
-      }
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
     );
 
     rerender();
@@ -979,7 +912,7 @@ describe('useSubscription Hook', () => {
   });
 
   describe('multipart subscriptions', () => {
-    it('should handle a simple subscription properly', async() => {
+    it('should handle a simple subscription properly', async () => {
       const subscription = gql`
         subscription ANewDieWasCreated {
           aNewDieWasCreated {
@@ -1023,10 +956,8 @@ describe('useSubscription Hook', () => {
           return useSubscription(subscription);
         },
         {
-          wrapper: ({ children }) => (
-            <ApolloProvider client={client}>{children}</ApolloProvider>
-          ),
-        }
+          wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+        },
       );
       expect(result.current.loading).toBe(true);
       expect(result.current.error).toBe(undefined);
@@ -1037,16 +968,14 @@ describe('useSubscription Hook', () => {
         () => {
           expect(result.current.error).toBeInstanceOf(ApolloError);
         },
-        { interval: 1 }
+        { interval: 1 },
       );
-      expect(result.current.error!.protocolErrors[0].message).toBe(
-        'cannot read message from websocket'
-      );
+      expect(result.current.error!.protocolErrors[0].message).toBe('cannot read message from websocket');
     });
   });
 
   it('should handle simple subscription after old in-flight teardown immediately \
-followed by new in-flight setup', async() => {
+followed by new in-flight setup', async () => {
     const subscription = gql`
       subscription {
         car {
@@ -1083,10 +1012,8 @@ followed by new in-flight setup', async() => {
         initialProps: {
           coin: 'heads',
         },
-        wrapper: ({ children }) => (
-          <ApolloProvider client={client}>{children}</ApolloProvider>
-        ),
-      }
+        wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+      },
     );
 
     rerender({ coin: 'tails' });
@@ -1099,7 +1026,7 @@ followed by new in-flight setup', async() => {
       () => {
         expect(result.current.tails.data).toEqual(results[0].result.data);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     expect(result.current.heads.data).toBeUndefined();
 
@@ -1111,7 +1038,7 @@ followed by new in-flight setup', async() => {
       () => {
         expect(result.current.heads.data).toEqual(results[1].result.data);
       },
-      { interval: 1 }
+      { interval: 1 },
     );
     expect(result.current.tails.data).toBeUndefined();
 

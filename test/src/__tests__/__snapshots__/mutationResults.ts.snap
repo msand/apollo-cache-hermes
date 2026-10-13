@@ -1,4 +1,4 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
 exports[`mutation results should warn when the result fields don't match the query fields 1`] = `
 [MockFunction] {
@@ -27,11 +27,11 @@ exports[`mutation results should write results to cache according to errorPolicy
 exports[`mutation results should write results to cache according to errorPolicy 2`] = `
 Object {
   "Person:{\\"name\\":\\"Jenn Creighton\\"}": Object {
-    "__typename": "Person",
-    "name": "Jenn Creighton",
-  },
-  "ROOT_MUTATION": Object {
-    "__typename": "Mutation",
+    "data": Object {
+      "__typename": "Person",
+      "name": "Jenn Creighton",
+    },
+    "type": 0,
   },
 }
 `;
@@ -39,15 +39,18 @@ Object {
 exports[`mutation results should write results to cache according to errorPolicy 3`] = `
 Object {
   "Person:{\\"name\\":\\"Ellen Shapiro\\"}": Object {
-    "__typename": "Person",
-    "name": "Ellen Shapiro",
+    "data": Object {
+      "__typename": "Person",
+      "name": "Ellen Shapiro",
+    },
+    "type": 0,
   },
   "Person:{\\"name\\":\\"Jenn Creighton\\"}": Object {
-    "__typename": "Person",
-    "name": "Jenn Creighton",
-  },
-  "ROOT_MUTATION": Object {
-    "__typename": "Mutation",
+    "data": Object {
+      "__typename": "Person",
+      "name": "Jenn Creighton",
+    },
+    "type": 0,
   },
 }
 `;

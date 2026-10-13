@@ -3,7 +3,6 @@ import { expect } from 'chai';
 import { HermesCacheError } from '../../../src';
 
 describe(`errors.CacheError`, () => {
-
   class ChildError extends HermesCacheError {}
 
   it(`it can be constructed directly`, () => {
@@ -28,5 +27,4 @@ describe(`errors.CacheError`, () => {
     const error = new ChildError({ message: `kaboom` });
     expect(error.message).to.eq('kaboom');
   });
-
 });

@@ -24,7 +24,7 @@ import { useSyncExternalStore } from './useSyncExternalStore';
 export function useReactiveVar<T>(rv: ReactiveVar<T>): T {
   return useSyncExternalStore(
     React.useCallback(
-      (update) => {
+      update => {
         // By reusing the same onNext function in the nested call to
         // rv.onNextChange(onNext), we can keep using the initial clean-up function
         // returned by rv.onNextChange(function onNext(v){...}), without having to
@@ -35,9 +35,9 @@ export function useReactiveVar<T>(rv: ReactiveVar<T>): T {
           rv.onNextChange(onNext);
         });
       },
-      [rv]
+      [rv],
     ),
     rv,
-    rv
+    rv,
   );
 }

@@ -7,7 +7,6 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.extract`, () => {
   describe(`nested parameterized value with array of nested references`, () => {
-
     let extractResult: Serializable.GraphSnapshot;
     beforeAll(() => {
       const cacheContext = createStrictCacheContext();
@@ -44,30 +43,18 @@ describe(`operations.extract`, () => {
           }
         }`,
         cacheContext,
-        { id: 1 }
+        { id: 1 },
       );
 
       extractResult = extract(snapshot, cacheContext);
     });
 
     it(`extracts JSON serialization object`, () => {
-      const parameterizedTopContainerId = nodeIdForParameterizedValue(
-        QueryRootId,
-        ['one', 'two'],
-        { id: 1 }
-      );
+      const parameterizedTopContainerId = nodeIdForParameterizedValue(QueryRootId, ['one', 'two'], { id: 1 });
 
-      const nestedParameterizedValueId0 = nodeIdForParameterizedValue(
-        '31',
-        ['four'],
-        { extra: true },
-      );
+      const nestedParameterizedValueId0 = nodeIdForParameterizedValue('31', ['four'], { extra: true });
 
-      const nestedParameterizedValueId1 = nodeIdForParameterizedValue(
-        '32',
-        ['four'],
-        { extra: true },
-      );
+      const nestedParameterizedValueId1 = nodeIdForParameterizedValue('32', ['four'], { extra: true });
 
       jestExpect(extractResult).toEqual({
         [QueryRootId]: {
@@ -115,6 +102,5 @@ describe(`operations.extract`, () => {
         },
       });
     });
-
   });
 });

@@ -12,18 +12,17 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 // It just isn't very fruitful to unit test the individual steps of the write
 // workflow in isolation, given the contextual state that must be passed around.
 describe(`operations.write`, () => {
-
   const context = new CacheContext(strictConfig);
   const empty = new GraphSnapshot();
 
   describe(`nested parameterized value with array of nested references`, () => {
-
     let nestedQuery: RawOperation, snapshot: GraphSnapshot, parameterizedRootId: NodeId;
     let entityId1: NodeId, entityId2: NodeId;
     let parameterizedIdInEntity1: NodeId, parameterizedIdInEntity2: NodeId;
 
     beforeAll(() => {
-      nestedQuery = query(`query nested($id: ID!) {
+      nestedQuery = query(
+        `query nested($id: ID!) {
         one {
           two(id: $id) {
             three {
@@ -34,7 +33,9 @@ describe(`operations.write`, () => {
             }
           }
         }
-      }`, { id: 1 });
+      }`,
+        { id: 1 },
+      );
 
       parameterizedRootId = nodeIdForParameterizedValue(QueryRootId, ['one', 'two'], { id: 1 });
       entityId1 = '31';
@@ -78,31 +79,37 @@ describe(`operations.write`, () => {
 
     it(`references the parent entity snapshot from the parameterized field`, () => {
       const entry1 = snapshot.getNodeSnapshot(parameterizedIdInEntity1)!;
-      jestExpect(mapToEntries2(entry1.inbound)).toEqual(jestExpect.arrayContaining([{ id: entityId1, path: ['four'] }]));
+      jestExpect(mapToEntries2(entry1.inbound)).toEqual(
+        jestExpect.arrayContaining([{ id: entityId1, path: ['four'] }]),
+      );
 
       const entry2 = snapshot.getNodeSnapshot(parameterizedIdInEntity2)!;
-      jestExpect(mapToEntries2(entry2.inbound)).toEqual(jestExpect.arrayContaining([{ id: entityId2, path: ['four'] }]));
+      jestExpect(mapToEntries2(entry2.inbound)).toEqual(
+        jestExpect.arrayContaining([{ id: entityId2, path: ['four'] }]),
+      );
     });
 
     it(`references the parameterized field children from the parent entity`, () => {
       const entity1 = snapshot.getNodeSnapshot(entityId1)!;
-      jestExpect(mapToEntries(entity1.parameterized)).toEqual(jestExpect.arrayContaining([
-        { id: parameterizedIdInEntity1, path: ['four'] },
-      ]));
+      jestExpect(mapToEntries(entity1.parameterized)).toEqual(
+        jestExpect.arrayContaining([{ id: parameterizedIdInEntity1, path: ['four'] }]),
+      );
 
       const entity2 = snapshot.getNodeSnapshot(entityId2)!;
-      jestExpect(mapToEntries(entity2.parameterized)).toEqual(jestExpect.arrayContaining([
-        { id: parameterizedIdInEntity2, path: ['four'] },
-      ]));
+      jestExpect(mapToEntries(entity2.parameterized)).toEqual(
+        jestExpect.arrayContaining([{ id: parameterizedIdInEntity2, path: ['four'] }]),
+      );
     });
 
     it(`references the children from the parameterized root`, () => {
       const container = snapshot.getNodeSnapshot(parameterizedRootId)!;
 
-      jestExpect(mapToEntries2(container.outbound)).toEqual(jestExpect.arrayContaining([
-        { id: entityId1, path: [0, 'three'] },
-        { id: entityId2, path: [1, 'three'] },
-      ]));
+      jestExpect(mapToEntries2(container.outbound)).toEqual(
+        jestExpect.arrayContaining([
+          { id: entityId1, path: [0, 'three'] },
+          { id: entityId2, path: [1, 'three'] },
+        ]),
+      );
     });
 
     it(`writes an array with the correct length`, () => {
@@ -128,6 +135,5 @@ describe(`operations.write`, () => {
 
       jestExpect(updated.getNodeData(parameterizedRootId)).toEqual(null);
     });
-
   });
 });

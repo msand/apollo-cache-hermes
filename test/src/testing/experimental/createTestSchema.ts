@@ -53,10 +53,7 @@ interface TestSchemaOptions {
  * @since 3.9.0
  * @alpha
  */
-const createTestSchema = (
-  schemaWithTypeDefs: GraphQLSchema,
-  options: TestSchemaOptions
-): ProxiedSchema => {
+const createTestSchema = (schemaWithTypeDefs: GraphQLSchema, options: TestSchemaOptions): ProxiedSchema => {
   let targetResolvers = { ...options.resolvers };
   let targetSchema = addResolversToSchema({
     schema: createMockSchema(schemaWithTypeDefs, options.scalars ?? {}),
@@ -79,8 +76,7 @@ const createTestSchema = (
     fork: ({ resolvers: newResolvers } = {}) => {
       return createTestSchema(targetSchema, {
         // @ts-ignore TODO(fixme): IResolvers type does not play well with our Resolvers
-        resolvers:
-          mergeResolvers([targetResolvers, newResolvers]) ?? targetResolvers,
+        resolvers: mergeResolvers([targetResolvers, newResolvers]) ?? targetResolvers,
         scalars: options.scalars,
       });
     },

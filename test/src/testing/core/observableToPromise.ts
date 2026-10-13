@@ -30,7 +30,7 @@ export type ResultCallback = (result: ApolloQueryResult<any>) => any;
 export function observableToPromiseAndSubscription(
   { observable, shouldResolve = true, wait = -1, errorCallbacks = [] }: Options,
   ...cbs: ResultCallback[]
-): { promise: Promise<any[]>, subscription: ObservableSubscription } {
+): { promise: Promise<any[]>; subscription: ObservableSubscription } {
   let subscription: ObservableSubscription = null as never;
   const promise = new Promise<any[]>((resolve, reject) => {
     let errorIndex = 0;
@@ -65,13 +65,9 @@ export function observableToPromiseAndSubscription(
           .then(() => {
             const cb = cbs[cbIndex++];
             if (cb) return cb(result);
-            reject(
-              new Error(
-                `Observable 'next' method called more than ${cbs.length} times`
-              )
-            );
+            reject(new Error(`Observable 'next' method called more than ${cbs.length} times`));
           })
-          .then((res) => {
+          .then(res => {
             results.push(res);
             tryToResolve();
           }, reject);
@@ -94,9 +90,6 @@ export function observableToPromiseAndSubscription(
   };
 }
 
-export default function(
-  options: Options,
-  ...cbs: ResultCallback[]
-): Promise<any[]> {
+export default function (options: Options, ...cbs: ResultCallback[]): Promise<any[]> {
   return observableToPromiseAndSubscription(options, ...cbs).promise;
 }

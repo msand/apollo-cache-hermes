@@ -11,7 +11,6 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 // workflow in isolation, given the contextual state that must be passed around.
 describe(`operations.write`, () => {
   describe(`new array of references hanging off of a root`, () => {
-
     let snapshot: GraphSnapshot, editedNodeIds: Set<NodeId>;
     beforeAll(() => {
       const result = createSnapshot(
@@ -27,7 +26,7 @@ describe(`operations.write`, () => {
             },
           ],
         },
-        `{ viewer { id name } }`
+        `{ viewer { id name } }`,
       );
 
       snapshot = result.snapshot;
@@ -83,7 +82,10 @@ describe(`operations.write`, () => {
 
     it(`records the outbound and inbound reference from the query root`, () => {
       const queryRoot = snapshot.getNodeSnapshot(QueryRootId)!;
-      jestExpect(mapToEntries2(queryRoot.outbound)).toEqual([{ id: '123', path: ['viewer', 0] }, { id: '456', path: ['viewer', 1] }]);
+      jestExpect(mapToEntries2(queryRoot.outbound)).toEqual([
+        { id: '123', path: ['viewer', 0] },
+        { id: '456', path: ['viewer', 1] },
+      ]);
       jestExpect(mapToEntries2(queryRoot.inbound)).toBe(undefined);
     });
 
@@ -101,5 +103,4 @@ describe(`operations.write`, () => {
       jestExpect(snapshot.allNodeIds()).toEqual(jestExpect.arrayContaining([QueryRootId, '123', '456']));
     });
   });
-
 });

@@ -11,7 +11,6 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 // It just isn't very fruitful to unit test the individual steps of the write
 // workflow in isolation, given the contextual state that must be passed around.
 describe(`operations.write`, () => {
-
   const context = new CacheContext(strictConfig);
   const empty = new GraphSnapshot();
   const rootValuesQuery = query(`{
@@ -60,7 +59,6 @@ describe(`operations.write`, () => {
     it(`contains the correct nodes`, () => {
       jestExpect(snapshot.allNodeIds()).toEqual(jestExpect.arrayContaining([QueryRootId, '1']));
     });
-
   });
 
   describe(`when orphaning a subgraph`, () => {
@@ -141,12 +139,13 @@ describe(`operations.write`, () => {
     });
 
     it(`marks the container and all orphaned nodes as edited`, () => {
-      jestExpect(Array.from(editedNodeIds)).toEqual(jestExpect.arrayContaining([QueryRootId, '1', '2', '111', '222', '333']));
+      jestExpect(Array.from(editedNodeIds)).toEqual(
+        jestExpect.arrayContaining([QueryRootId, '1', '2', '111', '222', '333']),
+      );
     });
 
     it(`contains the correct nodes`, () => {
       jestExpect(snapshot.allNodeIds()).toEqual(jestExpect.arrayContaining([QueryRootId, '1']));
     });
-
   });
 });

@@ -23,7 +23,7 @@ describe(`operations.prune`, () => {
         ],
       },
       `{ viewer { id name } }`,
-      cacheContext
+      cacheContext,
     );
 
     const pruneQuery = query(`{ viewer { id }}`);
@@ -57,5 +57,4 @@ describe(`operations.prune`, () => {
       },
     });
   });
-
 });

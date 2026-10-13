@@ -18,9 +18,7 @@ export interface QueryComponentOptions<
   TData = any,
   TVariables extends OperationVariables = OperationVariables,
 > extends QueryFunctionOptions<TData, TVariables> {
-  children: (
-    result: QueryResult<TData, TVariables>
-  ) => ReactTypes.JSX.Element | null;
+  children: (result: QueryResult<TData, TVariables>) => ReactTypes.JSX.Element | null;
   query: DocumentNode | TypedDocumentNode<TData, TVariables>;
 }
 
@@ -33,7 +31,7 @@ export interface MutationComponentOptions<
   mutation: DocumentNode | TypedDocumentNode<TData, TVariables>;
   children: (
     mutateFunction: MutationFunction<TData, TVariables, TContext>,
-    result: MutationResult<TData>
+    result: MutationResult<TData>,
   ) => ReactTypes.JSX.Element | null;
 }
 
@@ -43,7 +41,5 @@ export interface SubscriptionComponentOptions<
 > extends BaseSubscriptionOptions<TData, TVariables> {
   /** {@inheritDoc @apollo/client!SubscriptionOptionsDocumentation#query:member} */
   subscription: DocumentNode | TypedDocumentNode<TData, TVariables>;
-  children?:
-    | null
-    | ((result: SubscriptionResult<TData>) => ReactTypes.JSX.Element | null);
+  children?: null | ((result: SubscriptionResult<TData>) => ReactTypes.JSX.Element | null);
 }

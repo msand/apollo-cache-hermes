@@ -1,49 +1,127 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
 exports[`useQuery Hook SSR should return data written previously to cache during SSR pass if using cache-only fetchPolicy 1`] = `
 Object {
   "Order:{\\"selection\\":\\"RELEVANCE\\"}": Object {
-    "__typename": "Order",
-    "selection": "RELEVANCE",
+    "data": Object {
+      "__typename": "Order",
+      "selection": "RELEVANCE",
+    },
+    "inbound": Array [
+      Object {
+        "id": "ROOT_QUERY",
+        "path": Array [
+          "getSearchResults",
+          "order",
+        ],
+      },
+    ],
+    "type": 0,
   },
   "ROOT_QUERY": Object {
-    "__typename": "Query",
-    "getSearchResults": Object {
-      "__typename": "SearchResults",
-      "locale": "en-US",
-      "order": Object {
-        "__ref": "Order:{\\"selection\\":\\"RELEVANCE\\"}",
+    "data": Object {
+      "getSearchResults": Object {
+        "__typename": "SearchResults",
+        "locale": "en-US",
+        "order": undefined,
+        "pagination": Object {
+          "pageLimit": 3,
+        },
+        "results": Array [
+          undefined,
+          undefined,
+          undefined,
+        ],
       },
-      "pagination": Object {
-        "pageLimit": 3,
-      },
-      "results": Array [
-        Object {
-          "__ref": "SearchResult:1",
-        },
-        Object {
-          "__ref": "SearchResult:2",
-        },
-        Object {
-          "__ref": "SearchResult:3",
-        },
-      ],
     },
+    "outbound": Array [
+      Object {
+        "id": "Order:{\\"selection\\":\\"RELEVANCE\\"}",
+        "path": Array [
+          "getSearchResults",
+          "order",
+        ],
+      },
+      Object {
+        "id": "SearchResult:1",
+        "path": Array [
+          "getSearchResults",
+          "results",
+          0,
+        ],
+      },
+      Object {
+        "id": "SearchResult:2",
+        "path": Array [
+          "getSearchResults",
+          "results",
+          1,
+        ],
+      },
+      Object {
+        "id": "SearchResult:3",
+        "path": Array [
+          "getSearchResults",
+          "results",
+          2,
+        ],
+      },
+    ],
+    "type": 0,
   },
   "SearchResult:1": Object {
-    "__typename": "SearchResult",
-    "id": 1,
-    "text": "hi",
+    "data": Object {
+      "__typename": "SearchResult",
+      "id": 1,
+      "text": "hi",
+    },
+    "inbound": Array [
+      Object {
+        "id": "ROOT_QUERY",
+        "path": Array [
+          "getSearchResults",
+          "results",
+          0,
+        ],
+      },
+    ],
+    "type": 0,
   },
   "SearchResult:2": Object {
-    "__typename": "SearchResult",
-    "id": 2,
-    "text": "hello",
+    "data": Object {
+      "__typename": "SearchResult",
+      "id": 2,
+      "text": "hello",
+    },
+    "inbound": Array [
+      Object {
+        "id": "ROOT_QUERY",
+        "path": Array [
+          "getSearchResults",
+          "results",
+          1,
+        ],
+      },
+    ],
+    "type": 0,
   },
   "SearchResult:3": Object {
-    "__typename": "SearchResult",
-    "id": 3,
-    "text": "hey",
+    "data": Object {
+      "__typename": "SearchResult",
+      "id": 3,
+      "text": "hey",
+    },
+    "inbound": Array [
+      Object {
+        "id": "ROOT_QUERY",
+        "path": Array [
+          "getSearchResults",
+          "results",
+          2,
+        ],
+      },
+    ],
+    "type": 0,
   },
 }
 `;

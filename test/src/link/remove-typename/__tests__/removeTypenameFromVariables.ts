@@ -1,14 +1,10 @@
 import { ApolloLink, Operation } from '@apollo/client';
 
-import {
-  KEEP,
-  removeTypenameFromVariables,
-} from '../removeTypenameFromVariables';
+import { KEEP, removeTypenameFromVariables } from '../removeTypenameFromVariables';
 import { Observable, gql } from '../../../core';
 import { createOperation, toPromise } from '../../utils';
 
-type PartialOperation = Partial<Pick<Operation, 'variables'>> &
-  Pick<Operation, 'query'>;
+type PartialOperation = Partial<Pick<Operation, 'variables'>> & Pick<Operation, 'query'>;
 
 // Since this link modifies the `operation` and we only care to test against
 // the changed operation, we use a custom `execute` helper here instead of the
@@ -20,14 +16,12 @@ async function execute(link: ApolloLink, operation: PartialOperation) {
     return Observable.of({ data: operation });
   }
 
-  const { data } = await toPromise(
-    link.request(createOperation({}, operation), forward)!
-  );
+  const { data } = await toPromise(link.request(createOperation({}, operation), forward)!);
 
   return data as Operation;
 }
 
-it('strips all __typename keys by default', async() => {
+it('strips all __typename keys by default', async () => {
   const query = gql`
     query Test($foo: FooInput!, $bar: BarInput!) {
       someField(foo: $foo, bar: $bar)
@@ -61,7 +55,7 @@ it('strips all __typename keys by default', async() => {
   });
 });
 
-it('does nothing when no variables are passed', async() => {
+it('does nothing when no variables are passed', async () => {
   const query = gql`
     query Test {
       foo {
@@ -78,7 +72,7 @@ it('does nothing when no variables are passed', async() => {
   expect(resultOperation).toBe(operation);
 });
 
-it('does nothing when no variables are passed even if variables are declared in the document', async() => {
+it('does nothing when no variables are passed even if variables are declared in the document', async () => {
   const query = gql`
     query Test($unused: Boolean) {
       foo {
@@ -95,7 +89,7 @@ it('does nothing when no variables are passed even if variables are declared in 
   expect(resultOperation).toBe(operation);
 });
 
-it('keeps __typename for variables with types defined by `except`', async() => {
+it('keeps __typename for variables with types defined by `except`', async () => {
   const query = gql`
     query Test($foo: JSON, $bar: BarInput) {
       someField(foo: $foo, bar: $bar)
@@ -130,7 +124,7 @@ it('keeps __typename for variables with types defined by `except`', async() => {
   });
 });
 
-it('keeps __typename in all variables with types configured with `except`', async() => {
+it('keeps __typename in all variables with types configured with `except`', async () => {
   const query = gql`
     query Test($foo: JSON, $bar: Config, $baz: BazInput) {
       someField(foo: $foo, bar: $bar, baz: $baz)
@@ -160,7 +154,7 @@ it('keeps __typename in all variables with types configured with `except`', asyn
   });
 });
 
-it('handles variable declarations declared as non null and list types', async() => {
+it('handles variable declarations declared as non null and list types', async () => {
   const query = gql`
     query Test($foo: JSON!, $bar: [JSON], $baz: [JSON!]!, $qux: QuxInput!) {
       someField(foo: $foo, bar: $bar, baz: $baz)
@@ -177,9 +171,7 @@ it('handles variable declarations declared as non null and list types', async() 
     query,
     variables: {
       foo: { __typename: 'Foo', foo: true },
-      bar: [
-        { __typename: 'Bar', bar: true, baz: { __typename: 'Baz', baz: true } },
-      ],
+      bar: [{ __typename: 'Bar', bar: true, baz: { __typename: 'Baz', baz: true } }],
       baz: [
         { __typename: 'Baz', baz: true },
         { __typename: 'Baz', baz: true },
@@ -190,9 +182,7 @@ it('handles variable declarations declared as non null and list types', async() 
 
   expect(variables).toStrictEqual({
     foo: { __typename: 'Foo', foo: true },
-    bar: [
-      { __typename: 'Bar', bar: true, baz: { __typename: 'Baz', baz: true } },
-    ],
+    bar: [{ __typename: 'Bar', bar: true, baz: { __typename: 'Baz', baz: true } }],
     baz: [
       { __typename: 'Baz', baz: true },
       { __typename: 'Baz', baz: true },
@@ -201,7 +191,7 @@ it('handles variable declarations declared as non null and list types', async() 
   });
 });
 
-it('keeps __typename at configured fields under input object types', async() => {
+it('keeps __typename at configured fields under input object types', async () => {
   const query = gql`
     query Test($foo: FooInput) {
       someField(foo: $foo)
@@ -257,7 +247,7 @@ it('keeps __typename at configured fields under input object types', async() => 
   });
 });
 
-it('keeps __typename at a deeply nested field', async() => {
+it('keeps __typename at a deeply nested field', async () => {
   const query = gql`
     query Test($foo: FooInput) {
       someField(foo: $foo)
@@ -309,7 +299,7 @@ it('keeps __typename at a deeply nested field', async() => {
   });
 });
 
-it('handles configured fields varying nesting levels', async() => {
+it('handles configured fields varying nesting levels', async () => {
   const query = gql`
     query Test($foo: FooInput) {
       someField(foo: $foo)
@@ -363,7 +353,7 @@ it('handles configured fields varying nesting levels', async() => {
   });
 });
 
-it('handles multiple configured types with fields', async() => {
+it('handles multiple configured types with fields', async () => {
   const query = gql`
     query Test($foo: FooInput, $baz: BazInput) {
       someField(foo: $foo, baz: $baz)
@@ -417,7 +407,7 @@ it('handles multiple configured types with fields', async() => {
   });
 });
 
-it('handles when __typename is not present in all paths', async() => {
+it('handles when __typename is not present in all paths', async () => {
   const query = gql`
     query Test($foo: JSON, $bar: BarInput) {
       someField(foo: $foo, bar: $bar)
@@ -452,7 +442,7 @@ it('handles when __typename is not present in all paths', async() => {
   });
 });
 
-it('handles when __typename is not present in variables', async() => {
+it('handles when __typename is not present in variables', async () => {
   const query = gql`
     query Test($foo: JSON, $bar: BarInput) {
       someField(foo: $foo, bar: $bar)
@@ -487,7 +477,7 @@ it('handles when __typename is not present in variables', async() => {
   });
 });
 
-it('handles when declared variables are unused', async() => {
+it('handles when declared variables are unused', async () => {
   const query = gql`
     query Test($foo: FooInput, $unused: JSON) {
       someField(foo: $foo, bar: $bar)
@@ -519,7 +509,7 @@ it('handles when declared variables are unused', async() => {
   });
 });
 
-it('ensures operation.getContext and operation.setContext functions are properly forwarded', async() => {
+it('ensures operation.getContext and operation.setContext functions are properly forwarded', async () => {
   const query = gql`
     query Test($foo: FooInput) {
       someField(foo: $foo)

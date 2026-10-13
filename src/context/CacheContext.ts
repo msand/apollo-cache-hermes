@@ -1,14 +1,16 @@
 import { addTypenameToDocument } from '@apollo/client/utilities';
 import isEqual from '@wry/equality';
 import { TypePolicies } from '@apollo/client';
+import type { FragmentRegistryAPI, PossibleTypesMap } from '@apollo/client/cache';
 
 import { ApolloTransaction } from '../apollo/Transaction';
 import { CacheSnapshot } from '../CacheSnapshot';
-import { areChildrenDynamic, expandVariables } from '../ParsedQueryNode';
+import { areChildrenDynamic, expandVariables, SelectionCondition } from '../ParsedQueryNode';
 import { JsonObject } from '../primitive';
 import { EntityId, NodeId, OperationInstance, RawOperation } from '../schema';
 import { DocumentNode, isObject } from '../util';
 import { GraphSnapshot } from '../GraphSnapshot';
+import { FieldStorage } from '../operations/fieldFunctions';
 
 import { ConsoleTracer } from './ConsoleTracer';
 import { QueryInfo } from './QueryInfo';
@@ -26,7 +28,6 @@ declare module 'graphql/language/ast' {
 }
 
 export namespace CacheContext {
-
   export type EntityIdForNode = (node: JsonObject) => EntityId | undefined;
   export type EntityIdForValue = (value: any) => EntityId | undefined;
   export type EntityIdMapper = (node: JsonObject) => string | number | undefined;
@@ -40,8 +41,8 @@ export namespace CacheContext {
   export type ResolverRedirect = (args: JsonObject) => any;
   export type ResolverRedirects = {
     [typeName: string]: {
-      [fieldName: string]: ResolverRedirect,
-    },
+      [fieldName: string]: ResolverRedirect;
+    };
   };
 
   /**
@@ -62,11 +63,21 @@ export namespace CacheContext {
    * Configuration for a Hermes cache.
    */
   export interface Configuration<TSerialized = GraphSnapshot> {
-
     typePolicies?: TypePolicies;
 
     /** Whether __typename should be injected into nodes in queries. */
     addTypename?: boolean;
+
+    /** Fragments that operations may spread without defining them (like InMemoryCache's option). */
+    fragments?: FragmentRegistryAPI;
+
+    /**
+     * The subtypes of abstract (interface/union) types, used to match fragment
+     * type conditions against __typename (like InMemoryCache's option).
+     *
+     * Subtypes that are not valid type names are treated as regular expressions.
+     */
+    possibleTypes?: PossibleTypesMap;
 
     /**
      * Given a node, determines a _globally unique_ identifier for it to be used
@@ -151,14 +162,12 @@ export namespace CacheContext {
      */
     logger?: ConsoleTracer.Logger;
   }
-
 }
 
 /**
  * Configuration and shared state used throughout the cache's operation.
  */
 export class CacheContext<TSerialized = GraphSnapshot> {
-
   /** Retrieve the EntityId for a given node, if any. */
   readonly entityIdForValue: CacheContext.EntityIdForValue;
 
@@ -190,6 +199,9 @@ export class CacheContext<TSerialized = GraphSnapshot> {
   readonly addTypename: boolean;
 
   /** All currently known & processed GraphQL documents. */
+  /** Transformed documents by input; @apollo/client matches documents by identity (e.g. refetchQueries). */
+  private readonly _transformedDocuments = new WeakMap<DocumentNode, DocumentNode>();
+
   private readonly _queryInfoMap = new Map<string, QueryInfo<TSerialized>>();
   /** All currently known & parsed queries, for identity mapping. */
   private readonly _operationMap = new Map<string, OperationInstance<TSerialized>[]>();
@@ -198,11 +210,22 @@ export class CacheContext<TSerialized = GraphSnapshot> {
 
   public readonly typePolicies: TypePolicies | undefined;
 
+  public readonly fragments: FragmentRegistryAPI | undefined;
+
+  /** The (transitive, once matched) supertypes of each type in possibleTypes. */
+  private readonly _supertypeMap = new Map<string, Set<string>>();
+
+  /** possibleTypes subtypes that are regular expressions, by their source. */
+  private readonly _fuzzySubtypes = new Map<string, RegExp>();
+
+  /** The options.storage objects of read and merge functions. */
+  public readonly fieldStorage = new FieldStorage();
+
   constructor(config: CacheContext.Configuration<TSerialized> = {}) {
     // Infer dev mode from NODE_ENV, by convention.
     const nodeEnv = typeof process !== 'undefined' ? process.env.NODE_ENV : 'development';
 
-    this.entityIdForValue = _makeEntityIdMapper((config.entityIdForNode ?? config.dataIdFromObject), config.typePolicies);
+    this.entityIdForValue = _makeEntityIdMapper(config.entityIdForNode ?? config.dataIdFromObject, config.typePolicies);
     this.entityTransformer = config.entityTransformer;
     this.freezeSnapshots = 'freeze' in config ? !!config.freeze : nodeEnv !== 'production';
 
@@ -215,6 +238,100 @@ export class CacheContext<TSerialized = GraphSnapshot> {
 
     this.addTypename = config.addTypename ?? true;
     this.typePolicies = config.typePolicies;
+    this.fragments = config.fragments;
+    if (config.possibleTypes) {
+      this.addPossibleTypes(config.possibleTypes);
+    }
+  }
+
+  /**
+   * Registers subtypes of abstract types (like InMemoryCache's
+   * policies.addPossibleTypes).
+   */
+  addPossibleTypes(possibleTypes: PossibleTypesMap) {
+    for (const supertype of Object.keys(possibleTypes)) {
+      // Make sure all supertypes have an entry, so that fragmentMatches can
+      // return false immediately for unknown supertypes.
+      this._getSupertypeSet(supertype);
+      for (const subtype of possibleTypes[supertype]) {
+        this._getSupertypeSet(subtype).add(supertype);
+        const match = subtype.match(TypeOrFieldNameRegExp);
+        if (!match || match[0] !== subtype) {
+          this._fuzzySubtypes.set(subtype, new RegExp(subtype));
+        }
+      }
+    }
+  }
+
+  /**
+   * Whether a field selected under `conditions` applies to an object with the
+   * given __typename.
+   *
+   * Like Hermes always has (and unlike InMemoryCache), fields of fragments
+   * apply to objects of unknown type.  When writing, pass `hasValue` (whether
+   * the payload has a value for the field) to also consider fuzzy subtypes.
+   */
+  conditionsMatch(conditions: readonly SelectionCondition[] | undefined, typename: unknown, hasValue?: boolean) {
+    if (!conditions || typeof typename !== 'string') return true;
+    return conditions.some(
+      ({ typeConditions }) =>
+        !typeConditions || typeConditions.every(supertype => this.fragmentMatches(supertype, typename, hasValue)),
+    );
+  }
+
+  /**
+   * Whether a fragment with the type condition `supertype` applies to objects
+   * of type `typename` (mirroring InMemoryCache's policies.fragmentMatches).
+   *
+   * Fuzzy (regular expression) subtypes are only considered when
+   * `checkFuzzySubtypes` is set; positive matches are remembered.
+   */
+  fragmentMatches(supertype: string, typename: string, checkFuzzySubtypes?: boolean): boolean {
+    // Common case: the type condition and __typename are the same.
+    if (typename === supertype) return true;
+    if (!this._supertypeMap.has(supertype)) return false;
+
+    const typenameSupertypeSet = this._getSupertypeSet(typename);
+    const workQueue = [typenameSupertypeSet];
+    const maybeEnqueue = (subtype: string) => {
+      const supertypeSet = this._supertypeMap.get(subtype);
+      if (supertypeSet && supertypeSet.size && workQueue.indexOf(supertypeSet) < 0) {
+        workQueue.push(supertypeSet);
+      }
+    };
+
+    let needToCheckFuzzySubtypes = !!checkFuzzySubtypes && this._fuzzySubtypes.size > 0;
+    // Note that workQueue can grow while we're iterating over it.
+    for (let i = 0; i < workQueue.length; ++i) {
+      const supertypeSet = workQueue[i];
+      if (supertypeSet.has(supertype)) {
+        // Record positive results for faster future lookup.
+        typenameSupertypeSet.add(supertype);
+        return true;
+      }
+      supertypeSet.forEach(maybeEnqueue);
+
+      // Check fuzzy subtypes only after exhausting all non-fuzzy subtypes.
+      if (needToCheckFuzzySubtypes && i === workQueue.length - 1) {
+        needToCheckFuzzySubtypes = false;
+        this._fuzzySubtypes.forEach((regExp, fuzzyString) => {
+          const match = typename.match(regExp);
+          if (match && match[0] === typename) {
+            maybeEnqueue(fuzzyString);
+          }
+        });
+      }
+    }
+
+    return false;
+  }
+
+  private _getSupertypeSet(subtype: string) {
+    let supertypeSet = this._supertypeMap.get(subtype);
+    if (!supertypeSet) {
+      this._supertypeMap.set(subtype, (supertypeSet = new Set()));
+    }
+    return supertypeSet;
   }
 
   /**
@@ -224,12 +341,16 @@ export class CacheContext<TSerialized = GraphSnapshot> {
    * any other method in the cache.
    */
   transformDocument(document: DocumentNode): DocumentNode {
-    if (this.addTypename && !document.hasBeenTransformed) {
-      const transformedDocument = addTypenameToDocument(document);
-      transformedDocument.hasBeenTransformed = true;
-      return transformedDocument;
+    if (document.hasBeenTransformed || (!this.addTypename && !this.fragments)) return document;
+
+    let transformedDocument = this._transformedDocuments.get(document);
+    if (!transformedDocument) {
+      transformedDocument = this.fragments ? this.fragments.transform(document) : document;
+      if (this.addTypename) transformedDocument = addTypenameToDocument(transformedDocument);
+      if (transformedDocument !== document) transformedDocument.hasBeenTransformed = true;
+      this._transformedDocuments.set(document, transformedDocument);
     }
-    return document;
+    return transformedDocument;
   }
 
   /**
@@ -261,10 +382,16 @@ export class CacheContext<TSerialized = GraphSnapshot> {
       document: this.transformDocument(raw.document),
     };
 
-    const rootHasReadPolicy = Object.keys(this.typePolicies?.Query?.fields ?? {}).length > 0;
+    const rootHasReadPolicy = Object.values(this.typePolicies ?? {}).some(
+      policy => Object.keys(policy?.fields ?? {}).length > 0,
+    );
 
     const info = this._queryInfo(cacheKey, updateRaw);
     const fullVariables = { ...info.variableDefaults, ...updateRaw.variables } as JsonObject;
+    // Like InMemoryCache, treat variables without a value as undefined (e.g. @export variables before they are resolved).
+    for (const name of info.variables) {
+      if (!(name in fullVariables)) fullVariables[name] = undefined as any;
+    }
     const operation = {
       info,
       rootId: updateRaw.rootId,
@@ -287,7 +414,6 @@ export class CacheContext<TSerialized = GraphSnapshot> {
     }
     return this._queryInfoMap.get(cacheKey)!;
   }
-
 }
 
 /**
@@ -297,35 +423,37 @@ export function _makeEntityIdMapper(
   idForNode: CacheContext.EntityIdMapper | undefined,
   typePolicies: TypePolicies | undefined,
 ): CacheContext.EntityIdForValue {
-  const mapper = idForNode || (
-    !typePolicies ? defaultEntityIdMapper
+  const mapper =
+    idForNode ||
+    (!typePolicies
+      ? defaultEntityIdMapper
       : (node: JsonObject): string | number | undefined => {
-        if (!node) {
-          return undefined;
-        }
-        const { __typename } = node;
-        if (typeof __typename === 'string' && __typename in typePolicies) {
-          const keyFields = typePolicies[__typename].keyFields;
-          if (Array.isArray(keyFields)) {
-            const keys: Record<string, unknown> = {};
-            for (const key of keyFields) {
-              const value = node[key];
-              if (value === undefined) {
-                return undefined;
-              }
-              keys[key] = value;
-            }
-            return `${__typename}:${JSON.stringify(keys)}`;
+          if (!node) {
+            return undefined;
           }
-        }
-        const { id } = node;
-        const idType = typeof id;
-        if (idType !== 'string' && idType !== 'number') {
-          return undefined;
-        }
-        return __typename ? `${__typename}:${id}` : `${id}`;
-      }
-  );
+          const { __typename } = node;
+          if (typeof __typename === 'string' && __typename in typePolicies) {
+            const keyFields = typePolicies[__typename].keyFields;
+            if (Array.isArray(keyFields)) {
+              const keys: Record<string, unknown> = {};
+              for (const key of keyFields) {
+                const value = node[key];
+                if (value === undefined) {
+                  return undefined;
+                }
+                keys[key] = value;
+              }
+              return `${__typename}:${JSON.stringify(keys)}`;
+            }
+          }
+          const { id } = node;
+          const idType = typeof id;
+          if (idType !== 'string' && idType !== 'number') {
+            return undefined;
+          }
+          // Like InMemoryCache, objects without a __typename are not normalized.
+          return __typename ? `${__typename}:${id}` : undefined;
+        });
   return function entityIdForNode(node: JsonObject) {
     if (!isObject(node)) return undefined;
 
@@ -337,17 +465,21 @@ export function _makeEntityIdMapper(
   };
 }
 
-export function defaultEntityIdMapper({ __typename, _id, id = _id }: { __typename?: any, _id?: any, id?: any }) {
+export function defaultEntityIdMapper({ __typename, _id, id = _id }: { __typename?: any; _id?: any; id?: any }) {
   if (id == null) {
     return undefined;
   }
   const idType = typeof id;
   const numberOrString = idType === 'number' || idType === 'string';
-  if (typeof __typename === 'string') {
-    return `${__typename}:${numberOrString ? id : JSON.stringify(id)}`;
+  // Like InMemoryCache, objects without a __typename are not normalized.
+  if (typeof __typename !== 'string') {
+    return undefined;
   }
-  return numberOrString ? `${id}` : undefined;
+  return `${__typename}:${numberOrString ? id : JSON.stringify(id)}`;
 }
+
+// Matches valid GraphQL type names (like InMemoryCache's).
+const TypeOrFieldNameRegExp = /^[_a-z][_0-9a-z]*/i;
 
 export function operationCacheKey(document: DocumentNode, fragmentName?: string) {
   if (fragmentName) {

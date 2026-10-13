@@ -29,9 +29,7 @@ export {
   FragmentMap,
 };
 
-export function getOperationOrDie(
-  document: DocumentNode,
-): OperationDefinitionNode {
+export function getOperationOrDie(document: DocumentNode): OperationDefinitionNode {
   const def = getOperationDefinition(document);
   invariant(def, `GraphQL document is missing an operation`);
   return def as OperationDefinitionNode;
@@ -61,7 +59,9 @@ export function variableDefaultsInOperation(operation: OperationDefinitionNode):
       if (definition.type.kind === 'NonNullType') continue; // Required.
 
       const { defaultValue } = definition;
-      defaults[definition.variable.name.value] = isObject(defaultValue) ? valueFromNode(defaultValue as ValueNode) : null;
+      defaults[definition.variable.name.value] = isObject(defaultValue)
+        ? valueFromNode(defaultValue as ValueNode)
+        : null;
     }
   }
 
@@ -98,7 +98,6 @@ export function selectionSetIsStatic(
     if (selection.kind === 'Field') {
       if (!fieldIsStatic(selection)) return false;
       if (selection.selectionSet && !selectionSetIsStatic(selection.selectionSet, fragmentGetter)) return false;
-
     } else if (selection.kind === 'FragmentSpread') {
       if (!fragmentGetter) {
         throw new Error(`fragmentGetter is required for selection sets with ...fragments`);
@@ -109,10 +108,8 @@ export function selectionSetIsStatic(
       }
 
       if (!selectionSetIsStatic(fragmentSet, fragmentGetter)) return false;
-
     } else if (selection.kind === 'InlineFragment') {
       if (!selectionSetIsStatic(selection.selectionSet, fragmentGetter)) return false;
-
     } else {
       throw new Error(`Unknown selection type ${(selection as any).kind} in isSelectionSetStatic`);
     }

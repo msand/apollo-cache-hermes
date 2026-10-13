@@ -14,19 +14,14 @@
     "esModuleInterop": true,
     "experimentalDecorators": true,
     "inlineSourceMap": true,
-    "lib": [
-      "dom",
-      "es2017",
-      "esnext.asynciterable",
-      "ES2021.WeakRef",
-      "scripthost"
-    ],
+    "lib": ["dom", "es2017", "esnext.asynciterable", "ES2021.WeakRef", "scripthost"],
     "newLine": "LF",
     "noImplicitReturns": false,
     "noImplicitThis": true,
     "pretty": true,
     "jsx": "react",
     "strict": true,
-    "types": ["jest", "node", "./matchers.d.ts"]
-  }
+    "types": ["jest", "node"]
+  },
+  "exclude": ["node_modules", "apollo-client", "dist", ".claude"]
 }

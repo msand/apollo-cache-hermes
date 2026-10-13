@@ -8,7 +8,6 @@ import { StaticNodeId } from '../../../../src/schema';
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`writeFragment with missing __typename`, () => {
-
   let hermes: Hermes;
   beforeAll(() => {
     hermes = new Hermes({
@@ -31,8 +30,7 @@ describe(`writeFragment with missing __typename`, () => {
           id: 123,
           name: 'Gouda',
         },
-      })
+      }),
     ).to.deep.equal({ __ref: '123' });
   });
-
 });

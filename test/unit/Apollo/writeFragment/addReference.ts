@@ -9,7 +9,6 @@ import { strictConfig } from '../../../helpers';
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`writeFragment`, () => {
-
   let hermes: Hermes;
 
   beforeAll(() => {
@@ -80,10 +79,9 @@ describe(`writeFragment`, () => {
         },
         [{ id: QueryRootId, path: ['viewer'] }],
         [{ id: 'shipment0', path: ['shipment'] }],
-      )
+      ),
     );
 
     expect(baseline.getNodeData('123')!['shipment']).to.eq(baseline.getNodeData('shipment0'));
   });
-
 });

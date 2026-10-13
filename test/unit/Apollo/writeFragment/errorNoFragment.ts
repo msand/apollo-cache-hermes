@@ -5,7 +5,6 @@ import { Hermes } from '../../../../src';
 import { strictConfig } from '../../../helpers';
 
 describe(`writeFragment with no fragment`, () => {
-
   let hermes: Hermes;
   beforeAll(() => {
     hermes = new Hermes(strictConfig);
@@ -29,5 +28,4 @@ describe(`writeFragment with no fragment`, () => {
       });
     }).to.throw(/An error occurred! For more details, see the full error text at /i);
   });
-
 });

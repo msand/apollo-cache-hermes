@@ -37,7 +37,7 @@ class RetryableOperation {
     private operation: Operation,
     private forward: NextLink,
     private delayFor: DelayFunction,
-    private retryIf: RetryFunction
+    private retryIf: RetryFunction,
   ) {
     this.try();
   }
@@ -62,15 +62,11 @@ class RetryableOperation {
     });
   }
 
-  private onError = async(error: any) => {
+  private onError = async (error: any) => {
     this.retryCount += 1;
 
     // Should we retry?
-    const shouldRetry = await this.retryIf(
-      this.retryCount,
-      this.operation,
-      error
-    );
+    const shouldRetry = await this.retryIf(this.retryCount, this.operation, error);
     if (shouldRetry) {
       this.scheduleRetry(this.delayFor(this.retryCount, this.operation, error));
       return;
@@ -98,24 +94,13 @@ export class RetryLink extends ApolloLink {
   constructor(options?: RetryLink.Options) {
     super();
     const { attempts, delay } = options || ({} as RetryLink.Options);
-    this.delayFor
-      = typeof delay === 'function' ? delay : buildDelayFunction(delay);
-    this.retryIf
-      = typeof attempts === 'function' ? attempts : buildRetryFunction(attempts);
+    this.delayFor = typeof delay === 'function' ? delay : buildDelayFunction(delay);
+    this.retryIf = typeof attempts === 'function' ? attempts : buildRetryFunction(attempts);
   }
 
-  public request(
-    operation: Operation,
-    nextLink: NextLink
-  ): Observable<FetchResult> {
-    return new Observable((observer) => {
-      const retryable = new RetryableOperation(
-        observer,
-        operation,
-        nextLink,
-        this.delayFor,
-        this.retryIf
-      );
+  public request(operation: Operation, nextLink: NextLink): Observable<FetchResult> {
+    return new Observable(observer => {
+      const retryable = new RetryableOperation(observer, operation, nextLink, this.delayFor, this.retryIf);
       return () => {
         retryable.cancel();
       };

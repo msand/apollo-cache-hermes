@@ -21,7 +21,7 @@ describe(`operations.migrate`, () => {
         },
       },
       `{ foo bar viewer { id first last __typename } }`,
-      cacheContext
+      cacheContext,
     );
     cacheSnapshot = new CacheSnapshot(snapshot, snapshot, new OptimisticUpdateQueue());
   });
@@ -31,5 +31,4 @@ describe(`operations.migrate`, () => {
     const cacheAfter = extract(migrated.baseline, cacheContext);
     jestExpect(cacheAfter).toEqual(extract(cacheSnapshot.baseline, cacheContext));
   });
-
 });

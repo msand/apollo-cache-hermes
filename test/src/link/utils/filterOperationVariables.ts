@@ -1,10 +1,7 @@
 import type { VariableDefinitionNode, DocumentNode } from 'graphql';
 import { visit } from 'graphql';
 
-export function filterOperationVariables(
-  variables: Record<string, any>,
-  query: DocumentNode
-) {
+export function filterOperationVariables(variables: Record<string, any>, query: DocumentNode) {
   const result = { ...variables };
   const unusedNames = new Set(Object.keys(variables));
   visit(query, {
@@ -13,15 +10,12 @@ export function filterOperationVariables(
       // enough to silence server-side errors about the variable being
       // unused, so variable definitions do not count as usage.
       // https://spec.graphql.org/draft/#sec-All-Variables-Used
-      if (
-        parent &&
-        (parent as VariableDefinitionNode).kind !== 'VariableDefinition'
-      ) {
+      if (parent && (parent as VariableDefinitionNode).kind !== 'VariableDefinition') {
         unusedNames.delete(node.name.value);
       }
     },
   });
-  unusedNames.forEach((name) => {
+  unusedNames.forEach(name => {
     delete result![name];
   });
   return result;

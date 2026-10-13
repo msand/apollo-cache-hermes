@@ -1,4 +1,3 @@
-
 import * as React from 'rehackt';
 import type * as ReactTypes from 'react';
 import type { DocumentNode } from 'graphql';
@@ -28,15 +27,7 @@ export function withSubscription<
   TData extends object = {},
   TGraphQLVariables extends object = {},
   TChildProps extends object = DataProps<TData, TGraphQLVariables>,
->(
-  document: DocumentNode,
-  operationOptions: OperationOption<
-    TProps,
-    TData,
-    TGraphQLVariables,
-    TChildProps
-  > = {}
-) {
+>(document: DocumentNode, operationOptions: OperationOption<TProps, TData, TGraphQLVariables, TChildProps> = {}) {
   // this is memoized so if coming from `graphql` there is nearly no extra cost
   const operation = parser(document);
   // extract options
@@ -55,15 +46,9 @@ export function withSubscription<
 
   // allow for advanced referential equality checks
   let lastResultProps: TChildProps | void;
-  return (
-    WrappedComponent: ReactTypes.ComponentType<TProps & TChildProps>
-  ): ReactTypes.ComponentClass<TProps> => {
+  return (WrappedComponent: ReactTypes.ComponentType<TProps & TChildProps>): ReactTypes.ComponentClass<TProps> => {
     const graphQLDisplayName = `${alias}(${getDisplayName(WrappedComponent)})`;
-    class GraphQL extends GraphQLBase<
-      TProps,
-      TChildProps,
-      { resubscribe: boolean }
-    > {
+    class GraphQL extends GraphQLBase<TProps, TChildProps, { resubscribe: boolean }> {
       static displayName = graphQLDisplayName;
       static WrappedComponent = WrappedComponent;
       constructor(props: TProps) {
@@ -76,9 +61,7 @@ export function withSubscription<
       }
 
       componentDidUpdate(prevProps: TProps) {
-        const resubscribe = !!(
-          shouldResubscribe && shouldResubscribe(prevProps, this.props)
-        );
+        const resubscribe = !!(shouldResubscribe && shouldResubscribe(prevProps, this.props));
         if (this.state.resubscribe !== resubscribe) {
           this.updateResubscribe(resubscribe);
         }
@@ -87,8 +70,7 @@ export function withSubscription<
       render() {
         let props = this.props;
         const shouldSkip = mapPropsToSkip(props);
-        const opts
-          = shouldSkip ? Object.create(null) : mapPropsToOptions(props);
+        const opts = shouldSkip ? Object.create(null) : mapPropsToOptions(props);
 
         if (!shouldSkip && !opts.variables && operation.variables.length > 0) {
           opts.variables = calculateVariablesFromProps(operation, props);
@@ -110,12 +92,7 @@ export function withSubscription<
               }
               // if we have skipped, no reason to manage any reshaping
               if (shouldSkip) {
-                return (
-                  <WrappedComponent
-                    {...(props as TProps)}
-                    {...({} as TChildProps)}
-                  />
-                );
+                return <WrappedComponent {...(props as TProps)} {...({} as TChildProps)} />;
               }
 
               // the HOC's historically hoisted the data from the execution result
@@ -125,24 +102,15 @@ export function withSubscription<
               const name = operationOptions.name || 'data';
               let childProps = { [name]: result };
               if (operationOptions.props) {
-                const newResult: OptionProps<TProps, TData, TGraphQLVariables>
-                  = {
-                    [name]: result,
-                    ownProps: props as TProps,
-                  };
-                lastResultProps = operationOptions.props(
-                  newResult,
-                  lastResultProps
-                );
+                const newResult: OptionProps<TProps, TData, TGraphQLVariables> = {
+                  [name]: result,
+                  ownProps: props as TProps,
+                };
+                lastResultProps = operationOptions.props(newResult, lastResultProps);
                 childProps = lastResultProps;
               }
 
-              return (
-                <WrappedComponent
-                  {...(props as TProps)}
-                  {...(childProps as TChildProps)}
-                />
-              );
+              return <WrappedComponent {...(props as TProps)} {...(childProps as TChildProps)} />;
             }}
           </Subscription>
         );

@@ -40,6 +40,6 @@ export function useRenderGuard() {
         console.error = orig;
       }
     },
-    []
+    [],
   );
 }

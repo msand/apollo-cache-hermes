@@ -39,7 +39,7 @@ describe('[queries] polling', () => {
     const link = mockSingleLink(
       { request: { query }, result: { data } },
       { request: { query }, result: { data: data2 } },
-      { request: { query }, result: { data } }
+      { request: { query }, result: { data } },
     );
     const cache = new Hermes({ addTypename: false });
     const client = new ApolloClient({
@@ -66,64 +66,61 @@ describe('[queries] polling', () => {
     render(
       <ApolloProvider client={client}>
         <Container />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     waitFor(() => expect(count).toBe(4)).then(resolve, reject);
   });
 
-  itAsync(
-    'ensures polling respects no-cache fetchPolicy',
-    (resolve, reject) => {
-      const POLL_INTERVAL = 5;
-      const query: DocumentNode = gql`
-        query people {
-          allPeople(first: 1) {
-            people {
-              name
-            }
+  itAsync('ensures polling respects no-cache fetchPolicy', (resolve, reject) => {
+    const POLL_INTERVAL = 5;
+    const query: DocumentNode = gql`
+      query people {
+        allPeople(first: 1) {
+          people {
+            name
           }
         }
-      `;
-      const data = { allPeople: { people: [{ name: 'Luke Skywalker' }] } };
-      const data2 = { allPeople: { people: [{ name: 'Leia Skywalker' }] } };
-      const link = mockSingleLink(
-        { request: { query }, result: { data } },
-        { request: { query }, result: { data: data2 } },
-        { request: { query }, result: { data } }
-      );
-      const cache = new Hermes({ addTypename: false });
-      const client = new ApolloClient({
-        link,
-        cache,
-      });
+      }
+    `;
+    const data = { allPeople: { people: [{ name: 'Luke Skywalker' }] } };
+    const data2 = { allPeople: { people: [{ name: 'Leia Skywalker' }] } };
+    const link = mockSingleLink(
+      { request: { query }, result: { data } },
+      { request: { query }, result: { data: data2 } },
+      { request: { query }, result: { data } },
+    );
+    const cache = new Hermes({ addTypename: false });
+    const client = new ApolloClient({
+      link,
+      cache,
+    });
 
-      let count = 0;
-      const Container = graphql(query, {
-        options: () => ({
-          pollInterval: POLL_INTERVAL,
-          notifyOnNetworkStatusChange: false,
-          fetchPolicy: 'no-cache',
-        }),
-      })(({ data }) => {
-        count++;
-        if (count === 4) {
-          data!.stopPolling();
-          expect(cache.readQuery({ query })).toBeNull();
-          resolve();
-        }
-        return null;
-      });
+    let count = 0;
+    const Container = graphql(query, {
+      options: () => ({
+        pollInterval: POLL_INTERVAL,
+        notifyOnNetworkStatusChange: false,
+        fetchPolicy: 'no-cache',
+      }),
+    })(({ data }) => {
+      count++;
+      if (count === 4) {
+        data!.stopPolling();
+        expect(cache.readQuery({ query })).toBeNull();
+        resolve();
+      }
+      return null;
+    });
 
-      render(
-        <ApolloProvider client={client}>
-          <Container />
-        </ApolloProvider>
-      );
+    render(
+      <ApolloProvider client={client}>
+        <Container />
+      </ApolloProvider>,
+    );
 
-      waitFor(() => expect(count).toBe(4)).then(resolve, reject);
-    }
-  );
+    waitFor(() => expect(count).toBe(4)).then(resolve, reject);
+  });
 
   const allPeopleQuery: DocumentNode = gql`
     query people {
@@ -137,7 +134,7 @@ describe('[queries] polling', () => {
 
   const lukeLink = new ApolloLink(
     operation =>
-      new Observable((observer) => {
+      new Observable(observer => {
         expect(operation.query).toBe(allPeopleQuery);
         observer.next({
           data: {
@@ -147,7 +144,7 @@ describe('[queries] polling', () => {
           },
         });
         observer.complete();
-      })
+      }),
   );
 
   itAsync('exposes stopPolling as part of the props api', (resolve, reject) => {
@@ -174,12 +171,12 @@ describe('[queries] polling', () => {
         render() {
           return null;
         }
-      }
+      },
     );
     render(
       <ApolloProvider client={client}>
         <Container />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     waitFor(() => {
@@ -187,45 +184,42 @@ describe('[queries] polling', () => {
     }).then(resolve, reject);
   });
 
-  itAsync(
-    'exposes startPolling as part of the props api',
-    (resolve, reject) => {
-      let done = false;
-      const client = new ApolloClient({
-        link: lukeLink,
-        cache: new Hermes({ addTypename: false }),
-      });
+  itAsync('exposes startPolling as part of the props api', (resolve, reject) => {
+    let done = false;
+    const client = new ApolloClient({
+      link: lukeLink,
+      cache: new Hermes({ addTypename: false }),
+    });
 
-      const Container = graphql(allPeopleQuery, {
-        options: { pollInterval: 10 },
-      })(
-        class extends React.Component<ChildProps> {
-          componentDidUpdate() {
-            try {
-              const { data } = this.props;
-              expect(data!.startPolling).toBeTruthy();
-              expect(data!.startPolling instanceof Function).toBeTruthy();
-              done = true;
-            } catch (e) {
-              reject(e);
-            }
-          }
-
-          render() {
-            return null;
+    const Container = graphql(allPeopleQuery, {
+      options: { pollInterval: 10 },
+    })(
+      class extends React.Component<ChildProps> {
+        componentDidUpdate() {
+          try {
+            const { data } = this.props;
+            expect(data!.startPolling).toBeTruthy();
+            expect(data!.startPolling instanceof Function).toBeTruthy();
+            done = true;
+          } catch (e) {
+            reject(e);
           }
         }
-      );
 
-      render(
-        <ApolloProvider client={client}>
-          <Container />
-        </ApolloProvider>
-      );
+        render() {
+          return null;
+        }
+      },
+    );
 
-      waitFor(() => {
-        expect(done).toBe(true);
-      }).then(resolve, reject);
-    }
-  );
+    render(
+      <ApolloProvider client={client}>
+        <Container />
+      </ApolloProvider>,
+    );
+
+    waitFor(() => {
+      expect(done).toBe(true);
+    }).then(resolve, reject);
+  });
 });

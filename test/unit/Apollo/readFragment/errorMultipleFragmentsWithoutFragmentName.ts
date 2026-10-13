@@ -8,7 +8,6 @@ import { strictConfig } from '../../../helpers';
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`readFragment with ambiguous fragments`, () => {
-
   let hermes: Hermes;
   beforeAll(() => {
     hermes = new Hermes(strictConfig);
@@ -48,5 +47,4 @@ describe(`readFragment with ambiguous fragments`, () => {
       });
     }).to.throw(/An error occurred! For more details, see the full error text at /i);
   });
-
 });

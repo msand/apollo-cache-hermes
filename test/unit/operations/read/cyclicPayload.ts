@@ -4,7 +4,6 @@ import { QueryResult, read, write } from '../../../../src/operations';
 import { query, strictConfig } from '../../../helpers';
 
 describe(`operations.read`, () => {
-
   const context = new CacheContext(strictConfig);
   const empty = new GraphSnapshot();
 
@@ -60,5 +59,4 @@ describe(`operations.read`, () => {
       jestExpect(readResult.result).toEqual({ foo, baz: null });
     });
   });
-
 });

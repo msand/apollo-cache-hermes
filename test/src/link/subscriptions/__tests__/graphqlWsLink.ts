@@ -1,4 +1,3 @@
-
 import { Client } from 'graphql-ws';
 import { ExecutionResult, GraphQLError } from 'graphql';
 import gql from 'graphql-tag';
@@ -36,7 +35,7 @@ function mockClient(subscribe: Client['subscribe']): Client {
   return {
     subscribe,
     // GraphQLWsLink doesn't use these methods
-    iterate: () => (async function *iterator() {}()),
+    iterate: () => (async function* iterator() {})(),
     on: () => () => {},
     dispose: () => {},
     terminate: () => {},
@@ -60,7 +59,7 @@ describe('GraphQLWSlink', () => {
   // it('should pass the correct initialization parameters to the Subscription Client', () => {
   // });
 
-  it('should call subscribe on the client for a query', async() => {
+  it('should call subscribe on the client for a query', async () => {
     const result = { data: { data: 'result' } } as ExecutionResult<any, any>;
     const subscribe: Client['subscribe'] = (_, sink) => {
       sink.next(result);
@@ -74,7 +73,7 @@ describe('GraphQLWSlink', () => {
     await expect(observableToArray(obs)).resolves.toEqual([result]);
   });
 
-  it('should call subscribe on the client for a mutation', async() => {
+  it('should call subscribe on the client for a mutation', async () => {
     const result = { data: { data: 'result' } } as ExecutionResult<any, any>;
     const subscribe: Client['subscribe'] = (_, sink) => {
       sink.next(result);
@@ -88,11 +87,8 @@ describe('GraphQLWSlink', () => {
     await expect(observableToArray(obs)).resolves.toEqual([result]);
   });
 
-  it('should call next with multiple results for subscription', async() => {
-    const results = [
-      { data: { data: 'result1' } },
-      { data: { data: 'result2' } },
-    ] as ExecutionResult<any, any>[];
+  it('should call next with multiple results for subscription', async () => {
+    const results = [{ data: { data: 'result1' } }, { data: { data: 'result2' } }] as ExecutionResult<any, any>[];
     const subscribe: Client['subscribe'] = (_, sink) => {
       const copy = [...results];
       for (const r of copy) {
@@ -109,7 +105,7 @@ describe('GraphQLWSlink', () => {
   });
 
   describe('should reject', () => {
-    it('with Error on subscription error via Error', async() => {
+    it('with Error on subscription error via Error', async () => {
       const subscribe: Client['subscribe'] = (_, sink) => {
         sink.error(new Error('an error occurred'));
         return () => {};
@@ -118,12 +114,10 @@ describe('GraphQLWSlink', () => {
       const link = new GraphQLWsLink(client);
 
       const obs = execute(link, { query: subscription });
-      await expect(observableToArray(obs)).rejects.toEqual(
-        new Error('an error occurred')
-      );
+      await expect(observableToArray(obs)).rejects.toEqual(new Error('an error occurred'));
     });
 
-    it('with Error on subscription error via CloseEvent', async() => {
+    it('with Error on subscription error via CloseEvent', async () => {
       const subscribe: Client['subscribe'] = (_, sink) => {
         // A WebSocket close event receives a CloseEvent
         // See: https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/close_event
@@ -131,7 +125,7 @@ describe('GraphQLWSlink', () => {
           new CloseEvent('an error occurred', {
             code: 1006,
             reason: 'abnormally closed',
-          })
+          }),
         );
         return () => {};
       };
@@ -140,11 +134,11 @@ describe('GraphQLWSlink', () => {
 
       const obs = execute(link, { query: subscription });
       await expect(observableToArray(obs)).rejects.toEqual(
-        new Error('Socket closed with event 1006 abnormally closed')
+        new Error('Socket closed with event 1006 abnormally closed'),
       );
     });
 
-    it('with ApolloError on subscription error via Event (network disconnected)', async() => {
+    it('with ApolloError on subscription error via Event (network disconnected)', async () => {
       const subscribe: Client['subscribe'] = (_, sink) => {
         // A WebSocket error event receives a generic Event
         // See: https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/error_event
@@ -155,12 +149,10 @@ describe('GraphQLWSlink', () => {
       const link = new GraphQLWsLink(client);
 
       const obs = execute(link, { query: subscription });
-      await expect(observableToArray(obs)).rejects.toEqual(
-        new Error('Socket closed')
-      );
+      await expect(observableToArray(obs)).rejects.toEqual(new Error('Socket closed'));
     });
 
-    it('with ApolloError on subscription error via GraphQLError[]', async() => {
+    it('with ApolloError on subscription error via GraphQLError[]', async () => {
       const subscribe: Client['subscribe'] = (_, sink) => {
         sink.error([new GraphQLError('Foo bar.')]);
         return () => {};
@@ -172,7 +164,7 @@ describe('GraphQLWSlink', () => {
       await expect(observableToArray(obs)).rejects.toEqual(
         new ApolloError({
           graphQLErrors: [new GraphQLError('Foo bar.')],
-        })
+        }),
       );
     });
   });

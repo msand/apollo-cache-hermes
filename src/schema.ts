@@ -73,8 +73,8 @@ export interface OperationInstance<TSerialized> {
  */
 export type CacheDelta =
   | { delete: string }
-  | { query: RawOperation, payload?: JsonObject }
-  | { id: string, payload: JsonObject, deleted: Set<string> }
+  | { query: RawOperation; payload?: JsonObject }
+  | { id: string; payload: JsonObject; deleted: Set<string> };
 
 /**
  * Lists of types which are JSON serializable

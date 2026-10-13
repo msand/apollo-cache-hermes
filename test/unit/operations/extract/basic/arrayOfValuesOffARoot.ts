@@ -6,7 +6,6 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.extract`, () => {
   describe(`new array of values hanging off of a root`, () => {
-
     let extractResult: Serializable.GraphSnapshot;
     beforeAll(() => {
       const cacheContext = createStrictCacheContext();
@@ -24,7 +23,7 @@ describe(`operations.extract`, () => {
           ],
         },
         `{ viewer { postal name } }`,
-        cacheContext
+        cacheContext,
       );
 
       extractResult = extract(snapshot, cacheContext);
@@ -49,6 +48,5 @@ describe(`operations.extract`, () => {
         },
       });
     });
-
   });
 });

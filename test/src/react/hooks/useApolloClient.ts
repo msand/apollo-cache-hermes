@@ -1,4 +1,3 @@
-
 import * as React from 'rehackt';
 import { ApolloClient, getApolloContext } from '@apollo/client';
 
@@ -19,16 +18,14 @@ import { invariant } from '../../utilities/globals/index';
  * @since 3.0.0
  * @returns The `ApolloClient` instance being used by the application.
  */
-export function useApolloClient(
-  override?: ApolloClient<object>
-): ApolloClient<object> {
+export function useApolloClient(override?: ApolloClient<object>): ApolloClient<object> {
   const context = React.useContext(getApolloContext());
   const client = override || context.client;
   invariant(
     !!client,
-    'Could not find "client" in the context or passed in as an option. '
-      + 'Wrap the root component in an <ApolloProvider>, or pass an ApolloClient '
-      + 'instance in via options.'
+    'Could not find "client" in the context or passed in as an option. ' +
+      'Wrap the root component in an <ApolloProvider>, or pass an ApolloClient ' +
+      'instance in via options.',
   );
 
   return client;

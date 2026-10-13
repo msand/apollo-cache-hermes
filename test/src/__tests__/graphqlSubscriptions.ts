@@ -10,12 +10,10 @@ import { spyOnConsole } from '../testing/internal';
 import { Hermes } from '../../../src';
 
 describe('GraphQL Subscriptions', () => {
-  const results = [
-    'Dahivat Pandya',
-    'Vyacheslav Kim',
-    'Changping Chen',
-    'Amanda Liu',
-  ].map(name => ({ result: { data: { user: { name } } }, delay: 10 }));
+  const results = ['Dahivat Pandya', 'Vyacheslav Kim', 'Changping Chen', 'Amanda Liu'].map(name => ({
+    result: { data: { user: { name } } },
+    delay: 10,
+  }));
 
   let options: any;
   let defaultOptions: any;
@@ -47,34 +45,31 @@ describe('GraphQL Subscriptions', () => {
     };
   });
 
-  itAsync(
-    'should start a subscription on network interface and unsubscribe',
-    (resolve, reject) => {
-      const link = mockObservableLink();
-      // This test calls directly through Apollo Client
-      const client = new ApolloClient({
-        link,
-        cache: new Hermes({ addTypename: false }),
-      });
+  itAsync('should start a subscription on network interface and unsubscribe', (resolve, reject) => {
+    const link = mockObservableLink();
+    // This test calls directly through Apollo Client
+    const client = new ApolloClient({
+      link,
+      cache: new Hermes({ addTypename: false }),
+    });
 
-      let count = 0;
-      const sub = client.subscribe(defaultOptions).subscribe({
-        next(result) {
-          count++;
-          expect(result).toEqual(results[0].result);
+    let count = 0;
+    const sub = client.subscribe(defaultOptions).subscribe({
+      next(result) {
+        count++;
+        expect(result).toEqual(results[0].result);
 
-          // Test unsubscribing
-          if (count > 1) {
-            throw new Error('next fired after unsubscribing');
-          }
-          sub.unsubscribe();
-          resolve();
-        },
-      });
+        // Test unsubscribing
+        if (count > 1) {
+          throw new Error('next fired after unsubscribing');
+        }
+        sub.unsubscribe();
+        resolve();
+      },
+    });
 
-      link.simulateResult(results[0]);
-    }
-  );
+    link.simulateResult(results[0]);
+  });
 
   itAsync('should subscribe with default values', (resolve, reject) => {
     const link = mockObservableLink();
@@ -139,57 +134,51 @@ describe('GraphQL Subscriptions', () => {
     link.simulateResult(results[0]);
   });
 
-  itAsync(
-    'should receive multiple results for a subscription',
-    (resolve, reject) => {
-      const link = mockObservableLink();
-      let numResults = 0;
-      const queryManager = new QueryManager({
-        link,
-        cache: new Hermes({ addTypename: false }),
-      });
+  itAsync('should receive multiple results for a subscription', (resolve, reject) => {
+    const link = mockObservableLink();
+    let numResults = 0;
+    const queryManager = new QueryManager({
+      link,
+      cache: new Hermes({ addTypename: false }),
+    });
 
-      // tslint:disable-next-line
-      queryManager.startGraphQLSubscription(options).subscribe({
-        next(result) {
-          expect(result).toEqual(results[numResults].result);
-          numResults++;
-          if (numResults === 4) {
-            resolve();
-          }
-        },
-      }) as any;
-
-      for (let i = 0; i < 4; i++) {
-        link.simulateResult(results[i]);
-      }
-    }
-  );
-
-  itAsync(
-    'should not cache subscription data if a `no-cache` fetch policy is used',
-    (resolve, reject) => {
-      const link = mockObservableLink();
-      const cache = new Hermes({ addTypename: false });
-      const client = new ApolloClient({
-        link,
-        cache,
-      });
-
-      expect(cache.extract()).toEqual({});
-
-      options.fetchPolicy = 'no-cache';
-      const sub = client.subscribe(options).subscribe({
-        next() {
-          expect(cache.extract()).toEqual({});
-          sub.unsubscribe();
+    // tslint:disable-next-line
+    queryManager.startGraphQLSubscription(options).subscribe({
+      next(result) {
+        expect(result).toEqual(results[numResults].result);
+        numResults++;
+        if (numResults === 4) {
           resolve();
-        },
-      });
+        }
+      },
+    }) as any;
 
-      link.simulateResult(results[0]);
+    for (let i = 0; i < 4; i++) {
+      link.simulateResult(results[i]);
     }
-  );
+  });
+
+  itAsync('should not cache subscription data if a `no-cache` fetch policy is used', (resolve, reject) => {
+    const link = mockObservableLink();
+    const cache = new Hermes({ addTypename: false });
+    const client = new ApolloClient({
+      link,
+      cache,
+    });
+
+    expect(cache.extract()).toEqual({});
+
+    options.fetchPolicy = 'no-cache';
+    const sub = client.subscribe(options).subscribe({
+      next() {
+        expect(cache.extract()).toEqual({});
+        sub.unsubscribe();
+        resolve();
+      },
+    });
+
+    link.simulateResult(results[0]);
+  });
 
   it('should throw an error if the result has errors on it', () => {
     const link = mockObservableLink();
@@ -234,7 +223,7 @@ describe('GraphQL Subscriptions', () => {
     return Promise.resolve(promise);
   });
 
-  it('returns errors in next result when `errorPolicy` is "all"', async() => {
+  it('returns errors in next result when `errorPolicy` is "all"', async () => {
     const query = gql`
       subscription UserInfo($name: String) {
         user(name: $name) {
@@ -281,7 +270,7 @@ describe('GraphQL Subscriptions', () => {
     ]);
   });
 
-  it('throws protocol errors when `errorPolicy` is "all"', async() => {
+  it('throws protocol errors when `errorPolicy` is "all"', async () => {
     const query = gql`
       subscription UserInfo($name: String) {
         user(name: $name) {
@@ -346,11 +335,11 @@ describe('GraphQL Subscriptions', () => {
             ],
           },
         ],
-      })
+      }),
     );
   });
 
-  it('strips errors in next result when `errorPolicy` is "ignore"', async() => {
+  it('strips errors in next result when `errorPolicy` is "ignore"', async () => {
     const query = gql`
       subscription UserInfo($name: String) {
         user(name: $name) {
@@ -392,7 +381,7 @@ describe('GraphQL Subscriptions', () => {
     await expect(promise).resolves.toEqual([{ data: null }]);
   });
 
-  it('throws protocol errors when `errorPolicy` is "ignore"', async() => {
+  it('throws protocol errors when `errorPolicy` is "ignore"', async () => {
     const query = gql`
       subscription UserInfo($name: String) {
         user(name: $name) {
@@ -457,7 +446,7 @@ describe('GraphQL Subscriptions', () => {
             ],
           },
         ],
-      })
+      }),
     );
   });
 
@@ -468,7 +457,7 @@ describe('GraphQL Subscriptions', () => {
       cache: new Hermes({ addTypename: false }),
     });
 
-    return new Promise<void>((resolve) => {
+    return new Promise<void>(resolve => {
       client.subscribe(defaultOptions).subscribe({
         complete() {
           resolve();
@@ -478,29 +467,24 @@ describe('GraphQL Subscriptions', () => {
     });
   });
 
-  itAsync(
-    'should pass a context object through the link execution chain',
-    (resolve, reject) => {
-      const link = mockObservableLink();
-      const client = new ApolloClient({
-        cache: new Hermes(),
-        link,
-      });
+  itAsync('should pass a context object through the link execution chain', (resolve, reject) => {
+    const link = mockObservableLink();
+    const client = new ApolloClient({
+      cache: new Hermes(),
+      link,
+    });
 
-      client.subscribe(options).subscribe({
-        next() {
-          expect(link.operation?.getContext().someVar).toEqual(
-            options.context.someVar
-          );
-          resolve();
-        },
-      });
+    client.subscribe(options).subscribe({
+      next() {
+        expect(link.operation?.getContext().someVar).toEqual(options.context.someVar);
+        resolve();
+      },
+    });
 
-      link.simulateResult(results[0]);
-    }
-  );
+    link.simulateResult(results[0]);
+  });
 
-  it('should throw an error if the result has protocolErrors on it', async() => {
+  it('should throw an error if the result has protocolErrors on it', async () => {
     const link = mockObservableLink();
     const queryManager = new QueryManager({
       link,

@@ -7,7 +7,6 @@ import { query } from '../../helpers';
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`transactions`, () => {
-
   const simpleQuery = query(`{
     foo {
       bar
@@ -26,7 +25,7 @@ describe(`transactions`, () => {
   });
 
   it(`commits on success`, () => {
-    cache.transaction(true, (transaction) => {
+    cache.transaction(true, transaction => {
       transaction.write(simpleQuery, { foo: { bar: 1, baz: 'hi' } });
     });
 
@@ -37,10 +36,10 @@ describe(`transactions`, () => {
   });
 
   it(`can modify`, () => {
-    cache.transaction(true, (transaction) => {
+    cache.transaction(true, transaction => {
       transaction.write(simpleQuery, { foo: { bar: 1, baz: 'hi' } });
     });
-    cache.transaction(true, (transaction) => {
+    cache.transaction(true, transaction => {
       transaction.modify({
         fields: {
           foo: (current: any) => {
@@ -72,11 +71,11 @@ describe(`transactions`, () => {
         }
       }
     }`);
-    cache.transaction(true, (transaction) => {
+    cache.transaction(true, transaction => {
       transaction.write(simpleQuery, { bar });
     });
     expect(cache.getEntity(QueryRootId)).to.deep.eq({ bar });
-    cache.transaction(true, (transaction) => {
+    cache.transaction(true, transaction => {
       transaction.modify({
         fields: {
           bar: (current: any) => {
@@ -88,9 +87,9 @@ describe(`transactions`, () => {
     });
 
     expect(cache.getEntity(QueryRootId)).to.deep.eq({
-      bar: { ...bar, 'b': 2 },
+      bar: { ...bar, b: 2 },
     });
-    cache.transaction(true, (transaction) => {
+    cache.transaction(true, transaction => {
       transaction.modify({
         fields: {
           bar: (current: any) => {
@@ -103,20 +102,20 @@ describe(`transactions`, () => {
     });
 
     expect(cache.getEntity(QueryRootId)).to.deep.eq({
-      bar: { 'b': 2, foo: { ...foo, f: 3 } },
+      bar: { b: 2, foo: { ...foo, f: 3 } },
     });
     expect(cache.getSnapshot().baseline).to.deep.eq(cache.getSnapshot().optimistic);
   });
 
   it(`doesn't modify the cache until completion`, () => {
-    cache.transaction(true, (transaction) => {
+    cache.transaction(true, transaction => {
       transaction.write(simpleQuery, { foo: { bar: 1, baz: 'hi' } });
       expect(cache.getEntity(QueryRootId)).to.eq(undefined);
     });
   });
 
   it(`rolls back on error`, () => {
-    cache.transaction(true, (transaction) => {
+    cache.transaction(true, transaction => {
       transaction.write(simpleQuery, { foo: { bar: 1, baz: 'hi' } });
       throw new Error(`bewm`);
     });
@@ -126,7 +125,7 @@ describe(`transactions`, () => {
 
   it(`logs on error`, () => {
     const exception = new Error(`bewm`);
-    cache.transaction(true, (transaction) => {
+    cache.transaction(true, transaction => {
       transaction.write(simpleQuery, { foo: { bar: 1, baz: 'hi' } });
       throw exception;
     });
@@ -136,13 +135,9 @@ describe(`transactions`, () => {
   });
 
   it(`read optimistic transaction`, () => {
-    cache.transaction(
-      true,
-      /** changeIdOrCallback */'123',
-      (transaction) => {
-        transaction.write(simpleQuery, { foo: { bar: 1, baz: 'hello' } });
-      }
-    );
+    cache.transaction(true, /** changeIdOrCallback */ '123', transaction => {
+      transaction.write(simpleQuery, { foo: { bar: 1, baz: 'hello' } });
+    });
 
     expect(cache.read(simpleQuery, /** optimistic */ true).result).to.deep.eq({
       foo: { bar: 1, baz: 'hello' },
@@ -150,13 +145,9 @@ describe(`transactions`, () => {
   });
 
   it(`read multiple optimistic transactions`, () => {
-    cache.transaction(
-      true,
-      /** changeIdOrCallback */'123',
-      (transaction) => {
-        transaction.write(simpleQuery, { foo: { bar: 1, baz: 'hello' } });
-      }
-    );
+    cache.transaction(true, /** changeIdOrCallback */ '123', transaction => {
+      transaction.write(simpleQuery, { foo: { bar: 1, baz: 'hello' } });
+    });
 
     const otherQuery = query(`{
       fizz {
@@ -164,13 +155,9 @@ describe(`transactions`, () => {
       }
     }`);
 
-    cache.transaction(
-      true,
-      /** changeIdOrCallback */'456',
-      (transaction) => {
-        transaction.write(otherQuery, { fizz: { buzz: 'boom' } });
-      }
-    );
+    cache.transaction(true, /** changeIdOrCallback */ '456', transaction => {
+      transaction.write(otherQuery, { fizz: { buzz: 'boom' } });
+    });
 
     expect(cache.read(simpleQuery, /** optimistic */ true).result).to.deep.include({
       foo: { bar: 1, baz: 'hello' },
@@ -182,7 +169,7 @@ describe(`transactions`, () => {
   });
 
   it(`rolls back optimistic transactions`, () => {
-    cache.transaction(true, /** changeIdOrCallback */ '123', (transaction) => {
+    cache.transaction(true, /** changeIdOrCallback */ '123', transaction => {
       transaction.write(simpleQuery, { foo: { bar: 1, baz: 'hello' } });
     });
 
@@ -190,12 +177,10 @@ describe(`transactions`, () => {
       foo: { bar: 1, baz: 'hello' },
     });
 
-    cache.transaction(true, (transaction) => {
+    cache.transaction(true, transaction => {
       transaction.rollback('123');
     });
 
-    expect(cache.read(simpleQuery, /** optimistic */ true).result).to.eq(
-      undefined
-    );
+    expect(cache.read(simpleQuery, /** optimistic */ true).result).to.eq(undefined);
   });
 });

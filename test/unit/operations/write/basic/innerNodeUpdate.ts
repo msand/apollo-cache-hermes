@@ -8,7 +8,6 @@ import { createSnapshot, updateSnapshot } from '../../../../helpers';
 // workflow in isolation, given the contextual state that must be passed around.
 describe(`operations.write`, () => {
   describe(`inner nodes update`, () => {
-
     let snapshot: GraphSnapshot, editedNodeIds: Set<NodeId>;
     beforeAll(() => {
       const baseline = createSnapshot(
@@ -25,10 +24,11 @@ describe(`operations.write`, () => {
             id
             name
           }
-        }`
+        }`,
       ).snapshot;
 
-      const result = updateSnapshot(baseline,
+      const result = updateSnapshot(
+        baseline,
         {
           id: 1,
           name: 'moo',
@@ -36,7 +36,7 @@ describe(`operations.write`, () => {
         },
         `{ id name extra }`,
         /* gqlVariables */ undefined,
-        /* rootId */ '1'
+        /* rootId */ '1',
       );
       snapshot = result.snapshot;
       editedNodeIds = result.editedNodeIds;
@@ -49,7 +49,5 @@ describe(`operations.write`, () => {
     it(`marks only the inner node as edited`, () => {
       jestExpect(Array.from(editedNodeIds)).toEqual(jestExpect.arrayContaining(['1']));
     });
-
   });
-
 });

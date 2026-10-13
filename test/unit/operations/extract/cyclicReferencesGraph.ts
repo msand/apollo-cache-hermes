@@ -6,7 +6,6 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.extract`, () => {
   describe(`cyclic GraphSnapshot`, () => {
-
     let extractResult: Serializable.GraphSnapshot;
     beforeAll(() => {
       const cacheContext = createStrictCacheContext();
@@ -35,7 +34,7 @@ describe(`operations.extract`, () => {
             }
           }
         }`,
-        cacheContext
+        cacheContext,
       );
 
       extractResult = extract(snapshot, cacheContext);
@@ -56,9 +55,7 @@ describe(`operations.extract`, () => {
             { id: QueryRootId, path: ['foo'] },
             { id: '2', path: ['fizz'] },
           ],
-          outbound: [
-            { id: '2', path: ['bar'] },
-          ],
+          outbound: [{ id: '2', path: ['bar'] }],
           data: {
             id: 1,
             name: 'Foo',
@@ -84,6 +81,5 @@ describe(`operations.extract`, () => {
         },
       });
     });
-
   });
 });

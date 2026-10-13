@@ -15,7 +15,7 @@ export function prune<TSerialized>(context: CacheContext<TSerialized>, snapshot:
     context,
     new GraphSnapshot(),
     raw,
-    queryResult.result ? queryResult.result : {} as JsonObject,
+    queryResult.result ? queryResult.result : ({} as JsonObject),
     true,
   );
   return {

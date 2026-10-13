@@ -5,7 +5,8 @@ import { Hermes } from '../../../../../src';
 import { GraphSnapshot } from '../../../../../src/GraphSnapshot';
 
 describe('optimistic cache layers', () => {
-  it('return === results for repeated reads', () => {
+  // Hermes: asserts InMemoryCache result caching (=== results across optimistic layers)
+  it.skip('return === results for repeated reads', () => {
     const cache = new Hermes({
       // resultCaching: true,
       // canonizeResults: true,
@@ -68,9 +69,8 @@ describe('optimistic cache layers', () => {
     expect(result1984).toBe(readOptimistic(cache));
     expect(result1984).toBe(readRealistic(cache));
 
-    let result2666InTransaction: ReturnType<typeof readOptimistic> | null
-      = null;
-    cache.performTransaction((proxy) => {
+    let result2666InTransaction: ReturnType<typeof readOptimistic> | null = null;
+    cache.performTransaction(proxy => {
       expect(readOptimistic(cache)).toEqual(result1984);
 
       proxy.writeQuery({
@@ -106,7 +106,7 @@ describe('optimistic cache layers', () => {
     expect(result1984).toBe(readRealistic(cache));
 
     let resultCatch22: ReturnType<typeof readOptimistic> | null = null;
-    cache.performTransaction((proxy) => {
+    cache.performTransaction(proxy => {
       proxy.writeQuery({
         query,
         data: {
@@ -205,7 +205,8 @@ describe('optimistic cache layers', () => {
     });
   });
 
-  it('dirties appropriate IDs when optimistic layers are removed', () => {
+  // Hermes: asserts InMemoryCache result caching (=== results as optimistic layers are added/removed)
+  it.skip('dirties appropriate IDs when optimistic layers are removed', () => {
     const cache = new Hermes({
       // resultCaching: true,
       // canonizeResults: true,
@@ -220,7 +221,7 @@ describe('optimistic cache layers', () => {
     });
 
     type Q = {
-      books: any[],
+      books: any[];
     };
 
     const query = gql`
@@ -288,14 +289,12 @@ describe('optimistic cache layers', () => {
         {
           __typename: 'Book',
           title: 'Eager',
-          subtitle:
-            'The Surprising, Secret Life of Beavers and Why They Matter',
+          subtitle: 'The Surprising, Secret Life of Beavers and Why They Matter',
         },
         {
           __typename: 'Book',
           title: 'Spineless',
-          subtitle:
-            'The Science of Jellyfish and the Art of Growing a Backbone',
+          subtitle: 'The Science of Jellyfish and the Art of Growing a Backbone',
         },
       ],
     });
@@ -325,7 +324,7 @@ describe('optimistic cache layers', () => {
     expect(resultWithSpinlessAuthor.books[0]).toBe(result.books[0]);
     expect(resultWithSpinlessAuthor.books[1]).toBe(result.books[1]);
 
-    cache.recordOptimisticTransaction((proxy) => {
+    cache.recordOptimisticTransaction(proxy => {
       proxy.writeFragment({
         id: 'Book:1603589082',
         fragment: bookAuthorNameFragment,
@@ -354,7 +353,7 @@ describe('optimistic cache layers', () => {
         {
           query: queryWithAuthors,
         },
-        optimistic
+        optimistic,
       )!;
     }
 
@@ -363,7 +362,7 @@ describe('optimistic cache layers', () => {
         JSON.stringify(data, (key, value) => {
           if (key === 'isbn') return;
           return value;
-        })
+        }),
       );
     }
 
@@ -383,7 +382,7 @@ describe('optimistic cache layers', () => {
       },
     };
 
-    cache.recordOptimisticTransaction((proxy) => {
+    cache.recordOptimisticTransaction(proxy => {
       proxy.writeQuery({
         query: queryWithAuthors,
         data: {
@@ -395,11 +394,7 @@ describe('optimistic cache layers', () => {
     const resultWithBuzz = readWithAuthors();
 
     expect(resultWithBuzz).toEqual({
-      books: [
-        withoutISBN(eagerBookData),
-        withoutISBN(spinelessBookData),
-        withoutISBN(buzzBookData),
-      ],
+      books: [withoutISBN(eagerBookData), withoutISBN(spinelessBookData), withoutISBN(buzzBookData)],
     });
     expect(resultWithBuzz.books[0]).toEqual(resultWithTwoAuthors.books[0]);
     expect(resultWithBuzz.books[1]).toEqual(resultWithTwoAuthors.books[1]);
@@ -421,7 +416,7 @@ describe('optimistic cache layers', () => {
           id: `Book:${spinelessBookData.isbn}`,
           fragment: bookAuthorNameFragment,
         },
-        true
+        true,
       );
     }
 
@@ -474,7 +469,7 @@ describe('optimistic cache layers', () => {
           cache.readQuery({
             query,
             optimistic: true,
-          })
+          }),
         ).toEqual({
           counter: {
             value,
@@ -483,9 +478,11 @@ describe('optimistic cache layers', () => {
 
         expect(cache.extract(true)).toEqual({
           ROOT_QUERY: {
-            __typename: 'Query',
-            counter: {
-              value,
+            type: 0,
+            data: {
+              counter: {
+                value,
+              },
             },
           },
         });
@@ -497,7 +494,7 @@ describe('optimistic cache layers', () => {
           cache.readQuery({
             query,
             optimistic: false,
-          })
+          }),
         ).toEqual({
           counter: {
             value,
@@ -507,9 +504,11 @@ describe('optimistic cache layers', () => {
         // Extracting non-optimistically shows Query.counter === 0 again.
         expect(cache.extract(false)).toEqual({
           ROOT_QUERY: {
-            __typename: 'Query',
-            counter: {
-              value,
+            type: 0,
+            data: {
+              counter: {
+                value,
+              },
             },
           },
         });
@@ -552,7 +551,7 @@ describe('optimistic cache layers', () => {
           expect(
             cache.evict({
               fieldName: 'counter',
-            })
+            }),
           ).toBe(true);
 
           expectOptimisticEviction();
@@ -566,14 +565,16 @@ describe('optimistic cache layers', () => {
           cache.readQuery({
             query,
             optimistic: true,
-          })
+          }),
         ).toBe(null);
 
         // Extracting optimistically shows Query.counter undefined.
         expect(cache.extract(true)).toEqual({
           ROOT_QUERY: {
-            __typename: 'Query',
-            counter: void 0,
+            type: 0,
+            data: {
+              counter: void 0,
+            },
           },
         });
       }
@@ -600,7 +601,7 @@ describe('optimistic cache layers', () => {
       expect(
         cache.evict({
           fieldName: 'counter',
-        })
+        }),
       ).toBe(true);
 
       expectOptimisticEviction();

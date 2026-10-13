@@ -4,9 +4,12 @@ import { removeDirectivesFromDocument } from '@apollo/client/utilities';
 import { UnsatisfiedCacheError } from '../errors';
 import { JsonObject } from '../primitive';
 import { Queryable } from '../Queryable';
-import { DocumentNode } from '../util';
+import { NodeId } from '../schema';
+import { DocumentNode, isObject } from '../util';
 
 import { buildRawOperationFromQuery, buildRawOperationFromFragment } from './util';
+
+const EMPTY_RESULT = Object.freeze({});
 
 /**
  * Apollo-specific interface to the cache.
@@ -16,26 +19,40 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
   protected abstract _queryable: Queryable;
 
   diff<T>(query: Cache.DiffOptions): Cache.DiffResult<T> {
-    const rawOperation = buildRawOperationFromQuery(query.query, query.variables);
-    const { result, complete, missing, fromOptimisticTransaction } = this._queryable.read(rawOperation, query.optimistic);
+    const rawOperation = buildRawOperationFromQuery(query.query, query.variables, query.id);
+    const { result, complete, missing, fromOptimisticTransaction } = this._queryable.read(
+      rawOperation,
+      query.optimistic,
+    );
     if (query.returnPartialData === false && !complete) {
-      // TODO: Include more detail with this error.
-      throw new UnsatisfiedCacheError(`diffQuery not satisfied by the cache.`);
+      // Like InMemoryCache, throw the MissingFieldError describing what is missing.
+      throw missing?.[0] ?? new UnsatisfiedCacheError(`diffQuery not satisfied by the cache.`);
     }
 
-    return { result: result as unknown as T, complete, missing, fromOptimisticTransaction };
+    // Like InMemoryCache, an empty read is an empty (incomplete) object rather than undefined; and
+    // like its canonized results, the same (frozen) one each time.
+    const empty = result === undefined || (isObject(result) && Object.keys(result).length === 0);
+    return { result: (empty ? EMPTY_RESULT : result) as unknown as T, complete, missing, fromOptimisticTransaction };
   }
 
   read<TData = any, TVariables = any>(query: Cache.ReadOptions<TVariables, TData>): TData | null {
-    const rawOperation = buildRawOperationFromQuery(query.query, (query.variables as unknown) as JsonObject, query.rootId);
+    const rawOperation = buildRawOperationFromQuery(
+      query.query,
+      query.variables as unknown as JsonObject,
+      query.rootId,
+    );
     const { result, complete } = this._queryable.read(rawOperation, query.optimistic);
     if (complete || query.returnPartialData) {
-      return (result ?? null as unknown) as TData | null;
+      return (result ?? (null as unknown)) as TData | null;
     }
     return null;
   }
 
-  readQuery<QueryType, TVariables = any>(options: Cache.ReadQueryOptions<QueryType, TVariables>, optimistic?: boolean): QueryType | null {
+  readQuery<QueryType, TVariables = any>(
+    options: Cache.ReadQueryOptions<QueryType, TVariables>,
+    // Like ApolloCache, options.optimistic is the default.
+    optimistic = !!options.optimistic,
+  ): QueryType | null {
     return this.read({
       query: options.query,
       variables: options.variables,
@@ -45,8 +62,10 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
     });
   }
 
-  readFragment<FragmentType, TVariables = any>(options: Cache.ReadFragmentOptions<FragmentType, TVariables>, optimistic?: boolean):
-    FragmentType | null {
+  readFragment<FragmentType, TVariables = any>(
+    options: Cache.ReadFragmentOptions<FragmentType, TVariables>,
+    optimistic = !!options.optimistic,
+  ): FragmentType | null {
     // TODO: Support nested fragments.
     const rawOperation = buildRawOperationFromFragment(
       options.fragment,
@@ -56,7 +75,7 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
     );
     const { complete, result } = this._queryable.read(rawOperation, optimistic);
     if (complete || options.returnPartialData) {
-      return result ?? null as any;
+      return result ?? (null as any);
     }
     return null;
   }
@@ -71,17 +90,21 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
     return ref ?? makeReference(rawOperation.rootId);
   }
 
-  writeQuery<TData = any, TVariables = any>(options: Cache.WriteQueryOptions<TData, TVariables>): Reference | undefined {
+  writeQuery<TData = any, TVariables = any>(
+    options: Cache.WriteQueryOptions<TData, TVariables>,
+  ): Reference | undefined {
     const rawOperation = buildRawOperationFromQuery(options.query, options.variables as any, options.id);
     const ref = this._queryable.write(rawOperation, options.data as any, options.broadcast);
     return ref ?? makeReference(rawOperation.rootId);
   }
 
-  writeFragment<TData = any, TVariables = any>(options: Cache.WriteFragmentOptions<TData, TVariables>): Reference | undefined {
+  writeFragment<TData = any, TVariables = any>(
+    options: Cache.WriteFragmentOptions<TData, TVariables>,
+  ): Reference | undefined {
     // TODO: Support nested fragments.
     const rawOperation = buildRawOperationFromFragment(
       options.fragment,
-      options.id!,
+      options.id ?? this.identify(options.data as any)!,
       options.variables as any,
       options.fragmentName,
     );
@@ -95,13 +118,14 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
 
   transformForLink(document: DocumentNode): DocumentNode {
     // @static directives are for the cache only.
-    return removeDirectivesFromDocument(
-      [{ name: 'static' }],
-      document
-    )!;
+    return removeDirectivesFromDocument([{ name: 'static' }], document)!;
   }
 
   evict(options: Cache.EvictOptions): boolean {
     return this._queryable.evict(options);
+  }
+
+  batchEvict(ids: Iterable<NodeId>, broadcast?: boolean): boolean {
+    return this._queryable.batchEvict(ids, broadcast);
   }
 }

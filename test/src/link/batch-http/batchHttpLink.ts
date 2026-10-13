@@ -1,12 +1,7 @@
 import { ApolloLink } from '@apollo/client';
 
 import type { Operation, FetchResult } from '../core/index';
-import {
-  Observable,
-  hasDirectives,
-  maybe,
-  removeClientSetsFromDocument,
-} from '../../utilities/index';
+import { Observable, hasDirectives, maybe, removeClientSetsFromDocument } from '../../utilities/index';
 import { fromError } from '../utils/index';
 import type { HttpOptions } from '../http/index';
 import {
@@ -22,10 +17,7 @@ import { BatchLink } from '../batch/index';
 import { filterOperationVariables } from '../utils/filterOperationVariables';
 
 export namespace BatchHttpLink {
-  export type Options = Pick<
-    BatchLink.Options,
-    'batchMax' | 'batchDebounce' | 'batchInterval' | 'batchKey'
-  > &
+  export type Options = Pick<BatchLink.Options, 'batchMax' | 'batchDebounce' | 'batchInterval' | 'batchKey'> &
     Omit<HttpOptions, 'useGETForQueries'>;
 }
 
@@ -59,9 +51,7 @@ export class BatchHttpLink extends ApolloLink {
       includeUnusedVariables = false,
       ...requestOptions
     } = params;
-    let {
-      batchKey,
-    } = params;
+    let { batchKey } = params;
 
     if (__DEV__) {
       // Make sure at least one of preferredFetch, window.fetch, or backupFetch
@@ -86,8 +76,8 @@ export class BatchHttpLink extends ApolloLink {
       const context = operations[0].getContext();
 
       const clientAwarenessHeaders: {
-        'apollographql-client-name'?: string,
-        'apollographql-client-version'?: string,
+        'apollographql-client-name'?: string;
+        'apollographql-client-version'?: string;
       } = {};
       if (context.clientAwareness) {
         const { name, version } = context.clientAwareness;
@@ -119,8 +109,8 @@ export class BatchHttpLink extends ApolloLink {
       if (queries.some(query => !query)) {
         return fromError<FetchResult[]>(
           new Error(
-            'BatchHttpLink: Trying to send a client-only query to the server. To send to the server, ensure a non-client field is added to the query or enable the `transformOptions.removeClientFields` option.'
-          )
+            'BatchHttpLink: Trying to send a client-only query to the server. To send to the server, ensure a non-client field is added to the query or enable the `transformOptions.removeClientFields` option.',
+          ),
         );
       }
 
@@ -131,14 +121,11 @@ export class BatchHttpLink extends ApolloLink {
           print,
           fallbackHttpConfig,
           linkConfig,
-          contextConfig
+          contextConfig,
         );
 
         if (result.body.variables && !includeUnusedVariables) {
-          result.body.variables = filterOperationVariables(
-            result.body.variables,
-            operation.query
-          );
+          result.body.variables = filterOperationVariables(result.body.variables, operation.query);
         }
 
         return result;
@@ -149,9 +136,7 @@ export class BatchHttpLink extends ApolloLink {
 
       // There's no spec for using GET with batches.
       if (options.method === 'GET') {
-        return fromError<FetchResult[]>(
-          new Error('apollo-link-batch-http does not support GET requests')
-        );
+        return fromError<FetchResult[]>(new Error('apollo-link-batch-http does not support GET requests'));
       }
 
       try {
@@ -166,33 +151,30 @@ export class BatchHttpLink extends ApolloLink {
         options.signal = controller.signal;
       }
 
-      return new Observable<FetchResult[]>((observer) => {
+      return new Observable<FetchResult[]>(observer => {
         // Prefer BatchHttpLink.Options.fetch (preferredFetch) if provided, and
         // otherwise fall back to the *current* global window.fetch function
         // (see issue #7832), or (if all else fails) the backupFetch function we
         // saved when this module was first evaluated. This last option protects
         // against the removal of window.fetch, which is unlikely but not
         // impossible.
-        const currentFetch
-          = preferredFetch || maybe(() => fetch) || backupFetch;
+        const currentFetch = preferredFetch || maybe(() => fetch) || backupFetch;
 
         currentFetch!(chosenURI, options)
-          .then((response) => {
+          .then(response => {
             // Make the raw response available in the context.
-            operations.forEach(operation =>
-              operation.setContext({ response })
-            );
+            operations.forEach(operation => operation.setContext({ response }));
             return response;
           })
           .then(parseAndCheckHttpResponse(operations))
-          .then((result) => {
+          .then(result => {
             controller = undefined;
             // we have data and can send it to back up the link chain
             observer.next(result);
             observer.complete();
             return result;
           })
-          .catch((err) => {
+          .catch(err => {
             controller = undefined;
             // if it is a network error, BUT there is graphql result info
             // fire the next observer before calling error
@@ -241,8 +223,8 @@ export class BatchHttpLink extends ApolloLink {
       });
     };
 
-    batchKey
-      = batchKey ||
+    batchKey =
+      batchKey ||
       ((operation: Operation) => {
         const context = operation.getContext();
 

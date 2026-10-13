@@ -12,20 +12,14 @@ interface NodeStreamIterator<T> {
   [Symbol.asyncIterator]?(): AsyncIterator<T>;
 }
 
-export default function nodeStreamIterator<T>(
-  stream: NodeReadableStream
-): AsyncIterableIterator<T> {
+export default function nodeStreamIterator<T>(stream: NodeReadableStream): AsyncIterableIterator<T> {
   let cleanup: (() => void) | null = null;
   let error: Error | null = null;
   let done = false;
   const data: unknown[] = [];
 
   const waiting: [
-    (
-      value:
-        | IteratorResult<T, boolean | undefined>
-        | PromiseLike<IteratorResult<T, boolean | undefined>>
-    ) => void,
+    (value: IteratorResult<T, boolean | undefined> | PromiseLike<IteratorResult<T, boolean | undefined>>) => void,
     (reason?: any) => void,
   ][] = [];
 
@@ -42,7 +36,7 @@ export default function nodeStreamIterator<T>(
   function onError(err: Error) {
     error = err;
     const all = waiting.slice();
-    all.forEach((pair) => {
+    all.forEach(pair => {
       pair[1](err);
     });
     !cleanup || cleanup();
@@ -50,13 +44,13 @@ export default function nodeStreamIterator<T>(
   function onEnd() {
     done = true;
     const all = waiting.slice();
-    all.forEach((pair) => {
+    all.forEach(pair => {
       pair[0]({ value: undefined, done: true });
     });
     !cleanup || cleanup();
   }
 
-  cleanup = function() {
+  cleanup = function () {
     cleanup = null;
     stream.removeListener('data', onData);
     stream.removeListener('error', onError);
@@ -86,7 +80,7 @@ export default function nodeStreamIterator<T>(
   };
 
   if (canUseAsyncIteratorSymbol) {
-    iterator[Symbol.asyncIterator] = function(): AsyncIterator<T> {
+    iterator[Symbol.asyncIterator] = function (): AsyncIterator<T> {
       return this;
     };
   }

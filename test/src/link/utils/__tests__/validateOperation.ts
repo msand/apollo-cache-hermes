@@ -4,7 +4,7 @@ import { validateOperation } from '../validateOperation';
 
 describe('validateOperation', () => {
   it('should throw when invalid field in operation', () => {
-    expect(() => validateOperation(({ qwerty: '' } as any))).toThrow();
+    expect(() => validateOperation({ qwerty: '' } as any)).toThrow();
   });
 
   it('should not throw when valid fields in operation', () => {
@@ -19,7 +19,7 @@ describe('validateOperation', () => {
         `,
         context: {},
         variables: {},
-      })
+      }),
     ).not.toThrow();
   });
 });

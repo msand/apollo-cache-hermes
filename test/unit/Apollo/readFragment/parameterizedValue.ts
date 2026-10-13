@@ -9,15 +9,10 @@ import { strictConfig } from '../../../helpers';
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`readFragment with parameterized values`, () => {
-
   let hermes: Hermes;
   beforeAll(() => {
     hermes = new Hermes(strictConfig);
-    const parameterizedId = nodeIdForParameterizedValue(
-      '123',
-      ['shipment'],
-      { city: 'Seattle' }
-    );
+    const parameterizedId = nodeIdForParameterizedValue('123', ['shipment'], { city: 'Seattle' });
 
     hermes.restore({
       [QueryRootId]: {
@@ -51,9 +46,10 @@ describe(`readFragment with parameterized values`, () => {
   });
 
   it(`returns parameterized data`, () => {
-    expect(hermes.readFragment({
-      id: '123',
-      fragment: gql(`
+    expect(
+      hermes.readFragment({
+        id: '123',
+        fragment: gql(`
         fragment viewer on Viewer {
           id
           name
@@ -66,10 +62,11 @@ describe(`readFragment with parameterized values`, () => {
           }
         }
       `),
-      variables: {
-        city: 'Seattle',
-      },
-    })).to.be.deep.eq({
+        variables: {
+          city: 'Seattle',
+        },
+      }),
+    ).to.be.deep.eq({
       id: 123,
       name: 'Gouda',
       __typename: 'Viewer',
@@ -81,5 +78,4 @@ describe(`readFragment with parameterized values`, () => {
       },
     });
   });
-
 });

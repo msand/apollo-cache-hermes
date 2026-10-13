@@ -8,7 +8,6 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.restore`, () => {
   describe(`cyclic GraphSnapshot`, () => {
-
     let restoreGraphSnapshot: GraphSnapshot, originalGraphSnapshot: GraphSnapshot;
     beforeAll(() => {
       const cacheContext = createStrictCacheContext();
@@ -37,39 +36,40 @@ describe(`operations.restore`, () => {
             }
           }
         }`,
-        cacheContext
+        cacheContext,
       );
 
-      restoreGraphSnapshot = restore({
-        [QueryRootId]: {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          outbound: [{ id: '1', path: ['foo'] }],
-          data: {},
+      restoreGraphSnapshot = restore(
+        {
+          [QueryRootId]: {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            outbound: [{ id: '1', path: ['foo'] }],
+            data: {},
+          },
+          '1': {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            inbound: [
+              { id: QueryRootId, path: ['foo'] },
+              { id: '2', path: ['fizz'] },
+            ],
+            outbound: [{ id: '2', path: ['bar'] }],
+            data: { id: 1, name: 'Foo' },
+          },
+          '2': {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            inbound: [
+              { id: '1', path: ['bar'] },
+              { id: '2', path: ['buzz'] },
+            ],
+            outbound: [
+              { id: '1', path: ['fizz'] },
+              { id: '2', path: ['buzz'] },
+            ],
+            data: { id: 2, name: 'Bar' },
+          },
         },
-        '1': {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          inbound: [
-            { id: QueryRootId, path: ['foo'] },
-            { id: '2', path: ['fizz'] },
-          ],
-          outbound: [
-            { id: '2', path: ['bar'] },
-          ],
-          data: { id: 1, name: 'Foo' },
-        },
-        '2': {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          inbound: [
-            { id: '1', path: ['bar'] },
-            { id: '2', path: ['buzz'] },
-          ],
-          outbound: [
-            { id: '1', path: ['fizz'] },
-            { id: '2', path: ['buzz'] },
-          ],
-          data: { id: 2, name: 'Bar' },
-        },
-      }, cacheContext).cacheSnapshot.baseline;
+        cacheContext,
+      ).cacheSnapshot.baseline;
     });
 
     it(`restores GraphSnapshot from JSON serializable object`, () => {
@@ -126,6 +126,5 @@ describe(`operations.restore`, () => {
       jestExpect(barData.fizz).toBe(fooData);
       jestExpect(barData.buzz).toBe(barData);
     });
-
   });
 });

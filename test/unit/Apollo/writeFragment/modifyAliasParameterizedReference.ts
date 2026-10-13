@@ -11,12 +11,7 @@ import { getInbound, getOutbound } from '../../../../src/util';
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`writeFragment with alias paramterized references`, () => {
-
-  const parameterizedId = nodeIdForParameterizedValue(
-    '123',
-    ['shipment'],
-    { city: 'Seattle' }
-  );
+  const parameterizedId = nodeIdForParameterizedValue('123', ['shipment'], { city: 'Seattle' });
 
   let hermes: Hermes, baseline: GraphSnapshot;
   beforeAll(() => {
@@ -45,7 +40,7 @@ describe(`writeFragment with alias paramterized references`, () => {
         outbound: [{ id: 'shipment0', path: [] }],
         data: null,
       },
-      'shipment0': {
+      shipment0: {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
         inbound: [{ id: [parameterizedId], path: [] }],
         data: {
@@ -107,5 +102,4 @@ describe(`writeFragment with alias paramterized references`, () => {
     });
     expect(baseline.getNodeData(parameterizedId)).to.eq(baseline.getNodeData('shipment0'));
   });
-
 });

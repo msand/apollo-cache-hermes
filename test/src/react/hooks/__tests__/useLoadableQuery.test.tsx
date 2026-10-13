@@ -1,13 +1,6 @@
 import * as React from 'react';
 import { Suspense, useState } from 'react';
-import {
-  act,
-  render,
-  screen,
-  renderHook,
-  waitFor,
-  RenderOptions,
-} from '@testing-library/react';
+import { act, render, screen, renderHook, waitFor, RenderOptions } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ErrorBoundary as ReactErrorBoundary } from 'react-error-boundary';
 import { expectTypeOf } from 'expect-type';
@@ -33,11 +26,7 @@ import {
   MockSubscriptionLink,
   wait,
 } from '../../../testing';
-import {
-  concatPagination,
-  offsetLimitPagination,
-  DeepPartial,
-} from '../../../utilities';
+import { concatPagination, offsetLimitPagination, DeepPartial } from '../../../utilities';
 import { useLoadableQuery } from '../useLoadableQuery';
 import type { UseReadQueryResult } from '../useReadQuery';
 import { useReadQuery } from '../useReadQuery';
@@ -85,8 +74,8 @@ function useSimpleQueryCase() {
 
 interface VariablesCaseData {
   character: {
-    id: string,
-    name: string,
+    id: string;
+    name: string;
   };
 }
 
@@ -95,32 +84,29 @@ interface VariablesCaseVariables {
 }
 
 function useVariablesQueryCase() {
-  const query: TypedDocumentNode<VariablesCaseData, VariablesCaseVariables>
-    = gql`
-      query CharacterQuery($id: ID!) {
-        character(id: $id) {
-          id
-          name
-        }
+  const query: TypedDocumentNode<VariablesCaseData, VariablesCaseVariables> = gql`
+    query CharacterQuery($id: ID!) {
+      character(id: $id) {
+        id
+        name
       }
-    `;
+    }
+  `;
   const CHARACTERS = ['Spider-Man', 'Black Widow', 'Iron Man', 'Hulk'];
 
-  const mocks: MockedResponse<VariablesCaseData>[] = [...CHARACTERS].map(
-    (name, index) => ({
-      request: { query, variables: { id: String(index + 1) } },
-      result: { data: { character: { id: String(index + 1), name } } },
-      delay: 20,
-    })
-  );
+  const mocks: MockedResponse<VariablesCaseData>[] = [...CHARACTERS].map((name, index) => ({
+    request: { query, variables: { id: String(index + 1) } },
+    result: { data: { character: { id: String(index + 1), name } } },
+    delay: 20,
+  }));
 
   return { mocks, query };
 }
 
 interface PaginatedQueryData {
   letters: {
-    letter: string,
-    position: number,
+    letter: string;
+    position: number;
   }[];
 }
 
@@ -130,25 +116,22 @@ interface PaginatedQueryVariables {
 }
 
 function usePaginatedQueryCase() {
-  const query: TypedDocumentNode<PaginatedQueryData, PaginatedQueryVariables>
-    = gql`
-      query letters($limit: Int, $offset: Int) {
-        letters(limit: $limit) {
-          letter
-          position
-        }
+  const query: TypedDocumentNode<PaginatedQueryData, PaginatedQueryVariables> = gql`
+    query letters($limit: Int, $offset: Int) {
+      letters(limit: $limit) {
+        letter
+        position
       }
-    `;
+    }
+  `;
 
-  const data = 'ABCDEFG'
-    .split('')
-    .map((letter, index) => ({ letter, position: index + 1 }));
+  const data = 'ABCDEFG'.split('').map((letter, index) => ({ letter, position: index + 1 }));
 
-  const link = new ApolloLink((operation) => {
+  const link = new ApolloLink(operation => {
     const { offset = 0, limit = 2 } = operation.variables;
     const letters = data.slice(offset, offset + limit);
 
-    return new Observable((observer) => {
+    return new Observable(observer => {
       setTimeout(() => {
         observer.next({ data: { letters } });
         observer.complete();
@@ -173,12 +156,10 @@ function createDefaultProfiler<TData>() {
 
 function createDefaultProfiledComponents<
   Snapshot extends {
-    result: UseReadQueryResult<any> | null,
-    error?: Error | null,
+    result: UseReadQueryResult<any> | null;
+    error?: Error | null;
   },
-  TData = Snapshot['result'] extends UseReadQueryResult<infer TData> | null ?
-    TData
-  : unknown,
+  TData = Snapshot['result'] extends UseReadQueryResult<infer TData> | null ? TData : unknown,
 >(profiler: Profiler<Snapshot>) {
   function SuspenseFallback() {
     useTrackRenders();
@@ -194,7 +175,7 @@ function createDefaultProfiledComponents<
     return null;
   }
 
-  function ErrorFallback({ error }: { error: Error }) {
+  function ErrorFallback({ error }: { error: unknown }) {
     useTrackRenders();
     profiler.mergeSnapshot({ error } as Partial<Snapshot>);
 
@@ -202,11 +183,7 @@ function createDefaultProfiledComponents<
   }
 
   function ErrorBoundary({ children }: { children: React.ReactNode }) {
-    return (
-      <ReactErrorBoundary FallbackComponent={ErrorFallback}>
-        {children}
-      </ReactErrorBoundary>
-    );
+    return <ReactErrorBoundary FallbackComponent={ErrorFallback}>{children}</ReactErrorBoundary>;
   }
 
   return {
@@ -219,10 +196,7 @@ function createDefaultProfiledComponents<
 
 function renderWithMocks(
   ui: React.ReactElement,
-  {
-    wrapper: Wrapper = React.Fragment,
-    ...props
-  }: MockedProviderProps & { wrapper?: RenderOptions['wrapper'] }
+  { wrapper: Wrapper = React.Fragment, ...props }: MockedProviderProps & { wrapper?: RenderOptions['wrapper'] },
 ) {
   const user = userEvent.setup();
 
@@ -239,7 +213,7 @@ function renderWithMocks(
 
 function renderWithClient(
   ui: React.ReactElement,
-  options: { client: ApolloClient<any>, wrapper?: RenderOptions['wrapper'] }
+  options: { client: ApolloClient<any>; wrapper?: RenderOptions['wrapper'] },
 ) {
   const { client, wrapper: Wrapper = React.Fragment } = options;
   const user = userEvent.setup();
@@ -255,13 +229,12 @@ function renderWithClient(
   return { ...utils, user };
 }
 
-it('loads a query and suspends when the load query function is called', async() => {
+it('loads a query and suspends when the load query function is called', async () => {
   const { query, mocks } = useSimpleQueryCase();
 
   const Profiler = createDefaultProfiler<SimpleQueryData>();
 
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -270,9 +243,7 @@ it('loads a query and suspends when the load query function is called', async() 
     return (
       <>
         <button onClick={() => loadQuery()}>Load query</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -306,13 +277,12 @@ it('loads a query and suspends when the load query function is called', async() 
   }
 });
 
-it('loads a query with variables and suspends by passing variables to the loadQuery function', async() => {
+it('loads a query with variables and suspends by passing variables to the loadQuery function', async () => {
   const { query, mocks } = useVariablesQueryCase();
 
   const Profiler = createDefaultProfiler<VariablesCaseData>();
 
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -321,9 +291,7 @@ it('loads a query with variables and suspends by passing variables to the loadQu
     return (
       <>
         <button onClick={() => loadQuery({ id: '1' })}>Load query</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -358,7 +326,7 @@ it('loads a query with variables and suspends by passing variables to the loadQu
   await expect(Profiler).not.toRerender();
 });
 
-it('tears down the query on unmount', async() => {
+it('tears down the query on unmount', async () => {
   const { query, mocks } = useSimpleQueryCase();
 
   const client = new ApolloClient({
@@ -367,8 +335,7 @@ it('tears down the query on unmount', async() => {
   });
 
   const Profiler = createDefaultProfiler<SimpleQueryData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -377,9 +344,7 @@ it('tears down the query on unmount', async() => {
     return (
       <>
         <button onClick={() => loadQuery()}>Load query</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -413,7 +378,7 @@ it('tears down the query on unmount', async() => {
   expect(client).not.toHaveSuspenseCacheEntryUsing(query);
 });
 
-it('auto disposes of the queryRef if not used within timeout', async() => {
+it('auto disposes of the queryRef if not used within timeout', async () => {
   jest.useFakeTimers();
   const { query } = setupSimpleCase();
   const link = new MockSubscriptionLink();
@@ -429,7 +394,7 @@ it('auto disposes of the queryRef if not used within timeout', async() => {
   expect(client.getObservableQueries().size).toBe(1);
   expect(client).toHaveSuspenseCacheEntryUsing(query);
 
-  await act(async() => {
+  await act(async () => {
     link.simulateResult({ result: { data: { greeting: 'Hello' } } }, true);
     // Ensure simulateResult will deliver the result since its wrapped with
     // setTimeout
@@ -443,7 +408,7 @@ it('auto disposes of the queryRef if not used within timeout', async() => {
   expect(client).not.toHaveSuspenseCacheEntryUsing(query);
 });
 
-it('auto disposes of the queryRef if not used within configured timeout', async() => {
+it('auto disposes of the queryRef if not used within configured timeout', async () => {
   jest.useFakeTimers();
   const { query } = setupSimpleCase();
   const link = new MockSubscriptionLink();
@@ -469,7 +434,7 @@ it('auto disposes of the queryRef if not used within configured timeout', async(
   expect(client.getObservableQueries().size).toBe(1);
   expect(client).toHaveSuspenseCacheEntryUsing(query);
 
-  await act(async() => {
+  await act(async () => {
     link.simulateResult({ result: { data: { greeting: 'Hello' } } }, true);
     // Ensure simulateResult will deliver the result since its wrapped with
     // setTimeout
@@ -483,7 +448,7 @@ it('auto disposes of the queryRef if not used within configured timeout', async(
   expect(client).not.toHaveSuspenseCacheEntryUsing(query);
 });
 
-it('will resubscribe after disposed when mounting useReadQuery', async() => {
+it('will resubscribe after disposed when mounting useReadQuery', async () => {
   const { query, mocks } = setupSimpleCase();
   const client = new ApolloClient({
     link: new MockLink(mocks),
@@ -499,8 +464,7 @@ it('will resubscribe after disposed when mounting useReadQuery', async() => {
   });
 
   const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -511,9 +475,7 @@ it('will resubscribe after disposed when mounting useReadQuery', async() => {
       <>
         <button onClick={() => loadQuery()}>Load query</button>
         <button onClick={() => setShow(show => !show)}>Toggle</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {show && queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{show && queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -571,7 +533,7 @@ it('will resubscribe after disposed when mounting useReadQuery', async() => {
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('auto resubscribes when mounting useReadQuery after naturally disposed by useReadQuery', async() => {
+it('auto resubscribes when mounting useReadQuery after naturally disposed by useReadQuery', async () => {
   const { query, mocks } = setupSimpleCase();
   const client = new ApolloClient({
     link: new MockLink(mocks),
@@ -579,8 +541,7 @@ it('auto resubscribes when mounting useReadQuery after naturally disposed by use
   });
 
   const Profiler = createDefaultProfiler<SimpleCaseData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -591,9 +552,7 @@ it('auto resubscribes when mounting useReadQuery after naturally disposed by use
       <>
         <button onClick={() => loadQuery()}>Load query</button>
         <button onClick={() => setShow(show => !show)}>Toggle</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {show && queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{show && queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -669,13 +628,12 @@ it('auto resubscribes when mounting useReadQuery after naturally disposed by use
   await expect(Profiler).not.toRerender({ timeout: 50 });
 });
 
-it('changes variables on a query and resuspends when passing new variables to the loadQuery function', async() => {
+it('changes variables on a query and resuspends when passing new variables to the loadQuery function', async () => {
   const { query, mocks } = useVariablesQueryCase();
 
   const Profiler = createDefaultProfiler<VariablesCaseData>();
 
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   const App = () => {
     useTrackRenders();
@@ -683,15 +641,9 @@ it('changes variables on a query and resuspends when passing new variables to th
 
     return (
       <>
-        <button onClick={() => loadQuery({ id: '1' })}>
-          Load 1st character
-        </button>
-        <button onClick={() => loadQuery({ id: '2' })}>
-          Load 2nd character
-        </button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <button onClick={() => loadQuery({ id: '1' })}>Load 1st character</button>
+        <button onClick={() => loadQuery({ id: '2' })}>Load 2nd character</button>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   };
@@ -745,7 +697,7 @@ it('changes variables on a query and resuspends when passing new variables to th
   await expect(Profiler).not.toRerender();
 });
 
-it('resets the `queryRef` to null and disposes of it when calling the `reset` function', async() => {
+it('resets the `queryRef` to null and disposes of it when calling the `reset` function', async () => {
   const { query, mocks } = useSimpleQueryCase();
 
   const client = new ApolloClient({
@@ -754,8 +706,7 @@ it('resets the `queryRef` to null and disposes of it when calling the `reset` fu
   });
 
   const Profiler = createDefaultProfiler<SimpleQueryData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -769,9 +720,7 @@ it('resets the `queryRef` to null and disposes of it when calling the `reset` fu
       <>
         <button onClick={() => loadQuery()}>Load query</button>
         <button onClick={() => reset()}>Reset query</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -810,7 +759,7 @@ it('resets the `queryRef` to null and disposes of it when calling the `reset` fu
   expect(client.getObservableQueries().size).toBe(0);
 });
 
-it('allows the client to be overridden', async() => {
+it('allows the client to be overridden', async () => {
   const { query } = useSimpleQueryCase();
 
   const globalClient = new ApolloClient({
@@ -837,8 +786,7 @@ it('allows the client to be overridden', async() => {
 
   const Profiler = createDefaultProfiler<SimpleQueryData>();
 
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -849,9 +797,7 @@ it('allows the client to be overridden', async() => {
     return (
       <>
         <button onClick={() => loadQuery()}>Load query</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -876,7 +822,7 @@ it('allows the client to be overridden', async() => {
   });
 });
 
-it('passes context to the link', async() => {
+it('passes context to the link', async () => {
   interface QueryData {
     context: Record<string, any>;
   }
@@ -889,8 +835,8 @@ it('passes context to the link', async() => {
 
   const client = new ApolloClient({
     cache: new Hermes(),
-    link: new ApolloLink((operation) => {
-      return new Observable((observer) => {
+    link: new ApolloLink(operation => {
+      return new Observable(observer => {
         const { valueA, valueB } = operation.getContext();
         setTimeout(() => {
           observer.next({ data: { context: { valueA, valueB } } });
@@ -902,8 +848,7 @@ it('passes context to the link', async() => {
 
   const Profiler = createDefaultProfiler<QueryData>();
 
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -914,9 +859,7 @@ it('passes context to the link', async() => {
     return (
       <>
         <button onClick={() => loadQuery()}>Load query</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -938,7 +881,8 @@ it('passes context to the link', async() => {
   });
 });
 
-it('enables canonical results when canonizeResults is "true"', async() => {
+// Hermes: canonizeResults (canonical result identity) is InMemoryCache-only.
+it.skip('enables canonical results when canonizeResults is "true"', async () => {
   interface Result {
     __typename: string;
     value: number;
@@ -985,8 +929,7 @@ it('enables canonical results when canonizeResults is "true"', async() => {
 
   const Profiler = createDefaultProfiler<QueryData>();
 
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -997,9 +940,7 @@ it('enables canonical results when canonizeResults is "true"', async() => {
     return (
       <>
         <button onClick={() => loadQuery()}>Load query</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -1025,7 +966,7 @@ it('enables canonical results when canonizeResults is "true"', async() => {
   expect(values).toEqual([0, 1, 2, 3, 5]);
 });
 
-it('can disable canonical results when the cache\'s canonizeResults setting is true', async() => {
+it("can disable canonical results when the cache's canonizeResults setting is true", async () => {
   interface Result {
     __typename: string;
     value: number;
@@ -1067,8 +1008,7 @@ it('can disable canonical results when the cache\'s canonizeResults setting is t
   });
 
   const Profiler = createDefaultProfiler<QueryData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -1079,9 +1019,7 @@ it('can disable canonical results when the cache\'s canonizeResults setting is t
     return (
       <>
         <button onClick={() => loadQuery()}>Load query</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -1106,7 +1044,7 @@ it('can disable canonical results when the cache\'s canonizeResults setting is t
   expect(values).toEqual([0, 1, 1, 2, 3, 5]);
 });
 
-it('returns initial cache data followed by network data when the fetch policy is `cache-and-network`', async() => {
+it('returns initial cache data followed by network data when the fetch policy is `cache-and-network`', async () => {
   type QueryData = { hello: string };
   const query: TypedDocumentNode<QueryData, never> = gql`
     query {
@@ -1128,8 +1066,7 @@ it('returns initial cache data followed by network data when the fetch policy is
 
   const Profiler = createDefaultProfiler<QueryData>();
 
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -1140,9 +1077,7 @@ it('returns initial cache data followed by network data when the fetch policy is
     return (
       <>
         <button onClick={() => loadQuery()}>Load query</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -1177,7 +1112,7 @@ it('returns initial cache data followed by network data when the fetch policy is
   }
 });
 
-it('all data is present in the cache, no network request is made', async() => {
+it('all data is present in the cache, no network request is made', async () => {
   const query = gql`
     query {
       hello
@@ -1200,8 +1135,7 @@ it('all data is present in the cache, no network request is made', async() => {
   cache.writeQuery({ query, data: { hello: 'from cache' } });
 
   const Profiler = createDefaultProfiler();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -1210,9 +1144,7 @@ it('all data is present in the cache, no network request is made', async() => {
     return (
       <>
         <button onClick={() => loadQuery()}>Load query</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -1236,7 +1168,7 @@ it('all data is present in the cache, no network request is made', async() => {
   await expect(Profiler).not.toRerender();
 });
 
-it('partial data is present in the cache so it is ignored and network request is made', async() => {
+it('partial data is present in the cache so it is ignored and network request is made', async () => {
   const query = gql`
     {
       hello
@@ -1265,8 +1197,7 @@ it('partial data is present in the cache so it is ignored and network request is
   }
 
   const Profiler = createDefaultProfiler();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -1275,9 +1206,7 @@ it('partial data is present in the cache so it is ignored and network request is
     return (
       <>
         <button onClick={() => loadQuery()}>Load query</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -1306,7 +1235,7 @@ it('partial data is present in the cache so it is ignored and network request is
   }
 });
 
-it('existing data in the cache is ignored when `fetchPolicy` is \'network-only\'', async() => {
+it("existing data in the cache is ignored when `fetchPolicy` is 'network-only'", async () => {
   const query = gql`
     query {
       hello
@@ -1329,8 +1258,7 @@ it('existing data in the cache is ignored when `fetchPolicy` is \'network-only\'
   cache.writeQuery({ query, data: { hello: 'from cache' } });
 
   const Profiler = createDefaultProfiler();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -1341,9 +1269,7 @@ it('existing data in the cache is ignored when `fetchPolicy` is \'network-only\'
     return (
       <>
         <button onClick={() => loadQuery()}>Load query</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -1372,7 +1298,7 @@ it('existing data in the cache is ignored when `fetchPolicy` is \'network-only\'
   }
 });
 
-it('fetches data from the network but does not update the cache when `fetchPolicy` is \'no-cache\'', async() => {
+it("fetches data from the network but does not update the cache when `fetchPolicy` is 'no-cache'", async () => {
   const query = gql`
     query {
       hello
@@ -1392,8 +1318,7 @@ it('fetches data from the network but does not update the cache when `fetchPolic
   cache.writeQuery({ query, data: { hello: 'from cache' } });
 
   const Profiler = createDefaultProfiler();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -1404,9 +1329,7 @@ it('fetches data from the network but does not update the cache when `fetchPolic
     return (
       <>
         <button onClick={() => loadQuery()}>Load query</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -1435,20 +1358,20 @@ it('fetches data from the network but does not update the cache when `fetchPolic
   }
 
   expect(client.extract()).toEqual({
-    ROOT_QUERY: { __typename: 'Query', hello: 'from cache' },
+    ROOT_QUERY: { type: 0, data: { hello: 'from cache' } },
   });
 });
 
-it('works with startTransition to change variables', async() => {
+it('works with startTransition to change variables', async () => {
   type Variables = {
-    id: string,
+    id: string;
   };
 
   interface Data {
     todo: {
-      id: string,
-      name: string,
-      completed: boolean,
+      id: string;
+      name: string;
+      completed: boolean;
     };
   }
 
@@ -1497,21 +1420,13 @@ it('works with startTransition to change variables', async() => {
       <div>
         <button onClick={() => loadQuery({ id: '1' })}>Load first todo</button>
         <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && (
-            <Todo queryRef={queryRef} onChange={id => loadQuery({ id })} />
-          )}
+          {queryRef && <Todo queryRef={queryRef} onChange={id => loadQuery({ id })} />}
         </Suspense>
       </div>
     );
   }
 
-  function Todo({
-    queryRef,
-    onChange,
-  }: {
-    queryRef: QueryRef<Data>,
-    onChange: (id: string) => void,
-  }) {
+  function Todo({ queryRef, onChange }: { queryRef: QueryRef<Data>; onChange: (id: string) => void }) {
     const { data } = useReadQuery(queryRef);
     const [isPending, startTransition] = React.useTransition();
     const { todo } = data;
@@ -1571,12 +1486,12 @@ it('works with startTransition to change variables', async() => {
   });
 });
 
-it('does not suspend deferred queries with data in the cache and using a "cache-and-network" fetch policy', async() => {
+it('does not suspend deferred queries with data in the cache and using a "cache-and-network" fetch policy', async () => {
   interface Data {
     greeting: {
-      __typename: string,
-      message: string,
-      recipient: { name: string, __typename: string },
+      __typename: string;
+      message: string;
+      recipient: { name: string; __typename: string };
     };
   }
 
@@ -1608,8 +1523,7 @@ it('does not suspend deferred queries with data in the cache and using a "cache-
   const client = new ApolloClient({ cache, link });
 
   const Profiler = createDefaultProfiler<Data>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -1619,9 +1533,7 @@ it('does not suspend deferred queries with data in the cache and using a "cache-
     return (
       <div>
         <button onClick={() => loadQuery()}>Load todo</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </div>
     );
   }
@@ -1692,7 +1604,7 @@ it('does not suspend deferred queries with data in the cache and using a "cache-
         hasNext: false,
       },
     },
-    true
+    true,
   );
 
   {
@@ -1715,7 +1627,7 @@ it('does not suspend deferred queries with data in the cache and using a "cache-
   await expect(Profiler).not.toRerender();
 });
 
-it('reacts to cache updates', async() => {
+it('reacts to cache updates', async () => {
   const { query, mocks } = useSimpleQueryCase();
   const client = new ApolloClient({
     cache: new Hermes(),
@@ -1728,8 +1640,7 @@ it('reacts to cache updates', async() => {
     },
   });
 
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -1738,9 +1649,7 @@ it('reacts to cache updates', async() => {
     return (
       <>
         <button onClick={() => loadQuery()}>Load query</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -1783,7 +1692,7 @@ it('reacts to cache updates', async() => {
   await expect(Profiler).not.toRerender();
 });
 
-it('applies `errorPolicy` on next fetch when it changes between renders', async() => {
+it('applies `errorPolicy` on next fetch when it changes between renders', async () => {
   const { query } = useSimpleQueryCase();
 
   const mocks: MockedResponse<SimpleQueryData>[] = [
@@ -1802,8 +1711,7 @@ it('applies `errorPolicy` on next fetch when it changes between renders', async(
   ];
 
   const Profiler = createDefaultProfiler<SimpleQueryData>();
-  const { SuspenseFallback, ReadQueryHook, ErrorBoundary, ErrorFallback }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook, ErrorBoundary, ErrorFallback } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -1814,15 +1722,11 @@ it('applies `errorPolicy` on next fetch when it changes between renders', async(
 
     return (
       <>
-        <button onClick={() => setErrorPolicy('all')}>
-          Change error policy
-        </button>
+        <button onClick={() => setErrorPolicy('all')}>Change error policy</button>
         <button onClick={() => refetch()}>Refetch greeting</button>
         <button onClick={() => loadQuery()}>Load query</button>
         <Suspense fallback={<SuspenseFallback />}>
-          <ErrorBoundary>
-            {queryRef && <ReadQueryHook queryRef={queryRef} />}
-          </ErrorBoundary>
+          <ErrorBoundary>{queryRef && <ReadQueryHook queryRef={queryRef} />}</ErrorBoundary>
         </Suspense>
       </>
     );
@@ -1866,7 +1770,7 @@ it('applies `errorPolicy` on next fetch when it changes between renders', async(
   }
 });
 
-it('applies `context` on next fetch when it changes between renders', async() => {
+it('applies `context` on next fetch when it changes between renders', async () => {
   interface Data {
     phase: string;
   }
@@ -1877,8 +1781,8 @@ it('applies `context` on next fetch when it changes between renders', async() =>
     }
   `;
 
-  const link = new ApolloLink((operation) => {
-    return new Observable((subscriber) => {
+  const link = new ApolloLink(operation => {
+    return new Observable(subscriber => {
       setTimeout(() => {
         subscriber.next({
           data: {
@@ -1896,8 +1800,7 @@ it('applies `context` on next fetch when it changes between renders', async() =>
   });
 
   const Profiler = createDefaultProfiler<Data>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -1911,9 +1814,7 @@ it('applies `context` on next fetch when it changes between renders', async() =>
         <button onClick={() => setPhase('rerender')}>Update context</button>
         <button onClick={() => refetch()}>Refetch</button>
         <button onClick={() => loadQuery()}>Load query</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -1952,7 +1853,8 @@ it('applies `context` on next fetch when it changes between renders', async() =>
 // NOTE: We only test the `false` -> `true` path here. If the option changes
 // from `true` -> `false`, the data has already been canonized, so it has no
 // effect on the output.
-it('returns canonical results immediately when `canonizeResults` changes from `false` to `true` between renders', async() => {
+// Hermes: canonizeResults (canonical result identity) is InMemoryCache-only.
+it.skip('returns canonical results immediately when `canonizeResults` changes from `false` to `true` between renders', async () => {
   interface Result {
     __typename: string;
     value: number;
@@ -1998,8 +1900,7 @@ it('returns canonical results immediately when `canonizeResults` changes from `f
   });
 
   const Profiler = createDefaultProfiler<Data>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -2011,12 +1912,8 @@ it('returns canonical results immediately when `canonizeResults` changes from `f
     return (
       <>
         <button onClick={() => loadQuery()}>Load query</button>
-        <button onClick={() => setCanonizeResults(true)}>
-          Canonize results
-        </button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <button onClick={() => setCanonizeResults(true)}>Canonize results</button>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -2053,12 +1950,13 @@ it('returns canonical results immediately when `canonizeResults` changes from `f
   }
 });
 
-it('applies changed `refetchWritePolicy` to next fetch when changing between renders', async() => {
+// Hermes: keyArgs (merging a field across arguments) is not implemented.
+it.skip('applies changed `refetchWritePolicy` to next fetch when changing between renders', async () => {
   interface Data {
     primes: number[];
   }
 
-  const query: TypedDocumentNode<Data, { min: number, max: number }> = gql`
+  const query: TypedDocumentNode<Data, { min: number; max: number }> = gql`
     query GetPrimes($min: number, $max: number) {
       primes(min: $min, max: $max)
     }
@@ -2106,13 +2004,11 @@ it('applies changed `refetchWritePolicy` to next fetch when changing between ren
   });
 
   const Profiler = createDefaultProfiler<Data>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
-    const [refetchWritePolicy, setRefetchWritePolicy]
-      = React.useState<RefetchWritePolicy>('merge');
+    const [refetchWritePolicy, setRefetchWritePolicy] = React.useState<RefetchWritePolicy>('merge');
 
     const [loadQuery, queryRef, { refetch }] = useLoadableQuery(query, {
       refetchWritePolicy,
@@ -2120,21 +2016,11 @@ it('applies changed `refetchWritePolicy` to next fetch when changing between ren
 
     return (
       <>
-        <button onClick={() => loadQuery({ min: 0, max: 12 })}>
-          Load query
-        </button>
-        <button onClick={() => setRefetchWritePolicy('overwrite')}>
-          Change refetch write policy
-        </button>
-        <button onClick={() => refetch({ min: 12, max: 30 })}>
-          Refetch next
-        </button>
-        <button onClick={() => refetch({ min: 30, max: 50 })}>
-          Refetch last
-        </button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <button onClick={() => loadQuery({ min: 0, max: 12 })}>Load query</button>
+        <button onClick={() => setRefetchWritePolicy('overwrite')}>Change refetch write policy</button>
+        <button onClick={() => refetch({ min: 12, max: 30 })}>Refetch next</button>
+        <button onClick={() => refetch({ min: 30, max: 50 })}>Refetch last</button>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -2194,19 +2080,19 @@ it('applies changed `refetchWritePolicy` to next fetch when changing between ren
   }
 });
 
-it('applies `returnPartialData` on next fetch when it changes between renders', async() => {
+it('applies `returnPartialData` on next fetch when it changes between renders', async () => {
   interface Data {
     character: {
-      __typename: 'Character',
-      id: string,
-      name: string,
+      __typename: 'Character';
+      id: string;
+      name: string;
     };
   }
 
   interface PartialData {
     character: {
-      __typename: 'Character',
-      id: string,
+      __typename: 'Character';
+      id: string;
     };
   }
 
@@ -2271,8 +2157,7 @@ it('applies `returnPartialData` on next fetch when it changes between renders', 
   });
 
   const Profiler = createDefaultProfiler<Data>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -2285,12 +2170,8 @@ it('applies `returnPartialData` on next fetch when it changes between renders', 
     return (
       <>
         <button onClick={() => loadQuery()}>Load query</button>
-        <button onClick={() => setReturnPartialData(true)}>
-          Update partial data
-        </button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <button onClick={() => setReturnPartialData(true)}>Update partial data</button>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -2356,12 +2237,12 @@ it('applies `returnPartialData` on next fetch when it changes between renders', 
   }
 });
 
-it('applies updated `fetchPolicy` on next fetch when it changes between renders', async() => {
+it('applies updated `fetchPolicy` on next fetch when it changes between renders', async () => {
   interface Data {
     character: {
-      __typename: 'Character',
-      id: string,
-      name: string,
+      __typename: 'Character';
+      id: string;
+      name: string;
     };
   }
 
@@ -2410,13 +2291,11 @@ it('applies updated `fetchPolicy` on next fetch when it changes between renders'
   });
 
   const Profiler = createDefaultProfiler<Data>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
-    const [fetchPolicy, setFetchPolicy]
-      = React.useState<LoadableQueryHookFetchPolicy>('cache-first');
+    const [fetchPolicy, setFetchPolicy] = React.useState<LoadableQueryHookFetchPolicy>('cache-first');
 
     const [loadQuery, queryRef, { refetch }] = useLoadableQuery(query, {
       fetchPolicy,
@@ -2425,13 +2304,9 @@ it('applies updated `fetchPolicy` on next fetch when it changes between renders'
     return (
       <>
         <button onClick={() => loadQuery()}>Load query</button>
-        <button onClick={() => setFetchPolicy('no-cache')}>
-          Change fetch policy
-        </button>
+        <button onClick={() => setFetchPolicy('no-cache')}>Change fetch policy</button>
         <button onClick={() => refetch()}>Refetch</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -2492,7 +2367,7 @@ it('applies updated `fetchPolicy` on next fetch when it changes between renders'
   });
 });
 
-it('re-suspends when calling `refetch`', async() => {
+it('re-suspends when calling `refetch`', async () => {
   const { query } = useVariablesQueryCase();
 
   const mocks: MockedResponse<VariablesCaseData>[] = [
@@ -2514,8 +2389,7 @@ it('re-suspends when calling `refetch`', async() => {
   ];
 
   const Profiler = createDefaultProfiler<VariablesCaseData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -2525,9 +2399,7 @@ it('re-suspends when calling `refetch`', async() => {
       <>
         <button onClick={() => loadQuery({ id: '1' })}>Load query</button>
         <button onClick={() => refetch()}>Refetch</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -2576,7 +2448,7 @@ it('re-suspends when calling `refetch`', async() => {
   await expect(Profiler).not.toRerender();
 });
 
-it('re-suspends when calling `refetch` with new variables', async() => {
+it('re-suspends when calling `refetch` with new variables', async () => {
   const { query } = useVariablesQueryCase();
 
   const mocks: MockedResponse<VariablesCaseData>[] = [
@@ -2597,8 +2469,7 @@ it('re-suspends when calling `refetch` with new variables', async() => {
   ];
 
   const Profiler = createDefaultProfiler<VariablesCaseData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -2608,9 +2479,7 @@ it('re-suspends when calling `refetch` with new variables', async() => {
       <>
         <button onClick={() => loadQuery({ id: '1' })}>Load query</button>
         <button onClick={() => refetch({ id: '2' })}>Refetch with ID 2</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -2659,7 +2528,7 @@ it('re-suspends when calling `refetch` with new variables', async() => {
   await expect(Profiler).not.toRerender();
 });
 
-it('re-suspends multiple times when calling `refetch` multiple times', async() => {
+it('re-suspends multiple times when calling `refetch` multiple times', async () => {
   const { query } = useVariablesQueryCase();
 
   const mocks: MockedResponse<VariablesCaseData>[] = [
@@ -2675,8 +2544,7 @@ it('re-suspends multiple times when calling `refetch` multiple times', async() =
 
   const Profiler = createDefaultProfiler<VariablesCaseData>();
 
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -2686,9 +2554,7 @@ it('re-suspends multiple times when calling `refetch` multiple times', async() =
       <>
         <button onClick={() => loadQuery({ id: '1' })}>Load query</button>
         <button onClick={() => refetch()}>Refetch</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -2757,7 +2623,7 @@ it('re-suspends multiple times when calling `refetch` multiple times', async() =
   await expect(Profiler).not.toRerender();
 });
 
-it('throws errors when errors are returned after calling `refetch`', async() => {
+it('throws errors when errors are returned after calling `refetch`', async () => {
   using _consoleSpy = spyOnConsole('error');
 
   const { query } = useVariablesQueryCase();
@@ -2781,8 +2647,7 @@ it('throws errors when errors are returned after calling `refetch`', async() => 
 
   const Profiler = createDefaultProfiler<VariablesCaseData>();
 
-  const { SuspenseFallback, ReadQueryHook, ErrorBoundary, ErrorFallback }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook, ErrorBoundary, ErrorFallback } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -2793,9 +2658,7 @@ it('throws errors when errors are returned after calling `refetch`', async() => 
         <button onClick={() => loadQuery({ id: '1' })}>Load query</button>
         <button onClick={() => refetch()}>Refetch</button>
         <Suspense fallback={<SuspenseFallback />}>
-          <ErrorBoundary>
-            {queryRef && <ReadQueryHook queryRef={queryRef} />}
-          </ErrorBoundary>
+          <ErrorBoundary>{queryRef && <ReadQueryHook queryRef={queryRef} />}</ErrorBoundary>
         </Suspense>
       </>
     );
@@ -2829,12 +2692,12 @@ it('throws errors when errors are returned after calling `refetch`', async() => 
     expect(snapshot.error).toEqual(
       new ApolloError({
         graphQLErrors: [new GraphQLError('Something went wrong')],
-      })
+      }),
     );
   }
 });
 
-it('ignores errors returned after calling `refetch` when errorPolicy is set to "ignore"', async() => {
+it('ignores errors returned after calling `refetch` when errorPolicy is set to "ignore"', async () => {
   const { query } = useVariablesQueryCase();
 
   const mocks = [
@@ -2856,8 +2719,7 @@ it('ignores errors returned after calling `refetch` when errorPolicy is set to "
 
   const Profiler = createDefaultProfiler<VariablesCaseData | undefined>();
 
-  const { SuspenseFallback, ReadQueryHook, ErrorBoundary, ErrorFallback }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook, ErrorBoundary, ErrorFallback } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -2870,9 +2732,7 @@ it('ignores errors returned after calling `refetch` when errorPolicy is set to "
         <button onClick={() => loadQuery({ id: '1' })}>Load query</button>
         <button onClick={() => refetch()}>Refetch</button>
         <Suspense fallback={<SuspenseFallback />}>
-          <ErrorBoundary>
-            {queryRef && <ReadQueryHook queryRef={queryRef} />}
-          </ErrorBoundary>
+          <ErrorBoundary>{queryRef && <ReadQueryHook queryRef={queryRef} />}</ErrorBoundary>
         </Suspense>
       </>
     );
@@ -2915,7 +2775,7 @@ it('ignores errors returned after calling `refetch` when errorPolicy is set to "
   await expect(Profiler).not.toRerender();
 });
 
-it('returns errors after calling `refetch` when errorPolicy is set to "all"', async() => {
+it('returns errors after calling `refetch` when errorPolicy is set to "all"', async () => {
   const { query } = useVariablesQueryCase();
 
   const mocks: MockedResponse<VariablesCaseData>[] = [
@@ -2937,8 +2797,7 @@ it('returns errors after calling `refetch` when errorPolicy is set to "all"', as
 
   const Profiler = createDefaultProfiler<VariablesCaseData | undefined>();
 
-  const { SuspenseFallback, ReadQueryHook, ErrorBoundary, ErrorFallback }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook, ErrorBoundary, ErrorFallback } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -2951,9 +2810,7 @@ it('returns errors after calling `refetch` when errorPolicy is set to "all"', as
         <button onClick={() => loadQuery({ id: '1' })}>Load query</button>
         <button onClick={() => refetch()}>Refetch</button>
         <Suspense fallback={<SuspenseFallback />}>
-          <ErrorBoundary>
-            {queryRef && <ReadQueryHook queryRef={queryRef} />}
-          </ErrorBoundary>
+          <ErrorBoundary>{queryRef && <ReadQueryHook queryRef={queryRef} />}</ErrorBoundary>
         </Suspense>
       </>
     );
@@ -2997,7 +2854,7 @@ it('returns errors after calling `refetch` when errorPolicy is set to "all"', as
   await expect(Profiler).not.toRerender();
 });
 
-it('handles partial data results after calling `refetch` when errorPolicy is set to "all"', async() => {
+it('handles partial data results after calling `refetch` when errorPolicy is set to "all"', async () => {
   const { query } = useVariablesQueryCase();
 
   const mocks = [
@@ -3020,8 +2877,7 @@ it('handles partial data results after calling `refetch` when errorPolicy is set
 
   const Profiler = createDefaultProfiler<VariablesCaseData | undefined>();
 
-  const { SuspenseFallback, ReadQueryHook, ErrorBoundary, ErrorFallback }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook, ErrorBoundary, ErrorFallback } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -3034,9 +2890,7 @@ it('handles partial data results after calling `refetch` when errorPolicy is set
         <button onClick={() => loadQuery({ id: '1' })}>Load query</button>
         <button onClick={() => refetch()}>Refetch</button>
         <Suspense fallback={<SuspenseFallback />}>
-          <ErrorBoundary>
-            {queryRef && <ReadQueryHook queryRef={queryRef} />}
-          </ErrorBoundary>
+          <ErrorBoundary>{queryRef && <ReadQueryHook queryRef={queryRef} />}</ErrorBoundary>
         </Suspense>
       </>
     );
@@ -3080,16 +2934,16 @@ it('handles partial data results after calling `refetch` when errorPolicy is set
   await expect(Profiler).not.toRerender();
 });
 
-it('`refetch` works with startTransition to allow React to show stale UI until finished suspending', async() => {
+it('`refetch` works with startTransition to allow React to show stale UI until finished suspending', async () => {
   type Variables = {
-    id: string,
+    id: string;
   };
 
   interface Data {
     todo: {
-      id: string,
-      name: string,
-      completed: boolean,
+      id: string;
+      name: string;
+      completed: boolean;
     };
   }
 
@@ -3132,9 +2986,7 @@ it('`refetch` works with startTransition to allow React to show stale UI until f
       <>
         <button onClick={() => loadQuery({ id })}>Load query</button>
         <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && (
-            <Todo refetch={refetch} queryRef={queryRef} onChange={setId} />
-          )}
+          {queryRef && <Todo refetch={refetch} queryRef={queryRef} onChange={setId} />}
         </Suspense>
       </>
     );
@@ -3144,9 +2996,9 @@ it('`refetch` works with startTransition to allow React to show stale UI until f
     queryRef,
     refetch,
   }: {
-    refetch: RefetchFunction<Data, OperationVariables>,
-    queryRef: QueryRef<Data>,
-    onChange: (id: string) => void,
+    refetch: RefetchFunction<Data, OperationVariables>;
+    queryRef: QueryRef<Data>;
+    onChange: (id: string) => void;
   }) {
     const { data } = useReadQuery(queryRef);
     const [isPending, startTransition] = React.useTransition();
@@ -3207,7 +3059,8 @@ it('`refetch` works with startTransition to allow React to show stale UI until f
   });
 });
 
-it('re-suspends when calling `fetchMore` with different variables', async() => {
+// Hermes: keyArgs (merging a field across arguments) is not implemented.
+it.skip('re-suspends when calling `fetchMore` with different variables', async () => {
   const { query, link } = setupPaginatedCase();
 
   const client = new ApolloClient({
@@ -3226,8 +3079,7 @@ it('re-suspends when calling `fetchMore` with different variables', async() => {
   });
 
   const Profiler = createDefaultProfiler<PaginatedQueryData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -3236,14 +3088,8 @@ it('re-suspends when calling `fetchMore` with different variables', async() => {
     return (
       <>
         <button onClick={() => loadQuery()}>Load query</button>
-        <button
-          onClick={() => fetchMore({ variables: { offset: 2, limit: 2 } })}
-        >
-          Fetch more
-        </button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <button onClick={() => fetchMore({ variables: { offset: 2, limit: 2 } })}>Fetch more</button>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -3298,11 +3144,10 @@ it('re-suspends when calling `fetchMore` with different variables', async() => {
   await expect(Profiler).not.toRerender();
 });
 
-it('properly uses `updateQuery` when calling `fetchMore`', async() => {
+it('properly uses `updateQuery` when calling `fetchMore`', async () => {
   const { query, client } = usePaginatedQueryCase();
   const Profiler = createDefaultProfiler<PaginatedQueryData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -3323,9 +3168,7 @@ it('properly uses `updateQuery` when calling `fetchMore`', async() => {
         >
           Fetch more
         </button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -3379,11 +3222,11 @@ it('properly uses `updateQuery` when calling `fetchMore`', async() => {
   await expect(Profiler).not.toRerender();
 });
 
-it('properly uses cache field policies when calling `fetchMore` without `updateQuery`', async() => {
+// Hermes: concatPagination relies on keyArgs: false, which is not implemented.
+it.skip('properly uses cache field policies when calling `fetchMore` without `updateQuery`', async () => {
   const { query, link } = usePaginatedQueryCase();
   const Profiler = createDefaultProfiler<PaginatedQueryData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   const client = new ApolloClient({
     link,
@@ -3405,14 +3248,8 @@ it('properly uses cache field policies when calling `fetchMore` without `updateQ
     return (
       <>
         <button onClick={() => loadQuery()}>Load query</button>
-        <button
-          onClick={() => fetchMore({ variables: { offset: 2, limit: 2 } })}
-        >
-          Fetch more
-        </button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <button onClick={() => fetchMore({ variables: { offset: 2, limit: 2 } })}>Fetch more</button>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -3466,9 +3303,10 @@ it('properly uses cache field policies when calling `fetchMore` without `updateQ
   await expect(Profiler).not.toRerender();
 });
 
-it('`fetchMore` works with startTransition to allow React to show stale UI until finished suspending', async() => {
+// Hermes: offsetLimitPagination relies on keyArgs: false, which is not implemented.
+it.skip('`fetchMore` works with startTransition to allow React to show stale UI until finished suspending', async () => {
   type Variables = {
-    offset: number,
+    offset: number;
   };
 
   interface Todo {
@@ -3560,8 +3398,8 @@ it('`fetchMore` works with startTransition to allow React to show stale UI until
     queryRef,
     fetchMore,
   }: {
-    fetchMore: FetchMoreFunction<Data, OperationVariables>,
-    queryRef: QueryRef<Data>,
+    fetchMore: FetchMoreFunction<Data, OperationVariables>;
+    queryRef: QueryRef<Data>;
   }) {
     const { data } = useReadQuery(queryRef);
     const [isPending, startTransition] = React.useTransition();
@@ -3624,18 +3462,14 @@ it('`fetchMore` works with startTransition to allow React to show stale UI until
   // Eventually we should see the updated todos content once its done
   // suspending.
   await waitFor(() => {
-    expect(screen.getByTestId('todo:2')).toHaveTextContent(
-      'Take out trash (completed)'
-    );
+    expect(screen.getByTestId('todo:2')).toHaveTextContent('Take out trash (completed)');
     expect(todo1).toHaveTextContent('Clean room');
   });
 });
 
-it('honors refetchWritePolicy set to "merge"', async() => {
-  const query: TypedDocumentNode<
-    { primes: number[] },
-    { min: number, max: number }
-  > = gql`
+// Hermes: keyArgs (merging a field across arguments) is not implemented.
+it.skip('honors refetchWritePolicy set to "merge"', async () => {
+  const query: TypedDocumentNode<{ primes: number[] }, { min: number; max: number }> = gql`
     query GetPrimes($min: number, $max: number) {
       primes(min: $min, max: $max)
     }
@@ -3676,8 +3510,7 @@ it('honors refetchWritePolicy set to "merge"', async() => {
   });
 
   const Profiler = createDefaultProfiler<QueryData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   const client = new ApolloClient({
     link: new MockLink(mocks),
@@ -3692,13 +3525,9 @@ it('honors refetchWritePolicy set to "merge"', async() => {
 
     return (
       <>
-        <button onClick={() => loadQuery({ min: 0, max: 12 })}>
-          Load query
-        </button>
+        <button onClick={() => loadQuery({ min: 0, max: 12 })}>Load query</button>
         <button onClick={() => refetch({ min: 12, max: 30 })}>Refetch</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -3745,11 +3574,8 @@ it('honors refetchWritePolicy set to "merge"', async() => {
   await expect(Profiler).not.toRerender();
 });
 
-it('defaults refetchWritePolicy to "overwrite"', async() => {
-  const query: TypedDocumentNode<
-    { primes: number[] },
-    { min: number, max: number }
-  > = gql`
+it('defaults refetchWritePolicy to "overwrite"', async () => {
+  const query: TypedDocumentNode<{ primes: number[] }, { min: number; max: number }> = gql`
     query GetPrimes($min: number, $max: number) {
       primes(min: $min, max: $max)
     }
@@ -3790,8 +3616,7 @@ it('defaults refetchWritePolicy to "overwrite"', async() => {
   });
 
   const Profiler = createDefaultProfiler<QueryData>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   const client = new ApolloClient({
     link: new MockLink(mocks),
@@ -3804,13 +3629,9 @@ it('defaults refetchWritePolicy to "overwrite"', async() => {
 
     return (
       <>
-        <button onClick={() => loadQuery({ min: 0, max: 12 })}>
-          Load query
-        </button>
+        <button onClick={() => loadQuery({ min: 0, max: 12 })}>Load query</button>
         <button onClick={() => refetch({ min: 12, max: 30 })}>Refetch</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -3852,11 +3673,11 @@ it('defaults refetchWritePolicy to "overwrite"', async() => {
   }
 });
 
-it('does not suspend when partial data is in the cache and using a "cache-first" fetch policy with returnPartialData', async() => {
+it('does not suspend when partial data is in the cache and using a "cache-first" fetch policy with returnPartialData', async () => {
   interface Data {
     character: {
-      id: string,
-      name: string,
+      id: string;
+      name: string;
     };
   }
 
@@ -3885,8 +3706,7 @@ it('does not suspend when partial data is in the cache and using a "cache-first"
   ];
 
   const Profiler = createDefaultProfiler<DeepPartial<Data>>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   const cache = new Hermes();
 
@@ -3907,9 +3727,7 @@ it('does not suspend when partial data is in the cache and using a "cache-first"
     return (
       <>
         <button onClick={() => loadQuery()}>Load query</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -3948,7 +3766,7 @@ it('does not suspend when partial data is in the cache and using a "cache-first"
   await expect(Profiler).not.toRerender();
 });
 
-it('suspends and does not use partial data from other variables in the cache when changing variables and using a "cache-first" fetch policy with returnPartialData: true', async() => {
+it('suspends and does not use partial data from other variables in the cache when changing variables and using a "cache-first" fetch policy with returnPartialData: true', async () => {
   const { query, mocks } = useVariablesQueryCase();
 
   const partialQuery = gql`
@@ -3968,8 +3786,7 @@ it('suspends and does not use partial data from other variables in the cache whe
   });
 
   const Profiler = createDefaultProfiler<DeepPartial<VariablesCaseData>>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -3982,9 +3799,7 @@ it('suspends and does not use partial data from other variables in the cache whe
       <>
         <button onClick={() => loadQuery({ id: '1' })}>Load query</button>
         <button onClick={() => loadQuery({ id: '2' })}>Change variables</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -4047,11 +3862,11 @@ it('suspends and does not use partial data from other variables in the cache whe
   await expect(Profiler).not.toRerender();
 });
 
-it('suspends when partial data is in the cache and using a "network-only" fetch policy with returnPartialData', async() => {
+it('suspends when partial data is in the cache and using a "network-only" fetch policy with returnPartialData', async () => {
   interface Data {
     character: {
-      id: string,
-      name: string,
+      id: string;
+      name: string;
     };
   }
 
@@ -4080,8 +3895,7 @@ it('suspends when partial data is in the cache and using a "network-only" fetch 
   ];
 
   const Profiler = createDefaultProfiler<DeepPartial<Data>>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   const cache = new Hermes();
 
@@ -4100,9 +3914,7 @@ it('suspends when partial data is in the cache and using a "network-only" fetch 
     return (
       <>
         <button onClick={() => loadQuery()}>Load query</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -4137,13 +3949,13 @@ it('suspends when partial data is in the cache and using a "network-only" fetch 
   await expect(Profiler).not.toRerender();
 });
 
-it('suspends when partial data is in the cache and using a "no-cache" fetch policy with returnPartialData', async() => {
+it('suspends when partial data is in the cache and using a "no-cache" fetch policy with returnPartialData', async () => {
   using _consoleSpy = spyOnConsole('warn');
 
   interface Data {
     character: {
-      id: string,
-      name: string,
+      id: string;
+      name: string;
     };
   }
 
@@ -4179,8 +3991,7 @@ it('suspends when partial data is in the cache and using a "no-cache" fetch poli
   });
 
   const Profiler = createDefaultProfiler<DeepPartial<Data>>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -4192,9 +4003,7 @@ it('suspends when partial data is in the cache and using a "no-cache" fetch poli
     return (
       <>
         <button onClick={() => loadQuery()}>Load query</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -4227,7 +4036,7 @@ it('suspends when partial data is in the cache and using a "no-cache" fetch poli
   }
 });
 
-it('warns when using returnPartialData with a "no-cache" fetch policy', async() => {
+it('warns when using returnPartialData with a "no-cache" fetch policy', async () => {
   using _consoleSpy = spyOnConsole('warn');
 
   const query: TypedDocumentNode<SimpleQueryData> = gql`
@@ -4243,23 +4052,21 @@ it('warns when using returnPartialData with a "no-cache" fetch policy', async() 
         returnPartialData: true,
       }),
     {
-      wrapper: ({ children }) => (
-        <MockedProvider mocks={[]}>{children}</MockedProvider>
-      ),
-    }
+      wrapper: ({ children }) => <MockedProvider mocks={[]}>{children}</MockedProvider>,
+    },
   );
 
   expect(console.warn).toHaveBeenCalledTimes(1);
   expect(console.warn).toHaveBeenCalledWith(
-    'Using `returnPartialData` with a `no-cache` fetch policy has no effect. To read partial data from the cache, consider using an alternate fetch policy.'
+    'Using `returnPartialData` with a `no-cache` fetch policy has no effect. To read partial data from the cache, consider using an alternate fetch policy.',
   );
 });
 
-it('does not suspend when partial data is in the cache and using a "cache-and-network" fetch policy with returnPartialData', async() => {
+it('does not suspend when partial data is in the cache and using a "cache-and-network" fetch policy with returnPartialData', async () => {
   interface Data {
     character: {
-      id: string,
-      name: string,
+      id: string;
+      name: string;
     };
   }
 
@@ -4295,8 +4102,7 @@ it('does not suspend when partial data is in the cache and using a "cache-and-ne
   });
 
   const Profiler = createDefaultProfiler<DeepPartial<Data>>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -4308,9 +4114,7 @@ it('does not suspend when partial data is in the cache and using a "cache-and-ne
     return (
       <>
         <button onClick={() => loadQuery()}>Load query</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -4348,7 +4152,7 @@ it('does not suspend when partial data is in the cache and using a "cache-and-ne
   }
 });
 
-it('suspends and does not use partial data when changing variables and using a "cache-and-network" fetch policy with returnPartialData', async() => {
+it('suspends and does not use partial data when changing variables and using a "cache-and-network" fetch policy with returnPartialData', async () => {
   const { query, mocks } = useVariablesQueryCase();
 
   const partialQuery = gql`
@@ -4368,8 +4172,7 @@ it('suspends and does not use partial data when changing variables and using a "
   });
 
   const Profiler = createDefaultProfiler<DeepPartial<VariablesCaseData>>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -4382,9 +4185,7 @@ it('suspends and does not use partial data when changing variables and using a "
       <>
         <button onClick={() => loadQuery({ id: '1' })}>Load query</button>
         <button onClick={() => loadQuery({ id: '2' })}>Change variables</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </>
     );
   }
@@ -4441,15 +4242,15 @@ it('suspends and does not use partial data when changing variables and using a "
   }
 });
 
-it('does not suspend deferred queries with partial data in the cache and using a "cache-first" fetch policy with `returnPartialData`', async() => {
+it('does not suspend deferred queries with partial data in the cache and using a "cache-first" fetch policy with `returnPartialData`', async () => {
   interface QueryData {
     greeting: {
-      __typename: string,
-      message?: string,
+      __typename: string;
+      message?: string;
       recipient?: {
-        __typename: string,
-        name: string,
-      },
+        __typename: string;
+        name: string;
+      };
     };
   }
 
@@ -4488,8 +4289,7 @@ it('does not suspend deferred queries with partial data in the cache and using a
   const client = new ApolloClient({ link, cache });
 
   const Profiler = createDefaultProfiler<DeepPartial<QueryData>>();
-  const { SuspenseFallback, ReadQueryHook }
-    = createDefaultProfiledComponents(Profiler);
+  const { SuspenseFallback, ReadQueryHook } = createDefaultProfiledComponents(Profiler);
 
   function App() {
     useTrackRenders();
@@ -4501,9 +4301,7 @@ it('does not suspend deferred queries with partial data in the cache and using a
     return (
       <div>
         <button onClick={() => loadTodo()}>Load todo</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {queryRef && <ReadQueryHook queryRef={queryRef} />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{queryRef && <ReadQueryHook queryRef={queryRef} />}</Suspense>
       </div>
     );
   }
@@ -4572,7 +4370,7 @@ it('does not suspend deferred queries with partial data in the cache and using a
         hasNext: false,
       },
     },
-    true
+    true,
   );
 
   {
@@ -4595,7 +4393,7 @@ it('does not suspend deferred queries with partial data in the cache and using a
   await expect(Profiler).not.toRerender();
 });
 
-it('throws when calling loadQuery on first render', async() => {
+it('throws when calling loadQuery on first render', async () => {
   // We don't provide this functionality with React 19 anymore since it requires internals access
   if (IS_REACT_19) return;
   using _consoleSpy = spyOnConsole('error');
@@ -4611,12 +4409,12 @@ it('throws when calling loadQuery on first render', async() => {
 
   expect(() => renderWithMocks(<App />, { mocks })).toThrow(
     new InvariantError(
-      'useLoadableQuery: \'loadQuery\' should not be called during render. To start a query during render, use the \'useBackgroundQuery\' hook.'
-    )
+      "useLoadableQuery: 'loadQuery' should not be called during render. To start a query during render, use the 'useBackgroundQuery' hook.",
+    ),
   );
 });
 
-it('throws when calling loadQuery on subsequent render', async() => {
+it('throws when calling loadQuery on subsequent render', async () => {
   // We don't provide this functionality with React 19 anymore since it requires internals access
   if (React.version.startsWith('19')) return;
   using _consoleSpy = spyOnConsole('error');
@@ -4636,22 +4434,22 @@ it('throws when calling loadQuery on subsequent render', async() => {
   }
 
   const { user } = renderWithMocks(
-    <ReactErrorBoundary onError={e => (error = e)} fallback={<div>Oops</div>}>
+    <ReactErrorBoundary onError={e => (error = e as Error)} fallback={<div>Oops</div>}>
       <App />
     </ReactErrorBoundary>,
-    { mocks }
+    { mocks },
   );
 
   await act(() => user.click(screen.getByText('Load query in render')));
 
   expect(error).toEqual(
     new InvariantError(
-      'useLoadableQuery: \'loadQuery\' should not be called during render. To start a query during render, use the \'useBackgroundQuery\' hook.'
-    )
+      "useLoadableQuery: 'loadQuery' should not be called during render. To start a query during render, use the 'useBackgroundQuery' hook.",
+    ),
   );
 });
 
-it('allows loadQuery to be called in useEffect on first render', async() => {
+it('allows loadQuery to be called in useEffect on first render', async () => {
   const { query, mocks } = useSimpleQueryCase();
 
   function App() {
@@ -4703,10 +4501,7 @@ describe.skip('type tests', () => {
   });
 
   it('variables are optional when TVariables are empty', () => {
-    const query: TypedDocumentNode<
-      { greeting: string },
-      Record<string, never>
-    > = gql``;
+    const query: TypedDocumentNode<{ greeting: string }, Record<string, never>> = gql``;
 
     const [loadQuery] = useLoadableQuery(query);
 
@@ -4729,8 +4524,7 @@ describe.skip('type tests', () => {
   });
 
   it('optional variables are optional to loadQuery', () => {
-    const query: TypedDocumentNode<{ posts: string[] }, { limit?: number }>
-      = gql``;
+    const query: TypedDocumentNode<{ posts: string[] }, { limit?: number }> = gql``;
 
     const [loadQuery] = useLoadableQuery(query);
 
@@ -4749,8 +4543,7 @@ describe.skip('type tests', () => {
   });
 
   it('enforces required variables when TVariables includes required variables', () => {
-    const query: TypedDocumentNode<{ character: string }, { id: string }>
-      = gql``;
+    const query: TypedDocumentNode<{ character: string }, { id: string }> = gql``;
 
     const [loadQuery] = useLoadableQuery(query);
 
@@ -4771,10 +4564,7 @@ describe.skip('type tests', () => {
   });
 
   it('requires variables with mixed TVariables', () => {
-    const query: TypedDocumentNode<
-      { character: string },
-      { id: string, language?: string }
-    > = gql``;
+    const query: TypedDocumentNode<{ character: string }, { id: string; language?: string }> = gql``;
 
     const [loadQuery] = useLoadableQuery(query);
 
@@ -4817,10 +4607,7 @@ describe.skip('type tests', () => {
     }
 
     {
-      const [, queryRef] = useLoadableQuery<
-        VariablesCaseData,
-        VariablesCaseVariables
-      >(query);
+      const [, queryRef] = useLoadableQuery<VariablesCaseData, VariablesCaseVariables>(query);
 
       invariant(queryRef);
 
@@ -4846,10 +4633,9 @@ describe.skip('type tests', () => {
     }
 
     {
-      const [, queryRef] = useLoadableQuery<
-        VariablesCaseData,
-        VariablesCaseVariables
-      >(query, { errorPolicy: 'ignore' });
+      const [, queryRef] = useLoadableQuery<VariablesCaseData, VariablesCaseVariables>(query, {
+        errorPolicy: 'ignore',
+      });
 
       invariant(queryRef);
 
@@ -4875,10 +4661,7 @@ describe.skip('type tests', () => {
     }
 
     {
-      const [, queryRef] = useLoadableQuery<
-        VariablesCaseData,
-        VariablesCaseVariables
-      >(query, { errorPolicy: 'all' });
+      const [, queryRef] = useLoadableQuery<VariablesCaseData, VariablesCaseVariables>(query, { errorPolicy: 'all' });
 
       invariant(queryRef);
 
@@ -4904,10 +4687,7 @@ describe.skip('type tests', () => {
     }
 
     {
-      const [, queryRef] = useLoadableQuery<
-        VariablesCaseData,
-        VariablesCaseVariables
-      >(query, { errorPolicy: 'none' });
+      const [, queryRef] = useLoadableQuery<VariablesCaseData, VariablesCaseVariables>(query, { errorPolicy: 'none' });
 
       invariant(queryRef);
 
@@ -4933,10 +4713,9 @@ describe.skip('type tests', () => {
     }
 
     {
-      const [, queryRef] = useLoadableQuery<
-        VariablesCaseData,
-        VariablesCaseVariables
-      >(query, { returnPartialData: true });
+      const [, queryRef] = useLoadableQuery<VariablesCaseData, VariablesCaseVariables>(query, {
+        returnPartialData: true,
+      });
 
       invariant(queryRef);
 
@@ -4962,10 +4741,9 @@ describe.skip('type tests', () => {
     }
 
     {
-      const [, queryRef] = useLoadableQuery<
-        VariablesCaseData,
-        VariablesCaseVariables
-      >(query, { returnPartialData: false });
+      const [, queryRef] = useLoadableQuery<VariablesCaseData, VariablesCaseVariables>(query, {
+        returnPartialData: false,
+      });
 
       invariant(queryRef);
 
@@ -4991,10 +4769,9 @@ describe.skip('type tests', () => {
     }
 
     {
-      const [, queryRef] = useLoadableQuery<
-        VariablesCaseData,
-        VariablesCaseVariables
-      >(query, { fetchPolicy: 'no-cache' });
+      const [, queryRef] = useLoadableQuery<VariablesCaseData, VariablesCaseVariables>(query, {
+        fetchPolicy: 'no-cache',
+      });
 
       invariant(queryRef);
 
@@ -5017,24 +4794,20 @@ describe.skip('type tests', () => {
 
       const { data } = useReadQuery(queryRef);
 
-      expectTypeOf(data).toEqualTypeOf<
-        DeepPartial<VariablesCaseData> | undefined
-      >();
+      expectTypeOf(data).toEqualTypeOf<DeepPartial<VariablesCaseData> | undefined>();
     }
 
     {
-      const [, queryRef] = useLoadableQuery<
-        VariablesCaseData,
-        VariablesCaseVariables
-      >(query, { returnPartialData: true, errorPolicy: 'ignore' });
+      const [, queryRef] = useLoadableQuery<VariablesCaseData, VariablesCaseVariables>(query, {
+        returnPartialData: true,
+        errorPolicy: 'ignore',
+      });
 
       invariant(queryRef);
 
       const { data } = useReadQuery(queryRef);
 
-      expectTypeOf(data).toEqualTypeOf<
-        DeepPartial<VariablesCaseData> | undefined
-      >();
+      expectTypeOf(data).toEqualTypeOf<DeepPartial<VariablesCaseData> | undefined>();
     }
 
     {
@@ -5051,10 +4824,10 @@ describe.skip('type tests', () => {
     }
 
     {
-      const [, queryRef] = useLoadableQuery<
-        VariablesCaseData,
-        VariablesCaseVariables
-      >(query, { returnPartialData: true, errorPolicy: 'none' });
+      const [, queryRef] = useLoadableQuery<VariablesCaseData, VariablesCaseVariables>(query, {
+        returnPartialData: true,
+        errorPolicy: 'none',
+      });
 
       invariant(queryRef);
 
@@ -5082,10 +4855,7 @@ describe.skip('type tests', () => {
     }
 
     {
-      const [, queryRef] = useLoadableQuery<
-        VariablesCaseData,
-        VariablesCaseVariables
-      >(query, {
+      const [, queryRef] = useLoadableQuery<VariablesCaseData, VariablesCaseVariables>(query, {
         fetchPolicy: 'no-cache',
         returnPartialData: true,
         errorPolicy: 'none',

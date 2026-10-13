@@ -8,13 +8,13 @@ import { mockSingleLink } from './mockLink';
 export function createMockClient<TData>(
   data: TData,
   query: DocumentNode,
-  variables = {}
+  variables = {},
 ): ApolloClient<NormalizedCacheObject> {
   return new ApolloClient({
     link: mockSingleLink({
       request: { query, variables },
       result: { data },
-    }).setOnError((error) => {
+    }).setOnError(error => {
       throw error;
     }),
     cache: new Hermes({ addTypename: false }),

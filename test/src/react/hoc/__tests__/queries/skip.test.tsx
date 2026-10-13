@@ -9,608 +9,565 @@ import { Hermes } from '../../../../../../src';
 import { itAsync, mockSingleLink } from '../../../../testing';
 
 describe('[queries] skip', () => {
-  itAsync(
-    'allows you to skip a query without running it',
-    (resolve, reject) => {
-      const query: DocumentNode = gql`
-        query people {
-          allPeople(first: 1) {
-            people {
-              name
-            }
+  itAsync('allows you to skip a query without running it', (resolve, reject) => {
+    const query: DocumentNode = gql`
+      query people {
+        allPeople(first: 1) {
+          people {
+            name
           }
         }
-      `;
-      const data = { allPeople: { people: [{ name: 'Luke Skywalker' }] } };
-      const link = mockSingleLink({
-        request: { query },
-        result: { data },
-      });
-      const client = new ApolloClient({
-        link,
-        cache: new Hermes({ addTypename: false }),
-      });
-      interface Props {
-        skip: boolean;
       }
-
-      let queryExecuted = false;
-      const Container = graphql<Props>(query, {
-        skip: ({ skip }) => skip,
-      })(
-        class extends React.Component<ChildProps<Props>> {
-          componentDidUpdate() {
-            queryExecuted = true;
-          }
-
-          render() {
-            expect(this.props.data).toBeUndefined();
-            return null;
-          }
-        }
-      );
-
-      render(
-        <ApolloProvider client={client}>
-          <Container skip={true} />
-        </ApolloProvider>
-      );
-
-      let done = false;
-      setTimeout(() => {
-        if (!queryExecuted) {
-          done = true;
-          return;
-        }
-        reject(new Error('query ran even though skip present'));
-      }, 25);
-
-      waitFor(() => expect(done).toBeTruthy()).then(resolve, reject);
+    `;
+    const data = { allPeople: { people: [{ name: 'Luke Skywalker' }] } };
+    const link = mockSingleLink({
+      request: { query },
+      result: { data },
+    });
+    const client = new ApolloClient({
+      link,
+      cache: new Hermes({ addTypename: false }),
+    });
+    interface Props {
+      skip: boolean;
     }
-  );
 
-  itAsync(
-    'continues to not subscribe to a skipped query when props change',
-    (resolve, reject) => {
-      const query: DocumentNode = gql`
-        query people {
-          allPeople(first: 1) {
-            people {
-              name
-            }
-          }
-        }
-      `;
-
-      const link = new ApolloLink((o, f) => {
-        reject(new Error('query ran even though skip present'));
-        return f ? f(o) : null;
-      }).concat(mockSingleLink());
-      // const oldQuery = link.query;
-      const client = new ApolloClient({
-        link,
-        cache: new Hermes({ addTypename: false }),
-      });
-
-      interface Props {
-        foo: number;
-      }
-
-      let done = false;
-      const Container = graphql<Props>(query, { skip: true })(
-        class extends React.Component<ChildProps<Props>> {
-          componentDidUpdate() {
-            done = true;
-          }
-
-          render() {
-            return null;
-          }
-        }
-      );
-
-      class Parent extends React.Component<{}, { foo: number }> {
-        state = { foo: 42 };
-
-        componentDidMount() {
-          this.setState({ foo: 43 });
+    let queryExecuted = false;
+    const Container = graphql<Props>(query, {
+      skip: ({ skip }) => skip,
+    })(
+      class extends React.Component<ChildProps<Props>> {
+        componentDidUpdate() {
+          queryExecuted = true;
         }
 
         render() {
-          return <Container foo={this.state.foo} />;
+          expect(this.props.data).toBeUndefined();
+          return null;
+        }
+      },
+    );
+
+    render(
+      <ApolloProvider client={client}>
+        <Container skip={true} />
+      </ApolloProvider>,
+    );
+
+    let done = false;
+    setTimeout(() => {
+      if (!queryExecuted) {
+        done = true;
+        return;
+      }
+      reject(new Error('query ran even though skip present'));
+    }, 25);
+
+    waitFor(() => expect(done).toBeTruthy()).then(resolve, reject);
+  });
+
+  itAsync('continues to not subscribe to a skipped query when props change', (resolve, reject) => {
+    const query: DocumentNode = gql`
+      query people {
+        allPeople(first: 1) {
+          people {
+            name
+          }
         }
       }
+    `;
 
-      render(
-        <ApolloProvider client={client}>
-          <Parent />
-        </ApolloProvider>
-      );
+    const link = new ApolloLink((o, f) => {
+      reject(new Error('query ran even though skip present'));
+      return f ? f(o) : null;
+    }).concat(mockSingleLink());
+    // const oldQuery = link.query;
+    const client = new ApolloClient({
+      link,
+      cache: new Hermes({ addTypename: false }),
+    });
 
-      waitFor(() => expect(done).toBeTruthy()).then(resolve, reject);
+    interface Props {
+      foo: number;
     }
-  );
 
-  itAsync(
-    'supports using props for skipping which are used in options',
-    (resolve, reject) => {
-      const query: DocumentNode = gql`
-        query people($id: ID!) {
-          allPeople(first: $id) {
-            people {
-              id
-            }
-          }
-        }
-      `;
-
-      const data = {
-        allPeople: { people: { id: 1 } },
-      };
-
-      type Data = typeof data;
-
-      const variables = { id: 1 };
-      type Vars = typeof variables;
-
-      const link = mockSingleLink({
-        request: { query, variables },
-        result: { data },
-      });
-
-      const client = new ApolloClient({
-        link,
-        cache: new Hermes({ addTypename: false }),
-      });
-
-      let count = 0;
-      let renderCount = 0;
-
-      interface Props {
-        person: { id: number } | null;
-      }
-      const Container = graphql<Props, Data, Vars>(query, {
-        skip: ({ person }) => !person,
-        options: ({ person }) => ({
-          variables: {
-            id: person!.id,
-          },
-        }),
-      })(
-        class extends React.Component<ChildProps<Props, Data, Vars>> {
-          componentDidUpdate() {
-            try {
-              const { props } = this;
-              switch (++count) {
-                case 1:
-                  expect(props.data!.loading).toBe(true);
-                  break;
-                case 2:
-                  expect(props.data!.loading).toBe(false);
-                  expect(props.data!.allPeople).toEqual(data.allPeople);
-                  expect(renderCount).toBe(3);
-                  break;
-                default:
-                  reject(`Too many renders (${count})`);
-              }
-            } catch (err) {
-              reject(err);
-            }
-          }
-
-          render() {
-            renderCount++;
-            return null;
-          }
-        }
-      );
-
-      class Parent extends React.Component<
-        {},
-        { person: { id: number } | null }
-      > {
-        state = { person: null };
-
-        componentDidMount() {
-          this.setState({ person: { id: 1 } });
+    let done = false;
+    const Container = graphql<Props>(query, { skip: true })(
+      class extends React.Component<ChildProps<Props>> {
+        componentDidUpdate() {
+          done = true;
         }
 
         render() {
-          return <Container person={this.state.person} />;
+          return null;
         }
+      },
+    );
+
+    class Parent extends React.Component<{}, { foo: number }> {
+      state = { foo: 42 };
+
+      componentDidMount() {
+        this.setState({ foo: 43 });
       }
 
-      render(
-        <ApolloProvider client={client}>
-          <Parent />
-        </ApolloProvider>
-      );
-
-      waitFor(() => expect(count).toBe(2)).then(resolve, reject);
+      render() {
+        return <Container foo={this.state.foo} />;
+      }
     }
-  );
 
-  itAsync(
-    'doesn\'t run options or props when skipped, including option.client',
-    (resolve, reject) => {
-      const query: DocumentNode = gql`
-        query people {
-          allPeople(first: 1) {
-            people {
-              name
-            }
+    render(
+      <ApolloProvider client={client}>
+        <Parent />
+      </ApolloProvider>,
+    );
+
+    waitFor(() => expect(done).toBeTruthy()).then(resolve, reject);
+  });
+
+  itAsync('supports using props for skipping which are used in options', (resolve, reject) => {
+    const query: DocumentNode = gql`
+      query people($id: ID!) {
+        allPeople(first: $id) {
+          people {
+            id
           }
         }
-      `;
-      const data = { allPeople: { people: [{ name: 'Luke Skywalker' }] } };
-      const link = mockSingleLink({
-        request: { query },
-        result: { data },
-      });
-      const client = new ApolloClient({
-        link,
-        cache: new Hermes({ addTypename: false }),
-      });
-
-      let queryExecuted = false;
-      let optionsCalled = false;
-
-      interface Props {
-        skip: boolean;
-        pollInterval?: number;
       }
+    `;
 
-      interface FinalProps {
-        pollInterval: number;
-        data?: {};
-      }
+    const data = {
+      allPeople: { people: { id: 1 } },
+    };
 
-      const Container = graphql<Props, {}, {}, FinalProps>(query, {
-        skip: ({ skip }) => skip,
-        options: (props) => {
-          optionsCalled = true;
-          return {
-            pollInterval: props.pollInterval,
-          };
-        },
-        props: props => ({
-          // intentionally incorrect
-          pollInterval: (props as any).willThrowIfAccesed.pollInterval,
-        }),
-      })(
-        class extends React.Component<FinalProps & Props> {
-          componentDidUpdate() {
-            queryExecuted = true;
-          }
+    type Data = typeof data;
 
-          render() {
-            expect(this.props.data).toBeFalsy();
-            return null;
-          }
-        }
-      );
+    const variables = { id: 1 };
+    type Vars = typeof variables;
 
-      render(
-        <ApolloProvider client={client}>
-          <Container skip={true} />
-        </ApolloProvider>
-      );
+    const link = mockSingleLink({
+      request: { query, variables },
+      result: { data },
+    });
 
-      let done = false;
-      setTimeout(() => {
-        if (!queryExecuted) {
-          done = true;
-          return;
-        }
-        if (optionsCalled) {
-          reject(new Error('options ran even though skip present'));
-          return;
-        }
-        reject(new Error('query ran even though skip present'));
-      }, 25);
+    const client = new ApolloClient({
+      link,
+      cache: new Hermes({ addTypename: false }),
+    });
 
-      waitFor(() => expect(done).toBeTruthy()).then(resolve, reject);
+    let count = 0;
+    let renderCount = 0;
+
+    interface Props {
+      person: { id: number } | null;
     }
-  );
-
-  itAsync(
-    'doesn\'t run options or props when skipped even if the component updates',
-    (resolve, reject) => {
-      const query: DocumentNode = gql`
-        query people {
-          allPeople(first: 1) {
-            people {
-              name
+    const Container = graphql<Props, Data, Vars>(query, {
+      skip: ({ person }) => !person,
+      options: ({ person }) => ({
+        variables: {
+          id: person!.id,
+        },
+      }),
+    })(
+      class extends React.Component<ChildProps<Props, Data, Vars>> {
+        componentDidUpdate() {
+          try {
+            const { props } = this;
+            switch (++count) {
+              case 1:
+                expect(props.data!.loading).toBe(true);
+                break;
+              case 2:
+                expect(props.data!.loading).toBe(false);
+                expect(props.data!.allPeople).toEqual(data.allPeople);
+                expect(renderCount).toBe(3);
+                break;
+              default:
+                reject(`Too many renders (${count})`);
             }
+          } catch (err) {
+            reject(err);
           }
-        }
-      `;
-
-      const link = mockSingleLink({
-        request: { query },
-        result: {},
-      });
-
-      const client = new ApolloClient({
-        link,
-        cache: new Hermes({ addTypename: false }),
-      });
-
-      let queryWasSkipped = true;
-
-      interface Props {
-        foo: string;
-      }
-
-      let done = false;
-      const Container = graphql<Props>(query, {
-        skip: true,
-        options: () => {
-          queryWasSkipped = false;
-          return {};
-        },
-        props: () => {
-          queryWasSkipped = false;
-          return {};
-        },
-      })(
-        class extends React.Component<ChildProps<Props>> {
-          componentDidUpdate() {
-            expect(queryWasSkipped).toBeTruthy();
-            done = true;
-          }
-
-          render() {
-            return null;
-          }
-        }
-      );
-
-      class Parent extends React.Component<{}, { foo: string }> {
-        state = { foo: 'bar' };
-        componentDidMount() {
-          this.setState({ foo: 'baz' });
         }
 
         render() {
-          return <Container foo={this.state.foo} />;
+          renderCount++;
+          return null;
         }
+      },
+    );
+
+    class Parent extends React.Component<{}, { person: { id: number } | null }> {
+      state = { person: null };
+
+      componentDidMount() {
+        this.setState({ person: { id: 1 } });
       }
 
-      render(
-        <ApolloProvider client={client}>
-          <Parent />
-        </ApolloProvider>
-      );
-
-      waitFor(() => expect(done).toBeTruthy()).then(resolve, reject);
+      render() {
+        return <Container person={this.state.person} />;
+      }
     }
-  );
 
-  itAsync(
-    'allows you to skip a query without running it (alternate syntax)',
-    (resolve, reject) => {
-      const query: DocumentNode = gql`
-        query people {
-          allPeople(first: 1) {
-            people {
-              name
-            }
+    render(
+      <ApolloProvider client={client}>
+        <Parent />
+      </ApolloProvider>,
+    );
+
+    waitFor(() => expect(count).toBe(2)).then(resolve, reject);
+  });
+
+  itAsync("doesn't run options or props when skipped, including option.client", (resolve, reject) => {
+    const query: DocumentNode = gql`
+      query people {
+        allPeople(first: 1) {
+          people {
+            name
           }
         }
-      `;
-      const data = { allPeople: { people: [{ name: 'Luke Skywalker' }] } };
-      const link = mockSingleLink({
-        request: { query },
-        result: { data },
-      });
-      const client = new ApolloClient({
-        link,
-        cache: new Hermes({ addTypename: false }),
-      });
+      }
+    `;
+    const data = { allPeople: { people: [{ name: 'Luke Skywalker' }] } };
+    const link = mockSingleLink({
+      request: { query },
+      result: { data },
+    });
+    const client = new ApolloClient({
+      link,
+      cache: new Hermes({ addTypename: false }),
+    });
 
-      let queryExecuted = false;
-      const Container = graphql(query, { skip: true })(
-        class extends React.Component<ChildProps> {
-          componentDidUpdate() {
-            queryExecuted = true;
-          }
+    let queryExecuted = false;
+    let optionsCalled = false;
 
-          render() {
-            expect(this.props.data).toBeFalsy();
-            return null;
+    interface Props {
+      skip: boolean;
+      pollInterval?: number;
+    }
+
+    interface FinalProps {
+      pollInterval: number;
+      data?: {};
+    }
+
+    const Container = graphql<Props, {}, {}, FinalProps>(query, {
+      skip: ({ skip }) => skip,
+      options: props => {
+        optionsCalled = true;
+        return {
+          pollInterval: props.pollInterval,
+        };
+      },
+      props: props => ({
+        // intentionally incorrect
+        pollInterval: (props as any).willThrowIfAccesed.pollInterval,
+      }),
+    })(
+      class extends React.Component<FinalProps & Props> {
+        componentDidUpdate() {
+          queryExecuted = true;
+        }
+
+        render() {
+          expect(this.props.data).toBeFalsy();
+          return null;
+        }
+      },
+    );
+
+    render(
+      <ApolloProvider client={client}>
+        <Container skip={true} />
+      </ApolloProvider>,
+    );
+
+    let done = false;
+    setTimeout(() => {
+      if (!queryExecuted) {
+        done = true;
+        return;
+      }
+      if (optionsCalled) {
+        reject(new Error('options ran even though skip present'));
+        return;
+      }
+      reject(new Error('query ran even though skip present'));
+    }, 25);
+
+    waitFor(() => expect(done).toBeTruthy()).then(resolve, reject);
+  });
+
+  itAsync("doesn't run options or props when skipped even if the component updates", (resolve, reject) => {
+    const query: DocumentNode = gql`
+      query people {
+        allPeople(first: 1) {
+          people {
+            name
           }
         }
-      );
+      }
+    `;
 
-      render(
-        <ApolloProvider client={client}>
-          <Container />
-        </ApolloProvider>
-      );
+    const link = mockSingleLink({
+      request: { query },
+      result: {},
+    });
 
-      let done = false;
-      setTimeout(() => {
-        if (!queryExecuted) {
+    const client = new ApolloClient({
+      link,
+      cache: new Hermes({ addTypename: false }),
+    });
+
+    let queryWasSkipped = true;
+
+    interface Props {
+      foo: string;
+    }
+
+    let done = false;
+    const Container = graphql<Props>(query, {
+      skip: true,
+      options: () => {
+        queryWasSkipped = false;
+        return {};
+      },
+      props: () => {
+        queryWasSkipped = false;
+        return {};
+      },
+    })(
+      class extends React.Component<ChildProps<Props>> {
+        componentDidUpdate() {
+          expect(queryWasSkipped).toBeTruthy();
           done = true;
-          return;
         }
-        reject(new Error('query ran even though skip present'));
-      }, 25);
 
-      waitFor(() => expect(done).toBeTruthy()).then(resolve, reject);
+        render() {
+          return null;
+        }
+      },
+    );
+
+    class Parent extends React.Component<{}, { foo: string }> {
+      state = { foo: 'bar' };
+      componentDidMount() {
+        this.setState({ foo: 'baz' });
+      }
+
+      render() {
+        return <Container foo={this.state.foo} />;
+      }
     }
-  );
+
+    render(
+      <ApolloProvider client={client}>
+        <Parent />
+      </ApolloProvider>,
+    );
+
+    waitFor(() => expect(done).toBeTruthy()).then(resolve, reject);
+  });
+
+  itAsync('allows you to skip a query without running it (alternate syntax)', (resolve, reject) => {
+    const query: DocumentNode = gql`
+      query people {
+        allPeople(first: 1) {
+          people {
+            name
+          }
+        }
+      }
+    `;
+    const data = { allPeople: { people: [{ name: 'Luke Skywalker' }] } };
+    const link = mockSingleLink({
+      request: { query },
+      result: { data },
+    });
+    const client = new ApolloClient({
+      link,
+      cache: new Hermes({ addTypename: false }),
+    });
+
+    let queryExecuted = false;
+    const Container = graphql(query, { skip: true })(
+      class extends React.Component<ChildProps> {
+        componentDidUpdate() {
+          queryExecuted = true;
+        }
+
+        render() {
+          expect(this.props.data).toBeFalsy();
+          return null;
+        }
+      },
+    );
+
+    render(
+      <ApolloProvider client={client}>
+        <Container />
+      </ApolloProvider>,
+    );
+
+    let done = false;
+    setTimeout(() => {
+      if (!queryExecuted) {
+        done = true;
+        return;
+      }
+      reject(new Error('query ran even though skip present'));
+    }, 25);
+
+    waitFor(() => expect(done).toBeTruthy()).then(resolve, reject);
+  });
 
   // test the case of skip:false -> skip:true -> skip:false to make sure things
   // are cleaned up properly
-  itAsync(
-    'allows you to skip then unskip a query with top-level syntax',
-    (resolve, reject) => {
-      const query: DocumentNode = gql`
-        query people {
-          allPeople(first: 1) {
-            people {
-              name
-            }
+  itAsync('allows you to skip then unskip a query with top-level syntax', (resolve, reject) => {
+    const query: DocumentNode = gql`
+      query people {
+        allPeople(first: 1) {
+          people {
+            name
           }
-        }
-      `;
-      const data = { allPeople: { people: [{ name: 'Luke Skywalker' }] } };
-      const link = mockSingleLink({
-        request: { query },
-        result: { data },
-      });
-      const client = new ApolloClient({
-        link,
-        cache: new Hermes({ addTypename: false }),
-      });
-
-      let hasSkipped = false;
-
-      interface Props {
-        skip: boolean;
-        setSkip: (skip: boolean) => void;
-      }
-
-      const Container = graphql<Props>(query, { skip: ({ skip }) => skip })(
-        class extends React.Component<ChildProps<Props>> {
-          componentDidUpdate(prevProps: ChildProps<Props>) {
-            if (this.props.skip) {
-              hasSkipped = true;
-              prevProps.setSkip(false);
-            } else if (!hasSkipped) {
-              prevProps.setSkip(true);
-            }
-          }
-
-          render() {
-            return null;
-          }
-        }
-      );
-
-      class Parent extends React.Component<any, any> {
-        state = { skip: false };
-        render() {
-          return (
-            <Container
-              skip={this.state.skip}
-              setSkip={skip => this.setState({ skip })}
-            />
-          );
         }
       }
+    `;
+    const data = { allPeople: { people: [{ name: 'Luke Skywalker' }] } };
+    const link = mockSingleLink({
+      request: { query },
+      result: { data },
+    });
+    const client = new ApolloClient({
+      link,
+      cache: new Hermes({ addTypename: false }),
+    });
 
-      render(
-        <ApolloProvider client={client}>
-          <Parent />
-        </ApolloProvider>
-      );
+    let hasSkipped = false;
 
-      waitFor(() => expect(hasSkipped).toBeTruthy()).then(resolve, reject);
+    interface Props {
+      skip: boolean;
+      setSkip: (skip: boolean) => void;
     }
-  );
 
-  itAsync(
-    'allows you to skip then unskip a query with new options (top-level syntax)',
-    (resolve, reject) => {
-      const query: DocumentNode = gql`
-        query people($first: Int) {
-          allPeople(first: $first) {
-            people {
-              name
-            }
+    const Container = graphql<Props>(query, { skip: ({ skip }) => skip })(
+      class extends React.Component<ChildProps<Props>> {
+        componentDidUpdate(prevProps: ChildProps<Props>) {
+          if (this.props.skip) {
+            hasSkipped = true;
+            prevProps.setSkip(false);
+          } else if (!hasSkipped) {
+            prevProps.setSkip(true);
           }
         }
-      `;
-      const dataOne = { allPeople: { people: [{ name: 'Luke Skywalker' }] } };
-      const dataTwo = { allPeople: { people: [{ name: 'Leia Skywalker' }] } };
 
-      type Data = typeof dataOne;
-      type Vars = { first: number };
-
-      const link = mockSingleLink(
-        {
-          request: { query, variables: { first: 1 } },
-          result: { data: dataOne },
-        },
-        {
-          request: { query, variables: { first: 2 } },
-          result: { data: dataTwo },
-        },
-        {
-          request: { query, variables: { first: 2 } },
-          result: { data: dataTwo },
-        }
-      );
-      const client = new ApolloClient({
-        link,
-        cache: new Hermes({ addTypename: false }),
-      });
-
-      let hasSkipped = false;
-
-      interface Props {
-        skip: boolean;
-        first: number;
-        setState: <K extends 'skip' | 'first'>(
-          state: Pick<{ skip: boolean, first: number }, K>
-        ) => void;
-      }
-
-      let done = false;
-      const Container = graphql<Props, Data, Vars>(query, {
-        skip: ({ skip }) => skip,
-      })(
-        class extends React.Component<ChildProps<Props, Data, Vars>> {
-          componentDidUpdate(prevProps: ChildProps<Props, Data, Vars>) {
-            if (this.props.skip) {
-              hasSkipped = true;
-              // change back to skip: false, with a different variable
-              prevProps.setState({ skip: false, first: 2 });
-            } else if (hasSkipped) {
-              if (!this.props.data!.loading) {
-                expect(this.props.data!.allPeople).toEqual(dataTwo.allPeople);
-                done = true;
-              }
-            } else {
-              expect(this.props.data!.allPeople).toEqual(dataOne.allPeople);
-              prevProps.setState({ skip: true });
-            }
-          }
-
-          render() {
-            return null;
-          }
-        }
-      );
-
-      class Parent extends React.Component<
-        {},
-        { skip: boolean, first: number }
-      > {
-        state = { skip: false, first: 1 };
         render() {
-          return (
-            <Container
-              skip={this.state.skip}
-              first={this.state.first}
-              setState={state => this.setState(state)}
-            />
-          );
+          return null;
+        }
+      },
+    );
+
+    class Parent extends React.Component<any, any> {
+      state = { skip: false };
+      render() {
+        return <Container skip={this.state.skip} setSkip={skip => this.setState({ skip })} />;
+      }
+    }
+
+    render(
+      <ApolloProvider client={client}>
+        <Parent />
+      </ApolloProvider>,
+    );
+
+    waitFor(() => expect(hasSkipped).toBeTruthy()).then(resolve, reject);
+  });
+
+  itAsync('allows you to skip then unskip a query with new options (top-level syntax)', (resolve, reject) => {
+    const query: DocumentNode = gql`
+      query people($first: Int) {
+        allPeople(first: $first) {
+          people {
+            name
+          }
         }
       }
+    `;
+    const dataOne = { allPeople: { people: [{ name: 'Luke Skywalker' }] } };
+    const dataTwo = { allPeople: { people: [{ name: 'Leia Skywalker' }] } };
 
-      render(
-        <ApolloProvider client={client}>
-          <Parent />
-        </ApolloProvider>
-      );
+    type Data = typeof dataOne;
+    type Vars = { first: number };
 
-      waitFor(() => expect(done).toBeTruthy()).then(resolve, reject);
+    const link = mockSingleLink(
+      {
+        request: { query, variables: { first: 1 } },
+        result: { data: dataOne },
+      },
+      {
+        request: { query, variables: { first: 2 } },
+        result: { data: dataTwo },
+      },
+      {
+        request: { query, variables: { first: 2 } },
+        result: { data: dataTwo },
+      },
+    );
+    const client = new ApolloClient({
+      link,
+      cache: new Hermes({ addTypename: false }),
+    });
+
+    let hasSkipped = false;
+
+    interface Props {
+      skip: boolean;
+      first: number;
+      setState: <K extends 'skip' | 'first'>(state: Pick<{ skip: boolean; first: number }, K>) => void;
     }
-  );
+
+    let done = false;
+    const Container = graphql<Props, Data, Vars>(query, {
+      skip: ({ skip }) => skip,
+    })(
+      class extends React.Component<ChildProps<Props, Data, Vars>> {
+        componentDidUpdate(prevProps: ChildProps<Props, Data, Vars>) {
+          if (this.props.skip) {
+            hasSkipped = true;
+            // change back to skip: false, with a different variable
+            prevProps.setState({ skip: false, first: 2 });
+          } else if (hasSkipped) {
+            if (!this.props.data!.loading) {
+              expect(this.props.data!.allPeople).toEqual(dataTwo.allPeople);
+              done = true;
+            }
+          } else {
+            expect(this.props.data!.allPeople).toEqual(dataOne.allPeople);
+            prevProps.setState({ skip: true });
+          }
+        }
+
+        render() {
+          return null;
+        }
+      },
+    );
+
+    class Parent extends React.Component<{}, { skip: boolean; first: number }> {
+      state = { skip: false, first: 1 };
+      render() {
+        return <Container skip={this.state.skip} first={this.state.first} setState={state => this.setState(state)} />;
+      }
+    }
+
+    render(
+      <ApolloProvider client={client}>
+        <Parent />
+      </ApolloProvider>,
+    );
+
+    waitFor(() => expect(done).toBeTruthy()).then(resolve, reject);
+  });
 
   it('allows you to skip then unskip a query with opts syntax', () =>
     new Promise((resolve, reject) => {
@@ -648,8 +605,8 @@ describe('[queries] skip', () => {
           {
             request: { query },
             result: { data: finalData },
-          }
-        )
+          },
+        ),
       );
 
       const client = new ApolloClient({
@@ -727,9 +684,7 @@ describe('[queries] skip', () => {
                   // The next batch of data has loaded.
                   expect(this.props.skip).toBe(false);
                   expect(this.props.data!.loading).toBe(false);
-                  expect(this.props.data.allPeople).toEqual(
-                    finalData.allPeople
-                  );
+                  expect(this.props.data.allPeople).toEqual(finalData.allPeople);
                   expect(ranQuery).toBe(3);
                   break;
                 default:
@@ -741,25 +696,20 @@ describe('[queries] skip', () => {
 
             return null;
           }
-        }
+        },
       );
 
       class Parent extends React.Component<{}, { skip: boolean }> {
         state = { skip: false };
         render() {
-          return (
-            <Container
-              skip={this.state.skip}
-              setSkip={(skip: boolean) => this.setState({ skip })}
-            />
-          );
+          return <Container skip={this.state.skip} setSkip={(skip: boolean) => this.setState({ skip })} />;
         }
       }
 
       render(
         <ApolloProvider client={client}>
           <Parent />
-        </ApolloProvider>
+        </ApolloProvider>,
       );
 
       waitFor(() => {
@@ -770,7 +720,7 @@ describe('[queries] skip', () => {
   // This test might have value, but is currently broken (the count === 0 test
   // is never hit, for example, because count++ happens the first time before
   // componentDidUpdate is called), so we are skipping it for now.
-  it.skip('removes the injected props if skip becomes true', async() => {
+  it.skip('removes the injected props if skip becomes true', async () => {
     let count = 0;
     const query: DocumentNode = gql`
       query people($first: Int) {
@@ -797,7 +747,7 @@ describe('[queries] skip', () => {
     const link = mockSingleLink(
       { request: { query, variables: variables1 }, result: { data: data1 } },
       { request: { query, variables: variables2 }, result: { data: data2 } },
-      { request: { query, variables: variables3 }, result: { data: data3 } }
+      { request: { query, variables: variables3 }, result: { data: data3 } },
     );
 
     const client = new ApolloClient({
@@ -822,7 +772,7 @@ describe('[queries] skip', () => {
         render() {
           return null;
         }
-      }
+      },
     );
 
     class ChangingProps extends React.Component<{}, { first: number }> {
@@ -847,7 +797,7 @@ describe('[queries] skip', () => {
     render(
       <ApolloProvider client={client}>
         <ChangingProps />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     await waitFor(() => {
@@ -891,7 +841,7 @@ describe('[queries] skip', () => {
         render() {
           return null;
         }
-      }
+      },
     );
 
     class Hider extends React.Component<{}, { hide: boolean }> {
@@ -907,7 +857,7 @@ describe('[queries] skip', () => {
     render(
       <ApolloProvider client={client}>
         <Hider />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     waitFor(() => expect(done).toBeTruthy()).then(resolve, reject);

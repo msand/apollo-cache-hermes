@@ -13,20 +13,15 @@ import type { SubscriptionComponentOptions } from './types';
  * This library is still included in the `@apollo/client` package,
  * but it no longer receives feature updates or bug fixes.
  */
-export function Subscription<
-  TData = any,
-  TVariables extends OperationVariables = OperationVariables,
->(
-  props: SubscriptionComponentOptions<TData, TVariables>
+export function Subscription<TData = any, TVariables extends OperationVariables = OperationVariables>(
+  props: SubscriptionComponentOptions<TData, TVariables>,
 ): ReactTypes.JSX.Element | null {
   const result = useSubscription(props.subscription, props);
   return props.children && result ? props.children(result) : null;
 }
 
 export interface Subscription<TData, TVariables extends OperationVariables> {
-  propTypes: PropTypes.InferProps<
-    SubscriptionComponentOptions<TData, TVariables>
-  >;
+  propTypes: PropTypes.InferProps<SubscriptionComponentOptions<TData, TVariables>>;
 }
 
 Subscription.propTypes = {

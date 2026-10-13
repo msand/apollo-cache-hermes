@@ -4,26 +4,14 @@ import * as React from 'rehackt';
 
 import type { OperationVariables } from '../../core/index';
 import { mergeOptions } from '../../utilities/index';
-import type {
-  LazyQueryHookExecOptions,
-  LazyQueryHookOptions,
-  LazyQueryResultTuple,
-  NoInfer,
-} from '../types/types';
+import type { LazyQueryHookExecOptions, LazyQueryHookOptions, LazyQueryResultTuple, NoInfer } from '../types/types';
 
 import { useInternalState } from './useQuery';
 import { useApolloClient } from './useApolloClient';
 
 // The following methods, when called will execute the query, regardless of
 // whether the useLazyQuery execute function was called before.
-const EAGER_METHODS = [
-  'refetch',
-  'reobserve',
-  'fetchMore',
-  'updateQuery',
-  'startPolling',
-  'subscribeToMore',
-] as const;
+const EAGER_METHODS = ['refetch', 'reobserve', 'fetchMore', 'updateQuery', 'startPolling', 'subscribeToMore'] as const;
 
 /**
  * A hook for imperatively executing queries in an Apollo application, e.g. in response to user interaction.
@@ -60,19 +48,13 @@ const EAGER_METHODS = [
  * @param options - Default options to control how the query is executed.
  * @returns A tuple in the form of `[execute, result]`
  */
-export function useLazyQuery<
-  TData = any,
-  TVariables extends OperationVariables = OperationVariables,
->(
+export function useLazyQuery<TData = any, TVariables extends OperationVariables = OperationVariables>(
   query: DocumentNode | TypedDocumentNode<TData, TVariables>,
-  options?: LazyQueryHookOptions<NoInfer<TData>, NoInfer<TVariables>>
+  options?: LazyQueryHookOptions<NoInfer<TData>, NoInfer<TVariables>>,
 ): LazyQueryResultTuple<TData, TVariables> {
-  const execOptionsRef
-    = React.useRef<Partial<LazyQueryHookExecOptions<TData, TVariables>>>();
+  const execOptionsRef = React.useRef<Partial<LazyQueryHookExecOptions<TData, TVariables>>>();
   const optionsRef = React.useRef<LazyQueryHookOptions<TData, TVariables>>();
-  const queryRef = React.useRef<
-    DocumentNode | TypedDocumentNode<TData, TVariables>
-  >();
+  const queryRef = React.useRef<DocumentNode | TypedDocumentNode<TData, TVariables>>();
   const merged = mergeOptions(options, execOptionsRef.current || {});
   const document = merged?.query ?? query;
 
@@ -81,19 +63,15 @@ export function useLazyQuery<
   optionsRef.current = options;
   queryRef.current = document;
 
-  const internalState = useInternalState<TData, TVariables>(
-    useApolloClient(options && options.client),
-    document
-  );
+  const internalState = useInternalState<TData, TVariables>(useApolloClient(options && options.client), document);
 
   const useQueryResult = internalState.useQuery({
     ...merged,
     skip: !execOptionsRef.current,
   });
 
-  const initialFetchPolicy
-    = useQueryResult.observable.options.initialFetchPolicy ||
-    internalState.getDefaultFetchPolicy();
+  const initialFetchPolicy =
+    useQueryResult.observable.options.initialFetchPolicy || internalState.getDefaultFetchPolicy();
 
   const { forceUpdateState, obsQueryFields } = internalState;
   // We use useMemo here to make sure the eager methods have a stable identity.
@@ -101,7 +79,7 @@ export function useLazyQuery<
     const eagerMethods: Record<string, any> = {};
     for (const key of EAGER_METHODS) {
       const method = obsQueryFields[key];
-      eagerMethods[key] = function() {
+      eagerMethods[key] = function () {
         if (!execOptionsRef.current) {
           execOptionsRef.current = Object.create(null);
           // Only the first time populating execOptionsRef.current matters here.
@@ -122,18 +100,17 @@ export function useLazyQuery<
       ...eagerMethods,
       called,
     }),
-    [useQueryResult, eagerMethods, called]
+    [useQueryResult, eagerMethods, called],
   );
 
   const execute = React.useCallback<LazyQueryResultTuple<TData, TVariables>[0]>(
-    (executeOptions) => {
-      execOptionsRef.current
-        = executeOptions
-          ? {
+    executeOptions => {
+      execOptionsRef.current = executeOptions
+        ? {
             ...executeOptions,
             fetchPolicy: executeOptions.fetchPolicy || initialFetchPolicy,
           }
-          : {
+        : {
             fetchPolicy: initialFetchPolicy,
           };
 
@@ -152,7 +129,7 @@ export function useLazyQuery<
 
       return promise;
     },
-    [eagerMethods, initialFetchPolicy, internalState]
+    [eagerMethods, initialFetchPolicy, internalState],
   );
 
   return [execute, result];

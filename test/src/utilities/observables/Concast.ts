@@ -1,8 +1,4 @@
-import type {
-  Observer,
-  ObservableSubscription,
-  Subscriber,
-} from './Observable';
+import type { Observer, ObservableSubscription, Subscriber } from './Observable';
 import { Observable } from './Observable';
 import { iterateObserversSafely } from './iteration';
 import { fixObservableSubclass } from './subclassing';
@@ -63,7 +59,7 @@ export class Concast<T> extends Observable<T> {
   // Not only can the individual elements of the iterable be promises, but
   // also the iterable itself can be wrapped in a promise.
   constructor(sources: MaybeAsync<ConcastSourcesIterable<T>> | Subscriber<T>) {
-    super((observer) => {
+    super(observer => {
       this.addObserver(observer);
       return () => this.removeObserver(observer);
     });
@@ -71,7 +67,7 @@ export class Concast<T> extends Observable<T> {
     // Suppress rejection warnings for this.promise, since it's perfectly
     // acceptable to pay no attention to this.promise if you're consuming
     // the results through the normal observable API.
-    this.promise.catch((_) => {});
+    this.promise.catch(_ => {});
 
     // If someone accidentally tries to create a Concast using a subscriber
     // function, recover by creating an Observable from that subscriber and
@@ -210,10 +206,7 @@ export class Concast<T> extends Observable<T> {
           // followed by a 'complete' message (see addObserver).
           iterateObserversSafely(this.observers, 'complete');
         } else if (isPromiseLike(value)) {
-          value.then(
-            obs => (this.sub = obs.subscribe(this.handlers)),
-            this.handlers.error
-          );
+          value.then(obs => (this.sub = obs.subscribe(this.handlers)), this.handlers.error);
         } else {
           this.sub = value.subscribe(this.handlers);
         }
@@ -223,10 +216,7 @@ export class Concast<T> extends Observable<T> {
 
   private nextResultListeners = new Set<NextResultListener>();
 
-  private notify(
-    method: Parameters<NextResultListener>[0],
-    arg?: Parameters<NextResultListener>[1]
-  ) {
+  private notify(method: Parameters<NextResultListener>[0], arg?: Parameters<NextResultListener>[1]) {
     const { nextResultListeners } = this;
     if (nextResultListeners.size) {
       // Replacing this.nextResultListeners first ensures it does not grow while
@@ -260,10 +250,7 @@ export class Concast<T> extends Observable<T> {
   };
 }
 
-type NextResultListener = (
-  method: 'next' | 'error' | 'complete',
-  arg?: any
-) => any;
+type NextResultListener = (method: 'next' | 'error' | 'complete', arg?: any) => any;
 
 // Necessary because the Concast constructor has a different signature
 // than the Observable constructor.

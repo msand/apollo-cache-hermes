@@ -12,9 +12,7 @@ describe('toPromise', () => {
   const error = new Error('I always error');
 
   it('return next call as Promise resolution', () => {
-    return toPromise(Observable.of(data)).then(result =>
-      expect(data).toEqual(result)
-    );
+    return toPromise(Observable.of(data)).then(result => expect(data).toEqual(result));
   });
 
   it('return error call as Promise rejection', () => {
@@ -39,7 +37,7 @@ describe('toPromise', () => {
     });
 
     itAsync('return error call as Promise rejection', (resolve, reject) => {
-      toPromise(Observable.of(data, data)).then((result) => {
+      toPromise(Observable.of(data, data)).then(result => {
         expect(data).toEqual(result);
         expect(spy).toHaveBeenCalled();
         resolve();

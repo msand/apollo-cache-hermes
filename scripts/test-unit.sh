@@ -20,8 +20,9 @@ for i in "${!FILES[@]}"; do
   if [[ "${file##*.}" == "ts" ]] && [[ "${file##*/}" != "jest.config.ts" ]]; then
     FILES[$i]="${file%.*}.js"
   fi
+  # tsc emits .js for .tsx sources ("jsx": "react").
   if [[ "${file##*.}" == "tsx" ]]; then
-    FILES[$i]="${file%.*}.jsx"
+    FILES[$i]="${file%.*}.js"
   fi
 done
 
@@ -30,8 +31,9 @@ OPTIONS=(
 )
 DEBUGGING=false
 
+# toBeGarbageCollected needs global.gc; Jest workers inherit these flags.
+NODE_OPTIONS=(--expose-gc)
 # Jest doesn't handle debugger flags directly.
-NODE_OPTIONS=()
 for option in "${OPTIONS_FLAGS[@]}"; do
   if [[ "${option}" =~ ^--(inspect|debug-brk) ]]; then
     DEBUGGING=true

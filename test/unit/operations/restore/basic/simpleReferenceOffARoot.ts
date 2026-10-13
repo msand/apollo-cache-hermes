@@ -8,7 +8,6 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.restore`, () => {
   describe(`simple references hanging off a root`, () => {
-
     let restoreGraphSnapshot: GraphSnapshot, originalGraphSnapshot: GraphSnapshot;
     beforeAll(() => {
       const cacheContext = createStrictCacheContext();
@@ -27,23 +26,26 @@ describe(`operations.restore`, () => {
           }
           justValue
         }`,
-        cacheContext
+        cacheContext,
       );
 
-      restoreGraphSnapshot = restore({
-        [QueryRootId]: {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          outbound: [{ id: '123', path: ['viewer'] }],
-          data: {
-            justValue: '42',
+      restoreGraphSnapshot = restore(
+        {
+          [QueryRootId]: {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            outbound: [{ id: '123', path: ['viewer'] }],
+            data: {
+              justValue: '42',
+            },
+          },
+          '123': {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            inbound: [{ id: QueryRootId, path: ['viewer'] }],
+            data: { id: 123, name: 'Gouda' },
           },
         },
-        '123': {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          inbound: [{ id: QueryRootId, path: ['viewer'] }],
-          data: { id: 123, name: 'Gouda' },
-        },
-      }, cacheContext).cacheSnapshot.baseline;
+        cacheContext,
+      ).cacheSnapshot.baseline;
     });
 
     it(`restores GraphSnapshot from JSON serializable object`, () => {
@@ -54,6 +56,5 @@ describe(`operations.restore`, () => {
       jestExpect(restoreGraphSnapshot.getNodeSnapshot(QueryRootId)).toBeInstanceOf(EntitySnapshot);
       jestExpect(restoreGraphSnapshot.getNodeSnapshot('123')).toBeInstanceOf(EntitySnapshot);
     });
-
   });
 });

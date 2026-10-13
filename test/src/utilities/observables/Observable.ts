@@ -1,8 +1,4 @@
-import type {
-  Observer,
-  Subscription as ObservableSubscription,
-  Subscriber,
-} from 'zen-observable-ts';
+import type { Observer, Subscription as ObservableSubscription, Subscriber } from 'zen-observable-ts';
 import { Observable } from 'zen-observable-ts';
 
 // This simplified polyfill attempts to follow the ECMAScript Observable
@@ -18,7 +14,7 @@ const { prototype } = Observable;
 const fakeObsSymbol = '@@observable' as keyof typeof prototype;
 if (!prototype[fakeObsSymbol]) {
   // @ts-expect-error
-  prototype[fakeObsSymbol] = function() {
+  prototype[fakeObsSymbol] = function () {
     return this;
   };
 }

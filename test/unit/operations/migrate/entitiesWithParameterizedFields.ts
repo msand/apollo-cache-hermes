@@ -19,7 +19,7 @@ function createNewCacheSnapshot(cacheContext: CacheContext) {
       },
     },
     `{ foo bar viewer { id first last __typename } }`,
-    cacheContext
+    cacheContext,
   );
   return new CacheSnapshot(snapshot, snapshot, new OptimisticUpdateQueue());
 }
@@ -51,7 +51,7 @@ function createNewCacheSnapshot2(cacheContext: CacheContext) {
       user(id: $id) { id first last __typename }
     }`,
     cacheContext,
-    { id: 'xxx' }
+    { id: 'xxx' },
   );
   return new CacheSnapshot(snapshot, snapshot, new OptimisticUpdateQueue());
 }
@@ -68,17 +68,20 @@ function createNewCacheSnapshot3(cacheContext: CacheContext) {
         first: 'Jonh',
         last: 'Doe',
         __typename: 'Viewer',
-        friends: [{
-          id: 'friend-1',
-          first: 'Bob',
-          last: 'Breaker',
-          __typename: 'Friend',
-        }, {
-          id: 'friend-2',
-          first: 'Susan',
-          last: 'Fixer',
-          __typename: 'Friend',
-        }],
+        friends: [
+          {
+            id: 'friend-1',
+            first: 'Bob',
+            last: 'Breaker',
+            __typename: 'Friend',
+          },
+          {
+            id: 'friend-2',
+            first: 'Susan',
+            last: 'Fixer',
+            __typename: 'Friend',
+          },
+        ],
       },
     },
     `query dummy($circle: String) { 
@@ -93,7 +96,7 @@ function createNewCacheSnapshot3(cacheContext: CacheContext) {
       }
     }`,
     cacheContext,
-    { circle: 'elementary' }
+    { circle: 'elementary' },
   );
   return new CacheSnapshot(snapshot, snapshot, new OptimisticUpdateQueue());
 }
@@ -108,21 +111,30 @@ describe(`operations.migrate`, () => {
   it(`can add parameterized fields to root`, () => {
     const migrationMap: MigrationMap = {
       _parameterized: {
-        Query: [{
-          path: ['user'],
-          args: { id: 'xxx' },
-          defaultReturn: null,
-        }],
+        Query: [
+          {
+            path: ['user'],
+            args: { id: 'xxx' },
+            defaultReturn: null,
+          },
+        ],
       },
     };
     const migrated = migrate(createNewCacheSnapshot(cacheContext), migrationMap);
-    const { result, complete } = read(cacheContext, query(`
+    const { result, complete } = read(
+      cacheContext,
+      query(
+        `
       query dummy($id: ID) {
         foo
         bar
         user(id: $id)
       }
-    `, { id: 'xxx' }), migrated.baseline);
+    `,
+        { id: 'xxx' },
+      ),
+      migrated.baseline,
+    );
 
     jestExpect(complete).toBeTruthy();
     jestExpect(_.get(result, 'user')).toBeNull();
@@ -131,11 +143,13 @@ describe(`operations.migrate`, () => {
   it(`doesn't wipe out compatable parameterized fields at root`, () => {
     const migrationMap: MigrationMap = {
       _parameterized: {
-        Query: [{
-          path: ['user'],
-          args: { id: 'xxx' },
-          defaultReturn: null,
-        }],
+        Query: [
+          {
+            path: ['user'],
+            args: { id: 'xxx' },
+            defaultReturn: null,
+          },
+        ],
       },
     };
     // start with a snapshot with user(id: $id) already in place at root
@@ -143,7 +157,10 @@ describe(`operations.migrate`, () => {
     const migrated = migrate(snapshot, migrationMap);
 
     // migration should yield no change to the user(id: $id) parameterized field
-    const { result, complete } = read(cacheContext, query(`
+    const { result, complete } = read(
+      cacheContext,
+      query(
+        `
       query dummy($id: ID) {
         foo
         bar
@@ -153,7 +170,11 @@ describe(`operations.migrate`, () => {
           last
         }
       }
-    `, { id: 'xxx' }), migrated.baseline);
+    `,
+        { id: 'xxx' },
+      ),
+      migrated.baseline,
+    );
 
     jestExpect(complete).toBeTruthy();
     jestExpect(_.get(result, 'user')).toEqual({
@@ -167,11 +188,13 @@ describe(`operations.migrate`, () => {
   it(`can modify the signature of existing parameterized fields at root`, () => {
     const migrationMap: MigrationMap = {
       _parameterized: {
-        ['Query']: [{
-          path: ['user'],
-          args: { id: 'xxx', extraInfo: true },
-          defaultReturn: null,
-        }],
+        ['Query']: [
+          {
+            path: ['user'],
+            args: { id: 'xxx', extraInfo: true },
+            defaultReturn: null,
+          },
+        ],
       },
     };
     // start with a snapshot with user(id: $id) already in place at root
@@ -179,13 +202,20 @@ describe(`operations.migrate`, () => {
     const migrated = migrate(snapshot, migrationMap);
 
     // read for the old parameterized field should no longer succeed
-    const { result, complete } = read(cacheContext, query(`
+    const { result, complete } = read(
+      cacheContext,
+      query(
+        `
       query dummy($id: ID) {
         foo
         bar
         user(id: $id, extraInfo: true)
       }
-    `, { id: 'xxx' }), migrated.baseline);
+    `,
+        { id: 'xxx' },
+      ),
+      migrated.baseline,
+    );
 
     jestExpect(complete).toBeTruthy();
     jestExpect(_.get(result, 'user')).toBe(null);
@@ -194,15 +224,20 @@ describe(`operations.migrate`, () => {
   it(`can add parameterized fields to entity`, () => {
     const migrationMap: MigrationMap = {
       _parameterized: {
-        ['Viewer']: [{
-          path: ['friends'],
-          args: { circle: 'elementary' },
-          defaultReturn: [],
-        }],
+        ['Viewer']: [
+          {
+            path: ['friends'],
+            args: { circle: 'elementary' },
+            defaultReturn: [],
+          },
+        ],
       },
     };
     const migrated = migrate(createNewCacheSnapshot(cacheContext), migrationMap);
-    const { result, complete } = read(cacheContext, query(`
+    const { result, complete } = read(
+      cacheContext,
+      query(
+        `
       query dummy($circle: String) {
         foo
         bar
@@ -215,7 +250,11 @@ describe(`operations.migrate`, () => {
           }
         }
       }
-    `, { circle: 'elementary' }), migrated.baseline);
+    `,
+        { circle: 'elementary' },
+      ),
+      migrated.baseline,
+    );
 
     jestExpect(complete).toBeTruthy();
     jestExpect(_.get(result, ['viewer', 'friends'])).toEqual([]);
@@ -224,11 +263,13 @@ describe(`operations.migrate`, () => {
   it(`doesn't wipe out compatable parameterized fields on entity`, () => {
     const migrationMap: MigrationMap = {
       _parameterized: {
-        Viewer: [{
-          path: ['friends'],
-          args: { circle: 'elementary' },
-          defaultReturn: [],
-        }],
+        Viewer: [
+          {
+            path: ['friends'],
+            args: { circle: 'elementary' },
+            defaultReturn: [],
+          },
+        ],
       },
     };
     // start with a snapshot with user(id: $id) already in place at root
@@ -236,7 +277,10 @@ describe(`operations.migrate`, () => {
     const migrated = migrate(snapshot, migrationMap);
 
     // migration should yield no change to the user(id: $id) parameterized field
-    const { result, complete } = read(cacheContext, query(`
+    const { result, complete } = read(
+      cacheContext,
+      query(
+        `
       query dummy($circle: String) {
         foo
         bar
@@ -249,34 +293,46 @@ describe(`operations.migrate`, () => {
           }
         }
       }
-    `, { circle: 'elementary' }), migrated.baseline);
+    `,
+        { circle: 'elementary' },
+      ),
+      migrated.baseline,
+    );
 
     jestExpect(complete).toBeTruthy();
-    jestExpect(_.get(result, ['viewer', 'friends'])).toEqual([{
-      '__typename': 'Friend',
-      id: 'friend-1',
-      first: 'Bob',
-      last: 'Breaker',
-    }, {
-      '__typename': 'Friend',
-      id: 'friend-2',
-      first: 'Susan',
-      last: 'Fixer',
-    }]);
+    jestExpect(_.get(result, ['viewer', 'friends'])).toEqual([
+      {
+        __typename: 'Friend',
+        id: 'friend-1',
+        first: 'Bob',
+        last: 'Breaker',
+      },
+      {
+        __typename: 'Friend',
+        id: 'friend-2',
+        first: 'Susan',
+        last: 'Fixer',
+      },
+    ]);
   });
 
   it(`can modify parameterized fields of entity`, () => {
     const migrationMap: MigrationMap = {
       _parameterized: {
-        Viewer: [{
-          path: ['friends'],
-          args: { circle: 'elementary', stillFriends: true },
-          defaultReturn: [],
-        }],
+        Viewer: [
+          {
+            path: ['friends'],
+            args: { circle: 'elementary', stillFriends: true },
+            defaultReturn: [],
+          },
+        ],
       },
     };
     const migrated = migrate(createNewCacheSnapshot3(cacheContext), migrationMap);
-    const { result, complete } = read(cacheContext, query(`
+    const { result, complete } = read(
+      cacheContext,
+      query(
+        `
       query dummy($circle: String, $stillFriends: Boolean) {
         foo
         bar
@@ -289,7 +345,11 @@ describe(`operations.migrate`, () => {
           }
         }
       }
-    `, { circle: 'elementary', stillFriends: true }), migrated.baseline);
+    `,
+        { circle: 'elementary', stillFriends: true },
+      ),
+      migrated.baseline,
+    );
 
     jestExpect(complete).toBeTruthy();
     jestExpect(_.get(result, ['viewer', 'friends'])).toEqual([]);
@@ -300,17 +360,20 @@ describe(`operations.migrate`, () => {
     const { result, complete } = copyFromPath(cacheContext, copyFrom);
 
     jestExpect(complete).toBeTruthy();
-    jestExpect(_.get(result, ['viewer', 'friends'])).toEqual([{
-      '__typename': 'Friend',
-      id: 'friend-1',
-      first: 'Bob',
-      last: 'Breaker',
-    }, {
-      '__typename': 'Friend',
-      id: 'friend-2',
-      first: 'Susan',
-      last: 'Fixer',
-    }]);
+    jestExpect(_.get(result, ['viewer', 'friends'])).toEqual([
+      {
+        __typename: 'Friend',
+        id: 'friend-1',
+        first: 'Bob',
+        last: 'Breaker',
+      },
+      {
+        __typename: 'Friend',
+        id: 'friend-2',
+        first: 'Susan',
+        last: 'Fixer',
+      },
+    ]);
   });
 
   it(`defaults to defaultReturn if can't copy from path`, () => {
@@ -340,12 +403,14 @@ describe(`operations.migrate`, () => {
   it(`can complete when parameterized entity is undefined`, () => {
     const migrationMap: MigrationMap = {
       _parameterized: {
-        Viewer: [{
-          path: ['friends'],
-          args: { circle: 'elementary' },
-          defaultReturn: null,
-          copyFrom: { path: ['friends'], args: { circle: 'elementary', stillFriends: true } },
-        }],
+        Viewer: [
+          {
+            path: ['friends'],
+            args: { circle: 'elementary' },
+            defaultReturn: null,
+            copyFrom: { path: ['friends'], args: { circle: 'elementary', stillFriends: true } },
+          },
+        ],
       },
     };
 
@@ -354,7 +419,7 @@ describe(`operations.migrate`, () => {
     const { complete, result } = read(
       cacheContext,
       query(parameterizedQuery, { circle: 'elementary', stillFriends: true }),
-      migrated.baseline
+      migrated.baseline,
     );
 
     jestExpect(complete).toBeTruthy();
@@ -380,20 +445,18 @@ query dummy($circle: String, $stillFriends: Boolean) {
 function copyFromPath(cacheContext: CacheContext, copyFrom?: any): QueryResult {
   const migrationMap: MigrationMap = {
     _parameterized: {
-      Viewer: [{
-        path: ['friends'],
-        args: { circle: 'elementary', stillFriends: true },
-        defaultReturn: [],
-        copyFrom,
-      }],
+      Viewer: [
+        {
+          path: ['friends'],
+          args: { circle: 'elementary', stillFriends: true },
+          defaultReturn: [],
+          copyFrom,
+        },
+      ],
     },
   };
 
   const snapshot = createNewCacheSnapshot3(cacheContext);
   const migrated = migrate(snapshot, migrationMap);
-  return read(
-    cacheContext,
-    query(parameterizedQuery, { circle: 'elementary', stillFriends: true }),
-    migrated.baseline,
-  );
+  return read(cacheContext, query(parameterizedQuery, { circle: 'elementary', stillFriends: true }), migrated.baseline);
 }

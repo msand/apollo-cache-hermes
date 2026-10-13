@@ -1,9 +1,4 @@
-import type {
-  DocumentNode,
-  ASTNode,
-  FragmentDefinitionNode,
-  FragmentSpreadNode,
-} from 'graphql';
+import type { DocumentNode, ASTNode, FragmentDefinitionNode, FragmentSpreadNode } from 'graphql';
 import { visit } from 'graphql';
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { wrap } from 'optimism';
@@ -11,11 +6,7 @@ import { wrap } from 'optimism';
 import { WeakCache } from '@wry/caches';
 
 import type { FragmentMap } from '../../utilities/index';
-import {
-  cacheSizes,
-  defaultCacheSizes,
-  getFragmentDefinitions,
-} from '../../utilities/index';
+import { cacheSizes, defaultCacheSizes, getFragmentDefinitions } from '../../utilities/index';
 
 export interface FragmentRegistryAPI {
   register(...fragments: DocumentNode[]): this;
@@ -30,9 +21,7 @@ export interface FragmentRegistryAPI {
 // InMemoryCache refers only to the TypeScript interface FragmentRegistryAPI,
 // never the concrete implementation FragmentRegistry (which is deliberately not
 // exported from this module).
-export function createFragmentRegistry(
-  ...fragments: DocumentNode[]
-): FragmentRegistryAPI {
+export function createFragmentRegistry(...fragments: DocumentNode[]): FragmentRegistryAPI {
   return new FragmentRegistry(...fragments);
 }
 
@@ -52,7 +41,7 @@ class FragmentRegistry implements FragmentRegistryAPI {
   public register(...fragments: DocumentNode[]): this {
     const definitions = new Map<string, FragmentDefinitionNode>();
     fragments.forEach((doc: DocumentNode) => {
-      getFragmentDefinitions(doc).forEach((node) => {
+      getFragmentDefinitions(doc).forEach(node => {
         definitions.set(node.name.value, node);
       });
     });
@@ -74,21 +63,16 @@ class FragmentRegistry implements FragmentRegistryAPI {
     const proto = FragmentRegistry.prototype;
     this.invalidate = (this.lookup = wrap(proto.lookup.bind(this), {
       makeCacheKey: arg => arg,
-      max:
-        cacheSizes['fragmentRegistry.lookup'] ||
-        defaultCacheSizes['fragmentRegistry.lookup'],
+      max: cacheSizes['fragmentRegistry.lookup'] || defaultCacheSizes['fragmentRegistry.lookup'],
     })).dirty; // This dirty function is bound to the wrapped lookup method.
     this.transform = wrap(proto.transform.bind(this), {
       cache: WeakCache,
-      max:
-        cacheSizes['fragmentRegistry.transform'] ||
-        defaultCacheSizes['fragmentRegistry.transform'],
+      max: cacheSizes['fragmentRegistry.transform'] || defaultCacheSizes['fragmentRegistry.transform'],
     });
     this.findFragmentSpreads = wrap(proto.findFragmentSpreads.bind(this), {
       cache: WeakCache,
       max:
-        cacheSizes['fragmentRegistry.findFragmentSpreads'] ||
-        defaultCacheSizes['fragmentRegistry.findFragmentSpreads'],
+        cacheSizes['fragmentRegistry.findFragmentSpreads'] || defaultCacheSizes['fragmentRegistry.findFragmentSpreads'],
     });
   }
 
@@ -103,7 +87,7 @@ class FragmentRegistry implements FragmentRegistryAPI {
 
   public transform<D extends DocumentNode>(document: D): D {
     const defined = new Map<string, FragmentDefinitionNode>();
-    getFragmentDefinitions(document).forEach((def) => {
+    getFragmentDefinitions(document).forEach(def => {
       defined.set(def.name.value, def);
     });
 
@@ -114,8 +98,7 @@ class FragmentRegistry implements FragmentRegistryAPI {
       }
     };
 
-    const enqueueChildSpreads = (node: ASTNode) =>
-      Object.keys(this.findFragmentSpreads(node)).forEach(enqueue);
+    const enqueueChildSpreads = (node: ASTNode) => Object.keys(this.findFragmentSpreads(node)).forEach(enqueue);
 
     enqueueChildSpreads(document);
 
@@ -124,7 +107,7 @@ class FragmentRegistry implements FragmentRegistryAPI {
 
     // This Set forEach loop can be extended during iteration by adding
     // additional strings to the unbound set.
-    unbound.forEach((fragmentName) => {
+    unbound.forEach(fragmentName => {
       const knownFragmentDef = defined.get(fragmentName);
       if (knownFragmentDef) {
         enqueueChildSpreads((map[fragmentName] = knownFragmentDef));
@@ -139,7 +122,7 @@ class FragmentRegistry implements FragmentRegistryAPI {
 
     if (missing.length) {
       const defsToAppend: FragmentDefinitionNode[] = [];
-      missing.forEach((name) => {
+      missing.forEach(name => {
         const def = map[name];
         if (def) {
           defsToAppend.push(def);

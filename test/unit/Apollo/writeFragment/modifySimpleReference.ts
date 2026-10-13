@@ -10,7 +10,6 @@ import { strictConfig } from '../../../helpers';
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`writeFragment with simple reference`, () => {
-
   let hermes: Hermes, baseline: GraphSnapshot;
   beforeAll(() => {
     hermes = new Hermes(strictConfig);
@@ -90,9 +89,8 @@ describe(`writeFragment with simple reference`, () => {
           ],
         },
         [{ id: QueryRootId, path: ['viewer'] }],
-      )
+      ),
     );
     expect(baseline.getNodeData(QueryRootId)!['viewer']).to.eq(baseline.getNodeData('123'));
   });
-
 });

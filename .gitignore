@@ -6,13 +6,18 @@
 
 # Build Artifacts
 /output/
+/junit.xml
 *.d.ts
 *.js
 !/scripts/*.js
+!/babel.config.js
 *.ts.map
 
 # TypeScript
 !/typings/**/*.d.ts
+
+# Claude Code worktrees
+/.claude/worktrees/
 
 # jetbrains
 .idea/

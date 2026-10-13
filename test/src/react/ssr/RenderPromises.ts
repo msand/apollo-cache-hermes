@@ -15,8 +15,8 @@ interface QueryData {
 }
 
 type QueryInfo = {
-  seen: boolean,
-  observable: ObservableQuery<any, any> | null,
+  seen: boolean;
+  observable: ObservableQuery<any, any> | null;
 };
 
 function makeQueryInfoTrie() {
@@ -49,7 +49,7 @@ export class RenderPromises {
 
   // Registers the server side rendered observable.
   public registerSSRObservable<TData, TVariables extends OperationVariables>(
-    observable: ObservableQuery<any, TVariables>
+    observable: ObservableQuery<any, TVariables>,
   ) {
     if (this.stopped) return;
     this.lookupQueryInfo(observable.options).observable = observable;
@@ -57,23 +57,20 @@ export class RenderPromises {
 
   // Get's the cached observable that matches the SSR Query instances query and variables.
   public getSSRObservable<TData, TVariables extends OperationVariables>(
-    props: QueryDataOptions<TData, TVariables>
+    props: QueryDataOptions<TData, TVariables>,
   ): ObservableQuery<any, TVariables> | null {
     return this.lookupQueryInfo(props).observable;
   }
 
-  public addQueryPromise(
-    queryInstance: QueryData,
-    finish?: () => ReactTypes.ReactNode
-  ): ReactTypes.ReactNode {
+  public addQueryPromise(queryInstance: QueryData, finish?: () => ReactTypes.ReactNode): ReactTypes.ReactNode {
     if (!this.stopped) {
       const info = this.lookupQueryInfo(queryInstance.getOptions());
       if (!info.seen) {
         this.queryPromises.set(
           queryInstance.getOptions(),
-          new Promise((resolve) => {
+          new Promise(resolve => {
             resolve(queryInstance.fetchData());
-          })
+          }),
         );
         // Render null to abandon this subtree for this rendering, so that we
         // can wait for the data to arrive.
@@ -83,16 +80,15 @@ export class RenderPromises {
     return finish ? finish() : null;
   }
 
-  public addObservableQueryPromise<
-    TData,
-    TVariables extends OperationVariables,
-  >(obsQuery: ObservableQuery<TData, TVariables>) {
+  public addObservableQueryPromise<TData, TVariables extends OperationVariables>(
+    obsQuery: ObservableQuery<TData, TVariables>,
+  ) {
     return this.addQueryPromise({
       // The only options which seem to actually be used by the
       // RenderPromises class are query and variables.
       getOptions: () => obsQuery.options,
       fetchData: () =>
-        new Promise<void>((resolve) => {
+        new Promise<void>(resolve => {
           const sub = obsQuery.subscribe({
             next(result) {
               if (!result.loading) {
@@ -136,11 +132,8 @@ export class RenderPromises {
   }
 
   private lookupQueryInfo<TData, TVariables extends OperationVariables>(
-    props: QueryDataOptions<TData, TVariables>
+    props: QueryDataOptions<TData, TVariables>,
   ): QueryInfo {
-    return this.queryInfoTrie.lookup(
-      props.query,
-      canonicalStringify(props.variables)
-    );
+    return this.queryInfoTrie.lookup(props.query, canonicalStringify(props.variables));
   }
 }

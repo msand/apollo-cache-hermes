@@ -1,12 +1,6 @@
-
 import * as React from 'rehackt';
 
-import {
-  assertWrappedQueryRef,
-  getWrappedPromise,
-  unwrapQueryRef,
-  updateWrappedQueryRef,
-} from '../internal/index';
+import { assertWrappedQueryRef, getWrappedPromise, unwrapQueryRef, updateWrappedQueryRef } from '../internal/index';
 import type { QueryRef } from '../internal/index';
 import type { ApolloError } from '../../errors/index';
 import type { ApolloQueryResult, NetworkStatus } from '../../core/index';
@@ -41,9 +35,7 @@ export interface UseReadQueryResult<TData = unknown> {
   networkStatus: NetworkStatus;
 }
 
-export function useReadQuery<TData>(
-  queryRef: QueryRef<TData>
-): UseReadQueryResult<TData> {
+export function useReadQuery<TData>(queryRef: QueryRef<TData>): UseReadQueryResult<TData> {
   const unwrapped = unwrapQueryRef(queryRef);
 
   return wrapHook(
@@ -51,29 +43,21 @@ export function useReadQuery<TData>(
     _useReadQuery,
     unwrapped
       ? unwrapped['observable']
-      // in the case of a "transported" queryRef object, we need to use the
-      // client that's available to us at the current position in the React tree
-      // that ApolloClient will then have the job to recreate a real queryRef from
-      // the transported object
-      // This is just a context read - it's fine to do this conditionally.
-      // This hook wrapper also shouldn't be optimized by React Compiler.
-      : useApolloClient()
+      : // in the case of a "transported" queryRef object, we need to use the
+        // client that's available to us at the current position in the React tree
+        // that ApolloClient will then have the job to recreate a real queryRef from
+        // the transported object
+        // This is just a context read - it's fine to do this conditionally.
+        // This hook wrapper also shouldn't be optimized by React Compiler.
+        useApolloClient(),
   )(queryRef);
 }
 
-function _useReadQuery<TData>(
-  queryRef: QueryRef<TData>
-): UseReadQueryResult<TData> {
+function _useReadQuery<TData>(queryRef: QueryRef<TData>): UseReadQueryResult<TData> {
   assertWrappedQueryRef(queryRef);
-  const internalQueryRef = React.useMemo(
-    () => unwrapQueryRef(queryRef),
-    [queryRef]
-  );
+  const internalQueryRef = React.useMemo(() => unwrapQueryRef(queryRef), [queryRef]);
 
-  const getPromise = React.useCallback(
-    () => getWrappedPromise(queryRef),
-    [queryRef]
-  );
+  const getPromise = React.useCallback(() => getWrappedPromise(queryRef), [queryRef]);
 
   if (internalQueryRef.disposed) {
     internalQueryRef.reinitialize();
@@ -84,16 +68,16 @@ function _useReadQuery<TData>(
 
   const promise = useSyncExternalStore(
     React.useCallback(
-      (forceUpdate) => {
-        return internalQueryRef.listen((promise) => {
+      forceUpdate => {
+        return internalQueryRef.listen(promise => {
           updateWrappedQueryRef(queryRef, promise);
           forceUpdate();
         });
       },
-      [internalQueryRef, queryRef]
+      [internalQueryRef, queryRef],
     ),
     getPromise,
-    getPromise
+    getPromise,
   );
 
   const result = __use(promise) as ApolloQueryResult<TData>;

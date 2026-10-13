@@ -1,4 +1,3 @@
-
 import * as React from 'rehackt';
 import type * as ReactTypes from 'react';
 import type { DocumentNode } from 'graphql';
@@ -28,23 +27,11 @@ export function withQuery<
   TData extends object = {},
   TGraphQLVariables extends object = {},
   TChildProps extends object = DataProps<TData, TGraphQLVariables>,
->(
-  document: DocumentNode,
-  operationOptions: OperationOption<
-    TProps,
-    TData,
-    TGraphQLVariables,
-    TChildProps
-  > = {}
-) {
+>(document: DocumentNode, operationOptions: OperationOption<TProps, TData, TGraphQLVariables, TChildProps> = {}) {
   // this is memoized so if coming from `graphql` there is nearly no extra cost
   const operation = parser(document);
   // extract options
-  const {
-    options = defaultMapPropsToOptions,
-    skip = defaultMapPropsToSkip,
-    alias = 'Apollo',
-  } = operationOptions;
+  const { options = defaultMapPropsToOptions, skip = defaultMapPropsToSkip, alias = 'Apollo' } = operationOptions;
 
   let mapPropsToOptions = options as (props: any) => BaseQueryOptions;
   if (typeof mapPropsToOptions !== 'function') {
@@ -58,9 +45,7 @@ export function withQuery<
 
   // allow for advanced referential equality checks
   let lastResultProps: TChildProps | void;
-  return (
-    WrappedComponent: ReactTypes.ComponentType<TProps & TChildProps>
-  ): ReactTypes.ComponentClass<TProps> => {
+  return (WrappedComponent: ReactTypes.ComponentType<TProps & TChildProps>): ReactTypes.ComponentClass<TProps> => {
     const graphQLDisplayName = `${alias}(${getDisplayName(WrappedComponent)})`;
     class GraphQL extends GraphQLBase<TProps, TChildProps> {
       static displayName = graphQLDisplayName;
@@ -69,20 +54,14 @@ export function withQuery<
       render() {
         let props = this.props;
         const shouldSkip = mapPropsToSkip(props);
-        const opts
-          = shouldSkip ? Object.create(null) : { ...mapPropsToOptions(props) };
+        const opts = shouldSkip ? Object.create(null) : { ...mapPropsToOptions(props) };
 
         if (!shouldSkip && !opts.variables && operation.variables.length > 0) {
           opts.variables = calculateVariablesFromProps(operation, props);
         }
 
         return (
-          <Query
-            {...opts}
-            displayName={graphQLDisplayName}
-            skip={shouldSkip}
-            query={document}
-          >
+          <Query {...opts} displayName={graphQLDisplayName} skip={shouldSkip} query={document}>
             {({ client: _, data, ...r }: any) => {
               if (operationOptions.withRef) {
                 this.withRef = true;
@@ -93,12 +72,7 @@ export function withQuery<
 
               // if we have skipped, no reason to manage any reshaping
               if (shouldSkip) {
-                return (
-                  <WrappedComponent
-                    {...(props as TProps)}
-                    {...({} as TChildProps)}
-                  />
-                );
+                return <WrappedComponent {...(props as TProps)} {...({} as TChildProps)} />;
               }
 
               // the HOC's historically hoisted the data from the execution result
@@ -108,24 +82,15 @@ export function withQuery<
               const name = operationOptions.name || 'data';
               let childProps = { [name]: result };
               if (operationOptions.props) {
-                const newResult: OptionProps<TProps, TData, TGraphQLVariables>
-                  = {
-                    [name]: result,
-                    ownProps: props as TProps,
-                  };
-                lastResultProps = operationOptions.props(
-                  newResult,
-                  lastResultProps
-                );
+                const newResult: OptionProps<TProps, TData, TGraphQLVariables> = {
+                  [name]: result,
+                  ownProps: props as TProps,
+                };
+                lastResultProps = operationOptions.props(newResult, lastResultProps);
                 childProps = lastResultProps;
               }
 
-              return (
-                <WrappedComponent
-                  {...(props as TProps)}
-                  {...(childProps as TChildProps)}
-                />
-              );
+              return <WrappedComponent {...(props as TProps)} {...(childProps as TChildProps)} />;
             }}
           </Query>
         );

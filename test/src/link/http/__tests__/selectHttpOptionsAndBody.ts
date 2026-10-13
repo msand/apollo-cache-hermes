@@ -26,10 +26,9 @@ describe('selectHttpOptionsAndBody', () => {
 
   it('includeExtensions allows the extensions to be added', () => {
     const extensions = { yo: 'what up' };
-    const { body } = selectHttpOptionsAndBody(
-      createOperation({}, { query, extensions }),
-      { http: { includeExtensions: true } }
-    );
+    const { body } = selectHttpOptionsAndBody(createOperation({}, { query, extensions }), {
+      http: { includeExtensions: true },
+    });
     expect(body).toHaveProperty('extensions');
     expect((body as any).extensions).toEqual(extensions);
   });
@@ -45,10 +44,7 @@ describe('selectHttpOptionsAndBody', () => {
     };
 
     const extensions = { yo: 'what up' };
-    const { options, body } = selectHttpOptionsAndBody(
-      createOperation({}, { query, extensions }),
-      fallbackHttpConfig
-    );
+    const { options, body } = selectHttpOptionsAndBody(createOperation({}, { query, extensions }), fallbackHttpConfig);
 
     expect(body).toHaveProperty('query');
     expect(body).not.toHaveProperty('extensions');
@@ -78,7 +74,7 @@ describe('selectHttpOptionsAndBody', () => {
     const { options, body } = selectHttpOptionsAndBody(
       createOperation({}, { query, extensions }),
       fallbackHttpConfig,
-      config
+      config,
     );
 
     expect(body).toHaveProperty('query');
@@ -98,7 +94,7 @@ describe('selectHttpOptionsAndBody', () => {
     const { body } = selectHttpOptionsAndBodyInternal(
       createOperation({}, { query }),
       customPrinter,
-      fallbackHttpConfig
+      fallbackHttpConfig,
     );
 
     expect(body.query).toBe('query SampleQuery{stub{id}}');

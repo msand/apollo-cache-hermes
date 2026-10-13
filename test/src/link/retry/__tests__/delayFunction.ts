@@ -23,9 +23,7 @@ describe('buildDelayFunction', () => {
         max: 1000,
       }) as SimpleDelayFunction;
 
-      expect(delayRange(delayFunction, 6)).toEqual([
-        100, 200, 400, 800, 1000, 1000,
-      ]);
+      expect(delayRange(delayFunction, 6)).toEqual([100, 200, 400, 800, 1000, 1000]);
     });
   });
 

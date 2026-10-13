@@ -21,13 +21,8 @@ function isReadableStream(value: any): value is ReadableStream<any> {
   return !!(value as ReadableStream<any>).getReader;
 }
 
-function isAsyncIterableIterator(
-  value: any
-): value is AsyncIterableIterator<any> {
-  return !!(
-    canUseAsyncIteratorSymbol &&
-    (value as AsyncIterableIterator<any>)[Symbol.asyncIterator]
-  );
+function isAsyncIterableIterator(value: any): value is AsyncIterableIterator<any> {
+  return !!(canUseAsyncIteratorSymbol && (value as AsyncIterableIterator<any>)[Symbol.asyncIterator]);
 }
 
 function isStreamableBlob(value: any): value is Blob {
@@ -42,9 +37,7 @@ function isNodeReadableStream(value: any): value is NodeReadableStream {
   return !!(value as NodeReadableStream).pipe;
 }
 
-export function responseIterator<T>(
-  response: Response | NodeResponse
-): AsyncIterableIterator<T> {
+export function responseIterator<T>(response: Response | NodeResponse): AsyncIterableIterator<T> {
   let body: unknown = response;
 
   if (isNodeResponse(response)) body = response.body;
@@ -56,16 +49,12 @@ export function responseIterator<T>(
   // this errors without casting to ReadableStream<T>
   // because Blob.stream() returns a NodeJS ReadableStream
   if (isStreamableBlob(body)) {
-    return readerIterator<T>(
-      (body.stream() as unknown as ReadableStream<T>).getReader()
-    );
+    return readerIterator<T>((body.stream() as unknown as ReadableStream<T>).getReader());
   }
 
   if (isBlob(body)) return promiseIterator<T>(body.arrayBuffer());
 
   if (isNodeReadableStream(body)) return nodeStreamIterator<T>(body);
 
-  throw new Error(
-    'Unknown body type for responseIterator. Please pass a streamable response.'
-  );
+  throw new Error('Unknown body type for responseIterator. Please pass a streamable response.');
 }

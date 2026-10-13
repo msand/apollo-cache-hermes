@@ -11,7 +11,7 @@ const IS_REACT_18 = React.version.startsWith('18');
 const IS_REACT_19 = React.version.startsWith('19');
 
 describe('mockSubscriptionLink', () => {
-  it('should work with multiple subscribers to the same mock websocket', async() => {
+  it('should work with multiple subscribers to the same mock websocket', async () => {
     const subscription = gql`
       subscription {
         car {
@@ -61,7 +61,7 @@ describe('mockSubscriptionLink', () => {
           <ComponentA />
           <ComponentB />
         </div>
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     const numRenders = IS_REACT_18 || IS_REACT_19 ? 2 : results.length + 1;
@@ -71,7 +71,7 @@ describe('mockSubscriptionLink', () => {
       () => {
         expect(renderCountA).toBe(numRenders);
       },
-      { timeout: 1000 }
+      { timeout: 1000 },
     );
     expect(renderCountB).toBe(numRenders);
   });

@@ -1,4 +1,4 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
 exports[`GraphQL Subscriptions should throw an error if the result has errors on it 1`] = `[ApolloError: This is an error]`;
 

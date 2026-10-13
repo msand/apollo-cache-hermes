@@ -42,7 +42,6 @@ export namespace Tracer {
  * paired handlers.
  */
 export interface Tracer<TActionContext = any, TSerialized = GraphSnapshot> {
-
   /**
    * The cache encountered a non-fatal issue.
    */
@@ -66,7 +65,11 @@ export interface Tracer<TActionContext = any, TSerialized = GraphSnapshot> {
   /**
    * Successful end of a request to write to the cache.
    */
-  writeEnd?: (operation: OperationInstance<TSerialized>, info: Tracer.WriteInfo<TSerialized>, context: TActionContext) => void;
+  writeEnd?: (
+    operation: OperationInstance<TSerialized>,
+    info: Tracer.WriteInfo<TSerialized>,
+    context: TActionContext,
+  ) => void;
 
   /**
    * Start of a transaction within the cache.
@@ -87,5 +90,4 @@ export interface Tracer<TActionContext = any, TSerialized = GraphSnapshot> {
    * End of a request to broadcast changes to cache observers.
    */
   broadcastEnd?: (info: Tracer.BroadcastInfo, context: TActionContext) => void;
-
 }

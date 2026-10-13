@@ -1,60 +1,49 @@
 import { DocumentNode } from 'graphql';
 import gql from 'graphql-tag';
 
-import { EntityStore } from '../entityStore';
-import { StoreReader } from '../readFromStore';
-import { StoreWriter } from '../writeToStore';
-import { InMemoryCache } from '../inMemoryCache';
 import { spyOnConsole } from '../../../testing/internal';
+import { Hermes } from '../../../../../src';
 
-import { writeQueryToStore, readQueryFromStore, withError } from './helpers';
+import { withError } from './helpers';
 
 function assertDeeplyFrozen(value: any, stack: any[] = []) {
   if (value !== null && typeof value === 'object' && stack.indexOf(value) < 0) {
     expect(Object.isExtensible(value)).toBe(false);
     expect(Object.isFrozen(value)).toBe(true);
     stack.push(value);
-    Object.keys(value).forEach((key) => {
+    Object.keys(value).forEach(key => {
       assertDeeplyFrozen(value[key], stack);
     });
     expect(stack.pop()).toBe(value);
   }
 }
 
+// Hermes: round-trip through Hermes' public API instead of InMemoryCache's
+// internal StoreWriter/StoreReader/EntityStore (which never touch Hermes).
+// addTypename is off because StoreWriter/StoreReader use the document as is,
+// and diff with returnPartialData: false mirrors readQueryFromStore.
 function storeRoundtrip(query: DocumentNode, result: any, variables = {}) {
-  const cache = new InMemoryCache({
+  const cache = new Hermes({
+    addTypename: false,
     possibleTypes: {
       Character: ['Jedi', 'Droid'],
     },
   });
 
-  const reader = new StoreReader({ cache });
-  const writer = new StoreWriter(cache);
+  cache.writeQuery({ query, data: result, variables });
 
-  const store = writeQueryToStore({
-    writer,
-    result,
-    query,
-    variables,
-  });
+  const readQuery = () => cache.diff<any>({ query, variables, optimistic: false, returnPartialData: false }).result;
 
-  const readOptions = {
-    store,
-    query,
-    variables,
-  };
-
-  const reconstructedResult = readQueryFromStore(reader, readOptions);
+  const reconstructedResult = readQuery();
   expect(reconstructedResult).toEqual(result);
 
   // Make sure the result is identical if we haven't written anything new
   // to the store. https://github.com/apollographql/apollo-client/pull/3394
-  expect(store).toBeInstanceOf(EntityStore);
-  expect(readQueryFromStore(reader, readOptions)).toBe(reconstructedResult);
+  expect(readQuery()).toBe(reconstructedResult);
 
-  const immutableResult = readQueryFromStore(reader, readOptions);
+  const immutableResult = readQuery();
   expect(immutableResult).toEqual(reconstructedResult);
-  expect(readQueryFromStore(reader, readOptions)).toBe(immutableResult);
+  expect(readQuery()).toBe(immutableResult);
   if (__DEV__) {
     try {
       // Note: this illegal assignment will only throw in strict mode, but that's
@@ -70,10 +59,8 @@ function storeRoundtrip(query: DocumentNode, result: any, variables = {}) {
 
   // Now make sure subtrees of the result are identical even after we write
   // an additional bogus field to the store.
-  writeQueryToStore({
-    writer,
-    store,
-    result: { oyez: 1234 },
+  cache.writeQuery({
+    data: { oyez: 1234 },
     query: gql`
       {
         oyez
@@ -81,8 +68,10 @@ function storeRoundtrip(query: DocumentNode, result: any, variables = {}) {
     `,
   });
 
-  const deletedRootResult = readQueryFromStore(reader, readOptions);
-  expect(deletedRootResult).toEqual(result);
+  const deletedRootResult = readQuery();
+  // Hermes: reads may return a superset of the selected fields (see README),
+  // so the root result now also carries the bogus oyez field.
+  expect(deletedRootResult).toEqual({ ...result, oyez: 1234 });
 
   if (deletedRootResult === reconstructedResult) {
     // We don't expect the new result to be identical to the previous result,
@@ -93,7 +82,7 @@ function storeRoundtrip(query: DocumentNode, result: any, variables = {}) {
     return;
   }
 
-  Object.keys(result).forEach((key) => {
+  Object.keys(result).forEach(key => {
     expect(deletedRootResult[key]).toBe(reconstructedResult[key]);
   });
 }
@@ -112,7 +101,7 @@ describe('roundtrip', () => {
         people_one: {
           name: 'Luke Skywalker',
         },
-      }
+      },
     );
   });
 
@@ -130,7 +119,7 @@ describe('roundtrip', () => {
           [{ value: 1 }, { value: 2 }],
           [{ value: 3 }, { value: 4 }],
         ],
-      }
+      },
     );
   });
 
@@ -145,7 +134,7 @@ describe('roundtrip', () => {
       `,
       {
         list: [null, { value: 1 }],
-      }
+      },
     );
   });
 
@@ -162,7 +151,7 @@ describe('roundtrip', () => {
         hero: {
           name: 'Luke Skywalker',
         },
-      }
+      },
     );
   });
 
@@ -185,7 +174,7 @@ describe('roundtrip', () => {
         vader: {
           name: 'Darth Vader',
         },
-      }
+      },
     );
   });
 
@@ -212,7 +201,7 @@ describe('roundtrip', () => {
       {
         lukeId: '1',
         vaderId: '4',
-      }
+      },
     );
   });
 
@@ -242,7 +231,7 @@ describe('roundtrip', () => {
       `,
       {
         updateClub,
-      }
+      },
     );
 
     // Reading immutable results from the store does not mean the original
@@ -259,7 +248,7 @@ describe('roundtrip', () => {
             fortuneCookie @skip(if: true)
           }
         `,
-        {}
+        {},
       );
     });
 
@@ -270,7 +259,7 @@ describe('roundtrip', () => {
             fortuneCookie @skip(if: false)
           }
         `,
-        { fortuneCookie: 'live long and prosper' }
+        { fortuneCookie: 'live long and prosper' },
       );
     });
   });
@@ -289,7 +278,7 @@ describe('roundtrip', () => {
         `,
         {
           field: null,
-        }
+        },
       );
     });
 
@@ -310,7 +299,7 @@ describe('roundtrip', () => {
             __typename: 'Obj',
             stuff: 'Result',
           },
-        }
+        },
       );
     });
 
@@ -342,9 +331,9 @@ describe('roundtrip', () => {
                 side: 'bright',
               },
             ],
-          }
+          },
         );
-      }).toThrowError(/Can't find field 'rank' /);
+      }).toThrow(/Can't find field 'rank' /);
     });
 
     it('should resolve fields it can on interface with non matching inline fragments', () => {
@@ -373,7 +362,7 @@ describe('roundtrip', () => {
                 name: 'Anakin Skywalker',
               },
             ],
-          }
+          },
         );
       });
     });
@@ -412,7 +401,7 @@ describe('roundtrip', () => {
                 model: 'astromech',
               },
             ],
-          }
+          },
         );
       });
     });
@@ -452,7 +441,7 @@ describe('roundtrip', () => {
                 side: 'bright',
               },
             ],
-          }
+          },
         );
       });
     });
@@ -487,9 +476,9 @@ describe('roundtrip', () => {
                 side: 'bright',
               },
             ],
-          }
+          },
         );
-      }).toThrowError(/Can't find field 'rank' /);
+      }).toThrow(/Can't find field 'rank' /);
     });
 
     it('should resolve on @include and @skip with inline fragments', () => {
@@ -514,7 +503,7 @@ describe('roundtrip', () => {
             name: 'Luke Skywalker',
             side: 'bright',
           },
-        }
+        },
       );
     });
 
@@ -544,7 +533,7 @@ describe('roundtrip', () => {
             name: 'Luke Skywalker',
             side: 'bright',
           },
-        }
+        },
       );
     });
   });

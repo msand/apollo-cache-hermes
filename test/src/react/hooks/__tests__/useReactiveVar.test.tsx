@@ -9,7 +9,7 @@ const IS_REACT_18 = React.version.startsWith('18');
 const IS_REACT_19 = React.version.startsWith('19');
 
 describe('useReactiveVar Hook', () => {
-  it('works with one component', async() => {
+  it('works with one component', async () => {
     const counterVar = makeVar(0);
     let renderCount = 0;
 
@@ -47,94 +47,91 @@ describe('useReactiveVar Hook', () => {
     });
   });
 
-  itAsync(
-    'works when two components share a variable',
-    async(resolve, reject) => {
-      const counterVar = makeVar(0);
+  itAsync('works when two components share a variable', async (resolve, reject) => {
+    const counterVar = makeVar(0);
 
-      let parentRenderCount = 0;
-      function Parent() {
-        const count = useReactiveVar(counterVar);
+    let parentRenderCount = 0;
+    function Parent() {
+      const count = useReactiveVar(counterVar);
 
-        switch (++parentRenderCount) {
-          case 1:
-            expect(count).toBe(0);
-            break;
-          case 2:
-            expect(count).toBe(1);
-            break;
-          case 3:
-            expect(count).toBe(11);
-            break;
-          default:
-            reject(`too many (${parentRenderCount}) parent renders`);
-        }
-
-        return <Child />;
+      switch (++parentRenderCount) {
+        case 1:
+          expect(count).toBe(0);
+          break;
+        case 2:
+          expect(count).toBe(1);
+          break;
+        case 3:
+          expect(count).toBe(11);
+          break;
+        default:
+          reject(`too many (${parentRenderCount}) parent renders`);
       }
 
-      let childRenderCount = 0;
-      function Child() {
-        const count = useReactiveVar(counterVar);
-
-        switch (++childRenderCount) {
-          case 1:
-            expect(count).toBe(0);
-            break;
-          case 2:
-            expect(count).toBe(1);
-            break;
-          case 3:
-            expect(count).toBe(11);
-            break;
-          default:
-            reject(`too many (${childRenderCount}) child renders`);
-        }
-
-        return null;
-      }
-
-      render(<Parent />);
-
-      await waitFor(() => {
-        expect(parentRenderCount).toBe(1);
-      });
-
-      await waitFor(() => {
-        expect(childRenderCount).toBe(1);
-      });
-
-      expect(counterVar()).toBe(0);
-      act(() => {
-        counterVar(1);
-      });
-
-      await waitFor(() => {
-        expect(parentRenderCount).toBe(2);
-      });
-      await waitFor(() => {
-        expect(childRenderCount).toBe(2);
-      });
-
-      expect(counterVar()).toBe(1);
-      act(() => {
-        counterVar(counterVar() + 10);
-      });
-
-      await waitFor(() => {
-        expect(parentRenderCount).toBe(3);
-      });
-      await waitFor(() => {
-        expect(childRenderCount).toBe(3);
-      });
-
-      expect(counterVar()).toBe(11);
-
-      resolve();
+      return <Child />;
     }
-  );
 
-  it('does not update if component has been unmounted', async() => {
+    let childRenderCount = 0;
+    function Child() {
+      const count = useReactiveVar(counterVar);
+
+      switch (++childRenderCount) {
+        case 1:
+          expect(count).toBe(0);
+          break;
+        case 2:
+          expect(count).toBe(1);
+          break;
+        case 3:
+          expect(count).toBe(11);
+          break;
+        default:
+          reject(`too many (${childRenderCount}) child renders`);
+      }
+
+      return null;
+    }
+
+    render(<Parent />);
+
+    await waitFor(() => {
+      expect(parentRenderCount).toBe(1);
+    });
+
+    await waitFor(() => {
+      expect(childRenderCount).toBe(1);
+    });
+
+    expect(counterVar()).toBe(0);
+    act(() => {
+      counterVar(1);
+    });
+
+    await waitFor(() => {
+      expect(parentRenderCount).toBe(2);
+    });
+    await waitFor(() => {
+      expect(childRenderCount).toBe(2);
+    });
+
+    expect(counterVar()).toBe(1);
+    act(() => {
+      counterVar(counterVar() + 10);
+    });
+
+    await waitFor(() => {
+      expect(parentRenderCount).toBe(3);
+    });
+    await waitFor(() => {
+      expect(childRenderCount).toBe(3);
+    });
+
+    expect(counterVar()).toBe(11);
+
+    resolve();
+  });
+
+  it('does not update if component has been unmounted', async () => {
     const counterVar = makeVar(0);
     let renderCount = 0;
     let attemptedUpdateAfterUnmount = false;
@@ -167,7 +164,7 @@ describe('useReactiveVar Hook', () => {
     // the console.error method.
     const consoleErrorArgs: any[][] = [];
     const { error } = console;
-    console.error = function(...args: any[]) {
+    console.error = function (...args: any[]) {
       consoleErrorArgs.push(args);
       return error.apply(this, args);
     };
@@ -190,7 +187,7 @@ describe('useReactiveVar Hook', () => {
   });
 
   describe('useEffect', () => {
-    it('works if updated higher in the component tree', async() => {
+    it('works if updated higher in the component tree', async () => {
       const counterVar = makeVar(0);
 
       function ComponentOne() {
@@ -213,7 +210,7 @@ describe('useReactiveVar Hook', () => {
         <>
           <ComponentOne />
           <ComponentTwo />
-        </>
+        </>,
       );
 
       await waitFor(() => {
@@ -221,7 +218,7 @@ describe('useReactiveVar Hook', () => {
       });
     });
 
-    it('works if updated lower in the component tree', async() => {
+    it('works if updated lower in the component tree', async () => {
       const counterVar = makeVar(0);
 
       function ComponentOne() {
@@ -244,7 +241,7 @@ describe('useReactiveVar Hook', () => {
         <>
           <ComponentOne />
           <ComponentTwo />
-        </>
+        </>,
       );
 
       await waitFor(() => {
@@ -252,7 +249,7 @@ describe('useReactiveVar Hook', () => {
       });
     });
 
-    itAsync('works with strict mode', async(resolve, reject) => {
+    itAsync('works with strict mode', async (resolve, reject) => {
       const counterVar = makeVar(0);
       const mock = jest.fn();
 
@@ -274,7 +271,7 @@ describe('useReactiveVar Hook', () => {
       render(
         <StrictMode>
           <Component />
-        </StrictMode>
+        </StrictMode>,
       );
 
       await waitFor(() => {
@@ -293,90 +290,84 @@ describe('useReactiveVar Hook', () => {
       resolve();
     });
 
-    itAsync(
-      'works with multiple synchronous calls',
-      async(resolve, reject) => {
-        const counterVar = makeVar(0);
-        function Component() {
-          const count = useReactiveVar(counterVar);
+    itAsync('works with multiple synchronous calls', async (resolve, reject) => {
+      const counterVar = makeVar(0);
+      function Component() {
+        const count = useReactiveVar(counterVar);
 
-          return <div>{count}</div>;
-        }
-
-        render(<Component />);
-        Promise.resolve().then(() => {
-          counterVar(1);
-          counterVar(2);
-          counterVar(3);
-          counterVar(4);
-          counterVar(5);
-          counterVar(6);
-          counterVar(7);
-          counterVar(8);
-          counterVar(9);
-          counterVar(10);
-        });
-
-        await waitFor(() => {
-          expect(screen.getAllByText('10')).toHaveLength(1);
-        });
-
-        resolve();
+        return <div>{count}</div>;
       }
-    );
 
-    itAsync(
-      'should survive many rerenderings despite racing asynchronous updates',
-      (resolve, reject) => {
-        const rv = makeVar(0);
+      render(<Component />);
+      Promise.resolve().then(() => {
+        counterVar(1);
+        counterVar(2);
+        counterVar(3);
+        counterVar(4);
+        counterVar(5);
+        counterVar(6);
+        counterVar(7);
+        counterVar(8);
+        counterVar(9);
+        counterVar(10);
+      });
 
-        function App() {
-          const value = useReactiveVar(rv);
-          return (
-            <div className='App'>
-              <h1>{value}</h1>
-            </div>
-          );
-        }
+      await waitFor(() => {
+        expect(screen.getAllByText('10')).toHaveLength(1);
+      });
 
-        const goalCount = 1000;
-        let updateCount = 0;
-        let stopped = false;
+      resolve();
+    });
 
-        function spam() {
-          if (stopped) return;
-          try {
-            if (++updateCount <= goalCount) {
-              act(() => {
-                rv(updateCount);
-                setTimeout(spam, Math.random() * 10);
-              });
-            } else {
-              stopped = true;
-              expect(rv()).toBe(goalCount);
-              screen
-                .findByText(String(goalCount))
-                .then((element) => {
-                  expect(element.nodeName.toLowerCase()).toBe('h1');
-                })
-                .then(resolve, reject);
-            }
-          } catch (e) {
-            stopped = true;
-            reject(e);
-          }
-        }
-        spam();
-        spam();
-        spam();
-        spam();
+    itAsync('should survive many rerenderings despite racing asynchronous updates', (resolve, reject) => {
+      const rv = makeVar(0);
 
-        render(
-          <StrictMode>
-            <App />
-          </StrictMode>
+      function App() {
+        const value = useReactiveVar(rv);
+        return (
+          <div className='App'>
+            <h1>{value}</h1>
+          </div>
         );
       }
-    );
+
+      const goalCount = 1000;
+      let updateCount = 0;
+      let stopped = false;
+
+      function spam() {
+        if (stopped) return;
+        try {
+          if (++updateCount <= goalCount) {
+            act(() => {
+              rv(updateCount);
+              setTimeout(spam, Math.random() * 10);
+            });
+          } else {
+            stopped = true;
+            expect(rv()).toBe(goalCount);
+            screen
+              .findByText(String(goalCount))
+              .then(element => {
+                expect(element.nodeName.toLowerCase()).toBe('h1');
+              })
+              .then(resolve, reject);
+          }
+        } catch (e) {
+          stopped = true;
+          reject(e);
+        }
+      }
+      spam();
+      spam();
+      spam();
+      spam();
+
+      render(
+        <StrictMode>
+          <App />
+        </StrictMode>,
+      );
+    });
   });
 });

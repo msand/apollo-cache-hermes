@@ -1,7 +1,8 @@
 import type { OptimisticDependencyFunction } from 'optimism';
 // eslint-disable-next-line import/no-extraneous-dependencies
-import { dep, Slot } from 'optimism';
+import { dep } from 'optimism';
 import { ApolloCache } from '@apollo/client';
+import { cacheSlot as apolloCacheSlot } from '@apollo/client/cache';
 
 import type { InMemoryCache } from './inMemoryCache';
 
@@ -16,13 +17,16 @@ export type ReactiveListener<T> = (value: T) => any;
 
 // Contextual Slot that acquires its value when custom read functions are
 // called in Policies#readField.
-export const cacheSlot = new Slot<ApolloCache<any>>();
+// Hermes: use @apollo/client's own cacheSlot (rather than a copy), which is
+// the one Hermes sets while running read functions, so that reactive
+// variables made by this vendored copy of Apollo Client attach to Hermes.
+export const cacheSlot = apolloCacheSlot;
 
 const cacheInfoMap = new WeakMap<
   ApolloCache<any>,
   {
-    vars: Set<ReactiveVar<any>>,
-    dep: OptimisticDependencyFunction<ReactiveVar<any>>,
+    vars: Set<ReactiveVar<any>>;
+    dep: OptimisticDependencyFunction<ReactiveVar<any>>;
   }
 >();
 
@@ -34,7 +38,7 @@ function getCacheInfo(cache: ApolloCache<any>) {
       (info = {
         vars: new Set(),
         dep: dep(),
-      })
+      }),
     );
   }
   return info;
@@ -60,11 +64,11 @@ export function makeVar<T>(value: T): ReactiveVar<T> {
   const caches = new Set<ApolloCache<any>>();
   const listeners = new Set<ReactiveListener<T>>();
 
-  const rv: ReactiveVar<T> = function(newValue) {
+  const rv: ReactiveVar<T> = function (newValue) {
     if (arguments.length > 0) {
       if (value !== newValue) {
         value = newValue!;
-        caches.forEach((cache) => {
+        caches.forEach(cache => {
           // Invalidate any fields with custom read functions that
           // consumed this variable, so query results involving those
           // fields will be recomputed the next time we read them.
@@ -92,14 +96,14 @@ export function makeVar<T>(value: T): ReactiveVar<T> {
     return value;
   };
 
-  rv.onNextChange = (listener) => {
+  rv.onNextChange = listener => {
     listeners.add(listener);
     return () => {
       listeners.delete(listener);
     };
   };
 
-  const attach = (rv.attachCache = (cache) => {
+  const attach = (rv.attachCache = cache => {
     caches.add(cache);
     getCacheInfo(cache).vars.add(rv);
     return rv;
@@ -113,7 +117,7 @@ export function makeVar<T>(value: T): ReactiveVar<T> {
 type Broadcastable = ApolloCache<any> & {
   // This method is protected in InMemoryCache, which we are ignoring, but
   // we still want some semblance of type safety when we call it.
-  broadcastWatches?: InMemoryCache['broadcastWatches'],
+  broadcastWatches?: InMemoryCache['broadcastWatches'];
 };
 
 function broadcast(cache: Broadcastable) {

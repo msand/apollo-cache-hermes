@@ -68,7 +68,7 @@ const createLink = (reject: (reason: any) => any) =>
     {
       request: { query },
       result: { data: result },
-    }
+    },
   ).setOnError(reject);
 
 const createFailureLink = () =>
@@ -80,7 +80,7 @@ const createFailureLink = () =>
     {
       request: { query },
       result: { data: result },
-    }
+    },
   );
 
 const createMutationLink = (reject: (reason: any) => any) =>
@@ -97,46 +97,41 @@ const createMutationLink = (reject: (reason: any) => any) =>
     {
       request: { query },
       result: { data: merged },
-    }
+    },
   ).setOnError(reject);
 
 describe('network-only', () => {
-  itAsync(
-    'requests from the network even if already in cache',
-    (resolve, reject) => {
-      let called = 0;
-      const inspector = new ApolloLink((operation, forward) => {
+  itAsync('requests from the network even if already in cache', (resolve, reject) => {
+    let called = 0;
+    const inspector = new ApolloLink((operation, forward) => {
+      called++;
+      return forward(operation).map(result => {
         called++;
-        return forward(operation).map((result) => {
-          called++;
-          return result;
-        });
+        return result;
       });
+    });
 
-      const client = new ApolloClient({
-        link: inspector.concat(createLink(reject)),
-        cache: new Hermes({ addTypename: false }),
-      });
+    const client = new ApolloClient({
+      link: inspector.concat(createLink(reject)),
+      cache: new Hermes({ addTypename: false }),
+    });
 
-      return client
-        .query({ query })
-        .then(() =>
-          client
-            .query({ fetchPolicy: 'network-only', query })
-            .then((actualResult) => {
-              expect(actualResult.data).toEqual(result);
-              expect(called).toBe(4);
-            })
-        )
-        .then(resolve, reject);
-    }
-  );
+    return client
+      .query({ query })
+      .then(() =>
+        client.query({ fetchPolicy: 'network-only', query }).then(actualResult => {
+          expect(actualResult.data).toEqual(result);
+          expect(called).toBe(4);
+        }),
+      )
+      .then(resolve, reject);
+  });
 
   itAsync('saves data to the cache on success', (resolve, reject) => {
     let called = 0;
     const inspector = new ApolloLink((operation, forward) => {
       called++;
-      return forward(operation).map((result) => {
+      return forward(operation).map(result => {
         called++;
         return result;
       });
@@ -150,10 +145,10 @@ describe('network-only', () => {
     return client
       .query({ query, fetchPolicy: 'network-only' })
       .then(() =>
-        client.query({ query }).then((actualResult) => {
+        client.query({ query }).then(actualResult => {
           expect(actualResult.data).toEqual(result);
           expect(called).toBe(2);
-        })
+        }),
       )
       .then(resolve, reject);
   });
@@ -162,7 +157,7 @@ describe('network-only', () => {
     let called = 0;
     const inspector = new ApolloLink((operation, forward) => {
       called++;
-      return forward(operation).map((result) => {
+      return forward(operation).map(result => {
         called++;
         return result;
       });
@@ -176,24 +171,24 @@ describe('network-only', () => {
     let didFail = false;
     return client
       .query({ query, fetchPolicy: 'network-only' })
-      .catch((e) => {
+      .catch(e => {
         expect(e.message).toMatch('query failed');
         didFail = true;
       })
       .then(() =>
-        client.query({ query }).then((actualResult) => {
+        client.query({ query }).then(actualResult => {
           expect(actualResult.data).toEqual(result);
           // the first error doesn't call .map on the inspector
           expect(called).toBe(3);
           expect(didFail).toBe(true);
-        })
+        }),
       )
       .then(resolve, reject);
   });
 
   itAsync('updates the cache on a mutation', (resolve, reject) => {
     const inspector = new ApolloLink((operation, forward) => {
-      return forward(operation).map((result) => {
+      return forward(operation).map(result => {
         return result;
       });
     });
@@ -208,10 +203,10 @@ describe('network-only', () => {
       .then(() =>
         // XXX currently only no-cache is supported as a fetchPolicy
         // this mainly serves to ensure the cache is updated correctly
-        client.mutate({ mutation, variables })
+        client.mutate({ mutation, variables }),
       )
       .then(() => {
-        return client.query({ query }).then((actualResult) => {
+        return client.query({ query }).then(actualResult => {
           expect(actualResult.data).toEqual(merged);
         });
       })
@@ -224,7 +219,7 @@ describe('no-cache', () => {
     let called = 0;
     const inspector = new ApolloLink((operation, forward) => {
       called++;
-      return forward(operation).map((result) => {
+      return forward(operation).map(result => {
         called++;
         return result;
       });
@@ -237,79 +232,71 @@ describe('no-cache', () => {
 
     return client
       .query({ fetchPolicy: 'no-cache', query })
-      .then((actualResult) => {
+      .then(actualResult => {
         expect(actualResult.data).toEqual(result);
         expect(called).toBe(2);
       })
       .then(resolve, reject);
   });
 
-  itAsync(
-    'requests from the network even if already in cache',
-    (resolve, reject) => {
-      let called = 0;
-      const inspector = new ApolloLink((operation, forward) => {
+  itAsync('requests from the network even if already in cache', (resolve, reject) => {
+    let called = 0;
+    const inspector = new ApolloLink((operation, forward) => {
+      called++;
+      return forward(operation).map(result => {
         called++;
-        return forward(operation).map((result) => {
-          called++;
-          return result;
-        });
+        return result;
       });
+    });
 
-      const client = new ApolloClient({
-        link: inspector.concat(createLink(reject)),
-        cache: new Hermes({ addTypename: false }),
-      });
+    const client = new ApolloClient({
+      link: inspector.concat(createLink(reject)),
+      cache: new Hermes({ addTypename: false }),
+    });
 
-      return client
-        .query({ query })
-        .then(() =>
-          client
-            .query({ fetchPolicy: 'no-cache', query })
-            .then((actualResult) => {
-              expect(actualResult.data).toEqual(result);
-              expect(called).toBe(4);
-            })
-        )
-        .then(resolve, reject);
-    }
-  );
+    return client
+      .query({ query })
+      .then(() =>
+        client.query({ fetchPolicy: 'no-cache', query }).then(actualResult => {
+          expect(actualResult.data).toEqual(result);
+          expect(called).toBe(4);
+        }),
+      )
+      .then(resolve, reject);
+  });
 
-  itAsync(
-    'does not save the data to the cache on success',
-    (resolve, reject) => {
-      let called = 0;
-      const inspector = new ApolloLink((operation, forward) => {
+  itAsync('does not save the data to the cache on success', (resolve, reject) => {
+    let called = 0;
+    const inspector = new ApolloLink((operation, forward) => {
+      called++;
+      return forward(operation).map(result => {
         called++;
-        return forward(operation).map((result) => {
-          called++;
-          return result;
-        });
+        return result;
       });
+    });
 
-      const client = new ApolloClient({
-        link: inspector.concat(createLink(reject)),
-        cache: new Hermes({ addTypename: false }),
-      });
+    const client = new ApolloClient({
+      link: inspector.concat(createLink(reject)),
+      cache: new Hermes({ addTypename: false }),
+    });
 
-      return client
-        .query({ query, fetchPolicy: 'no-cache' })
-        .then(() =>
-          client.query({ query }).then((actualResult) => {
-            expect(actualResult.data).toEqual(result);
-            // the second query couldn't read anything from the cache
-            expect(called).toBe(4);
-          })
-        )
-        .then(resolve, reject);
-    }
-  );
+    return client
+      .query({ query, fetchPolicy: 'no-cache' })
+      .then(() =>
+        client.query({ query }).then(actualResult => {
+          expect(actualResult.data).toEqual(result);
+          // the second query couldn't read anything from the cache
+          expect(called).toBe(4);
+        }),
+      )
+      .then(resolve, reject);
+  });
 
   itAsync('does not save data to the cache on failure', (resolve, reject) => {
     let called = 0;
     const inspector = new ApolloLink((operation, forward) => {
       called++;
-      return forward(operation).map((result) => {
+      return forward(operation).map(result => {
         called++;
         return result;
       });
@@ -323,24 +310,24 @@ describe('no-cache', () => {
     let didFail = false;
     return client
       .query({ query, fetchPolicy: 'no-cache' })
-      .catch((e) => {
+      .catch(e => {
         expect(e.message).toMatch('query failed');
         didFail = true;
       })
       .then(() =>
-        client.query({ query }).then((actualResult) => {
+        client.query({ query }).then(actualResult => {
           expect(actualResult.data).toEqual(result);
           // the first error doesn't call .map on the inspector
           expect(called).toBe(3);
           expect(didFail).toBe(true);
-        })
+        }),
       )
       .then(resolve, reject);
   });
 
   itAsync('does not update the cache on a mutation', (resolve, reject) => {
     const inspector = new ApolloLink((operation, forward) => {
-      return forward(operation).map((result) => {
+      return forward(operation).map(result => {
         return result;
       });
     });
@@ -352,11 +339,9 @@ describe('no-cache', () => {
 
     return client
       .query({ query })
-      .then(() =>
-        client.mutate({ mutation, variables, fetchPolicy: 'no-cache' })
-      )
+      .then(() => client.mutate({ mutation, variables, fetchPolicy: 'no-cache' }))
       .then(() => {
-        return client.query({ query }).then((actualResult) => {
+        return client.query({ query }).then(actualResult => {
           expect(actualResult.data).toEqual(result);
         });
       })
@@ -364,45 +349,42 @@ describe('no-cache', () => {
   });
 
   describe('when notifyOnNetworkStatusChange is set', () => {
-    itAsync(
-      'does not save the data to the cache on success',
-      (resolve, reject) => {
-        let called = 0;
-        const inspector = new ApolloLink((operation, forward) => {
+    itAsync('does not save the data to the cache on success', (resolve, reject) => {
+      let called = 0;
+      const inspector = new ApolloLink((operation, forward) => {
+        called++;
+        return forward(operation).map(result => {
           called++;
-          return forward(operation).map((result) => {
-            called++;
-            return result;
-          });
+          return result;
         });
+      });
 
-        const client = new ApolloClient({
-          link: inspector.concat(createLink(reject)),
-          cache: new Hermes({ addTypename: false }),
-        });
+      const client = new ApolloClient({
+        link: inspector.concat(createLink(reject)),
+        cache: new Hermes({ addTypename: false }),
+      });
 
-        return client
-          .query({
-            query,
-            fetchPolicy: 'no-cache',
-            notifyOnNetworkStatusChange: true,
-          })
-          .then(() =>
-            client.query({ query }).then((actualResult) => {
-              expect(actualResult.data).toEqual(result);
-              // the second query couldn't read anything from the cache
-              expect(called).toBe(4);
-            })
-          )
-          .then(resolve, reject);
-      }
-    );
+      return client
+        .query({
+          query,
+          fetchPolicy: 'no-cache',
+          notifyOnNetworkStatusChange: true,
+        })
+        .then(() =>
+          client.query({ query }).then(actualResult => {
+            expect(actualResult.data).toEqual(result);
+            // the second query couldn't read anything from the cache
+            expect(called).toBe(4);
+          }),
+        )
+        .then(resolve, reject);
+    });
 
     itAsync('does not save data to the cache on failure', (resolve, reject) => {
       let called = 0;
       const inspector = new ApolloLink((operation, forward) => {
         called++;
-        return forward(operation).map((result) => {
+        return forward(operation).map(result => {
           called++;
           return result;
         });
@@ -420,240 +402,234 @@ describe('no-cache', () => {
           fetchPolicy: 'no-cache',
           notifyOnNetworkStatusChange: true,
         })
-        .catch((e) => {
+        .catch(e => {
           expect(e.message).toMatch('query failed');
           didFail = true;
         })
         .then(() =>
-          client.query({ query }).then((actualResult) => {
+          client.query({ query }).then(actualResult => {
             expect(actualResult.data).toEqual(result);
             // the first error doesn't call .map on the inspector
             expect(called).toBe(3);
             expect(didFail).toBe(true);
-          })
+          }),
         )
         .then(resolve, reject);
     });
 
-    itAsync(
-      'gives appropriate networkStatus for watched queries',
-      (resolve, reject) => {
-        const client = new ApolloClient({
-          link: ApolloLink.empty(),
-          cache: new Hermes(),
-          resolvers: {
-            Query: {
-              hero(_data, args) {
-                return {
-                  __typename: 'Hero',
-                  ...args,
-                  name: 'Luke Skywalker',
-                };
-              },
+    itAsync('gives appropriate networkStatus for watched queries', (resolve, reject) => {
+      const client = new ApolloClient({
+        link: ApolloLink.empty(),
+        cache: new Hermes(),
+        resolvers: {
+          Query: {
+            hero(_data, args) {
+              return {
+                __typename: 'Hero',
+                ...args,
+                name: 'Luke Skywalker',
+              };
             },
           },
-        });
+        },
+      });
 
-        const observable = client.watchQuery({
-          query: gql`
-            query FetchLuke($id: String) {
-              hero(id: $id) @client {
-                id
-                name
-              }
+      const observable = client.watchQuery({
+        query: gql`
+          query FetchLuke($id: String) {
+            hero(id: $id) @client {
+              id
+              name
             }
-          `,
-          fetchPolicy: 'no-cache',
-          variables: { id: '1' },
-          notifyOnNetworkStatusChange: true,
-        });
-
-        function dataWithId(id: number | string) {
-          return {
-            hero: {
-              __typename: 'Hero',
-              id: String(id),
-              name: 'Luke Skywalker',
-            },
-          };
-        }
-
-        subscribeAndCount(reject, observable, (count, result) => {
-          if (count === 1) {
-            expect(result).toEqual({
-              data: dataWithId(1),
-              loading: false,
-              networkStatus: NetworkStatus.ready,
-            });
-            expect(client.cache.extract(true)).toEqual({});
-            return observable.setVariables({ id: '2' });
-          } else if (count === 2) {
-            expect(result).toEqual({
-              loading: true,
-              networkStatus: NetworkStatus.setVariables,
-              partial: true,
-            });
-          } else if (count === 3) {
-            expect(result).toEqual({
-              data: dataWithId(2),
-              loading: false,
-              networkStatus: NetworkStatus.ready,
-            });
-            expect(client.cache.extract(true)).toEqual({});
-            return observable.refetch();
-          } else if (count === 4) {
-            expect(result).toEqual({
-              data: dataWithId(2),
-              loading: true,
-              networkStatus: NetworkStatus.refetch,
-            });
-            expect(client.cache.extract(true)).toEqual({});
-          } else if (count === 5) {
-            expect(result).toEqual({
-              data: dataWithId(2),
-              loading: false,
-              networkStatus: NetworkStatus.ready,
-            });
-            expect(client.cache.extract(true)).toEqual({});
-            return observable.refetch({ id: '3' });
-          } else if (count === 6) {
-            expect(result).toEqual({
-              loading: true,
-              networkStatus: NetworkStatus.setVariables,
-              partial: true,
-            });
-            expect(client.cache.extract(true)).toEqual({});
-          } else if (count === 7) {
-            expect(result).toEqual({
-              data: dataWithId(3),
-              loading: false,
-              networkStatus: NetworkStatus.ready,
-            });
-            expect(client.cache.extract(true)).toEqual({});
-            resolve();
           }
-        });
+        `,
+        fetchPolicy: 'no-cache',
+        variables: { id: '1' },
+        notifyOnNetworkStatusChange: true,
+      });
+
+      function dataWithId(id: number | string) {
+        return {
+          hero: {
+            __typename: 'Hero',
+            id: String(id),
+            name: 'Luke Skywalker',
+          },
+        };
       }
-    );
+
+      subscribeAndCount(reject, observable, (count, result) => {
+        if (count === 1) {
+          expect(result).toEqual({
+            data: dataWithId(1),
+            loading: false,
+            networkStatus: NetworkStatus.ready,
+          });
+          expect(client.cache.extract(true)).toEqual({});
+          return observable.setVariables({ id: '2' });
+        } else if (count === 2) {
+          expect(result).toEqual({
+            loading: true,
+            networkStatus: NetworkStatus.setVariables,
+            partial: true,
+          });
+        } else if (count === 3) {
+          expect(result).toEqual({
+            data: dataWithId(2),
+            loading: false,
+            networkStatus: NetworkStatus.ready,
+          });
+          expect(client.cache.extract(true)).toEqual({});
+          return observable.refetch();
+        } else if (count === 4) {
+          expect(result).toEqual({
+            data: dataWithId(2),
+            loading: true,
+            networkStatus: NetworkStatus.refetch,
+          });
+          expect(client.cache.extract(true)).toEqual({});
+        } else if (count === 5) {
+          expect(result).toEqual({
+            data: dataWithId(2),
+            loading: false,
+            networkStatus: NetworkStatus.ready,
+          });
+          expect(client.cache.extract(true)).toEqual({});
+          return observable.refetch({ id: '3' });
+        } else if (count === 6) {
+          expect(result).toEqual({
+            loading: true,
+            networkStatus: NetworkStatus.setVariables,
+            partial: true,
+          });
+          expect(client.cache.extract(true)).toEqual({});
+        } else if (count === 7) {
+          expect(result).toEqual({
+            data: dataWithId(3),
+            loading: false,
+            networkStatus: NetworkStatus.ready,
+          });
+          expect(client.cache.extract(true)).toEqual({});
+          resolve();
+        }
+      });
+    });
   });
 });
 
 describe('cache-first', () => {
-  itAsync.skip(
-    'does not trigger network request during optimistic update',
-    (resolve, reject) => {
-      const results: any[] = [];
-      const client = new ApolloClient({
-        link: new ApolloLink((operation, forward) => {
-          return forward(operation).map((result) => {
-            results.push(result);
-            return result;
+  itAsync.skip('does not trigger network request during optimistic update', (resolve, reject) => {
+    const results: any[] = [];
+    const client = new ApolloClient({
+      link: new ApolloLink((operation, forward) => {
+        return forward(operation).map(result => {
+          results.push(result);
+          return result;
+        });
+      }).concat(createMutationLink(reject)),
+      cache: new Hermes(),
+    });
+
+    let inOptimisticTransaction = false;
+
+    subscribeAndCount(
+      reject,
+      client.watchQuery({
+        query,
+        fetchPolicy: 'cache-and-network',
+        returnPartialData: true,
+      }),
+      (count, { data, loading, networkStatus }) => {
+        if (count === 1) {
+          expect(results.length).toBe(0);
+          expect(loading).toBe(true);
+          expect(networkStatus).toBe(NetworkStatus.loading);
+          expect(data).toEqual({});
+        } else if (count === 2) {
+          expect(results.length).toBe(1);
+          expect(loading).toBe(false);
+          expect(networkStatus).toBe(NetworkStatus.ready);
+          expect(data).toEqual({
+            author: {
+              __typename: 'Author',
+              id: 1,
+              firstName: 'John',
+              lastName: 'Smith',
+            },
           });
-        }).concat(createMutationLink(reject)),
-        cache: new Hermes(),
-      });
 
-      let inOptimisticTransaction = false;
-
-      subscribeAndCount(
-        reject,
-        client.watchQuery({
-          query,
-          fetchPolicy: 'cache-and-network',
-          returnPartialData: true,
-        }),
-        (count, { data, loading, networkStatus }) => {
-          if (count === 1) {
-            expect(results.length).toBe(0);
-            expect(loading).toBe(true);
-            expect(networkStatus).toBe(NetworkStatus.loading);
-            expect(data).toEqual({});
-          } else if (count === 2) {
-            expect(results.length).toBe(1);
-            expect(loading).toBe(false);
-            expect(networkStatus).toBe(NetworkStatus.ready);
-            expect(data).toEqual({
-              author: {
-                __typename: 'Author',
-                id: 1,
-                firstName: 'John',
-                lastName: 'Smith',
-              },
-            });
-
-            inOptimisticTransaction = true;
-            client.cache.recordOptimisticTransaction((cache) => {
-              cache.writeQuery({
-                query,
-                data: {
-                  author: {
-                    __typename: 'Bogus',
-                  },
-                },
-              });
-            }, 'bogus');
-          } else if (count === 3) {
-            expect(results.length).toBe(1);
-            expect(loading).toBe(false);
-            expect(networkStatus).toBe(NetworkStatus.ready);
-            expect(data).toEqual({
-              author: {
-                __typename: 'Bogus',
-              },
-            });
-
-            setTimeout(() => {
-              inOptimisticTransaction = false;
-              client.cache.removeOptimistic('bogus');
-            }, 100);
-          } else if (count === 4) {
-            // A network request should not be triggered until after the bogus
-            // optimistic transaction has been removed.
-            expect(inOptimisticTransaction).toBe(false);
-            expect(results.length).toBe(1);
-            expect(loading).toBe(false);
-            expect(networkStatus).toBe(NetworkStatus.ready);
-            expect(data).toEqual({
-              author: {
-                __typename: 'Author',
-                id: 1,
-                firstName: 'John',
-                lastName: 'Smith',
-              },
-            });
-
-            client.cache.writeQuery({
+          inOptimisticTransaction = true;
+          client.cache.recordOptimisticTransaction(cache => {
+            cache.writeQuery({
               query,
               data: {
                 author: {
-                  __typename: 'Author',
-                  id: 2,
-                  firstName: 'Chinua',
-                  lastName: 'Achebe',
+                  __typename: 'Bogus',
                 },
               },
             });
-          } else if (count === 5) {
-            expect(inOptimisticTransaction).toBe(false);
-            expect(results.length).toBe(1);
-            expect(loading).toBe(false);
-            expect(networkStatus).toBe(NetworkStatus.ready);
-            expect(data).toEqual({
+          }, 'bogus');
+        } else if (count === 3) {
+          expect(results.length).toBe(1);
+          expect(loading).toBe(false);
+          expect(networkStatus).toBe(NetworkStatus.ready);
+          expect(data).toEqual({
+            author: {
+              __typename: 'Bogus',
+            },
+          });
+
+          setTimeout(() => {
+            inOptimisticTransaction = false;
+            client.cache.removeOptimistic('bogus');
+          }, 100);
+        } else if (count === 4) {
+          // A network request should not be triggered until after the bogus
+          // optimistic transaction has been removed.
+          expect(inOptimisticTransaction).toBe(false);
+          expect(results.length).toBe(1);
+          expect(loading).toBe(false);
+          expect(networkStatus).toBe(NetworkStatus.ready);
+          expect(data).toEqual({
+            author: {
+              __typename: 'Author',
+              id: 1,
+              firstName: 'John',
+              lastName: 'Smith',
+            },
+          });
+
+          client.cache.writeQuery({
+            query,
+            data: {
               author: {
                 __typename: 'Author',
                 id: 2,
                 firstName: 'Chinua',
                 lastName: 'Achebe',
               },
-            });
-            setTimeout(resolve, 100);
-          } else {
-            reject(new Error('unreached'));
-          }
+            },
+          });
+        } else if (count === 5) {
+          expect(inOptimisticTransaction).toBe(false);
+          expect(results.length).toBe(1);
+          expect(loading).toBe(false);
+          expect(networkStatus).toBe(NetworkStatus.ready);
+          expect(data).toEqual({
+            author: {
+              __typename: 'Author',
+              id: 2,
+              firstName: 'Chinua',
+              lastName: 'Achebe',
+            },
+          });
+          setTimeout(resolve, 100);
+        } else {
+          reject(new Error('unreached'));
         }
-      );
-    }
-  );
+      },
+    );
+  });
 });
 
 describe('cache-only', () => {
@@ -663,14 +639,14 @@ describe('cache-only', () => {
       cache: new Hermes(),
       link: new ApolloLink(
         operation =>
-          new Observable((observer) => {
+          new Observable(observer => {
             observer.next({
               data: {
                 count: ++counter,
               },
             });
             observer.complete();
-          })
+          }),
       ),
     });
 
@@ -718,115 +694,112 @@ describe('cache-only', () => {
 });
 
 describe('cache-and-network', () => {
-  itAsync(
-    'gives appropriate networkStatus for refetched queries',
-    (resolve, reject) => {
-      const client = new ApolloClient({
-        link: ApolloLink.empty(),
-        cache: new Hermes(),
-        resolvers: {
-          Query: {
-            hero(_data, args) {
-              return {
-                __typename: 'Hero',
-                ...args,
-                name: 'Luke Skywalker',
-              };
-            },
+  itAsync('gives appropriate networkStatus for refetched queries', (resolve, reject) => {
+    const client = new ApolloClient({
+      link: ApolloLink.empty(),
+      cache: new Hermes(),
+      resolvers: {
+        Query: {
+          hero(_data, args) {
+            return {
+              __typename: 'Hero',
+              ...args,
+              name: 'Luke Skywalker',
+            };
           },
         },
-      });
+      },
+    });
 
-      const observable = client.watchQuery({
-        query: gql`
-          query FetchLuke($id: String) {
-            hero(id: $id) @client {
-              id
-              name
-            }
+    const observable = client.watchQuery({
+      query: gql`
+        query FetchLuke($id: String) {
+          hero(id: $id) @client {
+            id
+            name
           }
-        `,
-        fetchPolicy: 'cache-and-network',
-        variables: { id: '1' },
-        notifyOnNetworkStatusChange: true,
-      });
-
-      function dataWithId(id: number | string) {
-        return {
-          hero: {
-            __typename: 'Hero',
-            id: String(id),
-            name: 'Luke Skywalker',
-          },
-        };
-      }
-
-      subscribeAndCount(reject, observable, (count, result) => {
-        if (count === 1) {
-          expect(result).toEqual({
-            data: dataWithId(1),
-            loading: false,
-            networkStatus: NetworkStatus.ready,
-          });
-          return observable.setVariables({ id: '2' });
-        } else if (count === 2) {
-          expect(result).toEqual({
-            data: {},
-            loading: true,
-            networkStatus: NetworkStatus.setVariables,
-            partial: true,
-          });
-        } else if (count === 3) {
-          expect(result).toEqual({
-            data: dataWithId(2),
-            loading: false,
-            networkStatus: NetworkStatus.ready,
-          });
-          return observable.refetch();
-        } else if (count === 4) {
-          expect(result).toEqual({
-            data: dataWithId(2),
-            loading: true,
-            networkStatus: NetworkStatus.refetch,
-          });
-        } else if (count === 5) {
-          expect(result).toEqual({
-            data: dataWithId(2),
-            loading: false,
-            networkStatus: NetworkStatus.ready,
-          });
-          return observable.refetch({ id: '3' });
-        } else if (count === 6) {
-          expect(result).toEqual({
-            data: {},
-            loading: true,
-            networkStatus: NetworkStatus.setVariables,
-            partial: true,
-          });
-        } else if (count === 7) {
-          expect(result).toEqual({
-            data: dataWithId(3),
-            loading: false,
-            networkStatus: NetworkStatus.ready,
-          });
-          resolve();
         }
-      });
+      `,
+      fetchPolicy: 'cache-and-network',
+      variables: { id: '1' },
+      notifyOnNetworkStatusChange: true,
+    });
+
+    function dataWithId(id: number | string) {
+      return {
+        hero: {
+          __typename: 'Hero',
+          id: String(id),
+          name: 'Luke Skywalker',
+        },
+      };
     }
-  );
+
+    subscribeAndCount(reject, observable, (count, result) => {
+      if (count === 1) {
+        expect(result).toEqual({
+          data: dataWithId(1),
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+        });
+        return observable.setVariables({ id: '2' });
+      } else if (count === 2) {
+        expect(result).toEqual({
+          data: {},
+          loading: true,
+          networkStatus: NetworkStatus.setVariables,
+          partial: true,
+        });
+      } else if (count === 3) {
+        expect(result).toEqual({
+          data: dataWithId(2),
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+        });
+        return observable.refetch();
+      } else if (count === 4) {
+        expect(result).toEqual({
+          data: dataWithId(2),
+          loading: true,
+          networkStatus: NetworkStatus.refetch,
+        });
+      } else if (count === 5) {
+        expect(result).toEqual({
+          data: dataWithId(2),
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+        });
+        return observable.refetch({ id: '3' });
+      } else if (count === 6) {
+        expect(result).toEqual({
+          data: {},
+          loading: true,
+          networkStatus: NetworkStatus.setVariables,
+          partial: true,
+        });
+      } else if (count === 7) {
+        expect(result).toEqual({
+          data: dataWithId(3),
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+        });
+        resolve();
+      }
+    });
+  });
 });
 
 describe('nextFetchPolicy', () => {
   type TData = {
     echo: {
-      linkCounter: number,
-      opName: string,
-      opVars: Record<string, any>,
-    },
+      linkCounter: number;
+      opName: string;
+      opVars: Record<string, any>;
+    };
   };
 
   type TVars = {
-    refetching?: boolean,
+    refetching?: boolean;
   };
 
   const EchoQuery: TypedDocumentNode<TData> = gql`
@@ -843,7 +816,7 @@ describe('nextFetchPolicy', () => {
     let linkCounter = 0;
     return new ApolloLink(
       request =>
-        new Observable((observer) => {
+        new Observable(observer => {
           setTimeout(() => {
             observer.next({
               data: {
@@ -857,27 +830,25 @@ describe('nextFetchPolicy', () => {
             });
             observer.complete();
           }, 10);
-        })
+        }),
     );
   }
 
   const checkNextFetchPolicy = (args: {
-    fetchPolicy: WatchQueryFetchPolicy,
-    nextFetchPolicy: WatchQueryOptions<{}, TData>['nextFetchPolicy'],
-    useDefaultOptions: boolean,
+    fetchPolicy: WatchQueryFetchPolicy;
+    nextFetchPolicy: WatchQueryOptions<{}, TData>['nextFetchPolicy'];
+    useDefaultOptions: boolean;
     onResult(info: {
-      count: number,
-      result: ApolloQueryResult<TData>,
-      observable: ObservableQuery<TData, TVars>,
-      resolve(result?: any): void,
-      reject(reason?: any): void,
-    }): void,
+      count: number;
+      result: ApolloQueryResult<TData>;
+      observable: ObservableQuery<TData, TVars>;
+      resolve(result?: any): void;
+      reject(reason?: any): void;
+    }): void;
   }) =>
     itAsync(
       `transitions ${args.fetchPolicy} to ${
-        typeof args.nextFetchPolicy === 'function'
-          ? args.nextFetchPolicy.name
-          : args.nextFetchPolicy
+        typeof args.nextFetchPolicy === 'function' ? args.nextFetchPolicy.name : args.nextFetchPolicy
       } (${args.useDefaultOptions ? '' : 'not '}using defaults)`,
       (resolve, reject) => {
         const client = new ApolloClient({
@@ -886,12 +857,11 @@ describe('nextFetchPolicy', () => {
             addTypename: true,
           }),
           defaultOptions: {
-            watchQuery:
-              args.useDefaultOptions
-                ? {
+            watchQuery: args.useDefaultOptions
+              ? {
                   nextFetchPolicy: args.nextFetchPolicy,
                 }
-                : {},
+              : {},
           },
         });
 
@@ -917,7 +887,7 @@ describe('nextFetchPolicy', () => {
             reject,
           });
         });
-      }
+      },
     );
 
   type CheckOptions = Parameters<typeof checkNextFetchPolicy>[0];
@@ -926,13 +896,7 @@ describe('nextFetchPolicy', () => {
 
   // We'll use this same OnResultCallback for multiple tests, to make it easier
   // to tell that the behavior of the tests is the same.
-  const onResultNetworkOnlyToCacheFirst: OnResultCallback = ({
-    observable,
-    count,
-    result,
-    resolve,
-    reject,
-  }) => {
+  const onResultNetworkOnlyToCacheFirst: OnResultCallback = ({ observable, count, result, resolve, reject }) => {
     if (count === 1) {
       expect(result.loading).toBe(false);
       expect(result.data.echo).toEqual({
@@ -948,7 +912,7 @@ describe('nextFetchPolicy', () => {
         .refetch({
           refetching: true,
         })
-        .then((result) => {
+        .then(result => {
           expect(result.data.echo).toEqual({
             __typename: 'Echo',
             linkCounter: 2,
@@ -978,7 +942,7 @@ describe('nextFetchPolicy', () => {
             refetching: false,
           },
         })
-        .then((result) => {
+        .then(result => {
           expect(result.loading).toBe(false);
           expect(result.data.echo).toEqual({
             __typename: 'Echo',
@@ -1027,16 +991,14 @@ describe('nextFetchPolicy', () => {
     onResult: onResultNetworkOnlyToCacheFirst,
   });
 
-  const nextFetchPolicyNetworkOnlyToCacheFirst: NextFetchPolicy = function(
+  const nextFetchPolicyNetworkOnlyToCacheFirst: NextFetchPolicy = function (
     currentFetchPolicy,
-    context
+    context,
   ): WatchQueryFetchPolicy {
     expect(currentFetchPolicy).toBe(context.options.fetchPolicy);
     switch (context.reason) {
       case 'variables-changed':
-        expect(context.initialFetchPolicy).toBe(
-          context.options.initialFetchPolicy
-        );
+        expect(context.initialFetchPolicy).toBe(context.options.initialFetchPolicy);
         return context.initialFetchPolicy;
       default:
       case 'after-fetch':
@@ -1058,13 +1020,7 @@ describe('nextFetchPolicy', () => {
     onResult: onResultNetworkOnlyToCacheFirst,
   });
 
-  const onResultCacheAndNetworkToCacheFirst: OnResultCallback = ({
-    observable,
-    count,
-    result,
-    resolve,
-    reject,
-  }) => {
+  const onResultCacheAndNetworkToCacheFirst: OnResultCallback = ({ observable, count, result, resolve, reject }) => {
     if (count === 1) {
       expect(result.loading).toBe(false);
       expect(result.data.echo).toEqual({
@@ -1080,7 +1036,7 @@ describe('nextFetchPolicy', () => {
         .refetch({
           refetching: true,
         })
-        .then((result) => {
+        .then(result => {
           expect(result.data.echo).toEqual({
             __typename: 'Echo',
             linkCounter: 2,
@@ -1110,7 +1066,7 @@ describe('nextFetchPolicy', () => {
             refetching: false,
           },
         })
-        .then((result) => {
+        .then(result => {
           expect(result.loading).toBe(false);
           expect(result.data.echo).toEqual({
             __typename: 'Echo',
@@ -1171,16 +1127,14 @@ describe('nextFetchPolicy', () => {
     onResult: onResultCacheAndNetworkToCacheFirst,
   });
 
-  const nextFetchPolicyCacheAndNetworkToCacheFirst: NextFetchPolicy = function(
+  const nextFetchPolicyCacheAndNetworkToCacheFirst: NextFetchPolicy = function (
     currentFetchPolicy,
-    context
+    context,
   ): WatchQueryFetchPolicy {
     expect(currentFetchPolicy).toBe(context.options.fetchPolicy);
     switch (context.reason) {
       case 'variables-changed':
-        expect(context.initialFetchPolicy).toBe(
-          context.options.initialFetchPolicy
-        );
+        expect(context.initialFetchPolicy).toBe(context.options.initialFetchPolicy);
         return context.initialFetchPolicy;
       default:
       case 'after-fetch':
@@ -1202,9 +1156,9 @@ describe('nextFetchPolicy', () => {
     onResult: onResultCacheAndNetworkToCacheFirst,
   });
 
-  const nextFetchPolicyAlwaysCacheFirst: NextFetchPolicy = function(
+  const nextFetchPolicyAlwaysCacheFirst: NextFetchPolicy = function (
     currentFetchPolicy,
-    context
+    context,
   ): WatchQueryFetchPolicy {
     expect(currentFetchPolicy).toBe(context.options.fetchPolicy);
     // Return cache-first no matter what context.reason was.
@@ -1233,7 +1187,7 @@ describe('nextFetchPolicy', () => {
         .refetch({
           refetching: true,
         })
-        .then((result) => {
+        .then(result => {
           expect(result.data.echo).toEqual({
             __typename: 'Echo',
             linkCounter: 2,
@@ -1263,7 +1217,7 @@ describe('nextFetchPolicy', () => {
             refetching: false,
           },
         })
-        .then((result) => {
+        .then(result => {
           expect(result.loading).toBe(false);
           expect(result.data.echo).toEqual({
             __typename: 'Echo',

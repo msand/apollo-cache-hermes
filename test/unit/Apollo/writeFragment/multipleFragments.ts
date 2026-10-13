@@ -8,7 +8,6 @@ import { strictConfig } from '../../../helpers';
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`writeFragment with multiple fragments`, () => {
-
   let hermes: Hermes;
   const fragments = gql(`
     fragment viewer on Viewer {
@@ -44,7 +43,7 @@ describe(`writeFragment with multiple fragments`, () => {
           __typename: 'Viewer',
         },
       },
-      'shipment0': {
+      shipment0: {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
         inbound: [{ id: '123', path: ['shipment'] }],
         data: {
@@ -113,5 +112,4 @@ describe(`writeFragment with multiple fragments`, () => {
       },
     });
   });
-
 });

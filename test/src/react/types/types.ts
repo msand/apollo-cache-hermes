@@ -3,10 +3,7 @@ import type { DocumentNode } from 'graphql';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { ApolloClient, ApolloCache, ObservableQuery, OperationVariables, DefaultContext } from '@apollo/client';
 
-import type {
-  Observable,
-  ObservableSubscription,
-} from '../../utilities/index';
+import type { Observable, ObservableSubscription } from '../../utilities/index';
 import type { FetchResult } from '../../link/core/index';
 import type { ApolloError } from '../../errors/index';
 import type {
@@ -21,25 +18,18 @@ import type {
   ErrorPolicy,
   RefetchWritePolicy,
 } from '../../core/index';
-import type {
-  MutationSharedOptions,
-  SharedWatchQueryOptions,
-} from '../../core/watchQueryOptions';
+import type { MutationSharedOptions, SharedWatchQueryOptions } from '../../core/watchQueryOptions';
 
 /* QueryReference type */
 
-export type {
-  QueryReference,
-  QueryRef,
-  PreloadedQueryRef,
-} from '../internal/index';
+export type { QueryReference, QueryRef, PreloadedQueryRef } from '../internal/index';
 
 /* Common types */
 
 export type { DefaultContext as Context } from '../../core/index';
 
 export type CommonOptions<TOptions> = TOptions & {
-  client?: ApolloClient<object>,
+  client?: ApolloClient<object>;
 };
 
 /* Query types */
@@ -76,57 +66,39 @@ export interface QueryFunctionOptions<
   defaultOptions?: Partial<WatchQueryOptions<TVariables, TData>>;
 }
 
-export interface ObservableQueryFields<
-  TData,
-  TVariables extends OperationVariables,
-> {
+export interface ObservableQueryFields<TData, TVariables extends OperationVariables> {
   /** {@inheritDoc @apollo/client!QueryResultDocumentation#startPolling:member} */
   startPolling: (pollInterval: number) => void;
   /** {@inheritDoc @apollo/client!QueryResultDocumentation#stopPolling:member} */
   stopPolling: () => void;
   /** {@inheritDoc @apollo/client!QueryResultDocumentation#subscribeToMore:member} */
-  subscribeToMore: <
-    TSubscriptionData = TData,
-    TSubscriptionVariables extends OperationVariables = TVariables,
-  >(
-    options: SubscribeToMoreOptions<
-      TData,
-      TSubscriptionVariables,
-      TSubscriptionData
-    >
+  subscribeToMore: <TSubscriptionData = TData, TSubscriptionVariables extends OperationVariables = TVariables>(
+    options: SubscribeToMoreOptions<TData, TSubscriptionVariables, TSubscriptionData>,
   ) => () => void;
   /** {@inheritDoc @apollo/client!QueryResultDocumentation#updateQuery:member} */
   updateQuery: <TVars extends OperationVariables = TVariables>(
-    mapFn: (
-      previousQueryResult: TData,
-      options: Pick<WatchQueryOptions<TVars, TData>, 'variables'>
-    ) => TData
+    mapFn: (previousQueryResult: TData, options: Pick<WatchQueryOptions<TVars, TData>, 'variables'>) => TData,
   ) => void;
   /** {@inheritDoc @apollo/client!QueryResultDocumentation#refetch:member} */
-  refetch: (
-    variables?: Partial<TVariables>
-  ) => Promise<ApolloQueryResult<TData>>;
+  refetch: (variables?: Partial<TVariables>) => Promise<ApolloQueryResult<TData>>;
   /** @internal */
   reobserve: (
     newOptions?: Partial<WatchQueryOptions<TVariables, TData>>,
-    newNetworkStatus?: NetworkStatus
+    newNetworkStatus?: NetworkStatus,
   ) => Promise<ApolloQueryResult<TData>>;
   /** {@inheritDoc @apollo/client!QueryResultDocumentation#variables:member} */
   variables: TVariables | undefined;
   /** {@inheritDoc @apollo/client!QueryResultDocumentation#fetchMore:member} */
-  fetchMore: <
-    TFetchData = TData,
-    TFetchVars extends OperationVariables = TVariables,
-  >(
+  fetchMore: <TFetchData = TData, TFetchVars extends OperationVariables = TVariables>(
     fetchMoreOptions: FetchMoreQueryOptions<TFetchVars, TFetchData> & {
       updateQuery?: (
         previousQueryResult: TData,
         options: {
-          fetchMoreResult: TFetchData,
-          variables: TFetchVars,
-        }
-      ) => TData,
-    }
+          fetchMoreResult: TFetchData;
+          variables: TFetchVars;
+        },
+      ) => TData;
+    },
   ) => Promise<ApolloQueryResult<TFetchData>>;
 }
 
@@ -190,10 +162,7 @@ export type SuspenseQueryHookFetchPolicy = Extract<
   'cache-first' | 'network-only' | 'no-cache' | 'cache-and-network'
 >;
 
-export interface SuspenseQueryHookOptions<
-  TData = unknown,
-  TVariables extends OperationVariables = OperationVariables,
-> {
+export interface SuspenseQueryHookOptions<TData = unknown, TVariables extends OperationVariables = OperationVariables> {
   /** {@inheritDoc @apollo/client!QueryOptionsDocumentation#client:member} */
   client?: ApolloClient<any>;
   /** {@inheritDoc @apollo/client!QueryOptionsDocumentation#context:member} */
@@ -235,15 +204,9 @@ export interface BackgroundQueryHookOptions<
   TData = unknown,
   TVariables extends OperationVariables = OperationVariables,
 > extends Pick<
-    QueryHookOptions<TData, TVariables>,
-    | 'client'
-    | 'variables'
-    | 'errorPolicy'
-    | 'context'
-    | 'canonizeResults'
-    | 'returnPartialData'
-    | 'refetchWritePolicy'
-  > {
+  QueryHookOptions<TData, TVariables>,
+  'client' | 'variables' | 'errorPolicy' | 'context' | 'canonizeResults' | 'returnPartialData' | 'refetchWritePolicy'
+> {
   fetchPolicy?: BackgroundQueryHookFetchPolicy;
   queryKey?: string | number | any[];
 
@@ -297,39 +260,25 @@ export interface QueryLazyOptions<TVariables> {
 /**
  * @deprecated This type will be removed in the next major version of Apollo Client
  */
-export type LazyQueryResult<
-  TData,
-  TVariables extends OperationVariables,
-> = QueryResult<TData, TVariables>;
+export type LazyQueryResult<TData, TVariables extends OperationVariables> = QueryResult<TData, TVariables>;
 
 /**
  * @deprecated This type will be removed in the next major version of Apollo Client
  */
-export type QueryTuple<
-  TData,
-  TVariables extends OperationVariables,
-> = LazyQueryResultTuple<TData, TVariables>;
+export type QueryTuple<TData, TVariables extends OperationVariables> = LazyQueryResultTuple<TData, TVariables>;
 
-export type LazyQueryExecFunction<
-  TData,
-  TVariables extends OperationVariables,
-> = (
-  options?: Partial<LazyQueryHookExecOptions<TData, TVariables>>
+export type LazyQueryExecFunction<TData, TVariables extends OperationVariables> = (
+  options?: Partial<LazyQueryHookExecOptions<TData, TVariables>>,
 ) => Promise<QueryResult<TData, TVariables>>;
 
-export type LazyQueryResultTuple<
-  TData,
-  TVariables extends OperationVariables,
-> = [
+export type LazyQueryResultTuple<TData, TVariables extends OperationVariables> = [
   execute: LazyQueryExecFunction<TData, TVariables>,
   result: QueryResult<TData, TVariables>,
 ];
 
 /* Mutation types */
 
-export type RefetchQueriesFunction = (
-  ...args: any[]
-) => InternalRefetchQueriesInclude;
+export type RefetchQueriesFunction = (...args: any[]) => InternalRefetchQueriesInclude;
 
 export interface BaseMutationOptions<
   TData = any,
@@ -379,9 +328,7 @@ export declare type MutationFunction<
   TVariables = OperationVariables,
   TContext = DefaultContext,
   TCache extends ApolloCache<any> = ApolloCache<any>,
-> = (
-  options?: MutationFunctionOptions<TData, TVariables, TContext, TCache>
-) => Promise<FetchResult<TData>>;
+> = (options?: MutationFunctionOptions<TData, TVariables, TContext, TCache>) => Promise<FetchResult<TData>>;
 
 export interface MutationHookOptions<
   TData = any,
@@ -406,7 +353,7 @@ export type MutationTuple<
   TCache extends ApolloCache<any> = ApolloCache<any>,
 > = [
   mutate: (
-    options?: MutationFunctionOptions<TData, TVariables, TContext, TCache>
+    options?: MutationFunctionOptions<TData, TVariables, TContext, TCache>,
     // TODO This FetchResult<TData> seems strange here, as opposed to an
     // ApolloQueryResult<TData>
   ) => Promise<FetchResult<TData>>,
@@ -425,18 +372,13 @@ export interface OnSubscriptionDataOptions<TData = any> {
   subscriptionData: SubscriptionResult<TData>;
 }
 
-export interface BaseSubscriptionOptions<
-  TData = any,
-  TVariables extends OperationVariables = OperationVariables,
-> {
+export interface BaseSubscriptionOptions<TData = any, TVariables extends OperationVariables = OperationVariables> {
   /** {@inheritDoc @apollo/client!SubscriptionOptionsDocumentation#variables:member} */
   variables?: TVariables;
   /** {@inheritDoc @apollo/client!SubscriptionOptionsDocumentation#fetchPolicy:member} */
   fetchPolicy?: FetchPolicy;
   /** {@inheritDoc @apollo/client!SubscriptionOptionsDocumentation#shouldResubscribe:member} */
-  shouldResubscribe?:
-    | boolean
-    | ((options: BaseSubscriptionOptions<TData, TVariables>) => boolean);
+  shouldResubscribe?: boolean | ((options: BaseSubscriptionOptions<TData, TVariables>) => boolean);
   /** {@inheritDoc @apollo/client!SubscriptionOptionsDocumentation#client:member} */
   client?: ApolloClient<object>;
   /** {@inheritDoc @apollo/client!SubscriptionOptionsDocumentation#skip:member} */
@@ -480,9 +422,7 @@ export interface SubscriptionDataOptions<
   TVariables extends OperationVariables = OperationVariables,
 > extends BaseSubscriptionOptions<TData, TVariables> {
   subscription: DocumentNode | TypedDocumentNode<TData, TVariables>;
-  children?:
-    | null
-    | ((result: SubscriptionResult<TData>) => ReactTypes.ReactNode);
+  children?: null | ((result: SubscriptionResult<TData>) => ReactTypes.ReactNode);
 }
 
 export interface SubscriptionCurrentObservable {

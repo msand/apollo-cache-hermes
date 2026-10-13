@@ -1,25 +1,18 @@
 import * as React from 'react';
 import { ApolloClient, ApolloLink } from '@apollo/client';
 
-import {
-  Observable,
-} from '../../../../core';
+import { Observable } from '../../../../core';
 import { setupSimpleCase } from '../../../../testing/internal';
-import {
-  InternalQueryReference,
-  PreloadedQueryRef,
-  QueryRef,
-  QueryReference,
-} from '../QueryReference';
+import { InternalQueryReference, PreloadedQueryRef, QueryRef, QueryReference } from '../QueryReference';
 import { Hermes } from '../../../../../../src';
 
-it('kicks off request immediately when created', async() => {
+it('kicks off request immediately when created', async () => {
   const { query } = setupSimpleCase();
   let fetchCount = 0;
 
   const client = new ApolloClient({
     cache: new Hermes(),
-    link: new ApolloLink((operation) => {
+    link: new ApolloLink(operation => {
       fetchCount++;
       return Observable.of({ data: { greeting: 'Hello' } });
     }),
@@ -45,21 +38,21 @@ it.skip('type tests', () => {
     function ComponentWithQueryRefProp<
       TData = unknown,
       TVariables = unknown,
-        // eslint-disable-next-line no-empty-pattern
+      // eslint-disable-next-line no-empty-pattern
     >({}: { queryRef: QueryRef<TData, TVariables> }) {
       return null;
     }
     function ComponentWithQueryReferenceProp<
       TData = unknown,
       TVariables = unknown,
-        // eslint-disable-next-line no-empty-pattern
+      // eslint-disable-next-line no-empty-pattern
     >({}: { queryRef: QueryReference<TData> }) {
       return null;
     }
     function ComponentWithPreloadedQueryRefProp<
       TData = unknown,
       TVariables = unknown,
-        // eslint-disable-next-line no-empty-pattern
+      // eslint-disable-next-line no-empty-pattern
     >({}: { queryRef: PreloadedQueryRef<TData, TVariables> }) {
       return null;
     }
@@ -69,6 +62,7 @@ it.skip('type tests', () => {
       const withData: QueryRef<Data> = ANY;
       const withDataAndVariables: QueryRef<Data, Vars> = ANY;
 
+      // prettier-ignore
       <>
         {/* passing queryRef into components that expect queryRef */}
         <>
@@ -144,6 +138,7 @@ it.skip('type tests', () => {
       const withoutTypes: QueryReference = ANY;
       const withData: QueryReference<Data> = ANY;
       const withDataAndVariables: QueryReference<Data, Vars> = ANY;
+      // prettier-ignore
       <>
         {/* passing queryReference into components that expect queryRef */}
         <>
@@ -219,6 +214,7 @@ it.skip('type tests', () => {
       const withoutTypes: PreloadedQueryRef = ANY;
       const withData: PreloadedQueryRef<Data> = ANY;
       const withDataAndVariables: PreloadedQueryRef<Data, Vars> = ANY;
+      // prettier-ignore
       <>
         {/* passing preloadedQueryRef into components that expect queryRef */}
         <>

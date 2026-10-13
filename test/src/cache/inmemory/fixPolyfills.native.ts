@@ -3,7 +3,7 @@
 const testMap = new Map();
 if (testMap.set(1, 2) !== testMap) {
   const { set } = testMap;
-  Map.prototype.set = function(...args) {
+  Map.prototype.set = function (...args) {
     set.apply(this, args);
     return this;
   };
@@ -13,7 +13,7 @@ if (testMap.set(1, 2) !== testMap) {
 const testSet = new Set();
 if (testSet.add(3) !== testSet) {
   const { add } = testSet;
-  Set.prototype.add = function(...args) {
+  Set.prototype.add = function (...args) {
     add.apply(this, args);
     return this;
   };
@@ -36,7 +36,7 @@ try {
   const wrap = <M extends <T>(obj: T) => T>(method: M): M => {
     return (
       method &&
-      (((obj) => {
+      ((obj => {
         try {
           // If .set succeeds, also call .delete to avoid leaking memory.
           testMap.set(obj, obj).delete(obj);

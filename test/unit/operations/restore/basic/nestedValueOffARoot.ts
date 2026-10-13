@@ -8,7 +8,6 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.restore`, () => {
   describe(`nested values hanging off of a root`, () => {
-
     let restoreGraphSnapshot: GraphSnapshot, originalSnapshot: GraphSnapshot;
     beforeAll(() => {
       const cacheContext = createStrictCacheContext();
@@ -32,25 +31,28 @@ describe(`operations.restore`, () => {
             prop3
           }
         }`,
-        cacheContext
+        cacheContext,
       );
 
-      restoreGraphSnapshot = restore({
-        [QueryRootId]: {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          data: {
-            bar: {
-              value: 42,
-              prop1: 'hello',
-              prop2: {
-                nestedProp1: 1000,
-                nestedProp2: 'world',
+      restoreGraphSnapshot = restore(
+        {
+          [QueryRootId]: {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            data: {
+              bar: {
+                value: 42,
+                prop1: 'hello',
+                prop2: {
+                  nestedProp1: 1000,
+                  nestedProp2: 'world',
+                },
+                prop3: ['hello', 'world'],
               },
-              prop3: ['hello', 'world'],
             },
           },
         },
-      }, cacheContext).cacheSnapshot.baseline;
+        cacheContext,
+      ).cacheSnapshot.baseline;
     });
 
     it(`restores GraphSnapshot from JSON serializable object`, () => {
@@ -60,6 +62,5 @@ describe(`operations.restore`, () => {
     it(`correctly restores different types of NodeSnapshot`, () => {
       jestExpect(restoreGraphSnapshot.getNodeSnapshot(QueryRootId)).toBeInstanceOf(EntitySnapshot);
     });
-
   });
 });

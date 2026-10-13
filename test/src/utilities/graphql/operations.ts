@@ -2,10 +2,7 @@ import type { DocumentNode } from '../../core/index';
 
 import { getOperationDefinition } from './getFromAST';
 
-function isOperation(
-  document: DocumentNode,
-  operation: 'query' | 'mutation' | 'subscription'
-) {
+function isOperation(document: DocumentNode, operation: 'query' | 'mutation' | 'subscription') {
   return getOperationDefinition(document)?.operation === operation;
 }
 

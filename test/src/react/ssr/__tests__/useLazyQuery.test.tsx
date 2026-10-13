@@ -66,7 +66,7 @@ describe('useLazyQuery Hook SSR', () => {
       </ApolloProvider>
     );
 
-    return renderToStringWithData(app).then((markup) => {
+    return renderToStringWithData(app).then(markup => {
       expect(markup).toMatch(/Audi/);
     });
   });

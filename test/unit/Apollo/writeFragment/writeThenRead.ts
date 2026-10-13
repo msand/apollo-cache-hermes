@@ -8,7 +8,6 @@ import { strictConfig } from '../../../helpers';
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`writeFragment and then readFragment`, () => {
-
   let hermes: Hermes;
   const readWriteFragment = gql(`
     fragment viewer on Viewer {
@@ -48,7 +47,7 @@ describe(`writeFragment and then readFragment`, () => {
           __typename: 'Viewer',
         },
       },
-      'shipment0': {
+      shipment0: {
         type: Serializable.NodeSnapshotType.EntitySnapshot,
         inbound: [{ id: '123', path: ['shipment'] }],
         data: {
@@ -73,11 +72,13 @@ describe(`writeFragment and then readFragment`, () => {
       },
     });
 
-    expect(hermes.readFragment({
-      id: '123',
-      fragmentName: 'viewer',
-      fragment: readWriteFragment,
-    })).to.include({
+    expect(
+      hermes.readFragment({
+        id: '123',
+        fragmentName: 'viewer',
+        fragment: readWriteFragment,
+      }),
+    ).to.include({
       id: 123,
       name: 'Munster',
       __typename: 'Viewer',
@@ -96,11 +97,13 @@ describe(`writeFragment and then readFragment`, () => {
       },
     });
 
-    expect(hermes.readFragment({
-      id: '123',
-      fragmentName: 'viewerPlusShipment',
-      fragment: readWriteFragment,
-    })).to.deep.eq({
+    expect(
+      hermes.readFragment({
+        id: '123',
+        fragmentName: 'viewerPlusShipment',
+        fragment: readWriteFragment,
+      }),
+    ).to.deep.eq({
       id: 123,
       name: 'Gouda',
       __typename: 'Viewer',
@@ -114,5 +117,4 @@ describe(`writeFragment and then readFragment`, () => {
       },
     });
   });
-
 });

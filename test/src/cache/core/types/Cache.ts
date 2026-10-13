@@ -4,13 +4,9 @@ import { DataProxy } from './DataProxy';
 import type { AllFieldsModifier, Modifiers } from './common';
 
 export namespace Cache {
-  export type WatchCallback<TData = any> = (
-    diff: Cache.DiffResult<TData>,
-    lastDiff?: Cache.DiffResult<TData>
-  ) => void;
+  export type WatchCallback<TData = any> = (diff: Cache.DiffResult<TData>, lastDiff?: Cache.DiffResult<TData>) => void;
 
-  export interface ReadOptions<TVariables = any, TData = any>
-    extends DataProxy.Query<TVariables, TData> {
+  export interface ReadOptions<TVariables = any, TData = any> extends DataProxy.Query<TVariables, TData> {
     rootId?: string;
     previousResult?: any;
     optimistic: boolean;
@@ -26,21 +22,18 @@ export namespace Cache {
   }
 
   export interface WriteOptions<TResult = any, TVariables = any>
-    extends Omit<DataProxy.Query<TVariables, TResult>, 'id'>,
-      Omit<DataProxy.WriteOptions<TResult>, 'data'> {
+    extends Omit<DataProxy.Query<TVariables, TResult>, 'id'>, Omit<DataProxy.WriteOptions<TResult>, 'data'> {
     dataId?: string;
     result: TResult;
   }
 
-  export interface DiffOptions<TData = any, TVariables = any>
-    extends Omit<ReadOptions<TVariables, TData>, 'rootId'> {
+  export interface DiffOptions<TData = any, TVariables = any> extends Omit<ReadOptions<TVariables, TData>, 'rootId'> {
     // The DiffOptions interface is currently just an alias for
     // ReadOptions, though DiffOptions used to be responsible for
     // declaring the returnPartialData option.
   }
 
-  export interface WatchOptions<TData = any, TVariables = any>
-    extends DiffOptions<TData, TVariables> {
+  export interface WatchOptions<TData = any, TVariables = any> extends DiffOptions<TData, TVariables> {
     watcher?: object;
     immediate?: boolean;
     callback: WatchCallback<TData>;
@@ -60,19 +53,14 @@ export namespace Cache {
     discardWatches?: boolean;
   }
 
-  export interface ModifyOptions<
-    Entity extends Record<string, any> = Record<string, any>,
-  > {
+  export interface ModifyOptions<Entity extends Record<string, any> = Record<string, any>> {
     id?: string;
     fields: Modifiers<Entity> | AllFieldsModifier<Entity>;
     optimistic?: boolean;
     broadcast?: boolean;
   }
 
-  export interface BatchOptions<
-    TCache extends ApolloCache<any>,
-    TUpdateResult = void,
-  > {
+  export interface BatchOptions<TCache extends ApolloCache<any>, TUpdateResult = void> {
     // Same as the first parameter of performTransaction, except the cache
     // argument will have the subclass type rather than ApolloCache.
     update(cache: TCache): TUpdateResult;
@@ -101,7 +89,7 @@ export namespace Cache {
       this: TCache,
       watch: Cache.WatchOptions,
       diff: Cache.DiffResult<any>,
-      lastDiff?: Cache.DiffResult<any> | undefined
+      lastDiff?: Cache.DiffResult<any> | undefined,
     ) => any;
   }
 

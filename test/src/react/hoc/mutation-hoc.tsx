@@ -1,4 +1,3 @@
-
 import * as React from 'rehackt';
 import type * as ReactTypes from 'react';
 import type { DocumentNode } from 'graphql';
@@ -11,17 +10,13 @@ import {
   DefaultContext,
   OperationVariables,
   parser,
-  MutationFunctionOptions, FetchResult,
+  MutationFunctionOptions,
+  FetchResult,
 } from '@apollo/client';
 import { Mutation } from '@apollo/client/react/components';
 import { MutateProps, OperationOption, OptionProps } from '@apollo/client/react/hoc';
 
-import {
-  defaultMapPropsToOptions,
-  getDisplayName,
-  calculateVariablesFromProps,
-  GraphQLBase,
-} from './hoc-utils';
+import { defaultMapPropsToOptions, getDisplayName, calculateVariablesFromProps, GraphQLBase } from './hoc-utils';
 
 /**
  * @deprecated
@@ -35,33 +30,19 @@ export function withMutation<
   TChildProps = MutateProps<TData, TGraphQLVariables>,
   TContext extends Record<string, any> = DefaultContext,
   TCache extends ApolloCache<any> = ApolloCache<any>,
->(
-  document: DocumentNode,
-  operationOptions: OperationOption<
-    TProps,
-    TData,
-    TGraphQLVariables,
-    TChildProps
-  > = {}
-) {
+>(document: DocumentNode, operationOptions: OperationOption<TProps, TData, TGraphQLVariables, TChildProps> = {}) {
   // this is memoized so if coming from `graphql` there is nearly no extra cost
   const operation = parser(document);
   // extract options
 
-  const { options = defaultMapPropsToOptions, alias = 'Apollo' }
-    = operationOptions;
+  const { options = defaultMapPropsToOptions, alias = 'Apollo' } = operationOptions;
 
-  let mapPropsToOptions = options as (
-    props: TProps
-  ) => BaseMutationOptions<TData>;
+  let mapPropsToOptions = options as (props: TProps) => BaseMutationOptions<TData>;
   if (typeof mapPropsToOptions !== 'function') {
-    mapPropsToOptions = () =>
-      options as BaseMutationOptions<TData>;
+    mapPropsToOptions = () => options as BaseMutationOptions<TData>;
   }
 
-  return (
-    WrappedComponent: ReactTypes.ComponentType<TProps & TChildProps>
-  ): ReactTypes.ComponentClass<TProps> => {
+  return (WrappedComponent: ReactTypes.ComponentType<TProps & TChildProps>): ReactTypes.ComponentClass<TProps> => {
     const graphQLDisplayName = `${alias}(${getDisplayName(WrappedComponent)})`;
     class GraphQL extends GraphQLBase<TProps, TChildProps> {
       static displayName = graphQLDisplayName;
@@ -77,18 +58,17 @@ export function withMutation<
           });
         }
         if (!opts.variables && operation.variables.length > 0) {
-          opts.variables = calculateVariablesFromProps(
-            operation,
-            props
-          ) as TGraphQLVariables;
+          opts.variables = calculateVariablesFromProps(operation, props) as TGraphQLVariables;
         }
 
         return (
           // noinspection XmlDeprecatedElement
           <Mutation ignoreResults {...opts} mutation={document}>
             {(
-              mutate: <TData>(options?: MutationFunctionOptions<TData, OperationVariables, DefaultContext, ApolloCache<any>>) => Promise<FetchResult<TData>>,
-              { data, ...r }: MutationResult<TData>
+              mutate: <TData>(
+                options?: MutationFunctionOptions<TData, OperationVariables, DefaultContext, ApolloCache<any>>,
+              ) => Promise<FetchResult<TData>>,
+              { data, ...r }: MutationResult<TData>,
             ) => {
               // the HOC's historically hoisted the data from the execution result
               // up onto the result since it was passed as a nested prop
@@ -96,19 +76,17 @@ export function withMutation<
               // this matches the query HoC
               const result = Object.assign(r, data || {});
               const name = operationOptions.name || 'mutate';
-              const resultName
-                = operationOptions.name ? `${name}Result` : 'result';
+              const resultName = operationOptions.name ? `${name}Result` : 'result';
               let childProps = {
                 [name]: mutate,
                 [resultName]: result,
               } as any as TChildProps;
               if (operationOptions.props) {
-                const newResult: OptionProps<TProps, TData, TGraphQLVariables>
-                  = {
-                    [name]: mutate,
-                    [resultName]: result,
-                    ownProps: props,
-                  };
+                const newResult: OptionProps<TProps, TData, TGraphQLVariables> = {
+                  [name]: mutate,
+                  [resultName]: result,
+                  ownProps: props,
+                };
                 childProps = operationOptions.props(newResult) as any;
               }
 

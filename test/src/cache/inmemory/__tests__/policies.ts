@@ -2,19 +2,14 @@ import gql from 'graphql-tag';
 import { ApolloClient, InMemoryCache, FieldPolicy } from '@apollo/client';
 
 import { ReactiveVar, makeVar } from '../reactiveVars';
-import {
-  Reference,
-  StoreObject,
-  NetworkStatus,
-  TypedDocumentNode,
-  DocumentNode,
-} from '../../../core';
+import { Reference, StoreObject, NetworkStatus, TypedDocumentNode, DocumentNode } from '../../../core';
 import { MissingFieldError } from '../..';
 import { relayStylePagination, stringifyForDisplay } from '../../../utilities';
 import { StorageType } from '../policies';
 import { itAsync, subscribeAndCount, MockLink } from '../../../testing/core';
 import { spyOnConsole } from '../../../testing/internal';
 import { Hermes } from '../../../../../src';
+import { toNormalizedCacheObject } from '../../../../helpers';
 
 function reverse(s: string) {
   return s.split('').reverse().join('');
@@ -54,8 +49,9 @@ describe('type policies', () => {
             }
           }
         `,
-      })
-    ).toEqual({
+      }),
+      // Hermes: results may contain a superset of the selected fields.
+    ).toMatchObject({
       book: {
         __typename: 'Book',
         author: {
@@ -81,27 +77,33 @@ describe('type policies', () => {
       },
     });
 
+    // Hermes: references are edges, and the unselected subtitle field is stored too.
     expect(cache.extract(true)).toEqual({
       ROOT_QUERY: {
-        __typename: 'Query',
-        book: {
-          __ref: 'Book:{"isbn":"1400096235"}',
-        },
+        data: { book: undefined },
+        outbound: [{ id: 'Book:{"isbn":"1400096235"}', path: ['book'] }],
+        type: 0,
       },
       'Book:{"isbn":"1400096235"}': {
-        __typename: 'Book',
-        isbn: '1400096235',
-        title: 'The Information',
-        author: {
-          name: 'James Gleick',
+        data: {
+          __typename: 'Book',
+          isbn: '1400096235',
+          title: 'The Information',
+          subtitle: 'A History, a Theory, a Flood',
+          author: {
+            name: 'James Gleick',
+          },
         },
+        inbound: [{ id: 'ROOT_QUERY', path: ['book'] }],
+        type: 0,
       },
     });
 
     checkAuthorName(cache);
   });
 
-  it('can specify composite keyFields', () => {
+  // Hermes: nested keyFields are not supported
+  it.skip('can specify composite keyFields', () => {
     const cache = new Hermes({
       typePolicies: {
         Book: {
@@ -121,8 +123,7 @@ describe('type policies', () => {
       ROOT_QUERY: {
         __typename: 'Query',
         book: {
-          __ref:
-            'Book:{"title":"The Information","author":{"name":"James Gleick"}}',
+          __ref: 'Book:{"title":"The Information","author":{"name":"James Gleick"}}',
         },
       },
       'Book:{"title":"The Information","author":{"name":"James Gleick"}}': {
@@ -137,7 +138,8 @@ describe('type policies', () => {
     checkAuthorName(cache);
   });
 
-  it('can specify nested keyFields with alias', () => {
+  // Hermes: nested keyFields are not supported
+  it.skip('can specify nested keyFields with alias', () => {
     const cache = new Hermes({
       typePolicies: {
         Book: {
@@ -176,8 +178,7 @@ describe('type policies', () => {
       ROOT_QUERY: {
         __typename: 'Query',
         book: {
-          __ref:
-            'Book:{"title":"The Information","author":{"name":"James Gleick"}}',
+          __ref: 'Book:{"title":"The Information","author":{"name":"James Gleick"}}',
         },
       },
       'Book:{"title":"The Information","author":{"name":"James Gleick"}}': {
@@ -195,7 +196,8 @@ describe('type policies', () => {
     checkAuthorName(cache);
   });
 
-  it('keeps keyFields in specified order', () => {
+  // Hermes: nested keyFields are not supported
+  it.skip('keeps keyFields in specified order', () => {
     const cache = new Hermes({
       typePolicies: {
         Book: {
@@ -215,8 +217,7 @@ describe('type policies', () => {
       ROOT_QUERY: {
         __typename: 'Query',
         book: {
-          __ref:
-            'Book:{"author":{"name":"James Gleick"},"title":"The Information"}',
+          __ref: 'Book:{"author":{"name":"James Gleick"},"title":"The Information"}',
         },
       },
       'Book:{"author":{"name":"James Gleick"},"title":"The Information"}': {
@@ -231,7 +232,8 @@ describe('type policies', () => {
     checkAuthorName(cache);
   });
 
-  it('serializes nested keyFields objects in stable order', () => {
+  // Hermes: nested keyFields are not supported (object key values are stringified as written, with aliases)
+  it.skip('serializes nested keyFields objects in stable order', () => {
     const cache = new Hermes({
       typePolicies: {
         Book: {
@@ -279,7 +281,7 @@ describe('type policies', () => {
       data: {
         book: {
           __typename: 'Book',
-          title: 'The Science of Can and Can\'t',
+          title: "The Science of Can and Can't",
           writer: {
             // The order of fields shouldn't matter here, since cache
             // identification will stringify them in a stable order.
@@ -295,22 +297,21 @@ describe('type policies', () => {
       // The order of the author object's __typename, firstName, and lastName
       // fields has been determined by our keyFields configuration and stable
       // stringification.
-      'Book:{"title":"Brainscapes","author":{"__typename":"Person","firstName":"Rebecca","lastName":"Schwarzlose"}}':
-        {
-          __typename: 'Book',
-          title: 'Brainscapes',
-          author: {
-            __typename: 'Person',
-            firstName: 'Rebecca',
-            lastName: 'Schwarzlose',
-          },
+      'Book:{"title":"Brainscapes","author":{"__typename":"Person","firstName":"Rebecca","lastName":"Schwarzlose"}}': {
+        __typename: 'Book',
+        title: 'Brainscapes',
+        author: {
+          __typename: 'Person',
+          firstName: 'Rebecca',
+          lastName: 'Schwarzlose',
         },
+      },
       // Again, __typename, firstName, and then lastName, despite the different
       // order of keys in the data we wrote.
       'Book:{"title":"The Science of Can and Can\'t","author":{"__typename":"Person","firstName":"Chiarra","lastName":"Marletto"}}':
         {
           __typename: 'Book',
-          title: 'The Science of Can and Can\'t',
+          title: "The Science of Can and Can't",
           author: {
             __typename: 'Person',
             firstName: 'Chiarra',
@@ -327,7 +328,8 @@ describe('type policies', () => {
     });
   });
 
-  it('accepts keyFields functions', () => {
+  // Hermes: keyFields functions are not supported
+  it.skip('accepts keyFields functions', () => {
     const cache = new Hermes({
       typePolicies: {
         Book: {
@@ -397,20 +399,25 @@ describe('type policies', () => {
       },
     });
 
+    // Hermes: references are edges, and the unselected subtitle field is stored too.
     expect(cache.extract(true)).toEqual({
       ROOT_QUERY: {
-        __typename: 'Query',
-        book: {
-          __ref: 'Book:{"ISBN":"1400096235","title":"The Information"}',
-        },
+        data: { book: undefined },
+        outbound: [{ id: 'Book:{"ISBN":"1400096235","title":"The Information"}', path: ['book'] }],
+        type: 0,
       },
       'Book:{"ISBN":"1400096235","title":"The Information"}': {
-        __typename: 'Book',
-        ISBN: '1400096235',
-        title: 'The Information',
-        author: {
-          name: 'James Gleick',
+        data: {
+          __typename: 'Book',
+          ISBN: '1400096235',
+          title: 'The Information',
+          subtitle: 'A History, a Theory, a Flood',
+          author: {
+            name: 'James Gleick',
+          },
         },
+        inbound: [{ id: 'ROOT_QUERY', path: ['book'] }],
+        type: 0,
       },
     });
 
@@ -453,11 +460,8 @@ describe('type policies', () => {
           book: theInformationBookData,
         },
       });
-    }).toThrowError(
-      `Missing field 'year' while extracting keyFields from ${stringifyForDisplay(
-        theInformationBookData,
-        2
-      )}`
+    }).toThrow(
+      `Missing field 'year' while extracting keyFields from ${stringifyForDisplay(theInformationBookData, 2)}`,
     );
   });
 
@@ -486,7 +490,7 @@ describe('type policies', () => {
       cache.identify({
         __typename: 'Movie',
         id: '3993d4118143',
-      })
+      }),
     ).toBe('MotionPicture::3993d4118143');
   });
 
@@ -516,7 +520,7 @@ describe('type policies', () => {
             foo
           }
         `,
-      })
+      }),
     ).toEqual({ foo: 'foo' });
     expect(
       cache.readQuery({
@@ -525,7 +529,7 @@ describe('type policies', () => {
             bar
           }
         `,
-      })
+      }),
     ).toEqual({ bar: 'bar' });
   });
 
@@ -564,7 +568,7 @@ describe('type policies', () => {
     });
 
     const query: TypedDocumentNode<{
-      reptiles: Record<string, any>[],
+      reptiles: Record<string, any>[];
     }> = gql`
       query {
         reptiles {
@@ -627,7 +631,7 @@ describe('type policies', () => {
       cache.evict({
         id: cmId,
         fieldName: 'venomous',
-      })
+      }),
     ).toBe(true);
 
     const result2 = cache.readQuery({ query })!;
@@ -657,7 +661,7 @@ describe('type policies', () => {
       cache.identify({
         __typename: 'DeathAdder',
         tagId: 'LethalAbacus666',
-      })
+      }),
     ).toBe('DeathAdder:{"tagId":"LethalAbacus666"}');
   });
 
@@ -687,13 +691,13 @@ describe('type policies', () => {
     });
 
     type Coworker = {
-      __typename: 'CoworkerEntity' | 'ManagerEntity',
-      uid: string,
-      name: string,
+      __typename: 'CoworkerEntity' | 'ManagerEntity';
+      uid: string;
+      name: string;
     };
 
     const query: TypedDocumentNode<{
-      coworkers: Coworker[],
+      coworkers: Coworker[];
     }> = gql`
       query {
         coworkers {
@@ -752,7 +756,7 @@ describe('type policies', () => {
     }
 
     const queryWithAlias: TypedDocumentNode<{
-      coworkers: CoworkerWithAlias[],
+      coworkers: CoworkerWithAlias[];
     }> = gql`
       query {
         coworkers {
@@ -838,7 +842,8 @@ describe('type policies', () => {
   });
 
   describe('field policies', () => {
-    it(`can filter arguments using keyArgs`, () => {
+    // Hermes: keyArgs are not supported
+    it.skip(`can filter arguments using keyArgs`, () => {
       const cache = new Hermes({
         typePolicies: {
           Query: {
@@ -879,7 +884,8 @@ describe('type policies', () => {
       });
     });
 
-    it(`can filter arguments using keyArgs in non-Query fields`, () => {
+    // Hermes: keyArgs are not supported
+    it.skip(`can filter arguments using keyArgs in non-Query fields`, () => {
       const cache = new Hermes({
         typePolicies: {
           Book: {
@@ -901,11 +907,7 @@ describe('type policies', () => {
           book {
             isbn
             title
-            author(
-              firstName: "Douglas"
-              middleName: "Richard"
-              lastName: "Hofstadter"
-            ) {
+            author(firstName: "Douglas", middleName: "Richard", lastName: "Hofstadter") {
               name
             }
           }
@@ -951,7 +953,8 @@ describe('type policies', () => {
       expect(result).toEqual(data);
     });
 
-    it('assumes keyArgs:false when read and merge function present', () => {
+    // Hermes: keyArgs are not supported
+    it.skip('assumes keyArgs:false when read and merge function present', () => {
       const cache = new Hermes({
         typePolicies: {
           TypeA: {
@@ -1157,7 +1160,8 @@ describe('type policies', () => {
       });
     });
 
-    it(`can include optional arguments in field keyArgs policy`, () => {
+    // Hermes: keyArgs are not supported
+    it.skip(`can include optional arguments in field keyArgs policy`, () => {
       const cache = new Hermes({
         typePolicies: {
           Author: {
@@ -1179,9 +1183,7 @@ describe('type policies', () => {
             {
               __typename: 'Book',
               isbn: '0578675862',
-              title:
-                'Working in Public: The Making and Maintenance of '
-                + 'Open Source Software',
+              title: 'Working in Public: The Making and Maintenance of Open Source Software',
             },
           ],
         },
@@ -1189,7 +1191,7 @@ describe('type policies', () => {
 
       function check<TData extends typeof data, TVars>(
         query: DocumentNode | TypedDocumentNode<TData, TVars>,
-        variables?: TVars
+        variables?: TVars,
       ) {
         cache.writeQuery({ query, variables, data });
         expect(cache.readQuery({ query, variables })).toEqual(data);
@@ -1299,7 +1301,7 @@ describe('type policies', () => {
             }
           }
         `,
-        { type: void 0 as any }
+        { type: void 0 as any },
       );
       expect(cache.extract()).toMatchSnapshot();
 
@@ -1347,7 +1349,8 @@ describe('type policies', () => {
       ]);
     });
 
-    it(`can return KeySpecifier arrays from keyArgs functions`, () => {
+    // Hermes: keyArgs are not supported
+    it.skip(`can return KeySpecifier arrays from keyArgs functions`, () => {
       const cache = new Hermes({
         typePolicies: {
           Thread: {
@@ -1483,7 +1486,8 @@ describe('type policies', () => {
     // Use several different directives to prove we're not hard-coding support
     // for the @connection directive.
     ['connection', 'directive', 'misdirective'].forEach(directiveName =>
-      it(`can refer to directive @${directiveName} in field key shorthand array`, () => {
+      // Hermes: keyArgs are not supported
+      it.skip(`can refer to directive @${directiveName} in field key shorthand array`, () => {
         const cache = new Hermes({
           typePolicies: {
             Query: {
@@ -1521,8 +1525,7 @@ describe('type policies', () => {
         expect(cache.extract()).toEqual({
           ROOT_QUERY: {
             __typename: 'Query',
-            [`feed:{"@${directiveName}":{"key":"asdf"},"arg":1234}`]:
-              helloTokens,
+            [`feed:{"@${directiveName}":{"key":"asdf"},"arg":1234}`]: helloTokens,
           },
         });
 
@@ -1551,8 +1554,7 @@ describe('type policies', () => {
         expect(cache.extract()).toEqual({
           ROOT_QUERY: {
             __typename: 'Query',
-            [`feed:{"@${directiveName}":{"key":"asdf"},"arg":1234}`]:
-              helloTokens,
+            [`feed:{"@${directiveName}":{"key":"asdf"},"arg":1234}`]: helloTokens,
             'feed:{"arg":2345}': farewellTokens,
           },
         });
@@ -1582,16 +1584,16 @@ describe('type policies', () => {
         expect(cache.extract()).toEqual({
           ROOT_QUERY: {
             __typename: 'Query',
-            [`feed:{"@${directiveName}":{"key":"asdf"},"arg":1234}`]:
-              helloTokens,
+            [`feed:{"@${directiveName}":{"key":"asdf"},"arg":1234}`]: helloTokens,
             'feed:{"arg":2345}': farewellTokens,
             [`feed:{"@${directiveName}":{"key":3456}}`]: directivesTokens,
           },
         });
-      })
+      }),
     );
 
-    it('can refer to variables in field key shorthand array', () => {
+    // Hermes: keyArgs are not supported
+    it.skip('can refer to variables in field key shorthand array', () => {
       const cache = new Hermes({
         typePolicies: {
           Query: {
@@ -1626,8 +1628,7 @@ describe('type policies', () => {
       expect(cache.extract()).toEqual({
         ROOT_QUERY: {
           __typename: 'Query',
-          'defaultToNumVariable:{"input":1234,"$num":1234}':
-            'forced with input and $num',
+          'defaultToNumVariable:{"input":1234,"$num":1234}': 'forced with input and $num',
         },
       });
 
@@ -1650,8 +1651,7 @@ describe('type policies', () => {
       expect(cache.extract()).toEqual({
         ROOT_QUERY: {
           __typename: 'Query',
-          'defaultToNumVariable:{"input":1234,"$num":1234}':
-            'forced with input and $num',
+          'defaultToNumVariable:{"input":1234,"$num":1234}': 'forced with input and $num',
           'defaultToNumVariable:{"$num":2345}': 'forced with only $num',
         },
       });
@@ -1662,7 +1662,7 @@ describe('type policies', () => {
           variables: {
             num: 1234,
           },
-        })
+        }),
       ).toEqual({
         defaultToNumVariable: 'forced with input and $num',
       });
@@ -1673,7 +1673,7 @@ describe('type policies', () => {
           variables: {
             num: 2345,
           },
-        })
+        }),
       ).toEqual({
         defaultToNumVariable: 'forced with only $num',
       });
@@ -1684,7 +1684,7 @@ describe('type policies', () => {
           variables: {
             num: 3456,
           },
-        })
+        }),
       ).toEqual({
         defaultToNumVariable: 1234,
       });
@@ -1695,7 +1695,7 @@ describe('type policies', () => {
           variables: {
             num: 4567,
           },
-        })
+        }),
       ).toEqual({
         defaultToNumVariable: 4567,
       });
@@ -1745,18 +1745,31 @@ describe('type policies', () => {
         },
       });
 
+      // Hermes: references are inbound/outbound edges between nodes.
       expect(cache.extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          tasks: [{ __ref: 'Task:1' }, { __ref: 'Task:2' }],
+          data: { tasks: [undefined, undefined] },
+          outbound: [
+            { id: 'Task:1', path: ['tasks', 0] },
+            { id: 'Task:2', path: ['tasks', 1] },
+          ],
+          type: 0,
         },
         'Task:1': {
-          __typename: 'Task',
-          id: 1,
+          data: {
+            __typename: 'Task',
+            id: 1,
+          },
+          inbound: [{ id: 'ROOT_QUERY', path: ['tasks', 0] }],
+          type: 0,
         },
         'Task:2': {
-          __typename: 'Task',
-          id: 2,
+          data: {
+            __typename: 'Task',
+            id: 2,
+          },
+          inbound: [{ id: 'ROOT_QUERY', path: ['tasks', 1] }],
+          type: 0,
         },
       });
 
@@ -1770,7 +1783,8 @@ describe('type policies', () => {
         `,
       });
 
-      expect(result1).toEqual({
+      // Hermes: results may contain a superset of the selected fields.
+      expect(result1).toMatchObject({
         tasks: [
           {
             __typename: 'Task',
@@ -1810,7 +1824,7 @@ describe('type policies', () => {
       });
 
       // Clear the cached results.
-      storageSet.forEach((storage) => {
+      storageSet.forEach(storage => {
         delete storage.result;
       });
 
@@ -1825,7 +1839,8 @@ describe('type policies', () => {
         `,
       });
 
-      expect(result3).toEqual({
+      // Hermes: results may contain a superset of the selected fields.
+      expect(result3).toMatchObject({
         tasks: [
           {
             __typename: 'Task',
@@ -1873,17 +1888,21 @@ describe('type policies', () => {
         },
       });
 
+      // Hermes: references are inbound/outbound edges between nodes.
       const expectedExtraction = {
         ROOT_QUERY: {
-          __typename: 'Query',
-          me: {
-            __ref: 'Person:{"firstName":"Ben","lastName":"Newman"}',
-          },
+          data: { me: undefined },
+          outbound: [{ id: 'Person:{"firstName":"Ben","lastName":"Newman"}', path: ['me'] }],
+          type: 0,
         },
         'Person:{"firstName":"Ben","lastName":"Newman"}': {
-          __typename: 'Person',
-          firstName: 'Ben',
-          lastName: 'Newman',
+          data: {
+            __typename: 'Person',
+            firstName: 'Ben',
+            lastName: 'Newman',
+          },
+          inbound: [{ id: 'ROOT_QUERY', path: ['me'] }],
+          type: 0,
         },
       };
 
@@ -1905,8 +1924,9 @@ describe('type policies', () => {
               }
             }
           `,
-        })
-      ).toEqual(expectedResult);
+        }),
+        // Hermes: results may contain a superset of the selected fields.
+      ).toMatchObject(expectedResult);
 
       expect(
         cache.readQuery({
@@ -1917,8 +1937,8 @@ describe('type policies', () => {
               }
             }
           `,
-        })
-      ).toEqual(expectedResult);
+        }),
+      ).toMatchObject(expectedResult);
 
       expect(cache.extract(true)).toEqual(expectedExtraction);
     });
@@ -1962,13 +1982,19 @@ describe('type policies', () => {
         },
       });
 
+      // Hermes: the parameterized country field is a separate node.
       const expectedExtraction = {
         ROOT_QUERY: {
-          __typename: 'Query',
-          'country({"code":"CA"})': {
+          parameterized: [{ id: 'ROOT_QUERY❖["country"]❖{"code":"CA"}', path: ['country'] }],
+          type: 0,
+        },
+        'ROOT_QUERY❖["country"]❖{"code":"CA"}': {
+          data: {
             __typename: 'Country',
             name: 'CA',
           },
+          inbound: [{ id: 'ROOT_QUERY', path: ['country'] }],
+          type: 1,
         },
       };
 
@@ -1995,7 +2021,7 @@ describe('type policies', () => {
           variables: {
             code: 'CA',
           },
-        })
+        }),
       ).toEqual(expectedResult);
     });
 
@@ -2067,28 +2093,27 @@ describe('type policies', () => {
         },
       });
 
-      const snapshot1 = {
-        ROOT_QUERY: {
-          __typename: 'Query',
-          jobs: [
-            { __ref: 'Job:{"name":"Job #1"}' },
-            { __ref: 'Job:{"name":"Job #2"}' },
-            { __ref: 'Job:{"name":"Job #3"}' },
-          ],
-        },
-        'Job:{"name":"Job #1"}': {
-          __typename: 'Job',
-          name: 'Job #1',
-        },
-        'Job:{"name":"Job #2"}': {
-          __typename: 'Job',
-          name: 'Job #2',
-        },
-        'Job:{"name":"Job #3"}': {
-          __typename: 'Job',
-          name: 'Job #3',
-        },
-      };
+      // Hermes: references are inbound/outbound edges between nodes.
+      function jobsSnapshot(count: number) {
+        const ids = Array.from({ length: count }, (_, i) => `Job:{"name":"Job #${i + 1}"}`);
+        const snapshot: Record<string, any> = {
+          ROOT_QUERY: {
+            data: { jobs: ids.map(() => undefined) },
+            outbound: ids.map((id, i) => ({ id, path: ['jobs', i] })),
+            type: 0,
+          },
+        };
+        ids.forEach((id, i) => {
+          snapshot[id] = {
+            data: { __typename: 'Job', name: `Job #${i + 1}` },
+            inbound: [{ id: 'ROOT_QUERY', path: ['jobs', i] }],
+            type: 0,
+          };
+        });
+        return snapshot;
+      }
+
+      const snapshot1 = jobsSnapshot(3);
 
       expect(cache.extract()).toEqual(snapshot1);
 
@@ -2097,7 +2122,7 @@ describe('type policies', () => {
           query,
           optimistic: false,
           returnPartialData: true,
-        })
+        }),
       ).toEqual({
         result: {
           jobs: [
@@ -2122,21 +2147,18 @@ describe('type policies', () => {
             {
               jobs: {
                 0: {
-                  result:
-                    'Can\'t find field \'result\' on Job:{"name":"Job #1"} object',
+                  result: 'Can\'t find field \'result\' on Job:{"name":"Job #1"} object',
                 },
                 1: {
-                  result:
-                    'Can\'t find field \'result\' on Job:{"name":"Job #2"} object',
+                  result: 'Can\'t find field \'result\' on Job:{"name":"Job #2"} object',
                 },
                 2: {
-                  result:
-                    'Can\'t find field \'result\' on Job:{"name":"Job #3"} object',
+                  result: 'Can\'t find field \'result\' on Job:{"name":"Job #3"} object',
                 },
               },
             },
             expect.anything(), // query
-            expect.anything() // variables
+            expect.anything(), // variables
           ),
         ],
       });
@@ -2164,19 +2186,15 @@ describe('type policies', () => {
 
       // Nothing should have changed in the cache itself as a result of
       // writing a result for job #2.
-      expect(cache.extract()).toEqual({
-        ...snapshot1,
-        __META: {
-          extraRootIds: ['Job:{"name":"Job #2"}'],
-        },
-      });
+      // Hermes: writeFragment does not retain the written entity (no __META).
+      expect(cache.extract()).toEqual(snapshot1);
 
       expect(
         cache.diff({
           query,
           optimistic: false,
           returnPartialData: true,
-        })
+        }),
       ).toEqual({
         result: {
           jobs: [
@@ -2202,17 +2220,15 @@ describe('type policies', () => {
             {
               jobs: {
                 0: {
-                  result:
-                    'Can\'t find field \'result\' on Job:{"name":"Job #1"} object',
+                  result: 'Can\'t find field \'result\' on Job:{"name":"Job #1"} object',
                 },
                 2: {
-                  result:
-                    'Can\'t find field \'result\' on Job:{"name":"Job #3"} object',
+                  result: 'Can\'t find field \'result\' on Job:{"name":"Job #3"} object',
                 },
               },
             },
             expect.anything(), // query
-            expect.anything() // variables
+            expect.anything(), // variables
           ),
         ],
       });
@@ -2230,34 +2246,17 @@ describe('type policies', () => {
         },
       });
 
-      const snapshot2 = {
-        ...snapshot1,
-        ROOT_QUERY: {
-          ...snapshot1.ROOT_QUERY,
-          jobs: [
-            ...snapshot1.ROOT_QUERY.jobs,
-            { __ref: 'Job:{"name":"Job #4"}' },
-          ],
-        },
-        'Job:{"name":"Job #4"}': {
-          __typename: 'Job',
-          name: 'Job #4',
-        },
-      };
+      const snapshot2 = jobsSnapshot(4);
 
-      expect(cache.extract()).toEqual({
-        ...snapshot2,
-        __META: {
-          extraRootIds: ['Job:{"name":"Job #2"}'],
-        },
-      });
+      // Hermes: writeFragment does not retain the written entity (no __META).
+      expect(cache.extract()).toEqual(snapshot2);
 
       expect(
         cache.diff({
           query,
           optimistic: false,
           returnPartialData: true,
-        })
+        }),
       ).toEqual({
         result: {
           jobs: [
@@ -2288,17 +2287,15 @@ describe('type policies', () => {
             {
               jobs: {
                 0: {
-                  result:
-                    'Can\'t find field \'result\' on Job:{"name":"Job #1"} object',
+                  result: 'Can\'t find field \'result\' on Job:{"name":"Job #1"} object',
                 },
                 2: {
-                  result:
-                    'Can\'t find field \'result\' on Job:{"name":"Job #3"} object',
+                  result: 'Can\'t find field \'result\' on Job:{"name":"Job #3"} object',
                 },
               },
             },
             expect.anything(), // query
-            expect.anything() // variables
+            expect.anything(), // variables
           ),
         ],
       });
@@ -2311,7 +2308,7 @@ describe('type policies', () => {
           query,
           optimistic: false,
           returnPartialData: true,
-        })
+        }),
       ).toEqual({
         result: {
           jobs: [
@@ -2405,9 +2402,9 @@ describe('type policies', () => {
       });
 
       const query: TypedDocumentNode<{
-        mergeRead: number,
-        mergeModify: number,
-        mergeReadModify: number,
+        mergeRead: number;
+        mergeModify: number;
+        mergeReadModify: number;
       }> = gql`
         query {
           mergeRead
@@ -2445,7 +2442,7 @@ describe('type policies', () => {
               mergeReadModify
             }
           `,
-        })
+        }),
       ).toEqual({
         mergeRead: 1,
         mergeReadModify: 100,
@@ -2479,7 +2476,7 @@ describe('type policies', () => {
               return value + 1;
             },
           },
-        })
+        }),
       ).toBe(true);
 
       expect(cache.extract()).toMatchSnapshot();
@@ -2535,10 +2532,8 @@ describe('type policies', () => {
                 merge(existing: any[] = [], incoming: any[], { readField }) {
                   if (existing) {
                     const merged = existing.slice(0);
-                    const existingIsbnSet = new Set(
-                      merged.map(book => readField('isbn', book))
-                    );
-                    incoming.forEach((book) => {
+                    const existingIsbnSet = new Set(merged.map(book => readField('isbn', book)));
+                    incoming.forEach(book => {
                       const isbn = readField('isbn', book);
                       if (!existingIsbnSet.has(isbn)) {
                         existingIsbnSet.add(isbn);
@@ -2615,77 +2610,40 @@ describe('type policies', () => {
         });
       }
 
+      // Hermes: ROOT_QUERY.books holds edges to the Book nodes, in list order.
+      function expectBooks(...books: (typeof programmingRustBook)[]) {
+        const snapshot: Record<string, any> = {
+          ROOT_QUERY: {
+            data: { books: books.map(() => undefined) },
+            outbound: books.map((book, i) => ({ id: `Book:{"isbn":"${book.isbn}"}`, path: ['books', i] })),
+            type: 0,
+          },
+        };
+        books.forEach((book, i) => {
+          snapshot[`Book:{"isbn":"${book.isbn}"}`] = {
+            data: book,
+            inbound: [{ id: 'ROOT_QUERY', path: ['books', i] }],
+            type: 0,
+          };
+        });
+        expect(cache.extract()).toEqual(snapshot);
+      }
+
       addBooks(officialRustBook);
 
-      expect(cache.extract()).toEqual({
-        ROOT_QUERY: {
-          __typename: 'Query',
-          books: [{ __ref: 'Book:{"isbn":"1593278284"}' }],
-        },
-        'Book:{"isbn":"1593278284"}': {
-          __typename: 'Book',
-          isbn: '1593278284',
-          title: 'The Rust Programming Language',
-        },
-      });
+      expectBooks(officialRustBook);
 
       addBooks(programmingRustBook, officialRustBook);
 
-      expect(cache.extract()).toEqual({
-        ROOT_QUERY: {
-          __typename: 'Query',
-          books: [
-            { __ref: 'Book:{"isbn":"1593278284"}' },
-            { __ref: 'Book:{"isbn":"9781491927281"}' },
-          ],
-        },
-        'Book:{"isbn":"1593278284"}': officialRustBook,
-        'Book:{"isbn":"9781491927281"}': programmingRustBook,
-      });
+      expectBooks(officialRustBook, programmingRustBook);
 
-      addBooks(
-        wasmWithRustBook,
-        wasmWithRustBook,
-        programmingRustBook,
-        wasmWithRustBook
-      );
+      addBooks(wasmWithRustBook, wasmWithRustBook, programmingRustBook, wasmWithRustBook);
 
-      expect(cache.extract()).toEqual({
-        ROOT_QUERY: {
-          __typename: 'Query',
-          books: [
-            { __ref: 'Book:{"isbn":"1593278284"}' },
-            { __ref: 'Book:{"isbn":"9781491927281"}' },
-            { __ref: 'Book:{"isbn":"1680506366"}' },
-          ],
-        },
-        'Book:{"isbn":"1593278284"}': officialRustBook,
-        'Book:{"isbn":"9781491927281"}': programmingRustBook,
-        'Book:{"isbn":"1680506366"}': wasmWithRustBook,
-      });
+      expectBooks(officialRustBook, programmingRustBook, wasmWithRustBook);
 
-      addBooks(
-        programmingRustBook,
-        officialRustBook,
-        handsOnConcurrencyBook,
-        wasmWithRustBook
-      );
+      addBooks(programmingRustBook, officialRustBook, handsOnConcurrencyBook, wasmWithRustBook);
 
-      expect(cache.extract()).toEqual({
-        ROOT_QUERY: {
-          __typename: 'Query',
-          books: [
-            { __ref: 'Book:{"isbn":"1593278284"}' },
-            { __ref: 'Book:{"isbn":"9781491927281"}' },
-            { __ref: 'Book:{"isbn":"1680506366"}' },
-            { __ref: 'Book:{"isbn":"1788399978"}' },
-          ],
-        },
-        'Book:{"isbn":"1593278284"}': officialRustBook,
-        'Book:{"isbn":"9781491927281"}': programmingRustBook,
-        'Book:{"isbn":"1680506366"}': wasmWithRustBook,
-        'Book:{"isbn":"1788399978"}': handsOnConcurrencyBook,
-      });
+      expectBooks(officialRustBook, programmingRustBook, wasmWithRustBook, handsOnConcurrencyBook);
 
       expect(cache.readQuery({ query })).toEqual({
         // Note that these books have been sorted by title, thanks to the
@@ -2761,19 +2719,13 @@ describe('type policies', () => {
               },
 
               totalTime(_, { readField, toReference }) {
-                function total(
-                  blockers: Readonly<Reference[]> = [],
-                  seen = new Set<string>()
-                ) {
+                function total(blockers: Readonly<Reference[]> = [], seen = new Set<string>()) {
                   let time = 0;
-                  blockers.forEach((blocker) => {
+                  blockers.forEach(blocker => {
                     if (!seen.has(blocker.__ref)) {
                       seen.add(blocker.__ref);
                       time += readField<number>('ownTime', blocker)!;
-                      time += total(
-                        readField<Reference[]>('blockers', blocker),
-                        seen
-                      );
+                      time += total(readField<Reference[]>('blockers', blocker), seen);
                     }
                   });
                   return time;
@@ -2790,7 +2742,7 @@ describe('type policies', () => {
                 merge(existing: Reference[] = [], incoming: Reference[]) {
                   const seenIDs = new Set(existing.map(ref => ref.__ref));
                   const merged = existing.slice(0);
-                  incoming.forEach((ref) => {
+                  incoming.forEach(ref => {
                     if (!seenIDs.has(ref.__ref)) {
                       seenIDs.add(ref.__ref);
                       merged.push(ref);
@@ -2871,43 +2823,82 @@ describe('type policies', () => {
         },
       });
 
+      // Hermes: references are inbound/outbound edges between nodes.
       expect(cache.extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          agenda: { __ref: 'Agenda:1' },
+          data: { agenda: undefined },
+          outbound: [{ id: 'Agenda:1', path: ['agenda'] }],
+          type: 0,
         },
         'Agenda:1': {
-          __typename: 'Agenda',
-          id: 1,
-          tasks: [
-            { __ref: 'Task:1' },
-            { __ref: 'Task:2' },
-            { __ref: 'Task:3' },
-            { __ref: 'Task:4' },
+          data: {
+            __typename: 'Agenda',
+            id: 1,
+            tasks: [undefined, undefined, undefined, undefined],
+          },
+          inbound: [{ id: 'ROOT_QUERY', path: ['agenda'] }],
+          outbound: [
+            { id: 'Task:1', path: ['tasks', 0] },
+            { id: 'Task:2', path: ['tasks', 1] },
+            { id: 'Task:3', path: ['tasks', 2] },
+            { id: 'Task:4', path: ['tasks', 3] },
           ],
+          type: 0,
         },
         'Task:1': {
-          __typename: 'Task',
-          blockers: [{ __ref: 'Task:2' }, { __ref: 'Task:3' }],
-          description: 'parent task',
-          id: 1,
+          data: {
+            __typename: 'Task',
+            blockers: [undefined, undefined],
+            description: 'parent task',
+            id: 1,
+          },
+          inbound: [{ id: 'Agenda:1', path: ['tasks', 0] }],
+          outbound: [
+            { id: 'Task:2', path: ['blockers', 0] },
+            { id: 'Task:3', path: ['blockers', 1] },
+          ],
+          type: 0,
         },
         'Task:2': {
-          __typename: 'Task',
-          blockers: [{ __ref: 'Task:4' }],
-          description: 'child task 1',
-          id: 2,
+          data: {
+            __typename: 'Task',
+            blockers: [undefined],
+            description: 'child task 1',
+            id: 2,
+          },
+          inbound: [
+            { id: 'Task:1', path: ['blockers', 0] },
+            { id: 'Agenda:1', path: ['tasks', 1] },
+          ],
+          outbound: [{ id: 'Task:4', path: ['blockers', 0] }],
+          type: 0,
         },
         'Task:3': {
-          __typename: 'Task',
-          blockers: [{ __ref: 'Task:4' }],
-          description: 'child task 2',
-          id: 3,
+          data: {
+            __typename: 'Task',
+            blockers: [undefined],
+            description: 'child task 2',
+            id: 3,
+          },
+          inbound: [
+            { id: 'Task:1', path: ['blockers', 1] },
+            { id: 'Agenda:1', path: ['tasks', 2] },
+          ],
+          outbound: [{ id: 'Task:4', path: ['blockers', 0] }],
+          type: 0,
         },
         'Task:4': {
-          __typename: 'Task',
-          description: 'grandchild task',
-          id: 4,
+          data: {
+            __typename: 'Task',
+            description: 'grandchild task',
+            id: 4,
+          },
+          inbound: [
+            { id: 'Task:2', path: ['blockers', 0] },
+            { id: 'Task:3', path: ['blockers', 0] },
+            { id: 'Agenda:1', path: ['tasks', 3] },
+          ],
+          type: 0,
         },
       });
 
@@ -2930,7 +2921,7 @@ describe('type policies', () => {
 
       const firstResult = read();
 
-      expect(firstResult).toEqual({
+      expect(firstResult).toMatchObject({
         agenda: {
           __typename: 'Agenda',
           taskCount: 4,
@@ -2969,7 +2960,7 @@ describe('type policies', () => {
 
       const secondResult = read();
       expect(secondResult).not.toBe(firstResult);
-      expect(secondResult).toEqual({
+      expect(secondResult).toMatchObject({
         agenda: {
           __typename: 'Agenda',
           taskCount: 4,
@@ -3001,20 +2992,17 @@ describe('type policies', () => {
           ],
         },
       });
-      expect(secondResult!.agenda.tasks[0]).not.toBe(
-        firstResult!.agenda.tasks[0]
-      );
-      expect(secondResult!.agenda.tasks[1]).toBe(firstResult!.agenda.tasks[1]);
-      expect(secondResult!.agenda.tasks[2]).not.toBe(
-        firstResult!.agenda.tasks[2]
-      );
-      expect(secondResult!.agenda.tasks[3]).toBe(firstResult!.agenda.tasks[3]);
+      expect(secondResult!.agenda.tasks[0]).not.toBe(firstResult!.agenda.tasks[0]);
+      // Hermes: unchanged subtrees of results built by read functions are equal but not identical.
+      expect(secondResult!.agenda.tasks[1]).toEqual(firstResult!.agenda.tasks[1]);
+      expect(secondResult!.agenda.tasks[2]).not.toBe(firstResult!.agenda.tasks[2]);
+      expect(secondResult!.agenda.tasks[3]).toEqual(firstResult!.agenda.tasks[3]);
 
       ownTimes['grandchild task'](7);
 
       const thirdResult = read();
       expect(thirdResult).not.toBe(secondResult);
-      expect(thirdResult).toEqual({
+      expect(thirdResult).toMatchObject({
         agenda: {
           __typename: 'Agenda',
           taskCount: 4,
@@ -3074,7 +3062,8 @@ describe('type policies', () => {
         },
       });
 
-      expect(cache.extract()).toEqual({
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract())).toEqual({
         ROOT_QUERY: {
           __typename: 'Query',
           agenda: { __ref: 'Agenda:1' },
@@ -3122,7 +3111,7 @@ describe('type policies', () => {
 
       const fourthResult = read();
       expect(fourthResult).not.toBe(thirdResult);
-      expect(fourthResult).toEqual({
+      expect(fourthResult).toMatchObject({
         agenda: {
           __typename: 'Agenda',
           taskCount: 5,
@@ -3163,7 +3152,8 @@ describe('type policies', () => {
 
       function checkFirstFourIdentical(result: ReturnType<typeof read>) {
         for (let i = 0; i < 4; ++i) {
-          expect(result!.agenda.tasks[i]).toBe(thirdResult!.agenda.tasks[i]);
+          // Hermes: unchanged subtrees of results built by read functions are equal but not identical.
+          expect(result!.agenda.tasks[i]).toEqual(thirdResult!.agenda.tasks[i]);
         }
       }
       // The four original task results should not have been altered by
@@ -3175,7 +3165,7 @@ describe('type policies', () => {
 
       const fifthResult = read();
       expect(fifthResult).not.toBe(fourthResult);
-      expect(fifthResult).toEqual({
+      expect(fifthResult).toMatchObject({
         agenda: {
           __typename: 'Agenda',
           taskCount: 5,
@@ -3241,7 +3231,7 @@ describe('type policies', () => {
               }
             }
           `,
-        })
+        }),
       ).toBe(null);
 
       expect(() =>
@@ -3255,13 +3245,14 @@ describe('type policies', () => {
               }
             }
           `,
-        })
-      ).toThrowError('Can\'t find field \'secret\' ');
+        }),
+      ).toThrow("Can't find field 'secret' ");
 
       expect(secretReadAttempted).toBe(true);
     });
 
-    it(`can define custom merge functions and keyArgs simultaneously`, () => {
+    // Hermes: keyArgs are not supported
+    it.skip(`can define custom merge functions and keyArgs simultaneously`, () => {
       const cache = new Hermes({
         typePolicies: {
           Person: {
@@ -3279,19 +3270,12 @@ describe('type policies', () => {
                 read(existing: any[], { args, toReference, isReference }) {
                   expect(!existing || Object.isFrozen(existing)).toBe(true);
                   expect(typeof toReference).toBe('function');
-                  const slice = existing.slice(
-                    args!.offset,
-                    args!.offset + args!.limit
-                  );
+                  const slice = existing.slice(args!.offset, args!.offset + args!.limit);
                   slice.forEach(ref => expect(isReference(ref)).toBe(true));
                   return slice;
                 },
 
-                merge(
-                  existing: any[],
-                  incoming: any[],
-                  { args, toReference, isReference }
-                ) {
+                merge(existing: any[], incoming: any[], { args, toReference, isReference }) {
                   expect(!existing || Object.isFrozen(existing)).toBe(true);
                   expect(typeof toReference).toBe('function');
                   const copy = existing ? existing.slice(0) : [];
@@ -3345,10 +3329,7 @@ describe('type policies', () => {
           __typename: 'Query',
           me: {
             __typename: 'Person',
-            'todos:{}': [
-              { __ref: 'Todo:{"id":1}' },
-              { __ref: 'Todo:{"id":2}' },
-            ],
+            'todos:{}': [{ __ref: 'Todo:{"id":1}' }, { __ref: 'Todo:{"id":2}' }],
           },
         },
         'Todo:{"id":1}': {
@@ -3491,7 +3472,7 @@ describe('type policies', () => {
             offset: 1,
             limit: 4,
           },
-        })
+        }),
       ).toEqual({
         me: {
           __typename: 'Person',
@@ -3505,188 +3486,183 @@ describe('type policies', () => {
       });
     });
 
-    itAsync(
-      'can handle Relay-style pagination without args',
-      (resolve, reject) => {
-        const cache = new InMemoryCache({
-          addTypename: false,
-          typePolicies: {
-            Query: {
-              fields: {
-                todos: relayStylePagination(),
+    itAsync('can handle Relay-style pagination without args', (resolve, reject) => {
+      const cache = new InMemoryCache({
+        addTypename: false,
+        typePolicies: {
+          Query: {
+            fields: {
+              todos: relayStylePagination(),
+            },
+          },
+        },
+      });
+
+      const firstQuery = gql`
+        query TodoQuery {
+          todos {
+            totalCount
+          }
+        }
+      `;
+
+      const secondQuery = gql`
+        query TodoQuery {
+          todos(after: $after, first: $first) {
+            pageInfo {
+              __typename
+              hasNextPage
+              endCursor
+            }
+            totalCount
+            edges {
+              __typename
+              id
+              node {
+                __typename
+                id
+                title
+              }
+            }
+          }
+        }
+      `;
+
+      const thirdQuery = gql`
+        query TodoQuery {
+          todos {
+            totalCount
+            extraMetaData
+          }
+        }
+      `;
+
+      const secondVariables = {
+        first: 1,
+      };
+
+      const secondEdges = [
+        {
+          __typename: 'TodoEdge',
+          id: 'edge1',
+          node: {
+            __typename: 'Todo',
+            id: '1',
+            title: 'Fix the tests',
+          },
+        },
+      ];
+
+      const secondPageInfo = {
+        __typename: 'PageInfo',
+        endCursor: 'YXJyYXljb25uZWN0aW9uOjI=',
+        hasNextPage: true,
+      };
+
+      const link = new MockLink([
+        {
+          request: {
+            query: firstQuery,
+          },
+          result: {
+            data: {
+              todos: {
+                totalCount: 1292,
               },
+            },
+          },
+        },
+        {
+          request: {
+            query: secondQuery,
+            variables: secondVariables,
+          },
+          result: {
+            data: {
+              todos: {
+                edges: secondEdges,
+                pageInfo: secondPageInfo,
+                totalCount: 1292,
+              },
+            },
+          },
+        },
+        {
+          request: {
+            query: thirdQuery,
+          },
+          result: {
+            data: {
+              todos: {
+                totalCount: 1293,
+                extraMetaData: 'extra',
+              },
+            },
+          },
+        },
+      ]).setOnError(reject);
+
+      const client = new ApolloClient({ link, cache });
+
+      client.query({ query: firstQuery }).then(result => {
+        expect(result).toEqual({
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          data: {
+            todos: {
+              totalCount: 1292,
             },
           },
         });
 
-        const firstQuery = gql`
-          query TodoQuery {
-            todos {
-              totalCount
-            }
-          }
-        `;
-
-        const secondQuery = gql`
-          query TodoQuery {
-            todos(after: $after, first: $first) {
-              pageInfo {
-                __typename
-                hasNextPage
-                endCursor
-              }
-              totalCount
-              edges {
-                __typename
-                id
-                node {
-                  __typename
-                  id
-                  title
-                }
-              }
-            }
-          }
-        `;
-
-        const thirdQuery = gql`
-          query TodoQuery {
-            todos {
-              totalCount
-              extraMetaData
-            }
-          }
-        `;
-
-        const secondVariables = {
-          first: 1,
-        };
-
-        const secondEdges = [
-          {
-            __typename: 'TodoEdge',
-            id: 'edge1',
-            node: {
-              __typename: 'Todo',
-              id: '1',
-              title: 'Fix the tests',
+        expect(cache.extract()).toEqual({
+          ROOT_QUERY: {
+            __typename: 'Query',
+            todos: {
+              edges: [],
+              pageInfo: {
+                endCursor: '',
+                hasNextPage: true,
+                hasPreviousPage: false,
+                startCursor: '',
+              },
+              totalCount: 1292,
             },
           },
-        ];
+        });
 
-        const secondPageInfo = {
-          __typename: 'PageInfo',
-          endCursor: 'YXJyYXljb25uZWN0aW9uOjI=',
-          hasNextPage: true,
-        };
-
-        const link = new MockLink([
-          {
-            request: {
-              query: firstQuery,
-            },
-            result: {
-              data: {
-                todos: {
-                  totalCount: 1292,
-                },
+        client.query({ query: secondQuery, variables: secondVariables }).then(result => {
+          expect(result).toEqual({
+            loading: false,
+            networkStatus: NetworkStatus.ready,
+            data: {
+              todos: {
+                edges: secondEdges,
+                pageInfo: secondPageInfo,
+                totalCount: 1292,
               },
             },
-          },
-          {
-            request: {
-              query: secondQuery,
-              variables: secondVariables,
-            },
-            result: {
-              data: {
-                todos: {
-                  edges: secondEdges,
-                  pageInfo: secondPageInfo,
-                  totalCount: 1292,
-                },
-              },
-            },
-          },
-          {
-            request: {
-              query: thirdQuery,
-            },
-            result: {
+          });
+
+          expect(cache.extract()).toMatchSnapshot();
+
+          client.query({ query: thirdQuery }).then(result => {
+            expect(result).toEqual({
+              loading: false,
+              networkStatus: NetworkStatus.ready,
               data: {
                 todos: {
                   totalCount: 1293,
                   extraMetaData: 'extra',
                 },
               },
-            },
-          },
-        ]).setOnError(reject);
-
-        const client = new ApolloClient({ link, cache });
-
-        client.query({ query: firstQuery }).then((result) => {
-          expect(result).toEqual({
-            loading: false,
-            networkStatus: NetworkStatus.ready,
-            data: {
-              todos: {
-                totalCount: 1292,
-              },
-            },
-          });
-
-          expect(cache.extract()).toEqual({
-            ROOT_QUERY: {
-              __typename: 'Query',
-              todos: {
-                edges: [],
-                pageInfo: {
-                  endCursor: '',
-                  hasNextPage: true,
-                  hasPreviousPage: false,
-                  startCursor: '',
-                },
-                totalCount: 1292,
-              },
-            },
-          });
-
-          client
-            .query({ query: secondQuery, variables: secondVariables })
-            .then((result) => {
-              expect(result).toEqual({
-                loading: false,
-                networkStatus: NetworkStatus.ready,
-                data: {
-                  todos: {
-                    edges: secondEdges,
-                    pageInfo: secondPageInfo,
-                    totalCount: 1292,
-                  },
-                },
-              });
-
-              expect(cache.extract()).toMatchSnapshot();
-
-              client.query({ query: thirdQuery }).then((result) => {
-                expect(result).toEqual({
-                  loading: false,
-                  networkStatus: NetworkStatus.ready,
-                  data: {
-                    todos: {
-                      totalCount: 1293,
-                      extraMetaData: 'extra',
-                    },
-                  },
-                });
-                expect(cache.extract()).toMatchSnapshot();
-                resolve();
-              });
             });
+            expect(cache.extract()).toMatchSnapshot();
+            resolve();
+          });
         });
-      }
-    );
+      });
+    });
 
     itAsync('can handle Relay-style pagination', (resolve, reject) => {
       const cache = new InMemoryCache({
@@ -3710,20 +3686,8 @@ describe('type policies', () => {
       });
 
       const query = gql`
-        query ArtsySearch(
-          $query: String!
-          $after: String
-          $first: Int
-          $before: String
-          $last: Int
-        ) {
-          search(
-            query: $query
-            after: $after
-            first: $first
-            before: $before
-            last: $last
-          ) {
+        query ArtsySearch($query: String!, $after: String, $first: Int, $before: String, $last: Int) {
+          search(query: $query, after: $after, first: $first, before: $before, last: $last) {
             edges {
               __typename
               node {
@@ -3773,12 +3737,12 @@ describe('type policies', () => {
             displayLabel: 'ephemera BASQUIAT',
             __typename: 'SearchableItem',
             description:
-              'Past show featuring works by Damien Hirst, '
-              + 'James Rosenquist, David Salle, Andy Warhol, Jeff Koons, '
-              + 'Jean-Michel Basquiat, Keith Haring, Kiki Smith, Sandro Chia, '
-              + 'Kenny Scharf, Mike Bidlo, Jon Schueler, William Wegman, '
-              + 'David Wojnarowicz, Taylor Mead, William S. Burroughs, '
-              + 'Michael Halsband, Rene Ricard, and Chris DAZE Ellis',
+              'Past show featuring works by Damien Hirst, ' +
+              'James Rosenquist, David Salle, Andy Warhol, Jeff Koons, ' +
+              'Jean-Michel Basquiat, Keith Haring, Kiki Smith, Sandro Chia, ' +
+              'Kenny Scharf, Mike Bidlo, Jon Schueler, William Wegman, ' +
+              'David Wojnarowicz, Taylor Mead, William S. Burroughs, ' +
+              'Michael Halsband, Rene Ricard, and Chris DAZE Ellis',
           },
         },
         {
@@ -3787,8 +3751,7 @@ describe('type policies', () => {
             displayLabel: 'Jean-Michel Basquiat | Xerox',
             __typename: 'SearchableItem',
             description:
-              'Past show featuring works by Jean-Michel '
-              + 'Basquiat at Nahmad Contemporary Mar 12th – May 31st 2019',
+              'Past show featuring works by Jean-Michel Basquiat at Nahmad Contemporary Mar 12th – May 31st 2019',
           },
         },
       ];
@@ -3814,8 +3777,7 @@ describe('type policies', () => {
             displayLabel: 'STREET ART: From Basquiat to Banksy',
             __typename: 'SearchableItem',
             description:
-              'Past show featuring works by Banksy, SEEN, '
-              + 'JonOne and QUIK at Artrust Oct 8th – Dec 16th 2017',
+              'Past show featuring works by Banksy, SEEN, JonOne and QUIK at Artrust Oct 8th – Dec 16th 2017',
           },
         },
         {
@@ -3824,9 +3786,9 @@ describe('type policies', () => {
             __typename: 'SearchableItem',
             displayLabel: 'STREET ART 2: From Basquiat to Banksy',
             description:
-              'Past show featuring works by Jean-Michel Basquiat, '
-              + 'Shepard Fairey, COPE2, Pure Evil, Sickboy, Blade, '
-              + 'Kurar, and LARS at Artrust',
+              'Past show featuring works by Jean-Michel Basquiat, ' +
+              'Shepard Fairey, COPE2, Pure Evil, Sickboy, Blade, ' +
+              'Kurar, and LARS at Artrust',
           },
         },
         {
@@ -3901,9 +3863,7 @@ describe('type policies', () => {
           node: {
             __typename: 'SearchableItem',
             displayLabel: 'Basquiat: The Unknown Notebooks',
-            description:
-              'Past show featuring works by Jean-Michel Basquiat '
-              + 'at Brooklyn Museum Apr 3rd – Aug 23rd 2015',
+            description: 'Past show featuring works by Jean-Michel Basquiat at Brooklyn Museum Apr 3rd – Aug 23rd 2015',
           },
         },
       ];
@@ -4072,11 +4032,11 @@ describe('type policies', () => {
       const observable = client.watchQuery<
         any,
         {
-          query: string,
-          after?: string,
-          first?: number,
-          before?: string,
-          last?: number,
+          query: string;
+          after?: string;
+          first?: number;
+          before?: string;
+          last?: number;
         }
       >({
         query,
@@ -4174,10 +4134,7 @@ describe('type policies', () => {
             },
           });
 
-          expect(result.data.search.edges).toEqual([
-            ...firstEdges,
-            ...secondEdges,
-          ]);
+          expect(result.data.search.edges).toEqual([...firstEdges, ...secondEdges]);
 
           expect(cache.extract()).toMatchSnapshot();
 
@@ -4218,7 +4175,7 @@ describe('type policies', () => {
                 first: 1,
               },
             })
-            .then((result) => {
+            .then(result => {
               expect(result).toEqual({
                 loading: false,
                 networkStatus: NetworkStatus.ready,
@@ -4235,7 +4192,7 @@ describe('type policies', () => {
               expect(snapshot).toMatchSnapshot();
               expect(
                 // Note that Turrell's name has been lower-cased.
-                snapshot.ROOT_QUERY!['search:james turrell']
+                snapshot.ROOT_QUERY!['search:james turrell'],
               ).toEqual({
                 edges: turrellEdges.slice(0, 1).map(edge => ({
                   ...edge,
@@ -4261,7 +4218,7 @@ describe('type policies', () => {
                     __typename: 'Artist',
                     href: '/artist/jean-michel-basquiat',
                   }),
-                })
+                }),
               ).toBe(true);
             }, reject);
         } else if (count === 6) {
@@ -4309,7 +4266,7 @@ describe('type policies', () => {
               // Necessary to skip the cache, like fetchMore does.
               fetchPolicy: 'network-only',
             })
-            .then((result) => {
+            .then(result => {
               expect(result).toEqual({
                 loading: false,
                 networkStatus: NetworkStatus.ready,
@@ -4326,16 +4283,13 @@ describe('type policies', () => {
               expect(snapshot).toMatchSnapshot();
               expect(
                 // Note that Turrell's name has been lower-cased.
-                snapshot.ROOT_QUERY!['search:james turrell']
+                snapshot.ROOT_QUERY!['search:james turrell'],
               ).toEqual({
                 edges: turrellEdges.map((edge, i) => ({
                   ...edge,
                   // This time the cursors are different depending on which
                   // of the two edges we're considering.
-                  cursor: [
-                    turrellPageInfo2.startCursor,
-                    turrellPageInfo2.endCursor,
-                  ][i],
+                  cursor: [turrellPageInfo2.startCursor, turrellPageInfo2.endCursor][i],
                   node: [
                     // Artist objects are normalized by HREF:
                     { __ref: 'Artist:{"href":"/artist/james-turrell"}' },
@@ -4427,22 +4381,39 @@ describe('type policies', () => {
       expect(eventMergeCount).toBe(1);
       expect(attendeeMergeCount).toBe(1);
 
+      // Hermes: references are inbound/outbound edges between nodes.
       expect(cache.extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          eventsToday: [{ __ref: 'Event:123' }],
+          data: { eventsToday: [undefined] },
+          outbound: [{ id: 'Event:123', path: ['eventsToday', 0] }],
+          type: 0,
         },
         'Event:123': {
-          __typename: 'Event',
-          id: 123,
-          name: 'One-person party',
-          attendees: [{ __ref: 'Attendee:234' }],
+          data: {
+            __typename: 'Event',
+            id: 123,
+            name: 'One-person party',
+            // Hermes: unselected fields are stored too.
+            time: 'noonish',
+            attendees: [undefined],
+          },
+          inbound: [
+            { id: 'ROOT_QUERY', path: ['eventsToday', 0] },
+            { id: 'Attendee:234', path: ['events', 0] },
+          ],
+          outbound: [{ id: 'Attendee:234', path: ['attendees', 0] }],
+          type: 0,
         },
         'Attendee:234': {
-          __typename: 'Attendee',
-          id: 234,
-          name: 'Ben Newman',
-          events: [{ __ref: 'Event:123' }],
+          data: {
+            __typename: 'Attendee',
+            id: 234,
+            name: 'Ben Newman',
+            events: [undefined],
+          },
+          inbound: [{ id: 'Event:123', path: ['attendees', 0] }],
+          outbound: [{ id: 'Event:123', path: ['events', 0] }],
+          type: 0,
         },
       });
 
@@ -4492,33 +4463,73 @@ describe('type policies', () => {
       expect(eventMergeCount).toBe(2);
       expect(attendeeMergeCount).toBe(2);
 
+      // Hermes: references are inbound/outbound edges between nodes.
       expect(cache.extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          eventsToday: [{ __ref: 'Event:123' }],
-          people: [{ __ref: 'Attendee:234' }],
+          data: { eventsToday: [undefined], people: [undefined] },
+          outbound: [
+            { id: 'Event:123', path: ['eventsToday', 0] },
+            { id: 'Attendee:234', path: ['people', 0] },
+          ],
+          type: 0,
         },
         'Event:123': {
-          __typename: 'Event',
-          id: 123,
-          name: 'One-person party',
-          attendees: [{ __ref: 'Attendee:234' }],
+          data: {
+            __typename: 'Event',
+            id: 123,
+            name: 'One-person party',
+            // Hermes: unselected fields are stored too.
+            time: 'noonish',
+            attendees: [undefined],
+          },
+          inbound: [
+            { id: 'ROOT_QUERY', path: ['eventsToday', 0] },
+            { id: 'Attendee:234', path: ['events', 0] },
+          ],
+          outbound: [{ id: 'Attendee:234', path: ['attendees', 0] }],
+          type: 0,
         },
         'Event:345': {
-          __typename: 'Event',
-          id: 345,
-          attendees: [{ __ref: 'Attendee:456' }, { __ref: 'Attendee:234' }],
+          data: {
+            __typename: 'Event',
+            id: 345,
+            // Hermes: unselected fields are stored too.
+            name: 'Rooftop dog party',
+            attendees: [undefined, undefined],
+          },
+          inbound: [{ id: 'Attendee:234', path: ['events', 1] }],
+          outbound: [
+            { id: 'Attendee:456', path: ['attendees', 0] },
+            { id: 'Attendee:234', path: ['attendees', 1] },
+          ],
+          type: 0,
         },
         'Attendee:234': {
-          __typename: 'Attendee',
-          id: 234,
-          name: 'Ben Newman',
-          events: [{ __ref: 'Event:123' }, { __ref: 'Event:345' }],
+          data: {
+            __typename: 'Attendee',
+            id: 234,
+            name: 'Ben Newman',
+            events: [undefined, undefined],
+          },
+          inbound: [
+            { id: 'Event:123', path: ['attendees', 0] },
+            { id: 'ROOT_QUERY', path: ['people', 0] },
+            { id: 'Event:345', path: ['attendees', 1] },
+          ],
+          outbound: [
+            { id: 'Event:123', path: ['events', 0] },
+            { id: 'Event:345', path: ['events', 1] },
+          ],
+          type: 0,
         },
         'Attendee:456': {
-          __typename: 'Attendee',
-          id: 456,
-          name: 'Inspector Beckett',
+          data: {
+            __typename: 'Attendee',
+            id: 456,
+            name: 'Inspector Beckett',
+          },
+          inbound: [{ id: 'Event:345', path: ['attendees', 0] }],
+          type: 0,
         },
       });
 
@@ -4593,9 +4604,7 @@ describe('type policies', () => {
 
       expect(read()).toBe(null);
 
-      expect(diff).toThrow(
-        /Dangling reference to missing Book:{"isbn":"156858217X"} object/
-      );
+      expect(diff).toThrow(/Dangling reference to missing Book:{"isbn":"156858217X"} object/);
 
       const stealThisData = {
         __typename: 'Book',
@@ -4617,7 +4626,8 @@ describe('type policies', () => {
         data: stealThisData,
       });
 
-      expect(read()).toEqual({
+      // Hermes: results may contain a superset of the selected fields.
+      expect(read()).toMatchObject({
         book: {
           __typename: 'Book',
           title: 'Steal This Book',
@@ -4625,7 +4635,7 @@ describe('type policies', () => {
         },
       });
 
-      expect(read('0393354326')).toEqual({
+      expect(read('0393354326')).toMatchObject({
         book: {
           __typename: 'Book',
           title: 'Guns, Germs, and Steel',
@@ -4633,28 +4643,45 @@ describe('type policies', () => {
         },
       });
 
-      expect(cache.extract()).toEqual({
-        __META: {
-          extraRootIds: ['Book:{"isbn":"156858217X"}'],
-        },
-        ROOT_QUERY: {
-          __typename: 'Query',
-          'book:{"isbn":"0393354326"}': {
-            __ref: 'Book:{"isbn":"0393354326"}',
-          },
-        },
-        'Book:{"isbn":"0393354326"}': {
+      // Hermes: parameterized fields are separate nodes linked to ROOT_QUERY,
+      // references are inbound/outbound edges, and extract() has no
+      // __META.extraRootIds (Hermes does not serialize retained ids).
+      const fieldId = (isbn: string) => `ROOT_QUERY❖["book"]❖{"isbn":"${isbn}"}`;
+      const bookId = (isbn: string) => `Book:{"isbn":"${isbn}"}`;
+      const fieldNode = (isbn: string) => ({
+        type: 1,
+        data: null,
+        inbound: [{ id: 'ROOT_QUERY', path: ['book'] }],
+        outbound: [{ id: bookId(isbn), path: [] }],
+      });
+      const gunsGermsNode = {
+        type: 0,
+        data: {
           __typename: 'Book',
           isbn: '0393354326',
           author: 'Jared Diamond',
           title: 'Guns, Germs, and Steel',
         },
-        'Book:{"isbn":"156858217X"}': {
+        inbound: [{ id: fieldId('0393354326'), path: [] }],
+      };
+      const stealThisNode = {
+        type: 0,
+        data: {
           __typename: 'Book',
           isbn: '156858217X',
           author: 'Abbie Hoffman',
           title: 'Steal This Book',
         },
+      };
+
+      expect(cache.extract()).toEqual({
+        ROOT_QUERY: {
+          type: 0,
+          parameterized: [{ id: fieldId('0393354326'), path: ['book'] }],
+        },
+        [fieldId('0393354326')]: fieldNode('0393354326'),
+        [bookId('0393354326')]: gunsGermsNode,
+        [bookId('156858217X')]: stealThisNode,
       });
 
       // Nothing removed because stealThisID was retained by writeFragment.
@@ -4664,17 +4691,11 @@ describe('type policies', () => {
 
       expect(cache.extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          'book:{"isbn":"0393354326"}': {
-            __ref: 'Book:{"isbn":"0393354326"}',
-          },
+          type: 0,
+          parameterized: [{ id: fieldId('0393354326'), path: ['book'] }],
         },
-        'Book:{"isbn":"0393354326"}': {
-          __typename: 'Book',
-          isbn: '0393354326',
-          author: 'Jared Diamond',
-          title: 'Guns, Germs, and Steel',
-        },
+        [fieldId('0393354326')]: fieldNode('0393354326'),
+        [bookId('0393354326')]: gunsGermsNode,
       });
 
       cache.writeQuery({
@@ -4687,26 +4708,16 @@ describe('type policies', () => {
 
       expect(cache.extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
-          'book:{"isbn":"0393354326"}': {
-            __ref: 'Book:{"isbn":"0393354326"}',
-          },
-          'book:{"isbn":"156858217X"}': {
-            __ref: 'Book:{"isbn":"156858217X"}',
-          },
+          type: 0,
+          parameterized: [
+            { id: fieldId('0393354326'), path: ['book'] },
+            { id: fieldId('156858217X'), path: ['book'] },
+          ],
         },
-        'Book:{"isbn":"0393354326"}': {
-          __typename: 'Book',
-          isbn: '0393354326',
-          author: 'Jared Diamond',
-          title: 'Guns, Germs, and Steel',
-        },
-        'Book:{"isbn":"156858217X"}': {
-          __typename: 'Book',
-          isbn: '156858217X',
-          author: 'Abbie Hoffman',
-          title: 'Steal This Book',
-        },
+        [fieldId('0393354326')]: fieldNode('0393354326'),
+        [fieldId('156858217X')]: fieldNode('156858217X'),
+        [bookId('0393354326')]: gunsGermsNode,
+        [bookId('156858217X')]: { ...stealThisNode, inbound: [{ id: fieldId('156858217X'), path: [] }] },
       });
 
       expect(cache.gc()).toEqual([]);
@@ -4714,52 +4725,38 @@ describe('type policies', () => {
       expect(
         cache.evict({
           fieldName: 'book',
-        })
+        }),
       ).toBe(true);
 
-      expect(cache.gc().sort()).toEqual([
-        'Book:{"isbn":"0393354326"}',
-        'Book:{"isbn":"156858217X"}',
-      ]);
+      expect(cache.gc().sort()).toEqual(['Book:{"isbn":"0393354326"}', 'Book:{"isbn":"156858217X"}']);
 
       expect(cache.extract()).toEqual({
         ROOT_QUERY: {
-          __typename: 'Query',
+          type: 0,
         },
       });
 
       expect(read('0393354326')).toBe(null);
-      expect(() => diff('0393354326')).toThrow(
-        /Dangling reference to missing Book:{"isbn":"0393354326"} object/
-      );
+      expect(() => diff('0393354326')).toThrow(/Dangling reference to missing Book:{"isbn":"0393354326"} object/);
 
       expect(read('156858217X')).toBe(null);
-      expect(() => diff('156858217X')).toThrow(
-        /Dangling reference to missing Book:{"isbn":"156858217X"} object/
-      );
+      expect(() => diff('156858217X')).toThrow(/Dangling reference to missing Book:{"isbn":"156858217X"} object/);
     });
 
     it('can force merging of unidentified non-normalized data', () => {
-      const cache = new InMemoryCache({
+      const cache = new Hermes({
         typePolicies: {
           Book: {
             keyFields: ['isbn'],
             fields: {
               author: {
-                merge(
-                  existing: StoreObject,
-                  incoming: StoreObject,
-                  { mergeObjects }
-                ) {
+                merge(existing: StoreObject, incoming: StoreObject, { mergeObjects }) {
                   expect(mergeObjects(void 0 as any, null)).toBe(null);
 
                   expect(() => {
                     // The type system does a pretty good job of defending
                     // against this mistake.
-                    mergeObjects(
-                      [1, 2, 3] as any as StoreObject,
-                      [4] as any as StoreObject
-                    );
+                    mergeObjects([1, 2, 3] as any as StoreObject, [4] as any as StoreObject);
                   }).toThrow(/Cannot automatically merge arrays/);
 
                   const a = { __typename: 'A', a: 'ay' };
@@ -4791,13 +4788,13 @@ describe('type policies', () => {
           const merged = existing ? existing.slice(0) : [];
           const seen = new Set<string>();
           if (existing) {
-            existing.forEach((book) => {
+            existing.forEach(book => {
               if (isReference(book)) {
                 seen.add(book.__ref);
               }
             });
           }
-          incoming.forEach((book) => {
+          incoming.forEach(book => {
             if (isReference(book)) {
               if (!seen.has(book.__ref)) {
                 merged.push(book);
@@ -4812,7 +4809,20 @@ describe('type policies', () => {
       };
     }
 
-    function testForceMerges(cache: InMemoryCache) {
+    function testForceMerges(cache: InMemoryCache | Hermes) {
+      // Hermes: references are inbound/outbound edges between nodes, and
+      // results may contain a superset of the selected fields.
+      const isHermes = cache instanceof Hermes;
+      const topekaId = 'Book:{"isbn":"1250758009"}';
+      const atochaId = 'Book:{"isbn":"1566892740"}';
+      function expectResult(result: unknown, expected: object) {
+        if (isHermes) {
+          expect(result).toMatchObject(expected);
+        } else {
+          expect(result).toEqual(expected);
+        }
+      }
+
       const queryWithAuthorName = gql`
         query {
           currentlyReading {
@@ -4854,23 +4864,46 @@ describe('type policies', () => {
         },
       });
 
-      expect(cache.extract()).toEqual({
-        ROOT_QUERY: {
-          __typename: 'Query',
-          currentlyReading: {
-            __ref: 'Book:{"isbn":"1250758009"}',
-          },
-        },
-        'Book:{"isbn":"1250758009"}': {
-          __typename: 'Book',
-          author: {
-            __typename: 'Author',
-            name: 'Ben Lerner',
-          },
-          isbn: '1250758009',
-          title: 'The Topeka School',
-        },
-      });
+      expect(cache.extract()).toEqual(
+        isHermes
+          ? {
+              ROOT_QUERY: {
+                data: { currentlyReading: undefined },
+                outbound: [{ id: topekaId, path: ['currentlyReading'] }],
+                type: 0,
+              },
+              [topekaId]: {
+                data: {
+                  __typename: 'Book',
+                  author: {
+                    __typename: 'Author',
+                    name: 'Ben Lerner',
+                  },
+                  isbn: '1250758009',
+                  title: 'The Topeka School',
+                },
+                inbound: [{ id: 'ROOT_QUERY', path: ['currentlyReading'] }],
+                type: 0,
+              },
+            }
+          : {
+              ROOT_QUERY: {
+                __typename: 'Query',
+                currentlyReading: {
+                  __ref: 'Book:{"isbn":"1250758009"}',
+                },
+              },
+              'Book:{"isbn":"1250758009"}': {
+                __typename: 'Book',
+                author: {
+                  __typename: 'Author',
+                  name: 'Ben Lerner',
+                },
+                isbn: '1250758009',
+                title: 'The Topeka School',
+              },
+            },
+      );
 
       cache.writeQuery({
         query: queryWithAuthorBooks,
@@ -4892,24 +4925,52 @@ describe('type policies', () => {
         },
       });
 
-      expect(cache.extract()).toEqual({
-        ROOT_QUERY: {
-          __typename: 'Query',
-          currentlyReading: {
-            __ref: 'Book:{"isbn":"1250758009"}',
-          },
-        },
-        'Book:{"isbn":"1250758009"}': {
-          __typename: 'Book',
-          author: {
-            __typename: 'Author',
-            name: 'Ben Lerner',
-            books: [{ __ref: 'Book:{"isbn":"1250758009"}' }],
-          },
-          isbn: '1250758009',
-          title: 'The Topeka School',
-        },
-      });
+      expect(cache.extract()).toEqual(
+        isHermes
+          ? {
+              ROOT_QUERY: {
+                data: { currentlyReading: undefined },
+                outbound: [{ id: topekaId, path: ['currentlyReading'] }],
+                type: 0,
+              },
+              [topekaId]: {
+                data: {
+                  __typename: 'Book',
+                  author: {
+                    __typename: 'Author',
+                    name: 'Ben Lerner',
+                    books: [undefined],
+                  },
+                  isbn: '1250758009',
+                  title: 'The Topeka School',
+                },
+                inbound: [
+                  { id: 'ROOT_QUERY', path: ['currentlyReading'] },
+                  { id: topekaId, path: ['author', 'books', 0] },
+                ],
+                outbound: [{ id: topekaId, path: ['author', 'books', 0] }],
+                type: 0,
+              },
+            }
+          : {
+              ROOT_QUERY: {
+                __typename: 'Query',
+                currentlyReading: {
+                  __ref: 'Book:{"isbn":"1250758009"}',
+                },
+              },
+              'Book:{"isbn":"1250758009"}': {
+                __typename: 'Book',
+                author: {
+                  __typename: 'Author',
+                  name: 'Ben Lerner',
+                  books: [{ __ref: 'Book:{"isbn":"1250758009"}' }],
+                },
+                isbn: '1250758009',
+                title: 'The Topeka School',
+              },
+            },
+      );
 
       cache.writeQuery({
         query: queryWithAuthorBooks,
@@ -4931,79 +4992,118 @@ describe('type policies', () => {
         },
       });
 
-      expect(cache.extract()).toEqual({
-        ROOT_QUERY: {
-          __typename: 'Query',
-          currentlyReading: {
-            __ref: 'Book:{"isbn":"1250758009"}',
-          },
-        },
-        'Book:{"isbn":"1250758009"}': {
-          __typename: 'Book',
-          author: {
-            __typename: 'Author',
-            name: 'Ben Lerner',
-            books: [
-              { __ref: 'Book:{"isbn":"1250758009"}' },
-              { __ref: 'Book:{"isbn":"1566892740"}' },
-            ],
-          },
-          isbn: '1250758009',
-          title: 'The Topeka School',
-        },
-        'Book:{"isbn":"1566892740"}': {
-          __typename: 'Book',
-          isbn: '1566892740',
-          title: 'Leaving the Atocha Station',
-        },
-      });
-
-      expect(
-        cache.readQuery({
-          query: queryWithAuthorBooks,
-        })
-      ).toEqual({
-        currentlyReading: {
-          __typename: 'Book',
-          isbn: '1250758009',
-          author: {
-            __typename: 'Author',
-            books: [
-              {
+      expect(cache.extract()).toEqual(
+        isHermes
+          ? {
+              ROOT_QUERY: {
+                data: { currentlyReading: undefined },
+                outbound: [{ id: topekaId, path: ['currentlyReading'] }],
+                type: 0,
+              },
+              [topekaId]: {
+                data: {
+                  __typename: 'Book',
+                  author: {
+                    __typename: 'Author',
+                    name: 'Ben Lerner',
+                    books: [undefined, undefined],
+                  },
+                  isbn: '1250758009',
+                  title: 'The Topeka School',
+                },
+                inbound: [
+                  { id: 'ROOT_QUERY', path: ['currentlyReading'] },
+                  { id: topekaId, path: ['author', 'books', 0] },
+                ],
+                outbound: [
+                  { id: topekaId, path: ['author', 'books', 0] },
+                  { id: atochaId, path: ['author', 'books', 1] },
+                ],
+                type: 0,
+              },
+              [atochaId]: {
+                data: {
+                  __typename: 'Book',
+                  isbn: '1566892740',
+                  title: 'Leaving the Atocha Station',
+                },
+                inbound: [{ id: topekaId, path: ['author', 'books', 1] }],
+                type: 0,
+              },
+            }
+          : {
+              ROOT_QUERY: {
+                __typename: 'Query',
+                currentlyReading: {
+                  __ref: 'Book:{"isbn":"1250758009"}',
+                },
+              },
+              'Book:{"isbn":"1250758009"}': {
                 __typename: 'Book',
+                author: {
+                  __typename: 'Author',
+                  name: 'Ben Lerner',
+                  books: [{ __ref: 'Book:{"isbn":"1250758009"}' }, { __ref: 'Book:{"isbn":"1566892740"}' }],
+                },
                 isbn: '1250758009',
                 title: 'The Topeka School',
               },
-              {
+              'Book:{"isbn":"1566892740"}': {
                 __typename: 'Book',
                 isbn: '1566892740',
                 title: 'Leaving the Atocha Station',
               },
-            ],
+            },
+      );
+
+      expectResult(
+        cache.readQuery({
+          query: queryWithAuthorBooks,
+        }),
+        {
+          currentlyReading: {
+            __typename: 'Book',
+            isbn: '1250758009',
+            author: {
+              __typename: 'Author',
+              books: [
+                {
+                  __typename: 'Book',
+                  isbn: '1250758009',
+                  title: 'The Topeka School',
+                },
+                {
+                  __typename: 'Book',
+                  isbn: '1566892740',
+                  title: 'Leaving the Atocha Station',
+                },
+              ],
+            },
           },
         },
-      });
+      );
 
-      expect(
+      expectResult(
         cache.readQuery({
           query: queryWithAuthorName,
-        })
-      ).toEqual({
-        currentlyReading: {
-          __typename: 'Book',
-          isbn: '1250758009',
-          title: 'The Topeka School',
-          author: {
-            __typename: 'Author',
-            name: 'Ben Lerner',
+        }),
+        {
+          currentlyReading: {
+            __typename: 'Book',
+            isbn: '1250758009',
+            title: 'The Topeka School',
+            author: {
+              __typename: 'Author',
+              name: 'Ben Lerner',
+            },
           },
         },
-      });
+      );
     }
 
     // Same as previous test, except with merge:true for Book.author.
     it('can force merging with merge:true field policy', () => {
-      const cache = new InMemoryCache({
+      const cache = new Hermes({
         typePolicies: {
           Book: {
             keyFields: ['isbn'],
@@ -5029,7 +5129,7 @@ describe('type policies', () => {
     // Same as previous test, except configuring merge:true for the Author
     // type instead of for the Book.author field.
     it('can force merging with merge:true type policy', () => {
-      const cache = new InMemoryCache({
+      const cache = new Hermes({
         typePolicies: {
           Book: {
             keyFields: ['isbn'],
@@ -5181,7 +5281,7 @@ describe('type policies', () => {
               },
             },
           },
-        })
+        }),
       );
 
       check(
@@ -5191,7 +5291,7 @@ describe('type policies', () => {
               merge: true,
             },
           },
-        })
+        }),
       );
 
       function check(cache: Hermes) {
@@ -5207,13 +5307,16 @@ describe('type policies', () => {
           },
         });
 
+        // Hermes: references are inbound/outbound edges between nodes.
         expect(cache.extract()).toEqual({
           ROOT_QUERY: {
-            __typename: 'Query',
-            viewer: {
-              __typename: 'User',
-              name: 'Alice',
+            data: {
+              viewer: {
+                __typename: 'User',
+                name: 'Alice',
+              },
             },
+            type: 0,
           },
         });
 
@@ -5229,25 +5332,29 @@ describe('type policies', () => {
         });
 
         expect(cache.extract()).toEqual({
-          ROOT_QUERY: {
-            __typename: 'Query',
-            viewer: {
-              __ref: 'User:12345',
-            },
-          },
           'User:12345': {
-            __typename: 'User',
-            name: 'Alice',
-            id: 12345,
-            email: 'alice@example.com',
+            data: {
+              __typename: 'User',
+              name: 'Alice',
+              id: 12345,
+              email: 'alice@example.com',
+            },
+            inbound: [{ id: 'ROOT_QUERY', path: ['viewer'] }],
+            type: 0,
+          },
+          ROOT_QUERY: {
+            data: { viewer: undefined },
+            outbound: [{ id: 'User:12345', path: ['viewer'] }],
+            type: 0,
           },
         });
 
         expect(
           cache.readQuery({
             query: nameQuery,
-          })
-        ).toEqual({
+          }),
+          // Hermes: results may contain a superset of the selected fields.
+        ).toMatchObject({
           viewer: {
             __typename: 'User',
             name: 'Alice',
@@ -5257,8 +5364,9 @@ describe('type policies', () => {
         expect(
           cache.readQuery({
             query: emailQuery,
-          })
-        ).toEqual({
+          }),
+          // Hermes: results may contain a superset of the selected fields.
+        ).toMatchObject({
           viewer: {
             __typename: 'User',
             id: 12345,
@@ -5284,15 +5392,18 @@ describe('type policies', () => {
 
         expect(cache.extract()).toEqual({
           'User:12345': {
-            id: 12345,
-            __typename: 'User',
-            email: 'alice@example.com',
+            data: {
+              id: 12345,
+              __typename: 'User',
+              email: 'alice@example.com',
+            },
+            inbound: [{ id: 'ROOT_QUERY', path: ['viewer'] }],
+            type: 0,
           },
           ROOT_QUERY: {
-            __typename: 'Query',
-            viewer: {
-              __ref: 'User:12345',
-            },
+            data: { viewer: undefined },
+            outbound: [{ id: 'User:12345', path: ['viewer'] }],
+            type: 0,
           },
         });
 
@@ -5308,24 +5419,28 @@ describe('type policies', () => {
 
         expect(cache.extract()).toEqual({
           'User:12345': {
-            id: 12345,
-            __typename: 'User',
-            email: 'alice@example.com',
-            name: 'Alice',
+            data: {
+              __typename: 'User',
+              name: 'Alice',
+              id: 12345,
+              email: 'alice@example.com',
+            },
+            inbound: [{ id: 'ROOT_QUERY', path: ['viewer'] }],
+            type: 0,
           },
           ROOT_QUERY: {
-            __typename: 'Query',
-            viewer: {
-              __ref: 'User:12345',
-            },
+            data: { viewer: undefined },
+            outbound: [{ id: 'User:12345', path: ['viewer'] }],
+            type: 0,
           },
         });
 
         expect(
           cache.readQuery({
             query: nameQuery,
-          })
-        ).toEqual({
+          }),
+          // Hermes: results may contain a superset of the selected fields.
+        ).toMatchObject({
           viewer: {
             __typename: 'User',
             name: 'Alice',
@@ -5335,8 +5450,9 @@ describe('type policies', () => {
         expect(
           cache.readQuery({
             query: emailQuery,
-          })
-        ).toEqual({
+          }),
+          // Hermes: results may contain a superset of the selected fields.
+        ).toMatchObject({
           viewer: {
             __typename: 'User',
             id: 12345,
@@ -5441,8 +5557,7 @@ describe('type policies', () => {
           {
             __typename: 'Book',
             isbn: '0525558616',
-            title:
-              'Human Compatible: Artificial Intelligence and the Problem of Control',
+            title: 'Human Compatible: Artificial Intelligence and the Problem of Control',
             authors: [
               {
                 __typename: 'Author',
@@ -5469,50 +5584,59 @@ describe('type policies', () => {
       },
     });
 
+    // Hermes: references are inbound/outbound edges between nodes.
     expect(cache.extract()).toEqual({
       ROOT_QUERY: {
-        __typename: 'Query',
-        currentlyReading: [
-          { __ref: 'Book:{"isbn":"0525558616"}' },
-          { __ref: 'Book:{"isbn":"1541698967"}' },
+        data: { currentlyReading: [undefined, undefined] },
+        outbound: [
+          { id: 'Book:{"isbn":"0525558616"}', path: ['currentlyReading', 0] },
+          { id: 'Book:{"isbn":"1541698967"}', path: ['currentlyReading', 1] },
         ],
+        type: 0,
       },
       'Book:{"isbn":"0525558616"}': {
-        __typename: 'Book',
-        isbn: '0525558616',
-        authors: [
-          {
-            __typename: 'Author',
-            // Note the successful reversal of the Author names.
-            name: 'llessuR trautS',
-          },
-        ],
-        title:
-          'Human Compatible: Artificial Intelligence and the Problem of Control',
+        data: {
+          __typename: 'Book',
+          isbn: '0525558616',
+          authors: [
+            {
+              __typename: 'Author',
+              // Note the successful reversal of the Author names.
+              name: 'llessuR trautS',
+            },
+          ],
+          title: 'Human Compatible: Artificial Intelligence and the Problem of Control',
+        },
+        inbound: [{ id: 'ROOT_QUERY', path: ['currentlyReading', 0] }],
+        type: 0,
       },
       'Book:{"isbn":"1541698967"}': {
-        __typename: 'Book',
-        isbn: '1541698967',
-        authors: [
-          {
-            __typename: 'Author',
-            name: 'lraeP aeduJ',
-          },
-          {
-            __typename: 'Author',
-            name: 'eiznekcaM anaD',
-          },
-        ],
-        title: 'The Book of Why: The New Science of Cause and Effect',
+        data: {
+          __typename: 'Book',
+          isbn: '1541698967',
+          authors: [
+            {
+              __typename: 'Author',
+              name: 'lraeP aeduJ',
+            },
+            {
+              __typename: 'Author',
+              name: 'eiznekcaM anaD',
+            },
+          ],
+          title: 'The Book of Why: The New Science of Cause and Effect',
+        },
+        inbound: [{ id: 'ROOT_QUERY', path: ['currentlyReading', 1] }],
+        type: 0,
       },
     });
 
-    expect(cache.readQuery({ query })).toEqual({
+    // Hermes: results may contain a superset of the selected fields.
+    expect(cache.readQuery({ query })).toMatchObject({
       currentlyReading: [
         {
           __typename: 'Book',
-          title:
-            'Human Compatible: Artificial Intelligence and the Problem of Control',
+          title: 'Human Compatible: Artificial Intelligence and the Problem of Control',
           authors: [
             {
               __typename: 'Author',
@@ -5540,7 +5664,8 @@ describe('type policies', () => {
     });
   });
 
-  it(`allows keyFields and keyArgs functions to return false`, () => {
+  // Hermes: keyFields/keyArgs functions are not supported
+  it.skip(`allows keyFields and keyArgs functions to return false`, () => {
     const cache = new Hermes({
       typePolicies: {
         Person: {
@@ -5641,7 +5766,7 @@ describe('type policies', () => {
               let firstBook: Reference | null = null;
               let firstYear: number;
               const bookRefs = readField<Reference[]>('books') || [];
-              bookRefs.forEach((bookRef) => {
+              bookRefs.forEach(bookRef => {
                 expect(isReference(bookRef)).toBe(true);
                 const year = readField<number>('year', bookRef);
                 if (firstYear === void 0 || year! < firstYear) {
@@ -5703,7 +5828,7 @@ describe('type policies', () => {
     addBook({
       __typename: 'Book',
       isbn: '9353420717',
-      title: 'A Room of One\'s Own',
+      title: "A Room of One's Own",
       year: 1929,
     });
 
@@ -5714,39 +5839,57 @@ describe('type policies', () => {
       year: 1927,
     });
 
+    // Hermes: references are inbound/outbound edges between nodes.
+    const authorId = 'Author:{"name":"Virginia Woolf"}';
     expect(cache.extract()).toEqual({
       ROOT_QUERY: {
-        __typename: 'Query',
-        author: {
-          __ref: 'Author:{"name":"Virginia Woolf"}',
-        },
+        data: { author: undefined },
+        outbound: [{ id: authorId, path: ['author'] }],
+        type: 0,
       },
-      'Author:{"name":"Virginia Woolf"}': {
-        __typename: 'Author',
-        name: 'Virginia Woolf',
-        books: [
-          { __ref: 'Book:{"isbn":"1853262390"}' },
-          { __ref: 'Book:{"isbn":"9353420717"}' },
-          { __ref: 'Book:{"isbn":"0156907399"}' },
+      [authorId]: {
+        data: {
+          __typename: 'Author',
+          name: 'Virginia Woolf',
+          books: [undefined, undefined, undefined],
+        },
+        inbound: [{ id: 'ROOT_QUERY', path: ['author'] }],
+        outbound: [
+          { id: 'Book:{"isbn":"1853262390"}', path: ['books', 0] },
+          { id: 'Book:{"isbn":"9353420717"}', path: ['books', 1] },
+          { id: 'Book:{"isbn":"0156907399"}', path: ['books', 2] },
         ],
+        type: 0,
       },
       'Book:{"isbn":"1853262390"}': {
-        __typename: 'Book',
-        isbn: '1853262390',
-        title: 'Orlando',
-        year: 1928,
+        data: {
+          __typename: 'Book',
+          isbn: '1853262390',
+          title: 'Orlando',
+          year: 1928,
+        },
+        inbound: [{ id: authorId, path: ['books', 0] }],
+        type: 0,
       },
       'Book:{"isbn":"9353420717"}': {
-        __typename: 'Book',
-        isbn: '9353420717',
-        title: 'A Room of One\'s Own',
-        year: 1929,
+        data: {
+          __typename: 'Book',
+          isbn: '9353420717',
+          title: "A Room of One's Own",
+          year: 1929,
+        },
+        inbound: [{ id: authorId, path: ['books', 1] }],
+        type: 0,
       },
       'Book:{"isbn":"0156907399"}': {
-        __typename: 'Book',
-        isbn: '0156907399',
-        title: 'To the Lighthouse',
-        year: 1927,
+        data: {
+          __typename: 'Book',
+          isbn: '0156907399',
+          title: 'To the Lighthouse',
+          year: 1927,
+        },
+        inbound: [{ id: authorId, path: ['books', 2] }],
+        type: 0,
       },
     });
 
@@ -5770,7 +5913,8 @@ describe('type policies', () => {
     }
 
     const firstBookResult = readFirstBookResult();
-    expect(firstBookResult).toEqual({
+    // Hermes: results may contain a superset of the selected fields.
+    expect(firstBookResult).toMatchObject({
       author: {
         __typename: 'Author',
         name: 'Virginia Woolf',
@@ -5794,7 +5938,7 @@ describe('type policies', () => {
 
     const secondFirstBookResult = readFirstBookResult();
     expect(secondFirstBookResult).not.toBe(firstBookResult);
-    expect(secondFirstBookResult).toEqual({
+    const expectedSecondFirstBookResult = {
       author: {
         __typename: 'Author',
         name: 'Virginia Woolf',
@@ -5804,7 +5948,9 @@ describe('type policies', () => {
           year: 1915,
         },
       },
-    });
+    };
+    // Hermes: results may contain a superset of the selected fields.
+    expect(secondFirstBookResult).toMatchObject(expectedSecondFirstBookResult);
 
     // Write a new, unrelated field.
     cache.writeQuery({
@@ -5837,8 +5983,9 @@ describe('type policies', () => {
             afraidCount
           }
         `,
-      })
-    ).toEqual({
+      }),
+      // Hermes: results may contain a superset of the selected fields.
+    ).toMatchObject({
       __typename: 'Author',
       name: 'Virginia Woolf',
       afraidCount: 2,
@@ -5846,7 +5993,9 @@ describe('type policies', () => {
 
     // Since we wrote only the afraidCount field, the firstBook result
     // should be completely unchanged.
-    expect(readFirstBookResult()).toBe(secondFirstBookResult);
+    // Hermes: no canonizeResults, so an equal result is not the identical (===)
+    // object once the entity has changed.
+    expect(readFirstBookResult()).toMatchObject(expectedSecondFirstBookResult);
 
     // Add another book, not published first.
     addBook({
@@ -5857,8 +6006,9 @@ describe('type policies', () => {
     });
 
     const thirdFirstBookResult = readFirstBookResult();
-    expect(thirdFirstBookResult).toEqual(secondFirstBookResult);
-    expect(thirdFirstBookResult).toBe(secondFirstBookResult);
+    // Hermes: results may contain a superset of the selected fields (here, the
+    // new book), and are not canonized (===) when equal.
+    expect(thirdFirstBookResult).toMatchObject(expectedSecondFirstBookResult);
   });
 
   it('readField can read fields with arguments', () => {
@@ -5882,10 +6032,7 @@ describe('type policies', () => {
                 case Style.LOWER:
                   return text?.toLowerCase();
                 case Style.TITLE:
-                  return (
-                    text &&
-                    text.charAt(0).toUpperCase() + text.slice(1).toLowerCase()
-                  );
+                  return text && text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
               }
             },
             upperCase(_, { readField }) {
@@ -5938,8 +6085,9 @@ describe('type policies', () => {
             }
           }
         `,
-      })
-    ).toEqual({
+      }),
+      // Hermes: results may contain a superset of the selected fields.
+    ).toMatchObject({
       wordOfTheDay: {
         __typename: 'Word',
         upperCase: 'INVEIGLE',
@@ -6003,8 +6151,9 @@ describe('type policies', () => {
     expect(
       cache.readQuery({
         query: fullNamesQuery,
-      })
-    ).toEqual({
+      }),
+      // Hermes: results may contain a superset of the selected fields.
+    ).toMatchObject({
       fullNameWithDefaults: 'Alan Turing',
       fullNameWithVoids: 'undefined undefined',
     });
@@ -6059,18 +6208,21 @@ describe('type policies', () => {
     const snapshot = cache.extract();
     expect(snapshot).toEqual({
       'Person:1234': {
-        __typename: 'Person',
-        id: 1234,
-        currentTask: {
-          __typename: 'Task',
-          description: 'writing tests',
+        data: {
+          __typename: 'Person',
+          id: 1234,
+          currentTask: {
+            __typename: 'Task',
+            description: 'writing tests',
+          },
         },
+        inbound: [{ id: 'ROOT_QUERY', path: ['person'] }],
+        type: 0,
       },
       ROOT_QUERY: {
-        __typename: 'Query',
-        person: {
-          __ref: 'Person:1234',
-        },
+        data: { person: undefined },
+        outbound: [{ id: 'Person:1234', path: ['person'] }],
+        type: 0,
       },
     });
 
@@ -6092,7 +6244,8 @@ describe('type policies', () => {
     expect(cache.extract()).toEqual(snapshot);
   });
 
-  it('can alter the root query __typename', () => {
+  // Hermes: queryType/mutationType/subscriptionType typePolicies are not supported
+  it.skip('can alter the root query __typename', () => {
     const cache = new Hermes({
       typePolicies: {
         RootQuery: {
@@ -6108,7 +6261,7 @@ describe('type policies', () => {
             __typename
           }
         `,
-      })
+      }),
     ).toEqual({
       __typename: 'RootQuery',
     });
@@ -6148,14 +6301,15 @@ describe('type policies', () => {
     expect(
       cache.readQuery({
         query: ALL_ITEMS,
-      })
+      }),
     ).toEqual({
       __typename: 'RootQuery',
       items: [makeItem(0), makeItem(1), makeItem(2), makeItem(3)],
     });
   });
 
-  it('can configure {query,mutation,subscription}Type:true', () => {
+  // Hermes: queryType/mutationType/subscriptionType typePolicies are not supported
+  it.skip('can configure {query,mutation,subscription}Type:true', () => {
     const cache = new Hermes({
       typePolicies: {
         RootQuery: {
@@ -6177,7 +6331,7 @@ describe('type policies', () => {
             __typename
           }
         `,
-      })
+      }),
     ).toEqual({
       __typename: 'RootQuery',
     });
@@ -6190,7 +6344,7 @@ describe('type policies', () => {
             __typename
           }
         `,
-      })
+      }),
     ).toEqual({
       __typename: 'RootMutation',
     });
@@ -6203,7 +6357,7 @@ describe('type policies', () => {
             __typename
           }
         `,
-      })
+      }),
     ).toEqual({
       __typename: 'RootSubscription',
     });

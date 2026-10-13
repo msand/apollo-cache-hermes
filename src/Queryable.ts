@@ -2,7 +2,7 @@ import { Cache } from '@apollo/client';
 import { Reference } from '@apollo/client/utilities';
 
 import { JsonObject, JsonValue } from './primitive';
-import { RawOperation } from './schema';
+import { NodeId, RawOperation } from './schema';
 import { DocumentNode } from './util';
 
 /**
@@ -10,7 +10,6 @@ import { DocumentNode } from './util';
  * views, etc).
  */
 export interface Queryable {
-
   /**
    * Performs any transformations of operation documents.
    *
@@ -35,4 +34,10 @@ export interface Queryable {
   modify<Entity extends Record<string, unknown>>(options: Cache.ModifyOptions<Entity>): boolean;
 
   evict(options: Cache.EvictOptions): boolean;
+
+  /**
+   * Evicts several entities at once, as one edit of the cache. Ids that are not
+   * in the cache are skipped. Returns whether any entity was evicted.
+   */
+  batchEvict(ids: Iterable<NodeId>, broadcast?: boolean): boolean;
 }

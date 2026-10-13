@@ -12,12 +12,10 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 // It just isn't very fruitful to unit test the individual steps of the write
 // workflow in isolation, given the contextual state that must be passed around.
 describe(`operations.write`, () => {
-
   const context = new CacheContext(strictConfig);
   const empty = new GraphSnapshot();
 
   describe(`alias leaf-value`, () => {
-
     let aliasQuery: RawOperation, snapshot: GraphSnapshot;
     beforeAll(() => {
       aliasQuery = query(`{
@@ -55,9 +53,8 @@ describe(`operations.write`, () => {
           },
           /* inbound */ undefined,
           /* outbound */ [{ id: '0', path: ['user'] }],
-        )
+        ),
       );
     });
-
   });
 });

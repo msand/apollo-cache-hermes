@@ -1,9 +1,4 @@
-import type {
-  DocumentNode,
-  FragmentDefinitionNode,
-  InlineFragmentNode,
-  SelectionNode,
-} from 'graphql';
+import type { DocumentNode, FragmentDefinitionNode, InlineFragmentNode, SelectionNode } from 'graphql';
 
 import { invariant, newInvariantError } from '../globals/index';
 
@@ -32,25 +27,22 @@ type OperationTypeNode = any;
  * fragment specified by the provided `fragmentName`. If there is more than one
  * fragment, but a `fragmentName` was not defined then an error will be thrown.
  */
-export function getFragmentQueryDocument(
-  document: DocumentNode,
-  fragmentName?: string
-): DocumentNode {
+export function getFragmentQueryDocument(document: DocumentNode, fragmentName?: string): DocumentNode {
   let actualFragmentName = fragmentName;
 
   // Build an array of all our fragment definitions that will be used for
   // validations. We also do some validations on the other definitions in the
   // document while building this list.
   const fragments: Array<FragmentDefinitionNode> = [];
-  document.definitions.forEach((definition) => {
+  document.definitions.forEach(definition => {
     // Throw an error if we encounter an operation definition because we will
     // define our own operation definition later on.
     if (definition.kind === 'OperationDefinition') {
       throw newInvariantError(
-        `Found a %s operation%s. `
-          + 'No operations are allowed when using a fragment as a query. Only fragments are allowed.',
+        `Found a %s operation%s. ` +
+          'No operations are allowed when using a fragment as a query. Only fragments are allowed.',
         definition.operation,
-        definition.name ? ` named '${definition.name.value}'` : ''
+        definition.name ? ` named '${definition.name.value}'` : '',
       );
     }
     // Add our definition to the fragments array if it is a fragment
@@ -66,7 +58,7 @@ export function getFragmentQueryDocument(
     invariant(
       fragments.length === 1,
       `Found %s fragments. \`fragmentName\` must be provided when there is not exactly 1 fragment.`,
-      fragments.length
+      fragments.length,
     );
     actualFragmentName = fragments[0].name.value;
   }
@@ -107,17 +99,13 @@ export interface FragmentMap {
   [fragmentName: string]: FragmentDefinitionNode;
 }
 
-export type FragmentMapFunction = (
-  fragmentName: string
-) => FragmentDefinitionNode | null;
+export type FragmentMapFunction = (fragmentName: string) => FragmentDefinitionNode | null;
 
 // Utility function that takes a list of fragment definitions and makes a hash out of them
 // that maps the name of the fragment to the fragment definition.
-export function createFragmentMap(
-  fragments: FragmentDefinitionNode[] = []
-): FragmentMap {
+export function createFragmentMap(fragments: FragmentDefinitionNode[] = []): FragmentMap {
   const symTable: FragmentMap = {};
-  fragments.forEach((fragment) => {
+  fragments.forEach(fragment => {
     symTable[fragment.name.value] = fragment;
   });
   return symTable;
@@ -125,7 +113,7 @@ export function createFragmentMap(
 
 export function getFragmentFromSelection(
   selection: SelectionNode,
-  fragmentMap?: FragmentMap | FragmentMapFunction
+  fragmentMap?: FragmentMap | FragmentMapFunction,
 ): InlineFragmentNode | FragmentDefinitionNode | null {
   switch (selection.kind) {
     case 'InlineFragment':

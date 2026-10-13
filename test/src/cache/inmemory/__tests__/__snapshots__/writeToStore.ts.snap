@@ -1,4 +1,4 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
 exports[`writing to the store "Cache data may be lost..." warnings should not warn when scalar fields are updated 1`] = `
 Object {
@@ -66,7 +66,7 @@ exports[`writing to the store "Cache data may be lost..." warnings should warn "
 
 This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
 
-To address this problem (which is not a bug in Apollo Client), %sdefine a custom merge function for the %s field, so Hermes can safely merge these objects:
+To address this problem (which is not a bug in Apollo Client), %sdefine a custom merge function for the %s field, so InMemoryCache can safely merge these objects:
 
   existing: %o
   incoming: %o

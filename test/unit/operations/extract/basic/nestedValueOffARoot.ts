@@ -6,7 +6,6 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.extract`, () => {
   describe(`nested values hanging off of a root`, () => {
-
     let extractResult: Serializable.GraphSnapshot;
     beforeAll(() => {
       const cacheContext = createStrictCacheContext();
@@ -30,7 +29,7 @@ describe(`operations.extract`, () => {
             prop3
           }
         }`,
-        cacheContext
+        cacheContext,
       );
 
       extractResult = extract(snapshot, cacheContext);
@@ -54,6 +53,5 @@ describe(`operations.extract`, () => {
         },
       });
     });
-
   });
 });

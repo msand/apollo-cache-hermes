@@ -2,9 +2,9 @@
 
 Hermes requires some ES2015 features to exist in order for proper operation:
 
-* `Symbol` and `Symbol.iterator`
-* `Set`
-* `Map`
+- `Symbol` and `Symbol.iterator`
+- `Set`
+- `Map`
 
 If you are encountering an `InvalidEnvironmentError`, you are likely running in an environment that lacks those, or has only partially implemented them.
 

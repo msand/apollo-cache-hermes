@@ -65,9 +65,7 @@ describe('AST utility functions', () => {
         lastName
       }
     `;
-    const expectedResult: FragmentDefinitionNode[] = [
-      expectedDoc.definitions[0] as FragmentDefinitionNode,
-    ];
+    const expectedResult: FragmentDefinitionNode[] = [expectedDoc.definitions[0] as FragmentDefinitionNode];
     const actualResult = getFragmentDefinitions(singleFragmentDefinition);
     expect(actualResult.length).toEqual(expectedResult.length);
     expect(print(actualResult[0])).toBe(print(expectedResult[0]));
@@ -135,8 +133,7 @@ describe('AST utility functions', () => {
         }
       }
     `;
-    const expectedResult: OperationDefinitionNode = expectedDoc
-      .definitions[0] as OperationDefinitionNode;
+    const expectedResult: OperationDefinitionNode = expectedDoc.definitions[0] as OperationDefinitionNode;
     const actualResult = getQueryDefinition(queryWithFragments);
 
     expect(print(actualResult)).toEqual(print(expectedResult));
@@ -209,9 +206,7 @@ describe('AST utility functions', () => {
     `;
     expect(() => {
       getQueryDefinition(queryWithTypeDefinition);
-    }).toThrowError(
-      'Schema type definitions not allowed in queries. Found: "InputObjectTypeDefinition"'
-    );
+    }).toThrow('Schema type definitions not allowed in queries. Found: "InputObjectTypeDefinition"');
   });
 
   describe('getDefaultValues', () => {

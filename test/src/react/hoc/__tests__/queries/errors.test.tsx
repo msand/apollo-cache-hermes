@@ -66,7 +66,7 @@ describe('[queries] errors', () => {
         <ErrorBoundary>
           <ContainerWithData />
         </ErrorBoundary>
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     waitFor(() => {
@@ -99,7 +99,7 @@ describe('[queries] errors', () => {
     const { unmount } = render(
       <ApolloProvider client={client}>
         <ContainerWithData />
-      </ApolloProvider>
+      </ApolloProvider>,
     ) as any;
 
     try {
@@ -141,13 +141,13 @@ describe('[queries] errors', () => {
         render() {
           return null;
         }
-      }
+      },
     );
 
     render(
       <ApolloProvider client={client}>
         <ErrorContainer />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     waitFor(() => {
@@ -177,7 +177,7 @@ describe('[queries] errors', () => {
       process.removeListener('unhandledRejection', handle);
     });
 
-    it('does not log when you change variables resulting in an error', async() => {
+    it('does not log when you change variables resulting in an error', async () => {
       const query: DocumentNode = gql`
         query people($var: Int) {
           allPeople(first: $var) {
@@ -198,7 +198,7 @@ describe('[queries] errors', () => {
         {
           request: { query, variables: var2 },
           error: new Error('boo'),
-        }
+        },
       );
       const client = new ApolloClient({
         link,
@@ -218,7 +218,7 @@ describe('[queries] errors', () => {
       const ErrorContainer = withState(
         'var',
         'setVar',
-        1
+        1,
       )(
         graphql<Props, Data, Vars>(query)(
           class extends React.Component<ChildProps<Props, Data, Vars>> {
@@ -251,14 +251,14 @@ describe('[queries] errors', () => {
             render() {
               return null;
             }
-          }
-        )
+          },
+        ),
       );
 
       render(
         <ApolloProvider client={client}>
           <ErrorContainer />
-        </ApolloProvider>
+        </ApolloProvider>,
       );
 
       await waitFor(() => {
@@ -284,7 +284,7 @@ describe('[queries] errors', () => {
 
       interface Data {
         allPeople: {
-          people: { name: string }[],
+          people: { name: string }[];
         };
       }
 
@@ -303,9 +303,7 @@ describe('[queries] errors', () => {
 
       let renderCount = 0;
       @graphql<{}, Data>(query)
-      class UnhandledErrorComponent extends React.Component<
-        ChildProps<{}, Data>
-      > {
+      class UnhandledErrorComponent extends React.Component<ChildProps<{}, Data>> {
         render(): React.ReactNode {
           try {
             switch (renderCount++) {
@@ -332,7 +330,7 @@ describe('[queries] errors', () => {
       render(
         <ApolloProvider client={client}>
           <UnhandledErrorComponent />
-        </ApolloProvider>
+        </ApolloProvider>,
       );
 
       waitFor(() => {
@@ -340,78 +338,75 @@ describe('[queries] errors', () => {
       }).then(resolve, reject);
     }));
 
-  itAsync(
-    'passes any cached data when there is a GraphQL error',
-    (resolve, reject) => {
-      const query: DocumentNode = gql`
-        query people {
-          allPeople(first: 1) {
-            people {
-              name
-            }
+  itAsync('passes any cached data when there is a GraphQL error', (resolve, reject) => {
+    const query: DocumentNode = gql`
+      query people {
+        allPeople(first: 1) {
+          people {
+            name
           }
         }
-      `;
-      const data = { allPeople: { people: [{ name: 'Luke Skywalker' }] } };
-      type Data = typeof data;
-      const link = mockSingleLink(
-        { request: { query }, result: { data } },
-        { request: { query }, error: new Error('No Network Connection') }
-      );
-      const client = new ApolloClient({
-        link,
-        cache: new Hermes({ addTypename: false }),
-      });
+      }
+    `;
+    const data = { allPeople: { people: [{ name: 'Luke Skywalker' }] } };
+    type Data = typeof data;
+    const link = mockSingleLink(
+      { request: { query }, result: { data } },
+      { request: { query }, error: new Error('No Network Connection') },
+    );
+    const client = new ApolloClient({
+      link,
+      cache: new Hermes({ addTypename: false }),
+    });
 
-      let count = 0;
-      const Container = graphql<{}, Data>(query, {
-        options: { notifyOnNetworkStatusChange: true },
-      })(
-        class extends React.Component<ChildProps<{}, Data>> {
-          componentDidUpdate() {
-            const { props } = this;
-            try {
-              switch (count++) {
-                case 0:
-                  expect(props.data!.allPeople).toEqual(data.allPeople);
-                  setTimeout(() => {
-                    props.data!.refetch().catch(() => null);
-                  });
-                  break;
-                case 1:
-                  expect(props.data!.loading).toBeTruthy();
-                  expect(props.data!.allPeople).toEqual(data.allPeople);
-                  break;
-                case 2:
-                  expect(props.data!.loading).toBeFalsy();
-                  expect(props.data!.error).toBeTruthy();
-                  expect(props.data!.allPeople).toEqual(data.allPeople);
-                  break;
-                default:
-                  throw new Error('Unexpected fall through');
-              }
-            } catch (e) {
-              reject(e);
+    let count = 0;
+    const Container = graphql<{}, Data>(query, {
+      options: { notifyOnNetworkStatusChange: true },
+    })(
+      class extends React.Component<ChildProps<{}, Data>> {
+        componentDidUpdate() {
+          const { props } = this;
+          try {
+            switch (count++) {
+              case 0:
+                expect(props.data!.allPeople).toEqual(data.allPeople);
+                setTimeout(() => {
+                  props.data!.refetch().catch(() => null);
+                });
+                break;
+              case 1:
+                expect(props.data!.loading).toBeTruthy();
+                expect(props.data!.allPeople).toEqual(data.allPeople);
+                break;
+              case 2:
+                expect(props.data!.loading).toBeFalsy();
+                expect(props.data!.error).toBeTruthy();
+                expect(props.data!.allPeople).toEqual(data.allPeople);
+                break;
+              default:
+                throw new Error('Unexpected fall through');
             }
-          }
-
-          render() {
-            return null;
+          } catch (e) {
+            reject(e);
           }
         }
-      );
 
-      render(
-        <ApolloProvider client={client}>
-          <Container />
-        </ApolloProvider>
-      );
+        render() {
+          return null;
+        }
+      },
+    );
 
-      waitFor(() => {
-        expect(count).toBe(3);
-      }).then(resolve, reject);
-    }
-  );
+    render(
+      <ApolloProvider client={client}>
+        <Container />
+      </ApolloProvider>,
+    );
+
+    waitFor(() => {
+      expect(count).toBe(3);
+    }).then(resolve, reject);
+  });
 
   itAsync('can refetch after there was a network error', (resolve, reject) => {
     const query: DocumentNode = gql`
@@ -430,7 +425,7 @@ describe('[queries] errors', () => {
     const link = mockSingleLink(
       { request: { query }, result: { data } },
       { request: { query }, error: new Error('This is an error!') },
-      { request: { query }, result: { data: dataTwo } }
+      { request: { query }, result: { data: dataTwo } },
     );
     const client = new ApolloClient({
       link,
@@ -487,13 +482,13 @@ describe('[queries] errors', () => {
         render() {
           return null;
         }
-      }
+      },
     );
 
     render(
       <ApolloProvider client={client}>
         <Container />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     waitFor(() => {
@@ -518,7 +513,7 @@ describe('[queries] errors', () => {
       type Data = typeof data;
       const link = mockSingleLink(
         { request: { query }, result: { data } },
-        { request: { query }, error: new Error('This is an error!') }
+        { request: { query }, error: new Error('This is an error!') },
       );
 
       const client = new ApolloClient({
@@ -538,18 +533,15 @@ describe('[queries] errors', () => {
       }
 
       let done = false;
-      const Container = graphql<ContainerOwnProps, Data, {}, QueryChildProps>(
-        query,
-        {
-          options: { notifyOnNetworkStatusChange: true },
-          props: (something) => {
-            return {
-              data: something.data!,
-              hideContainer: something!.ownProps.hideContainer,
-            };
-          },
-        }
-      )(
+      const Container = graphql<ContainerOwnProps, Data, {}, QueryChildProps>(query, {
+        options: { notifyOnNetworkStatusChange: true },
+        props: something => {
+          return {
+            data: something.data!,
+            hideContainer: something!.ownProps.hideContainer,
+          };
+        },
+      })(
         class extends React.Component<ChildProps<QueryChildProps, Data>> {
           componentDidUpdate() {
             const { props } = this;
@@ -591,7 +583,7 @@ describe('[queries] errors', () => {
           render() {
             return null;
           }
-        }
+        },
       );
 
       class Switcher extends React.Component<any, any> {
@@ -607,11 +599,7 @@ describe('[queries] errors', () => {
             state: { showContainer },
           } = this;
           if (showContainer) {
-            return (
-              <Container
-                hideContainer={() => this.setState({ showContainer: false })}
-              />
-            );
+            return <Container hideContainer={() => this.setState({ showContainer: false })} />;
           }
           return null;
         }
@@ -620,20 +608,106 @@ describe('[queries] errors', () => {
       render(
         <ApolloProvider client={client}>
           <Switcher />
-        </ApolloProvider>
+        </ApolloProvider>,
       );
 
       waitFor(() => {
         expect(done).toBeTruthy();
       }).then(resolve, reject);
-    }
+    },
   );
 
-  itAsync(
-    'correctly sets loading state on remount after a network error',
-    (resolve, reject) => {
+  itAsync('correctly sets loading state on remount after a network error', (resolve, reject) => {
+    const query: DocumentNode = gql`
+      query somethingelse {
+        allPeople(first: 1) {
+          people {
+            name
+          }
+        }
+      }
+    `;
+    const data = { allPeople: { people: [{ name: 'Luke Skywalker' }] } };
+    const dataTwo = { allPeople: { people: [{ name: 'Princess Leia' }] } };
+
+    type Data = typeof data;
+    const link = mockSingleLink(
+      { request: { query }, error: new Error('This is an error!') },
+      { request: { query }, result: { data: dataTwo } },
+    );
+    const client = new ApolloClient({
+      link,
+      cache: new Hermes({ addTypename: false }),
+    });
+
+    let count = 0;
+    type ContainerOwnProps = { toggle: () => void };
+    const Container = graphql<ContainerOwnProps, Data>(query, {
+      options: { notifyOnNetworkStatusChange: true },
+    })(
+      class extends React.Component<ChildProps<ContainerOwnProps, Data>> {
+        render() {
+          switch (count) {
+            case 0:
+              expect(this.props.data!.loading).toBe(true);
+              break;
+            case 1:
+              expect(this.props.data!.loading).toBe(false);
+              expect(this.props.data!.error!.networkError!.message).toMatch(/This is an error/);
+              // unmount this component
+              setTimeout(() => {
+                this.props.toggle();
+              }, 0);
+              setTimeout(() => {
+                // remount after 50 ms
+                this.props.toggle();
+              }, 50);
+              break;
+            case 2:
+              expect(this.props.data!.loading).toBe(true);
+              break;
+            case 3:
+              expect(this.props.data!.loading).toBe(false);
+              expect(this.props.data!.allPeople).toEqual(dataTwo.allPeople);
+              break;
+            default:
+              throw new Error('Too many renders.');
+          }
+          count += 1;
+
+          return null;
+        }
+      },
+    );
+
+    type Toggle = () => void;
+    type OwnProps = { children: (toggle: Toggle) => any };
+    class Manager extends React.Component<OwnProps, { show: boolean }> {
+      constructor(props: any) {
+        super(props);
+        this.state = { show: true };
+      }
+
+      render() {
+        if (!this.state.show) return null;
+        return this.props.children(() => this.setState(({ show }) => ({ show: !show })));
+      }
+    }
+
+    render(
+      <ApolloProvider client={client}>
+        <Manager>{(toggle: Toggle) => <Container toggle={toggle} />}</Manager>
+      </ApolloProvider>,
+    );
+
+    waitFor(() => expect(count).toBe(4)).then(resolve, reject);
+  });
+
+  describe('errorPolicy', () => {
+    itAsync('passes any GraphQL errors in props along with data', (resolve, reject) => {
+      let done = false;
       const query: DocumentNode = gql`
-        query somethingelse {
+        query people {
           allPeople(first: 1) {
             people {
               name
@@ -641,208 +715,105 @@ describe('[queries] errors', () => {
           }
         }
       `;
-      const data = { allPeople: { people: [{ name: 'Luke Skywalker' }] } };
-      const dataTwo = { allPeople: { people: [{ name: 'Princess Leia' }] } };
+      const link = mockSingleLink({
+        request: { query },
+        result: {
+          data: {
+            allPeople: {
+              people: null,
+            },
+          },
+          errors: [new Error('this is an error')],
+        },
+      });
 
-      type Data = typeof data;
-      const link = mockSingleLink(
-        { request: { query }, error: new Error('This is an error!') },
-        { request: { query }, result: { data: dataTwo } }
-      );
       const client = new ApolloClient({
         link,
         cache: new Hermes({ addTypename: false }),
       });
 
-      let count = 0;
-      type ContainerOwnProps = { toggle: () => void };
-      const Container = graphql<ContainerOwnProps, Data>(query, {
-        options: { notifyOnNetworkStatusChange: true },
+      const ErrorContainer = graphql(query, {
+        options: { errorPolicy: 'all' },
       })(
-        class extends React.Component<ChildProps<ContainerOwnProps, Data>> {
-          render() {
-            switch (count) {
-              case 0:
-                expect(this.props.data!.loading).toBe(true);
-                break;
-              case 1:
-                expect(this.props.data!.loading).toBe(false);
-                expect(this.props.data!.error!.networkError!.message).toMatch(
-                  /This is an error/
-                );
-                // unmount this component
-                setTimeout(() => {
-                  this.props.toggle();
-                }, 0);
-                setTimeout(() => {
-                  // remount after 50 ms
-                  this.props.toggle();
-                }, 50);
-                break;
-              case 2:
-                expect(this.props.data!.loading).toBe(true);
-                break;
-              case 3:
-                expect(this.props.data!.loading).toBe(false);
-                expect(this.props.data!.allPeople).toEqual(dataTwo.allPeople);
-                break;
-              default:
-                throw new Error('Too many renders.');
-            }
-            count += 1;
-
-            return null;
-          }
-        }
-      );
-
-      type Toggle = () => void;
-      type OwnProps = { children: (toggle: Toggle) => any };
-      class Manager extends React.Component<OwnProps, { show: boolean }> {
-        constructor(props: any) {
-          super(props);
-          this.state = { show: true };
-        }
-
-        render() {
-          if (!this.state.show) return null;
-          return this.props.children(() =>
-            this.setState(({ show }) => ({ show: !show }))
-          );
-        }
-      }
-
-      render(
-        <ApolloProvider client={client}>
-          <Manager>{(toggle: Toggle) => <Container toggle={toggle} />}</Manager>
-        </ApolloProvider>
-      );
-
-      waitFor(() => expect(count).toBe(4)).then(resolve, reject);
-    }
-  );
-
-  describe('errorPolicy', () => {
-    itAsync(
-      'passes any GraphQL errors in props along with data',
-      (resolve, reject) => {
-        let done = false;
-        const query: DocumentNode = gql`
-          query people {
-            allPeople(first: 1) {
-              people {
-                name
-              }
-            }
-          }
-        `;
-        const link = mockSingleLink({
-          request: { query },
-          result: {
-            data: {
-              allPeople: {
-                people: null,
-              },
-            },
-            errors: [new Error('this is an error')],
-          },
-        });
-
-        const client = new ApolloClient({
-          link,
-          cache: new Hermes({ addTypename: false }),
-        });
-
-        const ErrorContainer = graphql(query, {
-          options: { errorPolicy: 'all' },
-        })(
-          class extends React.Component<ChildProps> {
-            componentDidUpdate() {
-              const { data } = this.props;
-              expect(data!.error).toBeTruthy();
-              expect(data!.error!.graphQLErrors[0].message).toEqual(
-                'this is an error'
-              );
-              expect(data).toMatchObject({ allPeople: { people: null } });
-              done = true;
-            }
-
-            render() {
-              return null;
-            }
-          }
-        );
-
-        render(
-          <ApolloProvider client={client}>
-            <ErrorContainer />
-          </ApolloProvider>
-        );
-
-        waitFor(() => {
-          expect(done).toBe(true);
-        }).then(resolve, reject);
-      }
-    );
-
-    itAsync(
-      'passes any GraphQL errors in props along with data [component]',
-      (resolve, reject) => {
-        let done = false;
-        const query: DocumentNode = gql`
-          query people {
-            allPeople(first: 1) {
-              people {
-                name
-              }
-            }
-          }
-        `;
-        const link = mockSingleLink({
-          request: { query },
-          result: {
-            data: {
-              allPeople: {
-                people: null,
-              },
-            },
-            errors: [new Error('this is an error')],
-          },
-        });
-
-        const client = new ApolloClient({
-          link,
-          cache: new Hermes({ addTypename: false }),
-        });
-
-        class ErrorContainer extends React.Component<QueryResult> {
+        class extends React.Component<ChildProps> {
           componentDidUpdate() {
-            const { props } = this;
-            expect(props.error).toBeTruthy();
-            expect(props.error!.graphQLErrors[0].message).toEqual(
-              'this is an error'
-            );
-            expect(props.data!.allPeople!).toMatchObject({ people: null });
+            const { data } = this.props;
+            expect(data!.error).toBeTruthy();
+            expect(data!.error!.graphQLErrors[0].message).toEqual('this is an error');
+            expect(data).toMatchObject({ allPeople: { people: null } });
             done = true;
           }
 
           render() {
             return null;
           }
+        },
+      );
+
+      render(
+        <ApolloProvider client={client}>
+          <ErrorContainer />
+        </ApolloProvider>,
+      );
+
+      waitFor(() => {
+        expect(done).toBe(true);
+      }).then(resolve, reject);
+    });
+
+    itAsync('passes any GraphQL errors in props along with data [component]', (resolve, reject) => {
+      let done = false;
+      const query: DocumentNode = gql`
+        query people {
+          allPeople(first: 1) {
+            people {
+              name
+            }
+          }
+        }
+      `;
+      const link = mockSingleLink({
+        request: { query },
+        result: {
+          data: {
+            allPeople: {
+              people: null,
+            },
+          },
+          errors: [new Error('this is an error')],
+        },
+      });
+
+      const client = new ApolloClient({
+        link,
+        cache: new Hermes({ addTypename: false }),
+      });
+
+      class ErrorContainer extends React.Component<QueryResult> {
+        componentDidUpdate() {
+          const { props } = this;
+          expect(props.error).toBeTruthy();
+          expect(props.error!.graphQLErrors[0].message).toEqual('this is an error');
+          expect(props.data!.allPeople!).toMatchObject({ people: null });
+          done = true;
         }
 
-        render(
-          <ApolloProvider client={client}>
-            <Query query={query} errorPolicy='all'>
-              {(props: any) => <ErrorContainer {...props} />}
-            </Query>
-          </ApolloProvider>
-        );
-
-        waitFor(() => {
-          expect(done).toBe(true);
-        }).then(resolve, reject);
+        render() {
+          return null;
+        }
       }
-    );
+
+      render(
+        <ApolloProvider client={client}>
+          <Query query={query} errorPolicy='all'>
+            {(props: any) => <ErrorContainer {...props} />}
+          </Query>
+        </ApolloProvider>,
+      );
+
+      waitFor(() => {
+        expect(done).toBe(true);
+      }).then(resolve, reject);
+    });
   });
 });

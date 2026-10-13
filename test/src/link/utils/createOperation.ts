@@ -1,11 +1,8 @@
 import type { GraphQLRequest, Operation } from '../core/index';
 
-export function createOperation(
-  starting: any,
-  operation: GraphQLRequest
-): Operation {
+export function createOperation(starting: any, operation: GraphQLRequest): Operation {
   let context = { ...starting };
-  const setContext: Operation['setContext'] = (next) => {
+  const setContext: Operation['setContext'] = next => {
     if (typeof next === 'function') {
       context = { ...context, ...next(context) };
     } else {

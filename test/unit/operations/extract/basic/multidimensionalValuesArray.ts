@@ -6,21 +6,14 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.extract`, () => {
   describe(`2d array of  values hanging off of a root`, () => {
-
     let extractResult: Serializable.GraphSnapshot;
     beforeAll(() => {
       const cacheContext = createStrictCacheContext();
       const snapshot = createGraphSnapshot(
         {
           rows: [
-            [
-              { value: 1 },
-              { value: 2 },
-            ],
-            [
-              { value: 3 },
-              { value: 4 },
-            ],
+            [{ value: 1 }, { value: 2 }],
+            [{ value: 3 }, { value: 4 }],
           ],
         },
         `{ 
@@ -28,7 +21,7 @@ describe(`operations.extract`, () => {
             value
           }
         }`,
-        cacheContext
+        cacheContext,
       );
 
       extractResult = extract(snapshot, cacheContext);
@@ -40,19 +33,12 @@ describe(`operations.extract`, () => {
           type: Serializable.NodeSnapshotType.EntitySnapshot,
           data: {
             rows: [
-              [
-                { value: 1 },
-                { value: 2 },
-              ],
-              [
-                { value: 3 },
-                { value: 4 },
-              ],
+              [{ value: 1 }, { value: 2 }],
+              [{ value: 3 }, { value: 4 }],
             ],
           },
         },
       });
     });
-
   });
 });

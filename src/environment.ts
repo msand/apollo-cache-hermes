@@ -16,8 +16,9 @@ export function assertValidEnvironment() {
   if (!missingBehavior.length) return;
 
   throw new InvalidEnvironmentError({
-    message: `Hermes requires some ES2015 features that your current environment lacks: `
-      + `${missingBehavior.join(', ')}. Please polyfill!`,
+    message:
+      `Hermes requires some ES2015 features that your current environment lacks: ` +
+      `${missingBehavior.join(', ')}. Please polyfill!`,
     infoUrl: `https://bit.ly/2SGa7uz`,
   });
 }
@@ -32,7 +33,7 @@ function _isSymbolPolyfilled() {
 function _isSetPolyfilled() {
   if (typeof Set !== 'function') return false;
   if (!_isSymbolPolyfilled()) return false;
-  if (typeof (new Set)[Symbol.iterator] !== 'function') return false;
+  if (typeof new Set()[Symbol.iterator] !== 'function') return false;
 
   return true;
 }
@@ -40,7 +41,7 @@ function _isSetPolyfilled() {
 function _isMapPolyfilled() {
   if (typeof Set !== 'function') return false;
   if (!_isSymbolPolyfilled()) return false;
-  if (typeof (new Set)[Symbol.iterator] !== 'function') return false;
+  if (typeof new Set()[Symbol.iterator] !== 'function') return false;
 
   return true;
 }

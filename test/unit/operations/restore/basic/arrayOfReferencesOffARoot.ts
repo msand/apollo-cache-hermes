@@ -31,7 +31,6 @@ function entityTransformer(node: JsonObject) {
 
 describe(`operations.restore`, () => {
   describe(`new array of references hanging off of a root`, () => {
-
     let restoreGraphSnapshot: GraphSnapshot, originalGraphSnapshot: GraphSnapshot;
     beforeAll(() => {
       const cacheContext = new CacheContext({
@@ -56,31 +55,34 @@ describe(`operations.restore`, () => {
           ],
         },
         `{ viewer { __typename id name } }`,
-        cacheContext
+        cacheContext,
       );
 
-      restoreGraphSnapshot = restore({
-        [QueryRootId]: {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          outbound: [
-            { id: '123', path: ['viewer', 0] },
-            { id: '456', path: ['viewer', 1] },
-          ],
-          data: {
-            viewer: [null, null, null],
+      restoreGraphSnapshot = restore(
+        {
+          [QueryRootId]: {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            outbound: [
+              { id: '123', path: ['viewer', 0] },
+              { id: '456', path: ['viewer', 1] },
+            ],
+            data: {
+              viewer: [null, null, null],
+            },
+          },
+          '123': {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            inbound: [{ id: QueryRootId, path: ['viewer', 0] }],
+            data: { __typename: 'viewer', id: 123, name: 'Gouda' },
+          },
+          '456': {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            inbound: [{ id: QueryRootId, path: ['viewer', 1] }],
+            data: { __typename: 'viewer', id: 456, name: 'Brie' },
           },
         },
-        '123': {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          inbound: [{ id: QueryRootId, path: ['viewer', 0] }],
-          data: {  __typename: 'viewer', id: 123, name: 'Gouda' },
-        },
-        '456': {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          inbound: [{ id: QueryRootId, path: ['viewer', 1] }],
-          data: {  __typename: 'viewer', id: 456, name: 'Brie' },
-        },
-      }, cacheContext).cacheSnapshot.baseline;
+        cacheContext,
+      ).cacheSnapshot.baseline;
     });
 
     it(`restores GraphSnapshot from JSON serializable object`, () => {
@@ -101,6 +103,5 @@ describe(`operations.restore`, () => {
     it(`correctly restores NodeSnapshot, no entity transformation on QueryRootId`, () => {
       jestExpect(restoreGraphSnapshot.getNodeData(QueryRootId)).not.toBeInstanceOf(Viewer);
     });
-
   });
 });

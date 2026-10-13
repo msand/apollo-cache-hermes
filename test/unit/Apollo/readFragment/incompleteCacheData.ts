@@ -8,7 +8,6 @@ import { strictConfig } from '../../../helpers';
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`readFragment with incomplete cache`, () => {
-
   let hermes: Hermes;
   beforeAll(() => {
     hermes = new Hermes(strictConfig);
@@ -29,21 +28,22 @@ describe(`readFragment with incomplete cache`, () => {
   });
 
   it(`returns the partial result`, () => {
-    expect(hermes.readFragment({
-      id: '123',
-      fragment: gql(`
+    expect(
+      hermes.readFragment({
+        id: '123',
+        fragment: gql(`
         fragment viewer on Viewer {
           id
           name
           location
         }
       `),
-      returnPartialData: true,
-    })).to.be.deep.eq({
+        returnPartialData: true,
+      }),
+    ).to.be.deep.eq({
       id: 123,
       name: 'Gouda',
       __typename: 'Viewer',
     });
   });
-
 });

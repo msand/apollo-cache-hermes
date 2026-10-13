@@ -7,7 +7,6 @@ import { query, strictConfig } from '../../../helpers';
 
 describe(`context.CacheContext`, () => {
   describe(`entityUpdaters with updateListOfReferences`, () => {
-
     const dashboardQuery = query(`
       query dashboard {
         dashboard {
@@ -70,7 +69,7 @@ describe(`context.CacheContext`, () => {
               }
             `),
           },
-          (previousUsers) => {
+          previousUsers => {
             if (!previousUsers) {
               return previousUsers;
             }
@@ -83,7 +82,7 @@ describe(`context.CacheContext`, () => {
             } else {
               return previousUsers; // No change.
             }
-          }
+          },
         );
       },
 
@@ -134,7 +133,7 @@ describe(`context.CacheContext`, () => {
             active: true,
             currentDashboard: { id: 'dash0' },
           },
-        }
+        },
       );
 
       expect(userUpdater.mock.calls.length).to.eq(1);
@@ -175,32 +174,33 @@ describe(`context.CacheContext`, () => {
       expect(userUpdater.mock.calls.length).to.eq(1);
       const [, user, previous] = userUpdater.mock.calls[0];
       expect(user).to.eq(undefined);
-      expect(previous).to.deep.eq(
-        {
-          __typename: 'User',
-          id: 1,
-          name: 'Gouda',
-          active: true,
-          currentDashboard: {
-            id: 'dash0',
-            name: 'Main Dashboard',
-          },
-        }
-      );
+      expect(previous).to.deep.eq({
+        __typename: 'User',
+        id: 1,
+        name: 'Gouda',
+        active: true,
+        currentDashboard: {
+          id: 'dash0',
+          name: 'Main Dashboard',
+        },
+      });
     });
 
     it(`respects writes by updaters`, () => {
-      cache.write({ ...getUserQuery, variables: { id: 2 } }, {
-        user: {
-          __typename: 'User',
-          id: 2,
-          name: 'Munster',
-          active: false,
-          currentDashboard: {
-            id: 'dash0',
+      cache.write(
+        { ...getUserQuery, variables: { id: 2 } },
+        {
+          user: {
+            __typename: 'User',
+            id: 2,
+            name: 'Munster',
+            active: false,
+            currentDashboard: {
+              id: 'dash0',
+            },
           },
         },
-      });
+      );
 
       expect(cache.read(dashboardQuery).result).to.deep.eq({
         dashboard: {
@@ -229,6 +229,5 @@ describe(`context.CacheContext`, () => {
       expect(root.foo).to.eq(123);
       expect(previous.foo).to.eq(undefined);
     });
-
   });
 });

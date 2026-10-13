@@ -10,7 +10,6 @@ import { strictConfig } from '../../../helpers';
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`writeFragment with nested paramterized value`, () => {
-
   let hermes: Hermes;
   beforeAll(() => {
     hermes = new Hermes(strictConfig);
@@ -74,11 +73,7 @@ describe(`writeFragment with nested paramterized value`, () => {
       },
     });
 
-    const parameterizedTruckId = nodeIdForParameterizedValue(
-      '123',
-      ['trucks'],
-      { number: 2 }
-    );
+    const parameterizedTruckId = nodeIdForParameterizedValue('123', ['trucks'], { number: 2 });
 
     expect(hermes.getCurrentCacheSnapshot().baseline.getNodeSnapshot('123')).to.deep.eq(
       new EntitySnapshot(
@@ -89,8 +84,8 @@ describe(`writeFragment with nested paramterized value`, () => {
         },
         [{ id: QueryRootId, path: ['viewer'] }],
         undefined,
-        [{ id: parameterizedTruckId, path: ['trucks'] }]
-      )
+        [{ id: parameterizedTruckId, path: ['trucks'] }],
+      ),
     );
 
     expect(hermes.getCurrentCacheSnapshot().baseline.getNodeSnapshot(parameterizedTruckId)).to.deep.eq(
@@ -107,8 +102,8 @@ describe(`writeFragment with nested paramterized value`, () => {
             driverName: 'Bob',
           },
         ],
-        [{ id: '123', path: ['trucks'] }]
-      )
+        [{ id: '123', path: ['trucks'] }],
+      ),
     );
   });
 
@@ -137,11 +132,7 @@ describe(`writeFragment with nested paramterized value`, () => {
       },
     });
 
-    const parameterizedTruckId = nodeIdForParameterizedValue(
-      '123',
-      ['trucks'],
-      { number: 2 }
-    );
+    const parameterizedTruckId = nodeIdForParameterizedValue('123', ['trucks'], { number: 2 });
 
     expect(hermes.getCurrentCacheSnapshot().baseline.getNodeSnapshot('123')).to.deep.eq(
       new EntitySnapshot(
@@ -152,8 +143,8 @@ describe(`writeFragment with nested paramterized value`, () => {
         },
         [{ id: QueryRootId, path: ['viewer'] }],
         undefined,
-        [{ id: parameterizedTruckId, path: ['trucks'] }]
-      )
+        [{ id: parameterizedTruckId, path: ['trucks'] }],
+      ),
     );
 
     expect(hermes.getCurrentCacheSnapshot().baseline.getNodeSnapshot(parameterizedTruckId)).to.deep.eq(
@@ -165,9 +156,8 @@ describe(`writeFragment with nested paramterized value`, () => {
             driverName: 'Bob',
           },
         ],
-        [{ id: '123', path: ['trucks'] }]
-      )
+        [{ id: '123', path: ['trucks'] }],
+      ),
     );
   });
-
 });

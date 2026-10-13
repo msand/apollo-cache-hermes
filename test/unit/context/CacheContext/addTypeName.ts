@@ -25,11 +25,14 @@ describe(`context.CacheContext`, () => {
 
     it(`does not inject __typename`, () => {
       const context = new CacheContext({ ...strictConfig, addTypename: false });
-      const parsed = transformDocument(context, `{
+      const parsed = transformDocument(
+        context,
+        `{
         foo {
           bar { a b }
         }
-      }`);
+      }`,
+      );
 
       expect(context.addTypename).to.eq(false);
 
@@ -45,11 +48,14 @@ describe(`context.CacheContext`, () => {
 
     it(`injects __typename into parsed queries`, () => {
       const context = new CacheContext({ ...strictConfig, addTypename: true });
-      const parsed = transformDocument(context, `{
+      const parsed = transformDocument(
+        context,
+        `{
         foo {
           bar { a b }
         }
-      }`);
+      }`,
+      );
 
       expect(context.addTypename).to.eq(true);
 
@@ -65,7 +71,9 @@ describe(`context.CacheContext`, () => {
 
     it(`injects __typename into fragments`, () => {
       const context = new CacheContext({ ...strictConfig, addTypename: true });
-      const parsed = transformDocument(context, `
+      const parsed = transformDocument(
+        context,
+        `
         query stuff {
           foo {
             __typename
@@ -74,7 +82,8 @@ describe(`context.CacheContext`, () => {
         }
 
         fragment fullFoo on Foo { bar }
-      `);
+      `,
+      );
 
       const rootSelection = parsed.info.operation.selectionSet;
       expect(fieldNames(rootSelection)).to.have.members(['foo']);
@@ -88,12 +97,15 @@ describe(`context.CacheContext`, () => {
 
     it(`injects __typename into inline fragments`, () => {
       const context = new CacheContext({ ...silentConfig, addTypename: true });
-      const parsed = transformDocument(context, `{
+      const parsed = transformDocument(
+        context,
+        `{
         asdf {
         ... on Foo { a }
         ... on Bar { b }
           }
-      }`);
+      }`,
+      );
 
       const rootSelection = parsed.info.operation.selectionSet;
       expect(fieldNames(rootSelection)).to.have.members(['asdf']);

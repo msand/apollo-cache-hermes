@@ -21,19 +21,13 @@ const sampleQueryWithoutVariables = gql`
 describe('filterOperationVariables', () => {
   it('filters unused variables', () => {
     const variables = { a: 1, b: 2, c: 3 };
-    const result = filterOperationVariables(
-      variables,
-      sampleQueryWithoutVariables
-    );
+    const result = filterOperationVariables(variables, sampleQueryWithoutVariables);
     expect(result).toEqual({});
   });
 
   it('does not filter used variables', () => {
     const variables = { a: 1, b: 2, c: 3 };
-    const result = filterOperationVariables(
-      variables,
-      sampleQueryWithVariables
-    );
+    const result = filterOperationVariables(variables, sampleQueryWithVariables);
     expect(result).toEqual({ a: 1 });
   });
 });

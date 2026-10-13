@@ -23,7 +23,7 @@ export class MockSubscriptionLink extends ApolloLink {
 
   public request(operation: Operation) {
     this.operation = operation;
-    return new Observable<FetchResult>((observer) => {
+    return new Observable<FetchResult>(observer => {
       this.setups.forEach(x => x());
       this.observers.push(observer);
       return () => {
@@ -36,7 +36,7 @@ export class MockSubscriptionLink extends ApolloLink {
     setTimeout(() => {
       const { observers } = this;
       if (!observers.length) throw new Error('subscription torn down');
-      observers.forEach((observer) => {
+      observers.forEach(observer => {
         if (result.result && observer.next) observer.next(result.result);
         if (result.error && observer.error) observer.error(result.error);
         if (complete && observer.complete) observer.complete();
@@ -47,7 +47,7 @@ export class MockSubscriptionLink extends ApolloLink {
   public simulateComplete() {
     const { observers } = this;
     if (!observers.length) throw new Error('subscription torn down');
-    observers.forEach((observer) => {
+    observers.forEach(observer => {
       if (observer.complete) observer.complete();
     });
   }

@@ -7,6 +7,7 @@ import type {
 } from '@apollo/client/cache/core/types/common';
 import type { Cache as CacheInterface, Reference, StoreObject, StoreValue } from '@apollo/client';
 import { makeReference } from '@apollo/client';
+import { invariant } from '@apollo/client/utilities/globals';
 import * as equality from '@wry/equality';
 
 import type { ChangeId, NodeId, OperationInstance, CacheDelta, RawOperation } from './schema';
@@ -14,6 +15,8 @@ import type { CacheSnapshot as CacheSnapshotType } from './CacheSnapshot';
 import type { GraphSnapshot, NodeSnapshotMap } from './GraphSnapshot';
 import type { JsonObject, JsonValue } from './primitive';
 import type { CacheContext } from './context';
+import type { OptimisticUpdate } from './OptimisticUpdateQueue';
+import { applyDeltas } from './OptimisticUpdateQueue';
 import type { Queryable } from './Queryable';
 import type { NodeSnapshot } from './nodes';
 import type { DocumentNode } from './util';
@@ -23,6 +26,8 @@ import * as operations from './operations';
 import * as schema from './schema';
 import * as nodes from './nodes';
 import * as util from './util';
+import { nodeIdForParameterizedValue } from './operations/SnapshotEditor';
+import { checkWrite } from './operations/checkWrite';
 
 const isEqual = equality.equal;
 const makeRef = makeReference;
@@ -31,7 +36,7 @@ const { CacheSnapshot } = cacheSnapshot;
 const { ApolloTransaction } = transaction;
 const { cloneNodeSnapshot, EntitySnapshot } = nodes;
 const { read, SnapshotEditor, write } = operations;
-const { addToSet, isObject, isReference } = util;
+const { addToSet, hasOwn, isObject, isReference } = util;
 
 const DELETE: DeleteModifier = Object.create(null);
 const INVALIDATE: InvalidateModifier = Object.create(null);
@@ -44,10 +49,43 @@ function isInvalidateModifier(value: any): value is InvalidateModifier {
   return value === INVALIDATE;
 }
 
+/**
+ * Re-runs an optimistic update on top of a snapshot (see Cache), returning the
+ * resulting snapshot, with the update re-enqueued.
+ */
+export type OptimisticReplay = (
+  snapshot: CacheSnapshotType,
+  update: OptimisticUpdate,
+) => { snapshot: CacheSnapshotType; editedNodeIds: Set<NodeId> };
+
+/**
+ * Services a transaction gets from the cache that runs it.
+ */
+export interface TransactionHooks {
+  /** Re-runs an optimistic update (see CacheTransaction#rollback). */
+  replayOptimisticUpdate?: OptimisticReplay;
+  /**
+   * Ids of the nodes watched queries are rooted at.  The transaction records
+   * the fields of these nodes that it changes in changedFields, so that (like
+   * InMemoryCache) onWatchUpdated is called for the watches reading them, even
+   * if their result ends up unchanged.
+   */
+  watchedRootIds?: Set<NodeId>;
+  changedFields?: ChangedFields;
+}
+
+/**
+ * The fields changed per node, in the baseline and in the optimistic view.
+ */
+export interface ChangedFields {
+  baseline: Map<NodeId, Set<string>>;
+  optimistic: Map<NodeId, Set<string>>;
+}
+
 type Node<TSerialized> = {
-  node: any,
-  previous: JsonValue | undefined,
-  updater: CacheContext.EntityUpdater<TSerialized>,
+  node: any;
+  previous: JsonValue | undefined;
+  updater: CacheContext.EntityUpdater<TSerialized>;
 };
 
 /**
@@ -58,7 +96,6 @@ type Node<TSerialized> = {
  * (an optimistic update).  Otherwise edits are made against the baseline state.
  */
 export class CacheTransaction<TSerialized> implements Queryable {
-
   /** The set of nodes edited throughout the transaction. */
   private _editedNodeIds = new Set<NodeId>();
 
@@ -68,6 +105,9 @@ export class CacheTransaction<TSerialized> implements Queryable {
   /** All queries written during the transaction. */
   private _writtenQueries = new Set<OperationInstance<TSerialized>>();
 
+  /** The ids non-optimistic writes started at, which the cache retains. */
+  private _writtenRootIds = new Set<NodeId>();
+
   /** The original snapshot before the transaction began. */
   private _parentSnapshot: CacheSnapshotType;
 
@@ -75,6 +115,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
     private _context: CacheContext<TSerialized>,
     private _snapshot: CacheSnapshotType,
     private _optimisticChangeId?: ChangeId,
+    private _hooks: TransactionHooks = {},
   ) {
     this._parentSnapshot = _snapshot;
   }
@@ -90,13 +131,39 @@ export class CacheTransaction<TSerialized> implements Queryable {
   /**
    * Executes reads against the current values in the transaction.
    */
-  read(query: RawOperation): CacheInterface.DiffResult<JsonValue> {
+  read(query: RawOperation, optimistic?: boolean): CacheInterface.DiffResult<JsonValue> {
     return read(
       this._context,
       query,
-      this._optimisticChangeId ? this._snapshot.optimistic : this._snapshot.baseline,
-      Object.create(null)
+      this.readsOptimistic(optimistic) ? this._snapshot.optimistic : this._snapshot.baseline,
+      Object.create(null),
     );
+  }
+
+  /** Whether optimistic reads see the optimistic view; see withBaselineReads. */
+  private _optimisticReads = true;
+
+  /**
+   * Whether a read (optimistic or not) made in the transaction sees the
+   * optimistic view.  Like InMemoryCache, an optimistic transaction reads its
+   * own layer either way.
+   */
+  readsOptimistic(optimistic?: boolean): boolean {
+    return !!this._optimisticChangeId || (!!optimistic && this._optimisticReads);
+  }
+
+  /**
+   * Runs a callback in which optimistic reads see the baseline, like
+   * InMemoryCache's batch({ optimistic: false }).
+   */
+  withBaselineReads<T>(callback: () => T): T {
+    const optimisticReads = this._optimisticReads;
+    this._optimisticReads = false;
+    try {
+      return callback();
+    } finally {
+      this._optimisticReads = optimisticReads;
+    }
   }
 
   /**
@@ -107,6 +174,15 @@ export class CacheTransaction<TSerialized> implements Queryable {
    * baseline state (and any optimistic updates will be replayed over it).
    */
   write(query: RawOperation, payload: JsonObject): Reference | undefined {
+    if (payload && typeof payload === 'object') {
+      checkWrite(
+        this._context,
+        this._context.transformDocument(query.document),
+        query.variables,
+        payload,
+        this._rootTypename(query.rootId),
+      );
+    }
     if (this._optimisticChangeId) {
       return this._writeOptimistic(query, payload);
     } else {
@@ -115,40 +191,88 @@ export class CacheTransaction<TSerialized> implements Queryable {
   }
 
   /**
-   * Roll back a previously enqueued optimistic update.
+   * The __typename of the node a write starts at, when it is known before the
+   * written data is looked at.
+   */
+  private _rootTypename(rootId: NodeId): string | undefined {
+    if (rootId === StaticNodeId.QueryRoot) return 'Query';
+    if (rootId === StaticNodeId.MutationRoot) return 'Mutation';
+    if (rootId === StaticNodeId.SubscriptionRoot) return 'Subscription';
+    const data = this.getCurrentNodeSnapshot(rootId)?.data;
+    return isObject(data) && typeof data.__typename === 'string' ? data.__typename : undefined;
+  }
+
+  /**
+   * Roll back previously enqueued optimistic updates with the given id.
+   *
+   * Like InMemoryCache's removeOptimistic, the updates beneath the removed one
+   * are kept as they are, and the ones above it are re-run on top of the data
+   * beneath them (so they pick up any data written since they last ran).
    */
   rollback(changeId: ChangeId): void {
     const current = this._snapshot;
-
-    const optimisticQueue = current.optimisticQueue.remove(changeId);
-    current.optimisticQueue = optimisticQueue;
-    const optimistic = this._buildOptimisticSnapshot(current.baseline);
+    const parts = current.optimisticQueue.split(changeId);
+    if (!parts) return;
 
     // Invalidate all IDs from the soon-to-be previous optimistic snapshot,
     // since we don't know which IDs were changed by the one we're rolling back.
-    const allIds = new Set(current.optimistic.allNodeIds());
-    addToSet(this._editedNodeIds, allIds);
+    addToSet(this._editedNodeIds, current.optimistic.allNodeIds());
 
-    this._snapshot = new CacheSnapshot(current.baseline, optimistic, optimisticQueue);
+    let optimistic = current.baseline;
+    if (parts.below.hasUpdates()) {
+      const applied = parts.below.apply(this._context, current.baseline);
+      optimistic = applied.snapshot;
+      addToSet(this._editedNodeIds, applied.editedNodeIds);
+    }
+    let snapshot = new CacheSnapshot(current.baseline, optimistic, parts.below);
+
+    for (const update of parts.above) {
+      if (update.callback && this._hooks.replayOptimisticUpdate) {
+        const replayed = this._hooks.replayOptimisticUpdate(snapshot, update);
+        snapshot = replayed.snapshot;
+        addToSet(this._editedNodeIds, replayed.editedNodeIds);
+      } else {
+        const optimisticQueue = snapshot.optimisticQueue.enqueue(update.id, update.deltas, update.callback);
+        const editor = new SnapshotEditor(this._context, snapshot.optimistic);
+        applyDeltas(editor, update.deltas);
+        const applied = editor.commit();
+        addToSet(this._editedNodeIds, applied.editedNodeIds);
+        snapshot = new CacheSnapshot(snapshot.baseline, applied.snapshot, optimisticQueue);
+      }
+    }
+
+    addToSet(this._editedNodeIds, snapshot.optimistic.allNodeIds());
+    this._setCurrentSnapshot(snapshot);
   }
 
   /**
    * Complete the transaction, returning the new snapshot and the ids of any
    * nodes that were edited.
    */
-  commit(): { snapshot: CacheSnapshotType, editedNodeIds: Set<NodeId>, writtenQueries: Set<OperationInstance<TSerialized>> } {
+  commit(callback?: OptimisticUpdate['callback']): {
+    snapshot: CacheSnapshotType;
+    editedNodeIds: Set<NodeId>;
+    writtenQueries: Set<OperationInstance<TSerialized>>;
+    writtenRootIds: Set<NodeId>;
+  } {
     this._triggerEntityUpdaters();
 
     let snapshot = this._snapshot;
     if (this._optimisticChangeId) {
+      // The callback is kept so the update can be re-run (see rollback).
       snapshot = new CacheSnapshot(
         snapshot.baseline,
         snapshot.optimistic,
-        snapshot.optimisticQueue.enqueue(this._optimisticChangeId, this._deltas),
+        snapshot.optimisticQueue.enqueue(this._optimisticChangeId, this._deltas, callback),
       );
     }
 
-    return { snapshot, editedNodeIds: this._editedNodeIds, writtenQueries: this._writtenQueries };
+    return {
+      snapshot,
+      editedNodeIds: this._editedNodeIds,
+      writtenQueries: this._writtenQueries,
+      writtenRootIds: this._writtenRootIds,
+    };
   }
 
   markEditedNodeIds(allIds: Iterable<string>) {
@@ -159,6 +283,14 @@ export class CacheTransaction<TSerialized> implements Queryable {
     this._snapshot = snapshot;
   }
 
+  /**
+   * The current (uncommitted) version of the cache, as seen by this
+   * transaction.
+   */
+  getSnapshot(): CacheSnapshotType {
+    return this._snapshot;
+  }
+
   getPreviousNodeSnapshot(nodeId: NodeId): NodeSnapshot | undefined {
     const prevSnapshot = this._optimisticChangeId ? this._parentSnapshot.optimistic : this._parentSnapshot.baseline;
     return prevSnapshot.getNodeSnapshot(nodeId);
@@ -167,6 +299,21 @@ export class CacheTransaction<TSerialized> implements Queryable {
   getCurrentNodeSnapshot(nodeId: NodeId): NodeSnapshot | undefined {
     const currentSnapshot = this._optimisticChangeId ? this._snapshot.optimistic : this._snapshot.baseline;
     return currentSnapshot.getNodeSnapshot(nodeId);
+  }
+
+  /**
+   * Moves the transaction to a new version of the cache, recording the fields
+   * of watched root nodes that changed (see TransactionHooks#watchedRootIds).
+   */
+  private _setCurrentSnapshot(next: CacheSnapshotType) {
+    const previous = this._snapshot;
+    this._snapshot = next;
+    const { watchedRootIds, changedFields } = this._hooks;
+    if (!watchedRootIds || !changedFields) return;
+    for (const id of watchedRootIds) {
+      addChangedFields(previous.baseline, next.baseline, id, changedFields.baseline);
+      addChangedFields(previous.optimistic, next.optimistic, id, changedFields.optimistic);
+    }
   }
 
   /**
@@ -187,7 +334,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
       const either = node || previous;
 
       if (!(either instanceof EntitySnapshot)) continue; // Only entities
-      let typeName = isObject(either.data) && either.data.__typename as string | undefined;
+      let typeName = isObject(either.data) && (either.data.__typename as string | undefined);
       const isRoot = nodeId === StaticNodeId.QueryRoot;
       if (!typeName && isRoot) {
         typeName = 'Query';
@@ -220,13 +367,19 @@ export class CacheTransaction<TSerialized> implements Queryable {
   private _writeBaseline(query: RawOperation, payload: JsonObject) {
     const current = this._snapshot;
 
-    const { snapshot: baseline, editedNodeIds, writtenQueries, ref } = write(this._context, current.baseline, query, payload);
+    const {
+      snapshot: baseline,
+      editedNodeIds,
+      writtenQueries,
+      ref,
+    } = write(this._context, current.baseline, query, payload);
     addToSet(this._editedNodeIds, editedNodeIds);
     addToSet(this._writtenQueries, writtenQueries);
+    this._writtenRootIds.add(query.rootId);
 
     const optimistic = this._buildOptimisticSnapshot(baseline);
 
-    this._snapshot = new CacheSnapshot(baseline, optimistic, current.optimisticQueue);
+    this._setCurrentSnapshot(new CacheSnapshot(baseline, optimistic, current.optimisticQueue));
 
     return ref;
   }
@@ -250,17 +403,37 @@ export class CacheTransaction<TSerialized> implements Queryable {
   private _writeOptimistic(query: RawOperation, payload: JsonObject) {
     this._deltas.push({ query, payload });
 
-    const { snapshot: optimistic, editedNodeIds, writtenQueries, ref } = write(this._context, this._snapshot.optimistic, query, payload);
+    const {
+      snapshot: optimistic,
+      editedNodeIds,
+      writtenQueries,
+      ref,
+    } = write(this._context, this._snapshot.optimistic, query, payload);
     addToSet(this._writtenQueries, writtenQueries);
     addToSet(this._editedNodeIds, editedNodeIds);
 
-    this._snapshot = new CacheSnapshot(this._snapshot.baseline, optimistic, this._snapshot.optimisticQueue);
+    this._setCurrentSnapshot(new CacheSnapshot(this._snapshot.baseline, optimistic, this._snapshot.optimisticQueue));
 
     return ref;
   }
 
   modify<Entity extends Record<string, unknown>>(options: CacheInterface.ModifyOptions<Entity>): boolean {
-    const graphSnapshot = options.optimistic ? this._snapshot.optimistic : this._snapshot.baseline;
+    // Like InMemoryCache, an optimistic transaction modifies its own layer.
+    return this._modify(options, this._optimisticChangeId ? 'layer' : options.optimistic ? 'optimistic' : 'baseline');
+  }
+
+  /**
+   * Modifies the baseline (and re-applies the optimistic updates over it), the
+   * optimistic view, the optimistic update made by this transaction ('layer'),
+   * or every optimistic update ('allLayers', used by evict so that evicted data
+   * is not resurrected by optimistic updates).
+   */
+  private _modify<Entity extends Record<string, unknown>>(
+    options: CacheInterface.ModifyOptions<Entity>,
+    target: 'baseline' | 'optimistic' | 'layer' | 'allLayers',
+  ): boolean {
+    const optimistic = target !== 'baseline';
+    let graphSnapshot = optimistic ? this._snapshot.optimistic : this._snapshot.baseline;
 
     const id = 'id' in options ? options.id : 'ROOT_QUERY';
     if (!id) {
@@ -271,7 +444,21 @@ export class CacheTransaction<TSerialized> implements Queryable {
       return false;
     }
 
-    const nodeRefToMatch = ({ id }) => ({ d: graphSnapshot.getNodeData(id), k: id });
+    // Modifier functions may write to the cache (in this transaction), so
+    // reads made while they run see the latest data.
+    const currentGraph = () => (optimistic ? this._snapshot.optimistic : this._snapshot.baseline);
+
+    const nodeRefToMatch = ({ id }) => ({ d: currentGraph().getNodeData(id), k: id });
+
+    // Like InMemoryCache, a field with arguments is passed to modifiers as its stored
+    // value, or as a Reference when it holds an entity.
+    const parameterizedFieldValue = (nodeId: string, data: any) => {
+      const outbound = currentGraph().getNodeSnapshot(nodeId)?.outbound;
+      for (const reference of outbound?.values() ?? []) {
+        if (reference.path.length === 0) return makeRef(reference.id);
+      }
+      return data && typeof data === 'object' ? { ...data } : data;
+    };
 
     function readFromSnapshot(obj: Readonly<NodeSnapshot>, key: string) {
       const data = obj.data;
@@ -279,11 +466,13 @@ export class CacheTransaction<TSerialized> implements Queryable {
       if (datum != null) {
         return [{ d: datum, k: null }];
       }
-      const nodes: { d: any, k: string }[] = obj.parameterized?.get(key)?.map(nodeRefToMatch) ?? [];
+      const nodes: { d: any; k: string }[] = obj.parameterized?.get(key)?.map(nodeRefToMatch) ?? [];
       const out = obj.outbound?.get(key);
       if (out) {
         const k = out.id;
-        return [{ d: graphSnapshot.getNodeData(k), k }].concat(nodes);
+        const target = currentGraph().getNodeData(k);
+        // Like InMemoryCache, a dangling reference is passed as a Reference.
+        return [target === undefined ? { d: makeRef(k), k: null } : { d: target, k }].concat(nodes);
       }
       if (nodes.length) {
         return nodes;
@@ -305,11 +494,11 @@ export class CacheTransaction<TSerialized> implements Queryable {
       }
       const out = obj.outbound?.get(key);
       if (out) {
-        return graphSnapshot.getNodeData(out.id);
+        return currentGraph().getNodeData(out.id);
       }
       const ref = obj.parameterized?.get(key)?.[0];
       if (ref) {
-        return graphSnapshot.getNodeData(ref.id);
+        return currentGraph().getNodeData(ref.id);
       }
       if (id === 'ROOT_QUERY' && key === '__typename') {
         return 'Query';
@@ -321,7 +510,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
 
     const readField = (
       fieldNameOrOptions: string | ReadFieldOptions,
-      from: StoreObject | Reference = (tempStore[id]?.data ?? node.data) as StoreObject
+      from: StoreObject | Reference = (tempStore[id]?.data ?? node.data) as StoreObject,
     ) => {
       if (typeof fieldNameOrOptions === 'object') {
         from = fieldNameOrOptions.from ?? from;
@@ -333,7 +522,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
 
       if (isReference(from)) {
         const ref = from.__ref;
-        const obj = tempStore[ref] ?? graphSnapshot.getNodeSnapshot(ref);
+        const obj = tempStore[ref] ?? currentGraph().getNodeSnapshot(ref);
         if (!obj) {
           return undefined;
         }
@@ -344,8 +533,55 @@ export class CacheTransaction<TSerialized> implements Queryable {
     };
 
     function getSnapshot(nodeId: string) {
-      return tempStore[nodeId] ?? graphSnapshot.getNodeSnapshot(nodeId);
+      return tempStore[nodeId] ?? currentGraph().getNodeSnapshot(nodeId);
     }
+
+    // Like InMemoryCache's EntityStore#modify, warn (in development) about
+    // values that will not be stored as their author probably intends.
+    const warnAboutModifiedValue = (value: unknown) => {
+      if ((globalThis as { __DEV__?: boolean }).__DEV__ === false) return;
+      const checkReference = (ref: Reference) => {
+        if (getSnapshot(ref.__ref)) return false;
+        invariant.warn(
+          'cache.modify: You are trying to write a Reference that is not part of the store: %o\n' +
+            'Please make sure to set the `mergeIntoStore` parameter to `true` when creating a Reference that is not part of the store yet:\n' +
+            '`toReference(object, true)`',
+          ref,
+        );
+        return true;
+      };
+      if (isReference(value)) {
+        checkReference(value);
+      } else if (Array.isArray(value)) {
+        // Warn about writing "mixed" arrays of Reference and non-Reference objects.
+        let seenReference = false;
+        let someNonReference: unknown;
+        for (const item of value) {
+          if (isReference(item)) {
+            seenReference = true;
+            if (checkReference(item)) break;
+          } else if (typeof item === 'object' && item) {
+            const itemId = this._context.entityIdForValue(item);
+            if (itemId !== undefined) {
+              // Hermes hands modifiers the data of stored entities, rather than references to them.
+              if (getSnapshot(itemId)?.data === item) {
+                seenReference = true;
+              } else {
+                someNonReference = item;
+              }
+            }
+          }
+          if (seenReference && someNonReference !== undefined) {
+            invariant.warn(
+              'cache.modify: Writing an array with a mix of both References and Objects will not result in the Objects being normalized correctly.\n' +
+                'Please convert the object instance %o to a Reference before writing it to the cache by calling `toReference(object, true)`.',
+              someNonReference,
+            );
+            break;
+          }
+        }
+      }
+    };
 
     const ensureNewSnapshot = (nodeId: NodeId): NodeSnapshot => {
       const parent = getSnapshot(nodeId);
@@ -363,9 +599,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
       DELETE,
       INVALIDATE,
       canRead(value: StoreValue): boolean {
-        return isReference(value)
-          ? snapshot.has(value.__ref)
-          : typeof value === 'object' && value !== null;
+        return isReference(value) ? snapshot.has(value.__ref) : typeof value === 'object' && value !== null;
       },
       fieldName: '',
       isReference,
@@ -375,7 +609,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
         const entityId = this._context.entityIdForValue(value);
         if (entityId && mergeIntoStore && !isReference(value) && typeof value !== 'string') {
           const nodeSnapshot = ensureNewSnapshot(entityId);
-          nodeSnapshot.data = { ...nodeSnapshot.data as {}, ...value };
+          nodeSnapshot.data = { ...(nodeSnapshot.data as {}), ...value };
           modified = true;
         }
         return entityId ? makeRef(entityId) : undefined;
@@ -384,7 +618,14 @@ export class CacheTransaction<TSerialized> implements Queryable {
 
     const data = node.data ?? {};
     const keys = Object.keys(data);
-    const payload: JsonObject = { };
+    // Fields holding a dangling reference have no data, but are still fields.
+    for (const { id: targetId, path } of node.outbound?.values() ?? []) {
+      const [key] = path;
+      if (path.length === 1 && typeof key === 'string' && !hasOwn.call(data, key) && !graphSnapshot.has(targetId)) {
+        keys.push(key);
+      }
+    }
+    const payload: JsonObject = {};
     const deleted = new Set<string>();
 
     let modified = false;
@@ -412,9 +653,11 @@ export class CacheTransaction<TSerialized> implements Queryable {
           const useRef = k?.includes('❖');
           const copyOrCurrent = Array.isArray(d)
             ? Array.prototype.slice.call(d)
-            : useRef ? { __ref: k } : typeof d === 'object'
-              ? { ...d }
-              : d;
+            : useRef
+              ? parameterizedFieldValue(k!, d)
+              : typeof d === 'object'
+                ? { ...d }
+                : d;
           details.fieldName = key;
           details.storeFieldName = storeFieldName;
           const value = field(copyOrCurrent, details);
@@ -425,20 +668,19 @@ export class CacheTransaction<TSerialized> implements Queryable {
             this._editedNodeIds.add(id);
             let dirty = this._context.dirty.get(id);
             if (!dirty) {
-              this._context.dirty.set(id, dirty = new Set());
+              this._context.dirty.set(id, (dirty = new Set()));
             }
             dirty.add(key);
             dirty.add(storeFieldName);
             invalidated = true;
           } else if (value !== copyOrCurrent || (!useRef && !isEqual(value, d))) {
-            payload[key] = (isReference(value) ? getSnapshot(value.__ref).data : value) as JsonValue;
+            warnAboutModifiedValue(value);
+            payload[key] = (isReference(value) ? (getSnapshot(value.__ref)?.data ?? value) : value) as JsonValue;
             modified = true;
           }
         }
       }
-      if (
-        keys.length !== 0 && keys.length === deleted.size && keys.every(key => deleted.has(key))
-      ) {
+      if (keys.length !== 0 && keys.length === deleted.size && keys.every(key => deleted.has(key))) {
         allDeleted = true;
         modified = true;
       }
@@ -451,9 +693,11 @@ export class CacheTransaction<TSerialized> implements Queryable {
           const useRef = k?.includes('❖');
           const copyOrCurrent = Array.isArray(d)
             ? Array.prototype.slice.call(d)
-            : useRef ? { __ref: k } : typeof d === 'object'
-              ? { ...d }
-              : d;
+            : useRef
+              ? parameterizedFieldValue(k!, d)
+              : typeof d === 'object'
+                ? { ...d }
+                : d;
           details.fieldName = key;
           details.storeFieldName = storeFieldName;
           const value = field(copyOrCurrent, details);
@@ -464,13 +708,15 @@ export class CacheTransaction<TSerialized> implements Queryable {
             this._editedNodeIds.add(id);
             let dirty = this._context.dirty.get(id);
             if (!dirty) {
-              this._context.dirty.set(id, dirty = new Set());
+              this._context.dirty.set(id, (dirty = new Set()));
             }
             dirty.add(key);
             dirty.add(storeFieldName);
             invalidated = true;
           } else if (value !== copyOrCurrent || (!useRef && !isEqual(value, d))) {
-            const nextValue = isReference(value) ? getSnapshot(value.__ref).data : value;
+            warnAboutModifiedValue(value);
+            // A reference to a missing entity is written as such (and dangles).
+            const nextValue = isReference(value) ? (getSnapshot(value.__ref)?.data ?? value) : value;
             if (nextValue !== undefined) {
               payload[key] = nextValue as JsonValue;
             }
@@ -478,8 +724,13 @@ export class CacheTransaction<TSerialized> implements Queryable {
           }
         }
       }
+      // Deleting the last fields of ROOT_QUERY keeps the node, like the
+      // ROOT_QUERY of InMemoryCache, which keeps its __typename.
       if (
-        keys.length !== 0 && keys.length === deleted.size && keys.every(key => deleted.has(key))
+        id !== StaticNodeId.QueryRoot &&
+        keys.length !== 0 &&
+        keys.length === deleted.size &&
+        keys.every(key => deleted.has(key))
       ) {
         allDeleted = true;
         modified = true;
@@ -489,7 +740,10 @@ export class CacheTransaction<TSerialized> implements Queryable {
       return false;
     }
 
+    // Modifier functions may have written to the cache (in this transaction);
+    // apply the modifications on top of those writes rather than dropping them.
     const current = this._snapshot;
+    graphSnapshot = optimistic ? current.optimistic : current.baseline;
 
     const editor = new SnapshotEditor(this._context, graphSnapshot);
     const empty = new Set<string>();
@@ -500,17 +754,17 @@ export class CacheTransaction<TSerialized> implements Queryable {
         editor.modify(mergeId, mergePayload, empty, seenObjects);
       }
     }
+    let delta: CacheDelta;
     if (allDeleted) {
       editor.delete(id);
-      if (options.optimistic) {
-        this._deltas.push({ delete: id });
-      }
+      delta = { delete: id };
     } else {
       const seenObjects = new Set<object | null>();
       editor.modify(id, payload, deleted, seenObjects);
-      if (options.optimistic) {
-        this._deltas.push({ id, payload, deleted });
-      }
+      delta = { id, payload, deleted };
+    }
+    if (optimistic) {
+      this._deltas.push(delta);
     }
     const newSnapshot = editor.commit();
     const { snapshot, editedNodeIds } = newSnapshot;
@@ -522,11 +776,14 @@ export class CacheTransaction<TSerialized> implements Queryable {
       }
     }
 
-    if (options.optimistic) {
-      this._snapshot = new CacheSnapshot(current.baseline, snapshot, current.optimisticQueue);
+    if (target === 'allLayers') {
+      const optimisticQueue = current.optimisticQueue.appendToAll([delta]);
+      this._setCurrentSnapshot(new CacheSnapshot(current.baseline, snapshot, optimisticQueue));
+    } else if (optimistic) {
+      this._setCurrentSnapshot(new CacheSnapshot(current.baseline, snapshot, current.optimisticQueue));
     } else {
       const optimistic = this._buildOptimisticSnapshot(snapshot);
-      this._snapshot = new CacheSnapshot(snapshot, optimistic, current.optimisticQueue);
+      this._setCurrentSnapshot(new CacheSnapshot(snapshot, optimistic, current.optimisticQueue));
     }
 
     return modified;
@@ -554,20 +811,161 @@ export class CacheTransaction<TSerialized> implements Queryable {
     }
 
     const optimistic = this._buildOptimisticSnapshot(snapshot);
-    this._snapshot = new CacheSnapshot(snapshot, optimistic, current.optimisticQueue);
+    this._setCurrentSnapshot(new CacheSnapshot(snapshot, optimistic, current.optimisticQueue));
   }
 
   evict(options: CacheInterface.EvictOptions): boolean {
+    // Like InMemoryCache, only a missing id means ROOT_QUERY; other falsy ids match nothing.
+    if ('id' in options && !options.id) return false;
+    // Evicting one argument variant of a field removes just that stored value.
+    if (options.fieldName && options.args) {
+      const nodeId = nodeIdForParameterizedValue(options.id ?? 'ROOT_QUERY', [options.fieldName], options.args);
+      return this.batchEvict([nodeId]);
+    }
     const modifier: Modifier<any> = (_current, details) => {
       return details.DELETE;
     };
-    return this.modify({
+    const modifyOptions: CacheInterface.ModifyOptions = {
       id: options.id ?? 'ROOT_QUERY',
-      fields: options.fieldName ? {
-        [options.fieldName]: modifier,
-      } : modifier,
+      fields: options.fieldName
+        ? {
+            [options.fieldName]: modifier,
+          }
+        : modifier,
       broadcast: options.broadcast,
-    });
+    };
+    // Like InMemoryCache, an optimistic transaction evicts from its own layer
+    // only; otherwise data is evicted from the baseline and every layer.
+    if (this._optimisticChangeId) return this._modify(modifyOptions, 'layer');
+    const evicted = this._modify(modifyOptions, 'baseline');
+    if (!this._snapshot.optimisticQueue.hasUpdates()) return evicted;
+    return this._modify(modifyOptions, 'allLayers') || evicted;
   }
 
+  /**
+   * Evicts several entities with one snapshot edit, where evict() makes one
+   * per entity. Like evict(), it skips ids that are not in the cache.
+   *
+   * Each entity is removed whole. evict() instead keeps the fields it cannot
+   * match to a stored field name, such as a null field that also has a
+   * parameterized variant.
+   *
+   * Unless fromLayers is false, the entities are also evicted from any
+   * optimistic updates (so they cannot reappear when those are re-applied).
+   *
+   * Returns whether any entity was evicted.
+   */
+  batchEvict(ids: Iterable<NodeId>, fromLayers = true): boolean {
+    const idList = Array.from(ids);
+    // Like evict(), an optimistic transaction evicts from its own layer only.
+    if (this._optimisticChangeId) return this._batchEvict(idList, 'layer');
+    const evicted = this._batchEvict(idList, 'baseline');
+    if (!fromLayers || !this._snapshot.optimisticQueue.hasUpdates()) return evicted;
+    return this._batchEvict(idList, 'allLayers') || evicted;
+  }
+
+  private _batchEvict(ids: NodeId[], target: 'baseline' | 'layer' | 'allLayers'): boolean {
+    const current = this._snapshot;
+    const graphSnapshot = target === 'baseline' ? current.baseline : current.optimistic;
+    const evictedIds = new Set<NodeId>();
+    for (const id of ids) {
+      if (graphSnapshot.getNodeSnapshot(id)) {
+        evictedIds.add(id);
+      }
+    }
+    if (!evictedIds.size) {
+      return false;
+    }
+
+    const editor = new SnapshotEditor(this._context, graphSnapshot);
+    for (const id of evictedIds) {
+      editor.delete(id);
+    }
+    // The same commit steps as modify() takes for a non-optimistic evict.
+    const { snapshot, editedNodeIds } = editor.commit();
+    addToSet(this._editedNodeIds, editedNodeIds);
+    const edited = Array.from(editedNodeIds);
+    for (const [key, val] of snapshot.readCache) {
+      if (evictedIds.has(key.rootId) || edited.some(cachedId => val.entityIds?.has(cachedId))) {
+        snapshot.readCache.delete(key);
+      }
+    }
+
+    if (target === 'baseline') {
+      const optimistic = this._buildOptimisticSnapshot(snapshot);
+      this._setCurrentSnapshot(new CacheSnapshot(snapshot, optimistic, current.optimisticQueue));
+    } else {
+      const deltas: CacheDelta[] = Array.from(evictedIds, id => ({ delete: id }));
+      let { optimisticQueue } = current;
+      if (target === 'layer') {
+        this._deltas.push(...deltas);
+      } else {
+        optimisticQueue = optimisticQueue.appendToAll(deltas);
+      }
+      this._setCurrentSnapshot(new CacheSnapshot(current.baseline, snapshot, optimisticQueue));
+    }
+
+    return true;
+  }
+}
+
+/**
+ * Records the top-level fields of a node that differ between two snapshots.
+ */
+function addChangedFields(
+  previous: GraphSnapshot,
+  next: GraphSnapshot,
+  id: NodeId,
+  changedFields: Map<NodeId, Set<string>>,
+) {
+  if (previous === next) return;
+  const prevNode = previous.getNodeSnapshot(id);
+  const nextNode = next.getNodeSnapshot(id);
+  if (prevNode === nextNode) return;
+
+  let fields = changedFields.get(id);
+  if (!fields) changedFields.set(id, (fields = new Set()));
+
+  const prevData = (isObject(prevNode?.data) ? prevNode!.data : {}) as JsonObject;
+  const nextData = (isObject(nextNode?.data) ? nextNode!.data : {}) as JsonObject;
+  for (const key of new Set([...Object.keys(prevData), ...Object.keys(nextData)])) {
+    if (prevData[key] !== nextData[key] && !isEqual(prevData[key], nextData[key])) fields.add(key);
+  }
+
+  // References are stored outside of the data; parameterized fields are
+  // separate nodes, which may have changed themselves (edits to those alone
+  // count as edits to the parameterized nodes, not to this one).
+  if (prevNode?.outbound === nextNode?.outbound && prevNode?.parameterized === nextNode?.parameterized) return;
+  const prevRefs = referencesByField(previous, prevNode);
+  const nextRefs = referencesByField(next, nextNode);
+  for (const key of new Set([...prevRefs.keys(), ...nextRefs.keys()])) {
+    const prevField = prevRefs.get(key);
+    const nextField = nextRefs.get(key);
+    if (
+      !prevField ||
+      !nextField ||
+      prevField.length !== nextField.length ||
+      prevField.some((value, index) => value !== nextField[index])
+    ) {
+      fields.add(key);
+    }
+  }
+}
+
+function referencesByField(snapshot: GraphSnapshot, node: NodeSnapshot | undefined) {
+  const refs = new Map<string, unknown[]>();
+  const add = (key: unknown, value: unknown) => {
+    const field = String(key);
+    const values = refs.get(field);
+    if (values) values.push(value);
+    else refs.set(field, [value]);
+  };
+  node?.outbound?.forEach(({ id, path }) => add(path[0], id));
+  node?.parameterized?.forEach(list =>
+    list.forEach(({ id, path }) => {
+      add(path[0], id);
+      add(path[0], snapshot.getNodeSnapshot(id));
+    }),
+  );
+  return refs;
 }

@@ -22,7 +22,7 @@ const query: DocumentNode = gql`
 
 interface Data {
   allPeople: {
-    people: { name: string }[],
+    people: { name: string }[];
   };
 }
 
@@ -59,18 +59,16 @@ describe('graphql(mutation)', () => {
     render(
       <ApolloProvider client={client}>
         <ContainerWithData />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
   });
 
   it('binds a mutation result to props', () => {
     type InjectedProps = {
-      result: any,
+      result: any;
     };
 
-    const ContainerWithData = graphql<{}, Data, Variables, InjectedProps>(
-      query
-    )(({ result }) => {
+    const ContainerWithData = graphql<{}, Data, Variables, InjectedProps>(query)(({ result }) => {
       const { loading, error } = result;
       expect(result).toBeTruthy();
       expect(typeof loading).toBe('boolean');
@@ -82,7 +80,7 @@ describe('graphql(mutation)', () => {
     render(
       <ApolloProvider client={client}>
         <ContainerWithData />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
   });
 
@@ -90,14 +88,14 @@ describe('graphql(mutation)', () => {
     interface Props {}
 
     type InjectedProps = {
-      customMutation: any,
-      customMutationResult: any,
+      customMutation: any;
+      customMutationResult: any;
     };
 
-    const ContainerWithData = graphql<Props, Data, Variables, InjectedProps>(
-      query,
-      { name: 'customMutation' }
-    )(({ customMutation, customMutationResult }) => {
+    const ContainerWithData = graphql<Props, Data, Variables, InjectedProps>(query, { name: 'customMutation' })(({
+      customMutation,
+      customMutationResult,
+    }) => {
       expect(customMutation).toBeTruthy();
       expect(customMutationResult).toBeTruthy();
       expect(typeof customMutation).toBe('function');
@@ -108,7 +106,7 @@ describe('graphql(mutation)', () => {
     render(
       <ApolloProvider client={client}>
         <ContainerWithData />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
   });
 
@@ -117,17 +115,13 @@ describe('graphql(mutation)', () => {
       methodName: string;
     }
     type InjectedProps = {
-      [name: string]: (name: string) => void,
+      [name: string]: (name: string) => void;
     };
-    const ContainerWithData = graphql<Props, Data, Variables, InjectedProps>(
-      query,
-      {
-        props: ({ ownProps, mutate: addPerson }) => ({
-          [ownProps.methodName]: (name: string) =>
-            addPerson!({ variables: { name } }),
-        }),
-      }
-    )(({ myInjectedMutationMethod }) => {
+    const ContainerWithData = graphql<Props, Data, Variables, InjectedProps>(query, {
+      props: ({ ownProps, mutate: addPerson }) => ({
+        [ownProps.methodName]: (name: string) => addPerson!({ variables: { name } }),
+      }),
+    })(({ myInjectedMutationMethod }) => {
       expect(myInjectedMutationMethod).toBeTruthy();
       expect(typeof myInjectedMutationMethod).toBe('function');
       return null;
@@ -136,7 +130,7 @@ describe('graphql(mutation)', () => {
     render(
       <ApolloProvider client={client}>
         <ContainerWithData methodName='myInjectedMutationMethod' />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
   });
 
@@ -164,7 +158,7 @@ describe('graphql(mutation)', () => {
         <ErrorBoundary>
           <ContainerWithData />
         </ErrorBoundary>
-      </ApolloProvider>
+      </ApolloProvider>,
     );
   });
 
@@ -172,7 +166,7 @@ describe('graphql(mutation)', () => {
     const Container = graphql(query)(
       class extends React.Component<ChildProps> {
         componentDidMount() {
-          this.props.mutate!().then((result) => {
+          this.props.mutate!().then(result => {
             expect(result && result.data).toEqual(expectedData);
             resolve();
           });
@@ -181,113 +175,107 @@ describe('graphql(mutation)', () => {
         render() {
           return null;
         }
-      }
+      },
     );
 
     render(
       <ApolloProvider client={client}>
         <Container />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
   });
 
-  itAsync(
-    'can execute a mutation with variables from props',
-    (resolve, reject) => {
-      const queryWithVariables = gql`
-        mutation addPerson($first: Int) {
-          allPeople(first: $first) {
-            people {
-              name
-            }
+  itAsync('can execute a mutation with variables from props', (resolve, reject) => {
+    const queryWithVariables = gql`
+      mutation addPerson($first: Int) {
+        allPeople(first: $first) {
+          people {
+            name
           }
         }
-      `;
-      client = createMockClient(expectedData, queryWithVariables, {
-        first: 1,
-      });
-
-      interface Props {
-        first: number;
       }
+    `;
+    client = createMockClient(expectedData, queryWithVariables, {
+      first: 1,
+    });
 
-      const Container = graphql<Props>(queryWithVariables)(
-        class extends React.Component<ChildProps<Props>> {
-          componentDidMount() {
-            this.props.mutate!().then((result) => {
-              expect(result && result.data).toEqual(expectedData);
-              resolve();
-            });
-          }
-
-          render() {
-            return null;
-          }
-        }
-      );
-
-      render(
-        <ApolloProvider client={client}>
-          <Container first={1} />
-        </ApolloProvider>
-      );
+    interface Props {
+      first: number;
     }
-  );
 
-  itAsync(
-    'can execute a mutation with variables from BOTH options and arguments',
-    (resolve, reject) => {
-      const queryWithVariables = gql`
-        mutation addPerson($first: Int!, $second: Int!) {
-          allPeople(first: $first) {
-            people {
-              name
-            }
+    const Container = graphql<Props>(queryWithVariables)(
+      class extends React.Component<ChildProps<Props>> {
+        componentDidMount() {
+          this.props.mutate!().then(result => {
+            expect(result && result.data).toEqual(expectedData);
+            resolve();
+          });
+        }
+
+        render() {
+          return null;
+        }
+      },
+    );
+
+    render(
+      <ApolloProvider client={client}>
+        <Container first={1} />
+      </ApolloProvider>,
+    );
+  });
+
+  itAsync('can execute a mutation with variables from BOTH options and arguments', (resolve, reject) => {
+    const queryWithVariables = gql`
+      mutation addPerson($first: Int!, $second: Int!) {
+        allPeople(first: $first) {
+          people {
+            name
           }
         }
-      `;
+      }
+    `;
 
-      const mocks = [
-        {
-          request: {
-            query: queryWithVariables,
-            variables: {
-              first: 1,
-              second: 2,
-            },
+    const mocks = [
+      {
+        request: {
+          query: queryWithVariables,
+          variables: {
+            first: 1,
+            second: 2,
           },
-          result: { data: expectedData },
         },
-      ];
+        result: { data: expectedData },
+      },
+    ];
 
-      interface Props {}
+    interface Props {}
 
-      const Container = graphql<Props>(queryWithVariables, {
-        options: () => ({
-          variables: { first: 1 },
-        }),
-      })(
-        class extends React.Component<ChildProps<Props>> {
-          componentDidMount() {
-            this.props.mutate!({
-              variables: { second: 2 },
-            }).then((result) => {
-              expect(result && result.data).toEqual(expectedData);
-              resolve();
-            });
-          }
-
-          render() {
-            return null;
-          }
+    const Container = graphql<Props>(queryWithVariables, {
+      options: () => ({
+        variables: { first: 1 },
+      }),
+    })(
+      class extends React.Component<ChildProps<Props>> {
+        componentDidMount() {
+          this.props.mutate!({
+            variables: { second: 2 },
+          }).then(result => {
+            expect(result && result.data).toEqual(expectedData);
+            resolve();
+          });
         }
-      );
 
-      render(
-        <MockedProvider mocks={mocks}>
-          <Container />
-        </MockedProvider>
-      );
-    }
-  );
+        render() {
+          return null;
+        }
+      },
+    );
+
+    render(
+      <MockedProvider mocks={mocks}>
+        <Container />
+      </MockedProvider>,
+    );
+  });
 });

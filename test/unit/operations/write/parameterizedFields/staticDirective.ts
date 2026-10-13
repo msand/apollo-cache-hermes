@@ -7,14 +7,11 @@ import { query, strictConfig } from '../../../../helpers';
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.write`, () => {
-
   const context = new CacheContext(strictConfig);
   const empty = new GraphSnapshot();
 
   describe(`with @static`, () => {
-
     describe(`with @static fields`, () => {
-
       const staticQuery = query(`{
         todos {
           id
@@ -68,9 +65,6 @@ describe(`operations.write`, () => {
       it(`does not create parameterized field nodes`, () => {
         jestExpect(snapshot.allNodeIds()).toEqual(jestExpect.arrayContaining([QueryRootId, '1']));
       });
-
     });
-
   });
-
 });

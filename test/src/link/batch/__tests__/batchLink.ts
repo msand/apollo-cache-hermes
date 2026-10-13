@@ -6,12 +6,7 @@ import { execute } from '../../core';
 import { Operation, FetchResult, GraphQLRequest } from '../../core/types';
 import { Observable } from '../../../utilities';
 import { itAsync } from '../../../testing';
-import {
-  BatchLink,
-  OperationBatcher,
-  BatchHandler,
-  BatchableRequest,
-} from '../batchLink';
+import { BatchLink, OperationBatcher, BatchHandler, BatchableRequest } from '../batchLink';
 
 interface MockedResponse {
   request: GraphQLRequest;
@@ -61,9 +56,9 @@ function createOperation(starting: any, operation: GraphQLRequest): Operation {
 function terminatingCheck<TArgs extends any[]>(
   resolve: () => any,
   reject: (e: any) => any,
-  callback: (...args: TArgs) => any
+  callback: (...args: TArgs) => any,
 ) {
-  return function() {
+  return function () {
     try {
       // @ts-expect-error
       callback.apply(this, arguments);
@@ -75,8 +70,7 @@ function terminatingCheck<TArgs extends any[]>(
 }
 
 function requestToKey(request: GraphQLRequest): string {
-  const queryString
-    = typeof request.query === 'string' ? request.query : print(request.query);
+  const queryString = typeof request.query === 'string' ? request.query : print(request.query);
 
   return JSON.stringify({
     variables: request.variables || {},
@@ -88,24 +82,22 @@ function createMockBatchHandler(...mockedResponses: MockedResponse[]) {
   const mockedResponsesByKey: { [key: string]: MockedResponse[] } = {};
 
   const mockBatchHandler: BatchHandler = (operations: Operation[]) => {
-    return new Observable((observer) => {
-      const results = operations.map((operation) => {
+    return new Observable(observer => {
+      const results = operations.map(operation => {
         const key = requestToKey(operation);
         const responses = mockedResponsesByKey[key];
         if (!responses || responses.length === 0) {
           throw new Error(
             `No more mocked responses for the query: ${print(
-              operation.query
-            )}, variables: ${JSON.stringify(operation.variables)}`
+              operation.query,
+            )}, variables: ${JSON.stringify(operation.variables)}`,
           );
         }
 
         const { result, error } = responses.shift()!;
 
         if (!result && !error) {
-          throw new Error(
-            `Mocked response should contain either result or error: ${key}`
-          );
+          throw new Error(`Mocked response should contain either result or error: ${key}`);
         }
 
         if (error) {
@@ -119,9 +111,7 @@ function createMockBatchHandler(...mockedResponses: MockedResponse[]) {
     });
   };
 
-  (mockBatchHandler as any).addMockedResponse = (
-    mockedResponse: MockedResponse
-  ) => {
+  (mockBatchHandler as any).addMockedResponse = (mockedResponse: MockedResponse) => {
     const key = requestToKey(mockedResponse.request);
     let _mockedResponses = mockedResponsesByKey[key];
     if (!_mockedResponses) {
@@ -213,108 +203,100 @@ describe('OperationBatcher', () => {
       {
         request: { query },
         result: { data },
-      }
+      },
     );
     const operation: Operation = createOperation(
       {},
       {
         query,
-      }
+      },
     );
 
-    itAsync(
-      'should be able to consume from a queue containing a single query',
-      (resolve, reject) => {
-        const myBatcher = new OperationBatcher({
-          batchInterval: 10,
-          batchHandler,
-        });
+    itAsync('should be able to consume from a queue containing a single query', (resolve, reject) => {
+      const myBatcher = new OperationBatcher({
+        batchInterval: 10,
+        batchHandler,
+      });
 
-        myBatcher.enqueueRequest({ operation }).subscribe(
-          terminatingCheck(resolve, reject, (resultObj: any) => {
-            expect(myBatcher['batchesByKey'].get('')).toBeUndefined();
-            expect(resultObj).toEqual({ data });
-          })
-        );
-        const observables: (Observable<FetchResult> | undefined)[]
-          = myBatcher.consumeQueue()!;
-
-        try {
-          expect(observables.length).toBe(1);
-        } catch (e) {
-          reject(e);
-        }
-      }
-    );
-
-    itAsync(
-      'should be able to consume from a queue containing multiple queries',
-      (resolve, reject) => {
-        const request2: Operation = createOperation(
-          {},
-          {
-            query,
-          }
-        );
-
-        const BH = createMockBatchHandler(
-          {
-            request: { query },
-            result: { data },
-          },
-          {
-            request: { query },
-            result: { data },
-          }
-        );
-
-        const myBatcher = new OperationBatcher({
-          batchInterval: 10,
-          batchMax: 10,
-          batchHandler: BH,
-        });
-        const observable1 = myBatcher.enqueueRequest({ operation });
-        const observable2 = myBatcher.enqueueRequest({ operation: request2 });
-        let notify = false;
-        observable1.subscribe((resultObj1) => {
-          try {
-            expect(resultObj1).toEqual({ data });
-          } catch (e) {
-            reject(e);
-          }
-
-          if (notify) {
-            resolve();
-          } else {
-            notify = true;
-          }
-        });
-
-        observable2.subscribe((resultObj2) => {
-          try {
-            expect(resultObj2).toEqual({ data });
-          } catch (e) {
-            reject(e);
-          }
-
-          if (notify) {
-            resolve();
-          } else {
-            notify = true;
-          }
-        });
-
-        try {
-          expect(myBatcher['batchesByKey'].get('')!.size).toBe(2);
-          const observables: (Observable<FetchResult> | undefined)[]
-            = myBatcher.consumeQueue()!;
+      myBatcher.enqueueRequest({ operation }).subscribe(
+        terminatingCheck(resolve, reject, (resultObj: any) => {
           expect(myBatcher['batchesByKey'].get('')).toBeUndefined();
-          expect(observables.length).toBe(2);
+          expect(resultObj).toEqual({ data });
+        }),
+      );
+      const observables: (Observable<FetchResult> | undefined)[] = myBatcher.consumeQueue()!;
+
+      try {
+        expect(observables.length).toBe(1);
+      } catch (e) {
+        reject(e);
+      }
+    });
+
+    itAsync('should be able to consume from a queue containing multiple queries', (resolve, reject) => {
+      const request2: Operation = createOperation(
+        {},
+        {
+          query,
+        },
+      );
+
+      const BH = createMockBatchHandler(
+        {
+          request: { query },
+          result: { data },
+        },
+        {
+          request: { query },
+          result: { data },
+        },
+      );
+
+      const myBatcher = new OperationBatcher({
+        batchInterval: 10,
+        batchMax: 10,
+        batchHandler: BH,
+      });
+      const observable1 = myBatcher.enqueueRequest({ operation });
+      const observable2 = myBatcher.enqueueRequest({ operation: request2 });
+      let notify = false;
+      observable1.subscribe(resultObj1 => {
+        try {
+          expect(resultObj1).toEqual({ data });
         } catch (e) {
           reject(e);
         }
+
+        if (notify) {
+          resolve();
+        } else {
+          notify = true;
+        }
+      });
+
+      observable2.subscribe(resultObj2 => {
+        try {
+          expect(resultObj2).toEqual({ data });
+        } catch (e) {
+          reject(e);
+        }
+
+        if (notify) {
+          resolve();
+        } else {
+          notify = true;
+        }
+      });
+
+      try {
+        expect(myBatcher['batchesByKey'].get('')!.size).toBe(2);
+        const observables: (Observable<FetchResult> | undefined)[] = myBatcher.consumeQueue()!;
+        expect(myBatcher['batchesByKey'].get('')).toBeUndefined();
+        expect(observables.length).toBe(2);
+      } catch (e) {
+        reject(e);
       }
-    );
+    });
 
     itAsync(
       'should be able to consume from a queue containing multiple queries with different batch keys',
@@ -326,7 +308,7 @@ describe('OperationBatcher', () => {
           {},
           {
             query,
-          }
+          },
         );
 
         const BH = createMockBatchHandler(
@@ -337,7 +319,7 @@ describe('OperationBatcher', () => {
           {
             request: { query },
             result: { data },
-          }
+          },
         );
 
         let key = true;
@@ -357,7 +339,7 @@ describe('OperationBatcher', () => {
         const observable2 = myBatcher.enqueueRequest({ operation: request2 });
 
         let notify = false;
-        observable1.subscribe((resultObj1) => {
+        observable1.subscribe(resultObj1 => {
           try {
             expect(resultObj1).toEqual({ data });
           } catch (e) {
@@ -371,7 +353,7 @@ describe('OperationBatcher', () => {
           }
         });
 
-        observable2.subscribe((resultObj2) => {
+        observable2.subscribe(resultObj2 => {
           try {
             expect(resultObj2).toEqual({ data });
           } catch (e) {
@@ -386,29 +368,26 @@ describe('OperationBatcher', () => {
         });
 
         jest.runAllTimers();
-      }
+      },
     );
 
-    itAsync(
-      'should return a promise when we enqueue a request and resolve it with a result',
-      (resolve, reject) => {
-        const BH = createMockBatchHandler({
-          request: { query },
-          result: { data },
-        });
-        const myBatcher = new OperationBatcher({
-          batchInterval: 10,
-          batchHandler: BH,
-        });
-        const observable = myBatcher.enqueueRequest({ operation });
-        observable.subscribe(
-          terminatingCheck(resolve, reject, (result: any) => {
-            expect(result).toEqual({ data });
-          })
-        );
-        myBatcher.consumeQueue();
-      }
-    );
+    itAsync('should return a promise when we enqueue a request and resolve it with a result', (resolve, reject) => {
+      const BH = createMockBatchHandler({
+        request: { query },
+        result: { data },
+      });
+      const myBatcher = new OperationBatcher({
+        batchInterval: 10,
+        batchHandler: BH,
+      });
+      const observable = myBatcher.enqueueRequest({ operation });
+      observable.subscribe(
+        terminatingCheck(resolve, reject, (result: any) => {
+          expect(result).toEqual({ data });
+        }),
+      );
+      myBatcher.consumeQueue();
+    });
 
     itAsync('should be able to debounce requests', (resolve, reject) => {
       const batchInterval = 10;
@@ -436,7 +415,7 @@ describe('OperationBatcher', () => {
       // not set, the original 3 requests would have fired, but we expect
       // instead that the queries will instead fire at
       // (batchInterval + batchInterval / 2).
-      jest.advanceTimersByTime((batchInterval / 2) + 1);
+      jest.advanceTimersByTime(batchInterval / 2 + 1);
       expect(myBatcher['batchesByKey'].get('')!.size).toEqual(4);
 
       // 5. Finally, run the timer to (batchInterval + batchInterval / 2) +1,
@@ -455,7 +434,7 @@ describe('OperationBatcher', () => {
     const batcher = new OperationBatcher({
       batchInterval: 10,
       batchHandler: () =>
-        new Observable((observer) => {
+        new Observable(observer => {
           observer.next([{ data }]);
           setTimeout(observer.complete.bind(observer));
         }),
@@ -481,140 +460,127 @@ describe('OperationBatcher', () => {
       terminatingCheck(resolve, reject, () => {
         expect(batcher['batchesByKey'].get('')).toBeUndefined();
       }),
-      20
+      20,
     );
 
     jest.runAllTimers();
   });
 
-  itAsync(
-    'should cancel single query in queue when unsubscribing',
-    (resolve, reject) => {
-      const data = {
-        lastName: 'Ever',
-        firstName: 'Greatest',
-      };
+  itAsync('should cancel single query in queue when unsubscribing', (resolve, reject) => {
+    const data = {
+      lastName: 'Ever',
+      firstName: 'Greatest',
+    };
 
-      const batcher = new OperationBatcher({
-        batchInterval: 10,
-        batchHandler: () =>
-          new Observable((observer) => {
-            observer.next([{ data }]);
-            setTimeout(observer.complete.bind(observer));
-          }),
-      });
+    const batcher = new OperationBatcher({
+      batchInterval: 10,
+      batchHandler: () =>
+        new Observable(observer => {
+          observer.next([{ data }]);
+          setTimeout(observer.complete.bind(observer));
+        }),
+    });
 
-      const query = gql`
-        query {
-          author {
-            firstName
-            lastName
-          }
+    const query = gql`
+      query {
+        author {
+          firstName
+          lastName
         }
-      `;
+      }
+    `;
 
-      batcher
-        .enqueueRequest({
-          operation: createOperation({}, { query }),
-        })
-        .subscribe(() => reject('next should never be called'))
-        .unsubscribe();
+    batcher
+      .enqueueRequest({
+        operation: createOperation({}, { query }),
+      })
+      .subscribe(() => reject('next should never be called'))
+      .unsubscribe();
 
-      expect(batcher['batchesByKey'].get('')).toBeUndefined();
-      resolve();
-    }
-  );
+    expect(batcher['batchesByKey'].get('')).toBeUndefined();
+    resolve();
+  });
 
-  itAsync(
-    'should cancel single query in queue with multiple subscriptions',
-    (resolve, reject) => {
-      const data = {
-        lastName: 'Ever',
-        firstName: 'Greatest',
-      };
-      const batcher = new OperationBatcher({
-        batchInterval: 10,
-        batchHandler: () =>
-          new Observable((observer) => {
-            observer.next([{ data }]);
-            setTimeout(observer.complete.bind(observer));
-          }),
-      });
-      const query = gql`
-        query {
-          author {
-            firstName
-            lastName
-          }
+  itAsync('should cancel single query in queue with multiple subscriptions', (resolve, reject) => {
+    const data = {
+      lastName: 'Ever',
+      firstName: 'Greatest',
+    };
+    const batcher = new OperationBatcher({
+      batchInterval: 10,
+      batchHandler: () =>
+        new Observable(observer => {
+          observer.next([{ data }]);
+          setTimeout(observer.complete.bind(observer));
+        }),
+    });
+    const query = gql`
+      query {
+        author {
+          firstName
+          lastName
         }
-      `;
-      const operation: Operation = createOperation({}, { query });
+      }
+    `;
+    const operation: Operation = createOperation({}, { query });
 
-      const observable = batcher.enqueueRequest({ operation });
+    const observable = batcher.enqueueRequest({ operation });
 
-      const checkQueuedRequests = (expectedSubscriberCount: number) => {
-        const batch = batcher['batchesByKey'].get('');
-        expect(batch).not.toBeUndefined();
-        expect(batch!.size).toBe(1);
-        batch!.forEach((request) => {
-          expect(request.subscribers.size).toBe(expectedSubscriberCount);
-        });
-      };
-
-      const sub1 = observable.subscribe(() =>
-        reject('next should never be called')
-      );
-      checkQueuedRequests(1);
-
-      const sub2 = observable.subscribe(() =>
-        reject('next should never be called')
-      );
-      checkQueuedRequests(2);
-
-      sub1.unsubscribe();
-      checkQueuedRequests(1);
-
-      sub2.unsubscribe();
-      expect(batcher['batchesByKey'].get('')).toBeUndefined();
-      resolve();
-    }
-  );
-
-  itAsync(
-    'should cancel single query in flight when unsubscribing',
-    (resolve, reject) => {
-      const batcher = new OperationBatcher({
-        batchInterval: 10,
-        batchHandler: () =>
-          new Observable(() => {
-            // Instead of typically starting an XHR, we trigger the unsubscription from outside
-            setTimeout(() => subscription?.unsubscribe(), 5);
-
-            return () => {
-              expect(batcher['batchesByKey'].get('')).toBeUndefined();
-              resolve();
-            };
-          }),
+    const checkQueuedRequests = (expectedSubscriberCount: number) => {
+      const batch = batcher['batchesByKey'].get('');
+      expect(batch).not.toBeUndefined();
+      expect(batch!.size).toBe(1);
+      batch!.forEach(request => {
+        expect(request.subscribers.size).toBe(expectedSubscriberCount);
       });
+    };
 
-      const query = gql`
-        query {
-          author {
-            firstName
-            lastName
-          }
+    const sub1 = observable.subscribe(() => reject('next should never be called'));
+    checkQueuedRequests(1);
+
+    const sub2 = observable.subscribe(() => reject('next should never be called'));
+    checkQueuedRequests(2);
+
+    sub1.unsubscribe();
+    checkQueuedRequests(1);
+
+    sub2.unsubscribe();
+    expect(batcher['batchesByKey'].get('')).toBeUndefined();
+    resolve();
+  });
+
+  itAsync('should cancel single query in flight when unsubscribing', (resolve, reject) => {
+    const batcher = new OperationBatcher({
+      batchInterval: 10,
+      batchHandler: () =>
+        new Observable(() => {
+          // Instead of typically starting an XHR, we trigger the unsubscription from outside
+          setTimeout(() => subscription?.unsubscribe(), 5);
+
+          return () => {
+            expect(batcher['batchesByKey'].get('')).toBeUndefined();
+            resolve();
+          };
+        }),
+    });
+
+    const query = gql`
+      query {
+        author {
+          firstName
+          lastName
         }
-      `;
+      }
+    `;
 
-      const subscription = batcher
-        .enqueueRequest({
-          operation: createOperation({}, { query }),
-        })
-        .subscribe(() => reject('next should never be called'));
+    const subscription = batcher
+      .enqueueRequest({
+        operation: createOperation({}, { query }),
+      })
+      .subscribe(() => reject('next should never be called'));
 
-      jest.runAllTimers();
-    }
-  );
+    jest.runAllTimers();
+  });
 
   itAsync('should correctly batch multiple queries', (resolve, reject) => {
     const data = {
@@ -628,7 +594,7 @@ describe('OperationBatcher', () => {
     const batcher = new OperationBatcher({
       batchInterval: 10,
       batchHandler: () =>
-        new Observable((observer) => {
+        new Observable(observer => {
           observer.next([{ data }, { data: data2 }, { data }]);
           setTimeout(observer.complete.bind(observer));
         }),
@@ -668,7 +634,7 @@ describe('OperationBatcher', () => {
         // The batch should've been fired by now.
         expect(batcher['batchesByKey'].get('')).toBeUndefined();
       }),
-      20
+      20,
     );
 
     jest.runAllTimers();
@@ -685,7 +651,7 @@ describe('OperationBatcher', () => {
       const batcher = new OperationBatcher({
         batchInterval: 10,
         batchHandler: () =>
-          new Observable((observer) => {
+          new Observable(observer => {
             observer.next([{ data: data2 }]);
             setTimeout(observer.complete.bind(observer));
           }),
@@ -704,10 +670,8 @@ describe('OperationBatcher', () => {
       const operation2: Operation = createOperation({}, { query });
       const operation3: Operation = createOperation({}, { query });
 
-      const sub1 = batcher
-        .enqueueRequest({ operation })
-        .subscribe(() => reject('next should never be called'));
-      batcher.enqueueRequest({ operation: operation2 }).subscribe((result) => {
+      const sub1 = batcher.enqueueRequest({ operation }).subscribe(() => reject('next should never be called'));
+      batcher.enqueueRequest({ operation: operation2 }).subscribe(result => {
         expect(result.data).toBe(data2);
 
         // The batch should've been fired by now.
@@ -733,40 +697,37 @@ describe('OperationBatcher', () => {
       }, 5);
 
       jest.runAllTimers();
-    }
+    },
   );
 
-  itAsync(
-    'should reject the promise if there is a network error',
-    (resolve, reject) => {
-      const query = gql`
-        query {
-          author {
-            firstName
-            lastName
-          }
+  itAsync('should reject the promise if there is a network error', (resolve, reject) => {
+    const query = gql`
+      query {
+        author {
+          firstName
+          lastName
         }
-      `;
-      const operation: Operation = createOperation({}, { query });
-      const error = new Error('Network error');
-      const BH = createMockBatchHandler({
-        request: { query },
-        error,
-      });
-      const batcher = new OperationBatcher({
-        batchInterval: 10,
-        batchHandler: BH,
-      });
+      }
+    `;
+    const operation: Operation = createOperation({}, { query });
+    const error = new Error('Network error');
+    const BH = createMockBatchHandler({
+      request: { query },
+      error,
+    });
+    const batcher = new OperationBatcher({
+      batchInterval: 10,
+      batchHandler: BH,
+    });
 
-      const observable = batcher.enqueueRequest({ operation });
-      observable.subscribe({
-        error: terminatingCheck(resolve, reject, (resError: Error) => {
-          expect(resError.message).toBe('Network error');
-        }),
-      });
-      batcher.consumeQueue();
-    }
-  );
+    const observable = batcher.enqueueRequest({ operation });
+    observable.subscribe({
+      error: terminatingCheck(resolve, reject, (resError: Error) => {
+        expect(resError.message).toBe('Network error');
+      }),
+    });
+    batcher.consumeQueue();
+  });
 });
 
 describe('BatchLink', () => {
@@ -777,9 +738,7 @@ describe('BatchLink', () => {
   `;
 
   it('does not need any constructor arguments', () => {
-    expect(
-      () => new BatchLink({ batchHandler: () => Observable.of() })
-    ).not.toThrow();
+    expect(() => new BatchLink({ batchHandler: () => Observable.of() })).not.toThrow();
   });
 
   itAsync('passes forward on', (resolve, reject) => {
@@ -797,7 +756,7 @@ describe('BatchLink', () => {
           return forward![0]!(operation[0]).map(result => [result]);
         },
       }),
-      new ApolloLink((operation) => {
+      new ApolloLink(operation => {
         terminatingCheck(resolve, reject, () => {
           expect(operation.query).toEqual(query);
         })();
@@ -811,16 +770,15 @@ describe('BatchLink', () => {
         {},
         {
           query,
-        }
-      )
+        },
+      ),
     ).subscribe(result => reject());
   });
 
   it('raises warning if terminating', () => {
     let calls = 0;
     const link_full = new BatchLink({
-      batchHandler: (operation, forward) =>
-        forward![0]!(operation[0]).map(r => [r]),
+      batchHandler: (operation, forward) => forward![0]!(operation[0]).map(r => [r]),
     });
     const link_one_op = new BatchLink({
       batchHandler: operation => Observable.of(),
@@ -834,25 +792,19 @@ describe('BatchLink', () => {
         expect.any(BatchLink),
       ]);
     };
-    expect(
-      link_one_op.concat((operation, forward) => forward(operation))
-    ).toEqual(link_one_op);
-    expect(
-      link_no_op.concat((operation, forward) => forward(operation))
-    ).toEqual(link_no_op);
+    expect(link_one_op.concat((operation, forward) => forward(operation))).toEqual(link_one_op);
+    expect(link_no_op.concat((operation, forward) => forward(operation))).toEqual(link_no_op);
     console.warn = (warning: any) => {
       throw Error('non-terminating link should not throw');
     };
-    expect(
-      link_full.concat((operation, forward) => forward(operation))
-    ).not.toEqual(link_full);
+    expect(link_full.concat((operation, forward) => forward(operation))).not.toEqual(link_full);
     console.warn = _warn;
     expect(calls).toBe(2);
   });
 
   itAsync('correctly uses batch size', (resolve, reject) => {
     const sizes = [1, 2, 3];
-    const terminating = new ApolloLink((operation) => {
+    const terminating = new ApolloLink(operation => {
       try {
         expect(operation.query).toEqual(query);
       } catch (e) {
@@ -873,7 +825,7 @@ describe('BatchLink', () => {
           reject(e);
         }
         const observables = forward.map((f: any, i: any) => f(operation[i]));
-        return new Observable((observer) => {
+        return new Observable(observer => {
           const data: any[] = [];
           observables.forEach((obs: any) =>
             obs.subscribe((d: any) => {
@@ -882,7 +834,7 @@ describe('BatchLink', () => {
                 observer.next(data);
                 observer.complete();
               }
-            })
+            }),
           );
         });
       }) as any;
@@ -901,7 +853,7 @@ describe('BatchLink', () => {
           query,
           variables: { count: i },
         }).subscribe({
-          next: (data) => {
+          next: data => {
             expect(data).toBe(i);
           },
           complete: () => {
@@ -954,10 +906,10 @@ describe('BatchLink', () => {
           {},
           {
             query,
-          }
-        )
+          },
+        ),
       ).subscribe({
-        next: (data) => {
+        next: data => {
           try {
             expect(data).toBe(42);
           } catch (e) {
@@ -969,14 +921,14 @@ describe('BatchLink', () => {
         },
       });
 
-      const delayedBatchInterval = async() => {
+      const delayedBatchInterval = async () => {
         await delay(batchInterval);
 
         const checkCalls = mock.mock.calls.slice(0, -1);
         try {
           expect(checkCalls.length).toBe(2);
           checkCalls.forEach(args => expect(args[0]).toBe(0));
-          expect(mock).lastCalledWith(1);
+          expect(mock).toHaveBeenLastCalledWith(1);
           expect(batchHandler.mock.calls.length).toBe(1);
         } catch (e) {
           reject(e);
@@ -995,97 +947,91 @@ describe('BatchLink', () => {
     runBatchInterval();
   });
 
-  itAsync(
-    'throws an error when more requests than results',
-    (resolve, reject) => {
-      const result = [{ data: {} }];
-      const batchHandler = jest.fn(op => Observable.of(result));
+  itAsync('throws an error when more requests than results', (resolve, reject) => {
+    const result = [{ data: {} }];
+    const batchHandler = jest.fn(op => Observable.of(result));
+
+    const link = ApolloLink.from([
+      new BatchLink({
+        batchInterval: 10,
+        batchMax: 2,
+        batchHandler,
+      }),
+    ]);
+
+    [1, 2].forEach(x => {
+      execute(link, {
+        query,
+      }).subscribe({
+        next: data => {
+          reject('next should not be called');
+        },
+        error: terminatingCheck(resolve, reject, (error: any) => {
+          expect(error).toBeDefined();
+          expect(error.result).toEqual(result);
+        }),
+        complete: () => {
+          reject('complete should not be called');
+        },
+      });
+    });
+  });
+
+  describe('batchKey', () => {
+    itAsync('should allow different batches to be created separately', (resolve, reject) => {
+      const data = { data: {} };
+      const result = [data, data];
+
+      const batchHandler = jest.fn(op => {
+        try {
+          expect(op.length).toBe(2);
+        } catch (e) {
+          reject(e);
+        }
+        return Observable.of(result);
+      });
+      let key = true;
+      const batchKey = () => {
+        key = !key;
+        return `${!key}`;
+      };
 
       const link = ApolloLink.from([
         new BatchLink({
-          batchInterval: 10,
+          batchInterval: 1,
+          // if batchKey does not work, then the batch size would be 3
           batchMax: 2,
           batchHandler,
+          batchKey,
         }),
       ]);
 
-      [1, 2].forEach((x) => {
+      let count = 0;
+      [1, 2, 3, 4].forEach(() => {
         execute(link, {
           query,
         }).subscribe({
-          next: (data) => {
-            reject('next should not be called');
+          next: d => {
+            try {
+              expect(d).toEqual(data);
+            } catch (e) {
+              reject(e);
+            }
           },
-          error: terminatingCheck(resolve, reject, (error: any) => {
-            expect(error).toBeDefined();
-            expect(error.result).toEqual(result);
-          }),
+          error: reject,
           complete: () => {
-            reject('complete should not be called');
-          },
-        });
-      });
-    }
-  );
-
-  describe('batchKey', () => {
-    itAsync(
-      'should allow different batches to be created separately',
-      (resolve, reject) => {
-        const data = { data: {} };
-        const result = [data, data];
-
-        const batchHandler = jest.fn((op) => {
-          try {
-            expect(op.length).toBe(2);
-          } catch (e) {
-            reject(e);
-          }
-          return Observable.of(result);
-        });
-        let key = true;
-        const batchKey = () => {
-          key = !key;
-          return `${!key}`;
-        };
-
-        const link = ApolloLink.from([
-          new BatchLink({
-            batchInterval: 1,
-            // if batchKey does not work, then the batch size would be 3
-            batchMax: 2,
-            batchHandler,
-            batchKey,
-          }),
-        ]);
-
-        let count = 0;
-        [1, 2, 3, 4].forEach(() => {
-          execute(link, {
-            query,
-          }).subscribe({
-            next: (d) => {
+            count++;
+            if (count === 4) {
               try {
-                expect(d).toEqual(data);
+                expect(batchHandler.mock.calls.length).toBe(2);
+                resolve();
               } catch (e) {
                 reject(e);
               }
-            },
-            error: reject,
-            complete: () => {
-              count++;
-              if (count === 4) {
-                try {
-                  expect(batchHandler.mock.calls.length).toBe(2);
-                  resolve();
-                } catch (e) {
-                  reject(e);
-                }
-              }
-            },
-          });
+            }
+          },
         });
-      }
-    );
+      });
+    });
   });
 });

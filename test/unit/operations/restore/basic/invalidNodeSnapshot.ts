@@ -6,26 +6,27 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.restore`, () => {
   describe(`invalid NodeSnapshot type`, () => {
-
     it(`throws error when restore invalid NodeSnapshot type`, () => {
       jestExpect(() => {
         const cacheContext = createStrictCacheContext();
-        restore({
-          [QueryRootId]: {
-            type: Serializable.NodeSnapshotType.EntitySnapshot,
-            outbound: [{ id: '1', path: ['foo'] }],
-            data: { },
-          },
-          '1': {
-            // @ts-ignore
-            type: -1,
-            data: {
-              INVALID: 42,
+        restore(
+          {
+            [QueryRootId]: {
+              type: Serializable.NodeSnapshotType.EntitySnapshot,
+              outbound: [{ id: '1', path: ['foo'] }],
+              data: {},
+            },
+            '1': {
+              // @ts-ignore
+              type: -1,
+              data: {
+                INVALID: 42,
+              },
             },
           },
-        }, cacheContext);
+          cacheContext,
+        );
       }).toThrow(/Invalid Serializable.NodeSnapshotType/i);
     });
-
   });
 });

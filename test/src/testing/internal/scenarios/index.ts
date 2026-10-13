@@ -27,9 +27,9 @@ export function setupSimpleCase() {
 
 export interface VariablesCaseData {
   character: {
-    __typename: 'Character',
-    id: string,
-    name: string,
+    __typename: 'Character';
+    id: string;
+    name: string;
   };
 }
 
@@ -38,28 +38,25 @@ export interface VariablesCaseVariables {
 }
 
 export function setupVariablesCase() {
-  const query: TypedDocumentNode<VariablesCaseData, VariablesCaseVariables>
-    = gql`
-      query CharacterQuery($id: ID!) {
-        character(id: $id) {
-          id
-          name
-        }
+  const query: TypedDocumentNode<VariablesCaseData, VariablesCaseVariables> = gql`
+    query CharacterQuery($id: ID!) {
+      character(id: $id) {
+        id
+        name
       }
-    `;
+    }
+  `;
   const CHARACTERS = ['Spider-Man', 'Black Widow', 'Iron Man', 'Hulk'];
 
-  const mocks: MockedResponse<VariablesCaseData>[] = [...CHARACTERS].map(
-    (name, index) => ({
-      request: { query, variables: { id: String(index + 1) } },
-      result: {
-        data: {
-          character: { __typename: 'Character', id: String(index + 1), name },
-        },
+  const mocks: MockedResponse<VariablesCaseData>[] = [...CHARACTERS].map((name, index) => ({
+    request: { query, variables: { id: String(index + 1) } },
+    result: {
+      data: {
+        character: { __typename: 'Character', id: String(index + 1), name },
       },
-      delay: 20,
-    })
-  );
+    },
+    delay: 20,
+  }));
 
   return { mocks, query };
 }
@@ -79,15 +76,14 @@ export interface PaginatedCaseVariables {
 }
 
 export function setupPaginatedCase() {
-  const query: TypedDocumentNode<PaginatedCaseData, PaginatedCaseVariables>
-    = gql`
-      query LettersQuery($limit: Int, $offset: Int) {
-        letters(limit: $limit, offset: $offset) {
-          letter
-          position
-        }
+  const query: TypedDocumentNode<PaginatedCaseData, PaginatedCaseVariables> = gql`
+    query LettersQuery($limit: Int, $offset: Int) {
+      letters(limit: $limit, offset: $offset) {
+        letter
+        position
       }
-    `;
+    }
+  `;
 
   const data = 'ABCDEFGHIJKLMNOPQRSTUV'.split('').map((letter, index) => ({
     __typename: 'Letter',
@@ -95,11 +91,11 @@ export function setupPaginatedCase() {
     position: index + 1,
   }));
 
-  const link = new ApolloLink((operation) => {
+  const link = new ApolloLink(operation => {
     const { offset = 0, limit = 2 } = operation.variables;
     const letters = data.slice(offset, offset + limit);
 
-    return new Observable((observer) => {
+    return new Observable(observer => {
       setTimeout(() => {
         observer.next({ data: { letters } });
         observer.complete();

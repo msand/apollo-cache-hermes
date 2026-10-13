@@ -1,9 +1,6 @@
 import type { Operation } from '../core/index';
 
-export const selectURI = (
-  operation: Operation,
-  fallbackURI?: string | ((operation: Operation) => string)
-) => {
+export const selectURI = (operation: Operation, fallbackURI?: string | ((operation: Operation) => string)) => {
   const context = operation.getContext();
   const contextURI = context.uri;
 

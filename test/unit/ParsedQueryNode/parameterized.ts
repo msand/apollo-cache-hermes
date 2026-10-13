@@ -8,7 +8,6 @@ import { getOperationOrDie } from '../../../src/util';
 import { strictConfig } from '../../helpers';
 
 describe(`parseQuery with parameterized queries`, () => {
-
   const context = new CacheContext(strictConfig);
   function parseOperation(operationString: string) {
     const operation = getOperationOrDie(gql(operationString));
@@ -50,11 +49,21 @@ describe(`parseQuery with parameterized queries`, () => {
     `;
     expect(parseOperation(operation)).to.deep.eq({
       parsedQuery: {
-        foo: new ParsedQueryNode({
-          bar: new ParsedQueryNode({
-            baz: new ParsedQueryNode(undefined, undefined, { limit: new VariableArgument('count') }),
-          }, undefined, undefined, true),
-        }, undefined, undefined, true),
+        foo: new ParsedQueryNode(
+          {
+            bar: new ParsedQueryNode(
+              {
+                baz: new ParsedQueryNode(undefined, undefined, { limit: new VariableArgument('count') }),
+              },
+              undefined,
+              undefined,
+              true,
+            ),
+          },
+          undefined,
+          undefined,
+          true,
+        ),
       },
       variables: new Set(['count']),
     });
@@ -72,14 +81,22 @@ describe(`parseQuery with parameterized queries`, () => {
     `;
     expect(parseOperation(operation)).to.deep.eq({
       parsedQuery: {
-        foo: new ParsedQueryNode({
-          bar: new ParsedQueryNode<JsonScalar | VariableArgument>({
-            baz: new ParsedQueryNode(),
-          }, undefined, { limit: new VariableArgument('count') }),
-        }, undefined, undefined, true),
+        foo: new ParsedQueryNode(
+          {
+            bar: new ParsedQueryNode<JsonScalar | VariableArgument>(
+              {
+                baz: new ParsedQueryNode(),
+              },
+              undefined,
+              { limit: new VariableArgument('count') },
+            ),
+          },
+          undefined,
+          undefined,
+          true,
+        ),
       },
       variables: new Set(['count']),
     });
   });
-
 });

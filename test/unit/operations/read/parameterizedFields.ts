@@ -8,22 +8,22 @@ import { query, strictConfig } from '../../../helpers';
 const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.read`, () => {
-
   const context = new CacheContext(strictConfig);
   const empty = new GraphSnapshot();
-  const parameterizedQuery = query(`
+  const parameterizedQuery = query(
+    `
     query getAFoo($id: ID!) {
       user(id: $id, withExtra: true) {
         id name extra
       }
       stuff
     }
-  `, { id: 1 });
+  `,
+    { id: 1 },
+  );
 
   describe(`parameterized fields`, () => {
-
     describe(`with a complete cache`, () => {
-
       let snapshot: GraphSnapshot;
       beforeAll(() => {
         snapshot = write(context, empty, parameterizedQuery, {
@@ -42,20 +42,16 @@ describe(`operations.read`, () => {
 
       it(`returns the nodeIds visited during reading`, () => {
         const { entityIds, dynamicNodeIds } = read(context, parameterizedQuery, snapshot, Object.create(null), true);
-        jestExpect(Array.from(entityIds)).toEqual(jestExpect.arrayContaining([
-          QueryRootId,
-          '1',
-        ]));
-        jestExpect(Array.from(dynamicNodeIds!)).toEqual(jestExpect.arrayContaining([
-          nodeIdForParameterizedValue(QueryRootId, ['user'], { id: 1, withExtra: true }),
-        ]));
+        jestExpect(Array.from(entityIds)).toEqual(jestExpect.arrayContaining([QueryRootId, '1']));
+        jestExpect(Array.from(dynamicNodeIds!)).toEqual(
+          jestExpect.arrayContaining([nodeIdForParameterizedValue(QueryRootId, ['user'], { id: 1, withExtra: true })]),
+        );
       });
-
     });
 
     describe(`with nested fields`, () => {
-
-      const nestedQuery = query(`query nested($id: ID!) {
+      const nestedQuery = query(
+        `query nested($id: ID!) {
         one {
           two(id: $id) {
             id
@@ -66,10 +62,11 @@ describe(`operations.read`, () => {
             }
           }
         }
-      }`, { id: 1 });
+      }`,
+        { id: 1 },
+      );
 
       describe(`and a full store`, () => {
-
         let snapshot: GraphSnapshot;
         beforeAll(() => {
           snapshot = write(context, empty, nestedQuery, {
@@ -116,22 +113,18 @@ describe(`operations.read`, () => {
 
         it(`returns the nodeIds visited during reading`, () => {
           const { entityIds, dynamicNodeIds } = read(context, nestedQuery, snapshot, Object.create(null), true);
-          jestExpect(Array.from(entityIds)).toEqual(jestExpect.arrayContaining([
-            QueryRootId,
-            '1',
-            '2',
-          ]));
-          jestExpect(Array.from(dynamicNodeIds!)).toEqual(jestExpect.arrayContaining([
-            nodeIdForParameterizedValue(QueryRootId, ['one', 'two'], { id: 1 }),
-            nodeIdForParameterizedValue('1', ['three', 'four'], { extra: true }),
-            nodeIdForParameterizedValue('2', ['three', 'four'], { extra: true }),
-          ]));
+          jestExpect(Array.from(entityIds)).toEqual(jestExpect.arrayContaining([QueryRootId, '1', '2']));
+          jestExpect(Array.from(dynamicNodeIds!)).toEqual(
+            jestExpect.arrayContaining([
+              nodeIdForParameterizedValue(QueryRootId, ['one', 'two'], { id: 1 }),
+              nodeIdForParameterizedValue('1', ['three', 'four'], { extra: true }),
+              nodeIdForParameterizedValue('2', ['three', 'four'], { extra: true }),
+            ]),
+          );
         });
-
       });
 
       describe(`and an empty store`, () => {
-
         it(`doesn't recurse to nested fields if there are no values for their parent`, () => {
           const { result } = read(context, nestedQuery, empty);
           jestExpect(result).toEqual(undefined);
@@ -141,11 +134,9 @@ describe(`operations.read`, () => {
           const { complete } = read(context, nestedQuery, empty);
           jestExpect(complete).toBe(false);
         });
-
       });
 
       describe(`and an empty value`, () => {
-
         let snapshot: GraphSnapshot;
         beforeAll(() => {
           snapshot = write(context, empty, nestedQuery, {
@@ -177,11 +168,9 @@ describe(`operations.read`, () => {
             },
           });
         });
-
       });
 
       describe(`and a null container`, () => {
-
         let snapshot: GraphSnapshot;
         beforeAll(() => {
           snapshot = write(context, empty, nestedQuery, { one: null }).snapshot;
@@ -196,11 +185,9 @@ describe(`operations.read`, () => {
           const { complete } = read(context, nestedQuery, snapshot);
           jestExpect(complete).toBe(true);
         });
-
       });
 
       describe(`and a null root snapshot`, () => {
-
         let snapshot: GraphSnapshot;
         beforeAll(() => {
           snapshot = write(context, empty, nestedQuery, {
@@ -223,11 +210,9 @@ describe(`operations.read`, () => {
           const { complete } = read(context, nestedQuery, snapshot);
           jestExpect(complete).toBe(true);
         });
-
       });
 
       describe(`and a null intermediate node`, () => {
-
         let snapshot: GraphSnapshot;
         beforeAll(() => {
           snapshot = write(context, empty, nestedQuery, {
@@ -256,11 +241,9 @@ describe(`operations.read`, () => {
           const { complete } = read(context, nestedQuery, snapshot);
           jestExpect(complete).toBe(true);
         });
-
       });
 
       describe(`in an array with holes`, () => {
-
         let snapshot: GraphSnapshot;
         beforeAll(() => {
           snapshot = write(context, empty, nestedQuery, {
@@ -295,14 +278,12 @@ describe(`operations.read`, () => {
           const { complete } = read(context, nestedQuery, snapshot);
           jestExpect(complete).toBe(true);
         });
-
       });
-
     });
 
     describe(`with multi-dimensional array fields`, () => {
-
-      const nestedQuery = query(`query multiDimensional($id: ID!) {
+      const nestedQuery = query(
+        `query multiDimensional($id: ID!) {
         listOfLists {
           foo {
             stuff(id: $id) {
@@ -310,21 +291,17 @@ describe(`operations.read`, () => {
             }
           }
         }
-      }`, { id: 1 });
+      }`,
+        { id: 1 },
+      );
 
       let snapshot: GraphSnapshot;
 
       beforeAll(() => {
         snapshot = write(context, empty, nestedQuery, {
           listOfLists: [
-            [
-              { foo: { stuff: { bar: 1 } } },
-              { foo: { stuff: { bar: 2 } } },
-            ],
-            [
-              { foo: { stuff: { bar: 3 } } },
-              { foo: { stuff: { bar: 4 } } },
-            ],
+            [{ foo: { stuff: { bar: 1 } } }, { foo: { stuff: { bar: 2 } } }],
+            [{ foo: { stuff: { bar: 3 } } }, { foo: { stuff: { bar: 4 } } }],
           ],
         }).snapshot;
       });
@@ -333,22 +310,16 @@ describe(`operations.read`, () => {
         const { result } = read(context, nestedQuery, snapshot);
         jestExpect(result).toEqual({
           listOfLists: [
-            [
-              { foo: { stuff: { bar: 1 } } },
-              { foo: { stuff: { bar: 2 } } },
-            ],
-            [
-              { foo: { stuff: { bar: 3 } } },
-              { foo: { stuff: { bar: 4 } } },
-            ],
+            [{ foo: { stuff: { bar: 1 } } }, { foo: { stuff: { bar: 2 } } }],
+            [{ foo: { stuff: { bar: 3 } } }, { foo: { stuff: { bar: 4 } } }],
           ],
         });
       });
     });
 
     describe(`directly nested reference fields`, () => {
-
-      const nestedQuery = query(`
+      const nestedQuery = query(
+        `
       query nested($id: ID!) {
         one(id: $id) {
           id
@@ -356,7 +327,9 @@ describe(`operations.read`, () => {
             id
           }
         }
-      }`, { id: 1 });
+      }`,
+        { id: 1 },
+      );
 
       let snapshot: GraphSnapshot;
       beforeAll(() => {
@@ -377,12 +350,11 @@ describe(`operations.read`, () => {
           },
         });
       });
-
     });
 
     describe(`directly nested reference without any simple fields on the intermediate object`, () => {
-
-      const nestedQuery = query(`
+      const nestedQuery = query(
+        `
       query nested($id: ID!) {
         one(id: $id) {
           # Notice, no simple fields on one
@@ -390,7 +362,9 @@ describe(`operations.read`, () => {
             id
           }
         }
-      }`, { id: 1 });
+      }`,
+        { id: 1 },
+      );
 
       let snapshot: GraphSnapshot;
       beforeAll(() => {
@@ -409,11 +383,9 @@ describe(`operations.read`, () => {
           },
         });
       });
-
     });
 
     describe(`with a value of []`, () => {
-
       let snapshot: GraphSnapshot;
       beforeAll(() => {
         snapshot = write(context, empty, parameterizedQuery, {
@@ -429,13 +401,10 @@ describe(`operations.read`, () => {
           stuff: 123,
         });
       });
-
     });
-
   });
 
   describe(`with @static fields`, () => {
-
     const staticQuery = query(`{
       todos {
         id
@@ -507,7 +476,5 @@ describe(`operations.read`, () => {
 
       jestExpect(result1).toBe(result2);
     });
-
   });
-
 });

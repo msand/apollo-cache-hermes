@@ -29,7 +29,7 @@ export type ErrorMessageHandler = {
    *          A link to https://go.apollo.dev/c/err with Apollo Client version,
    *          the error message number, and the error message arguments encoded into
    *          the URL hash.
-   */ (message: string | number, args: string[]): string | undefined,
+   */ (message: string | number, args: string[]): string | undefined;
 };
 
 /**

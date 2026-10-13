@@ -22,9 +22,7 @@ export interface SuspenseCacheOptions {
 }
 
 export class SuspenseCache {
-  private queryRefs = new Trie<{ current?: InternalQueryReference }>(
-    canUseWeakMap
-  );
+  private queryRefs = new Trie<{ current?: InternalQueryReference }>(canUseWeakMap);
 
   private options: SuspenseCacheOptions;
 
@@ -32,12 +30,9 @@ export class SuspenseCache {
     this.options = options;
   }
 
-  getQueryRef<TData = any>(
-    cacheKey: CacheKey,
-    createObservable: () => ObservableQuery<TData>
-  ) {
+  getQueryRef<TData = any>(cacheKey: CacheKey, createObservable: () => ObservableQuery<TData>) {
     const ref = this.queryRefs.lookupArray(cacheKey) as {
-      current?: InternalQueryReference<TData>,
+      current?: InternalQueryReference<TData>;
     };
 
     if (!ref.current) {

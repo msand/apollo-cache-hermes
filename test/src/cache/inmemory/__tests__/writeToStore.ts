@@ -1,12 +1,5 @@
 import { assign, omit } from 'lodash';
-import {
-  SelectionNode,
-  FieldNode,
-  DefinitionNode,
-  OperationDefinitionNode,
-  ASTNode,
-  DocumentNode,
-} from 'graphql';
+import { SelectionNode, FieldNode, DefinitionNode, OperationDefinitionNode, ASTNode, DocumentNode } from 'graphql';
 import gql from 'graphql-tag';
 
 import {
@@ -68,7 +61,7 @@ describe('writing to the store', () => {
         writer,
         query,
         result: cloneDeep(result),
-      }).toObject()
+      }).toObject(),
     ).toEqual({
       ROOT_QUERY: {
         __typename: 'Query',
@@ -191,11 +184,7 @@ describe('writing to the store', () => {
 
   it('properly normalizes a query with default values', () => {
     const query = gql`
-      query someBigQuery(
-        $stringArg: String = "This is a default string!"
-        $intArg: Int
-        $floatArg: Float
-      ) {
+      query someBigQuery($stringArg: String = "This is a default string!", $intArg: Int, $floatArg: Float) {
         id
         stringField(arg: $stringArg)
         numberField(intArg: $intArg, floatArg: $floatArg)
@@ -299,7 +288,7 @@ describe('writing to the store', () => {
     const writer = new StoreWriter(
       new InMemoryCache({
         dataIdFromObject: getIdField,
-      })
+      }),
     );
 
     expect(
@@ -307,7 +296,7 @@ describe('writing to the store', () => {
         writer,
         query,
         result: cloneDeep(result),
-      }).toObject()
+      }).toObject(),
     ).toEqual({
       ROOT_QUERY: {
         __typename: 'Query',
@@ -350,7 +339,7 @@ describe('writing to the store', () => {
         writer,
         query,
         result: cloneDeep(result),
-      }).toObject()
+      }).toObject(),
     ).toEqual({
       ROOT_QUERY: {
         __typename: 'Query',
@@ -391,7 +380,7 @@ describe('writing to the store', () => {
         writer,
         query,
         result: cloneDeep(result),
-      }).toObject()
+      }).toObject(),
     ).toEqual({
       ROOT_QUERY: assign(omit(result, 'nestedObj'), {
         __typename: 'Query',
@@ -440,7 +429,7 @@ describe('writing to the store', () => {
     const writer = new StoreWriter(
       new InMemoryCache({
         dataIdFromObject: getIdField,
-      })
+      }),
     );
 
     expect(
@@ -448,13 +437,11 @@ describe('writing to the store', () => {
         writer,
         query,
         result: cloneDeep(result),
-      }).toObject()
+      }).toObject(),
     ).toEqual({
       ROOT_QUERY: assign({}, assign({}, omit(result, 'nestedArray')), {
         __typename: 'Query',
-        nestedArray: result.nestedArray.map((obj: any) =>
-          makeReference(obj.id)
-        ),
+        nestedArray: result.nestedArray.map((obj: any) => makeReference(obj.id)),
       }),
       [result.nestedArray[0].id]: result.nestedArray[0],
       [result.nestedArray[1].id]: result.nestedArray[1],
@@ -496,7 +483,7 @@ describe('writing to the store', () => {
     const writer = new StoreWriter(
       new InMemoryCache({
         dataIdFromObject: getIdField,
-      })
+      }),
     );
 
     expect(
@@ -504,7 +491,7 @@ describe('writing to the store', () => {
         writer,
         query,
         result: cloneDeep(result),
-      }).toObject()
+      }).toObject(),
     ).toEqual({
       ROOT_QUERY: assign({}, assign({}, omit(result, 'nestedArray')), {
         __typename: 'Query',
@@ -628,7 +615,7 @@ describe('writing to the store', () => {
     const writer = new StoreWriter(
       new InMemoryCache({
         dataIdFromObject: getIdField,
-      })
+      }),
     );
 
     const normalized = writeQueryToStore({
@@ -681,10 +668,10 @@ describe('writing to the store', () => {
   it('refuses to normalize objects with nullish id fields', () => {
     const query: TypedDocumentNode<{
       objects: Array<{
-        __typename: string,
-        id?: any,
-        text?: string,
-      }>,
+        __typename: string;
+        id?: any;
+        text?: string;
+      }>;
     }> = gql`
       query {
         objects {
@@ -762,7 +749,7 @@ describe('writing to the store', () => {
             }
           }
         `,
-      })
+      }),
     ).toEqual({
       objects: [
         { __typename: 'Object', text: 'a' },
@@ -780,10 +767,10 @@ describe('writing to the store', () => {
   it('refuses to normalize objects with nullish id fields', () => {
     const query: TypedDocumentNode<{
       objects: Array<{
-        __typename: string,
-        _id?: any,
-        text?: string,
-      }>,
+        __typename: string;
+        _id?: any;
+        text?: string;
+      }>;
     }> = gql`
       query {
         objects {
@@ -861,7 +848,7 @@ describe('writing to the store', () => {
             }
           }
         `,
-      })
+      }),
     ).toEqual({
       objects: [
         { __typename: 'Object', text: 'a' },
@@ -905,7 +892,7 @@ describe('writing to the store', () => {
     const writer = new StoreWriter(
       new InMemoryCache({
         dataIdFromObject: getIdField,
-      })
+      }),
     );
 
     const normalized = writeQueryToStore({
@@ -979,7 +966,7 @@ describe('writing to the store', () => {
     const writer = new StoreWriter(
       new InMemoryCache({
         dataIdFromObject: getIdField,
-      })
+      }),
     );
 
     const normalized = writeQueryToStore({
@@ -1056,7 +1043,7 @@ describe('writing to the store', () => {
     const writer = new StoreWriter(
       new InMemoryCache({
         dataIdFromObject: getIdField,
-      })
+      }),
     );
 
     const normalized = writeQueryToStore({
@@ -1107,7 +1094,7 @@ describe('writing to the store', () => {
     const writer = new StoreWriter(
       new InMemoryCache({
         dataIdFromObject: getIdField,
-      })
+      }),
     );
 
     const store = writeQueryToStore({
@@ -1175,7 +1162,7 @@ describe('writing to the store', () => {
         writer,
         query,
         result: cloneDeep(result),
-      }).toObject()
+      }).toObject(),
     ).toEqual({
       ROOT_QUERY: {
         __typename: 'Query',
@@ -1207,7 +1194,7 @@ describe('writing to the store', () => {
         writer,
         query,
         result: cloneDeep(result),
-      }).toObject()
+      }).toObject(),
     ).toEqual({
       ROOT_QUERY: {
         __typename: 'Query',
@@ -1289,9 +1276,7 @@ describe('writing to the store', () => {
       },
     ];
 
-    function isOperationDefinition(
-      definition: DefinitionNode
-    ): definition is OperationDefinitionNode {
+    function isOperationDefinition(definition: DefinitionNode): definition is OperationDefinitionNode {
       return definition.kind === 'OperationDefinition';
     }
 
@@ -1299,14 +1284,12 @@ describe('writing to the store', () => {
       return selection.kind === 'Field';
     }
 
-    testData.forEach((data) => {
-      data.mutation.definitions.forEach((definition) => {
+    testData.forEach(data => {
+      data.mutation.definitions.forEach(definition => {
         if (isOperationDefinition(definition)) {
-          definition.selectionSet.selections.forEach((selection) => {
+          definition.selectionSet.selections.forEach(selection => {
             if (isField(selection)) {
-              expect(storeKeyNameFromField(selection, data.variables)).toEqual(
-                data.expected
-              );
+              expect(storeKeyNameFromField(selection, data.variables)).toEqual(data.expected);
             }
           });
         }
@@ -1317,16 +1300,7 @@ describe('writing to the store', () => {
   it('properly normalizes a mutation with object or array parameters and variables', () => {
     const mutation = gql`
       mutation some_mutation($nil: ID, $in: Object) {
-        some_mutation(
-          input: {
-            id: "5"
-            arr: [1, { a: "b" }]
-            obj: { a: "b" }
-            num: 5.5
-            nil: $nil
-            bo: true
-          }
-        ) {
+        some_mutation(input: { id: "5", arr: [1, { a: "b" }], obj: { a: "b" }, num: 5.5, nil: $nil, bo: true }) {
           id
         }
         some_mutation_with_variables(input: $in) {
@@ -1356,20 +1330,18 @@ describe('writing to the store', () => {
       },
     };
 
-    function isOperationDefinition(
-      value: ASTNode
-    ): value is OperationDefinitionNode {
+    function isOperationDefinition(value: ASTNode): value is OperationDefinitionNode {
       return value.kind === 'OperationDefinition';
     }
 
-    mutation.definitions.map((def) => {
+    mutation.definitions.map(def => {
       if (isOperationDefinition(def)) {
         const writer = new StoreWriter(
           new InMemoryCache({
             dataIdFromObject() {
               return '5';
             },
-          })
+          }),
         );
 
         expect(
@@ -1382,7 +1354,7 @@ describe('writing to the store', () => {
             dataId: '5',
             result,
             variables,
-          }).toObject()
+          }).toObject(),
         ).toEqual({
           '5': {
             id: 'id',
@@ -1425,7 +1397,7 @@ describe('writing to the store', () => {
           writer,
           result: data,
           query,
-        }).toObject()
+        }).toObject(),
       ).toEqual(expStore.toObject());
     });
 
@@ -1462,7 +1434,7 @@ describe('writing to the store', () => {
           writer,
           result: data,
           query,
-        }).toObject()
+        }).toObject(),
       ).toEqual(expStore.toObject());
     });
 
@@ -1501,7 +1473,7 @@ describe('writing to the store', () => {
           writer,
           result: data,
           query,
-        }).toObject()
+        }).toObject(),
       ).toEqual(expStore.toObject());
     });
   });
@@ -1556,7 +1528,7 @@ describe('writing to the store', () => {
                     readField({
                       fieldName: '__typename',
                       from: existing,
-                    })
+                    }),
                   ).toBe('Author');
 
                   expect(isReference(incoming)).toBe(true);
@@ -1564,7 +1536,7 @@ describe('writing to the store', () => {
                     readField({
                       fieldName: '__typename',
                       from: incoming,
-                    })
+                    }),
                   ).toBe('Author');
                 }
 
@@ -1799,7 +1771,7 @@ describe('writing to the store', () => {
     expect(
       cache.readQuery({
         query: GET_COUNTRIES,
-      })
+      }),
     ).toEqual({ countries });
   });
 
@@ -1991,7 +1963,7 @@ describe('writing to the store', () => {
       });
 
       resolve();
-    }
+    },
   );
 
   it('does not swallow errors other than field errors', () => {
@@ -2010,7 +1982,7 @@ describe('writing to the store', () => {
         result,
         query,
       });
-    }).toThrowError(/No fragment/);
+    }).toThrow(/No fragment/);
   });
 
   it('does not change object references if the value is the same', () => {
@@ -2042,10 +2014,8 @@ describe('writing to the store', () => {
       store: defaultNormalizedCacheFactory(store.toObject()),
     });
 
-    Object.keys(store.toObject()).forEach((field) => {
-      expect((store as any).lookup(field)).toEqual(
-        (newStore as any).lookup(field)
-      );
+    Object.keys(store.toObject()).forEach(field => {
+      expect((store as any).lookup(field)).toEqual((newStore as any).lookup(field));
     });
   });
 
@@ -2155,7 +2125,7 @@ describe('writing to the store', () => {
       const writer = new StoreWriter(
         new InMemoryCache({
           dataIdFromObject: getIdField,
-        })
+        }),
       );
 
       const newStore = writeQueryToStore({
@@ -2182,7 +2152,7 @@ describe('writing to the store', () => {
         new InMemoryCache({
           dataIdFromObject: getIdField,
           possibleTypes: {},
-        })
+        }),
       );
 
       writeQueryToStore({
@@ -2234,7 +2204,7 @@ describe('writing to the store', () => {
           possibleTypes: {
             Todo: ['ShoppingCartItem', 'TaskItem'],
           },
-        })
+        }),
       );
 
       writeQueryToStore({
@@ -2259,7 +2229,7 @@ describe('writing to the store', () => {
         new InMemoryCache({
           dataIdFromObject: getIdField,
           possibleTypes: {},
-        })
+        }),
       );
 
       writeQueryToStore({
@@ -2277,7 +2247,7 @@ describe('writing to the store', () => {
       const writer = new StoreWriter(
         new InMemoryCache({
           dataIdFromObject: getIdField,
-        })
+        }),
       );
 
       const newStore = writeQueryToStore({
@@ -2307,7 +2277,7 @@ describe('writing to the store', () => {
       const writer = new StoreWriter(
         new InMemoryCache({
           dataIdFromObject: getIdField,
-        })
+        }),
       );
 
       const newStore = writeQueryToStore({
@@ -2389,7 +2359,7 @@ describe('writing to the store', () => {
             },
           },
         },
-      })
+      }),
     );
 
     writeQueryToStore({
@@ -2616,9 +2586,9 @@ describe('writing to the store', () => {
 
   it('should not merge { __ref } as StoreObject when mergeObjects used', () => {
     const merges: Array<{
-      existing: Reference | undefined,
-      incoming: Reference | StoreObject,
-      merged: Reference,
+      existing: Reference | undefined;
+      incoming: Reference | StoreObject;
+      merged: Reference;
     }> = [];
 
     const cache = new InMemoryCache({
@@ -2856,10 +2826,7 @@ describe('writing to the store', () => {
 
     expect(mergeCounts).toEqual({ first: 1, second: 1 });
 
-    const threeTodos = [
-      ...twoTodos,
-      { __typename: 'Todo', id: 3, text: 'third' },
-    ];
+    const threeTodos = [...twoTodos, { __typename: 'Todo', id: 3, text: 'third' }];
 
     cache.writeQuery({
       query,
@@ -2890,138 +2857,135 @@ describe('writing to the store', () => {
     expect(mergeCounts).toEqual({ first: 1, second: 1, third: 1, fourth: 1 });
   });
 
-  itAsync(
-    'should allow silencing broadcast of cache updates',
-    (resolve, reject) => {
-      const cache = new InMemoryCache({
-        typePolicies: {
-          Counter: {
-            // Counter is a singleton, but we want to be able to test
-            // writing to it with writeFragment, so it needs to have an ID.
-            keyFields: [],
-          },
+  itAsync('should allow silencing broadcast of cache updates', (resolve, reject) => {
+    const cache = new InMemoryCache({
+      typePolicies: {
+        Counter: {
+          // Counter is a singleton, but we want to be able to test
+          // writing to it with writeFragment, so it needs to have an ID.
+          keyFields: [],
         },
-      });
+      },
+    });
 
-      const query = gql`
-        query {
-          counter {
-            count
-          }
+    const query = gql`
+      query {
+        counter {
+          count
         }
-      `;
+      }
+    `;
 
-      const results: number[] = [];
+    const results: number[] = [];
 
-      cache.watch({
-        query,
-        optimistic: true,
-        callback(diff) {
-          results.push(diff.result);
-          expect(diff.result).toEqual({
-            counter: {
-              __typename: 'Counter',
-              count: 3,
-            },
-          });
-          resolve();
-        },
-      });
-
-      let count = 0;
-
-      cache.writeQuery({
-        query,
-        data: {
-          counter: {
-            __typename: 'Counter',
-            count: ++count,
-          },
-        },
-        broadcast: false,
-      });
-
-      expect(cache.extract()).toEqual({
-        ROOT_QUERY: {
-          __typename: 'Query',
-          counter: { __ref: 'Counter:{}' },
-        },
-        'Counter:{}': {
-          __typename: 'Counter',
-          count: 1,
-        },
-      });
-
-      expect(results).toEqual([]);
-
-      const counterId = cache.identify({
-        __typename: 'Counter',
-      })!;
-
-      cache.writeFragment({
-        id: counterId,
-        fragment: gql`
-          fragment Count on Counter {
-            count
-          }
-        `,
-        data: {
-          count: ++count,
-        },
-        broadcast: false,
-      });
-
-      const counterMeta = {
-        extraRootIds: ['Counter:{}'],
-      };
-
-      expect(cache.extract()).toEqual({
-        __META: counterMeta,
-        ROOT_QUERY: {
-          __typename: 'Query',
-          counter: { __ref: 'Counter:{}' },
-        },
-        'Counter:{}': {
-          __typename: 'Counter',
-          count: 2,
-        },
-      });
-
-      expect(results).toEqual([]);
-
-      expect(
-        cache.evict({
-          id: counterId,
-          fieldName: 'count',
-          broadcast: false,
-        })
-      ).toBe(true);
-
-      expect(cache.extract()).toEqual({
-        __META: counterMeta,
-        ROOT_QUERY: {
-          __typename: 'Query',
-          counter: { __ref: 'Counter:{}' },
-        },
-        'Counter:{}': {
-          __typename: 'Counter',
-        },
-      });
-
-      expect(results).toEqual([]);
-
-      // Only this write should trigger a broadcast.
-      cache.writeQuery({
-        query,
-        data: {
+    cache.watch({
+      query,
+      optimistic: true,
+      callback(diff) {
+        results.push(diff.result);
+        expect(diff.result).toEqual({
           counter: {
             __typename: 'Counter',
             count: 3,
           },
+        });
+        resolve();
+      },
+    });
+
+    let count = 0;
+
+    cache.writeQuery({
+      query,
+      data: {
+        counter: {
+          __typename: 'Counter',
+          count: ++count,
         },
-      });
-    }
-  );
+      },
+      broadcast: false,
+    });
+
+    expect(cache.extract()).toEqual({
+      ROOT_QUERY: {
+        __typename: 'Query',
+        counter: { __ref: 'Counter:{}' },
+      },
+      'Counter:{}': {
+        __typename: 'Counter',
+        count: 1,
+      },
+    });
+
+    expect(results).toEqual([]);
+
+    const counterId = cache.identify({
+      __typename: 'Counter',
+    })!;
+
+    cache.writeFragment({
+      id: counterId,
+      fragment: gql`
+        fragment Count on Counter {
+          count
+        }
+      `,
+      data: {
+        count: ++count,
+      },
+      broadcast: false,
+    });
+
+    const counterMeta = {
+      extraRootIds: ['Counter:{}'],
+    };
+
+    expect(cache.extract()).toEqual({
+      __META: counterMeta,
+      ROOT_QUERY: {
+        __typename: 'Query',
+        counter: { __ref: 'Counter:{}' },
+      },
+      'Counter:{}': {
+        __typename: 'Counter',
+        count: 2,
+      },
+    });
+
+    expect(results).toEqual([]);
+
+    expect(
+      cache.evict({
+        id: counterId,
+        fieldName: 'count',
+        broadcast: false,
+      }),
+    ).toBe(true);
+
+    expect(cache.extract()).toEqual({
+      __META: counterMeta,
+      ROOT_QUERY: {
+        __typename: 'Query',
+        counter: { __ref: 'Counter:{}' },
+      },
+      'Counter:{}': {
+        __typename: 'Counter',
+      },
+    });
+
+    expect(results).toEqual([]);
+
+    // Only this write should trigger a broadcast.
+    cache.writeQuery({
+      query,
+      data: {
+        counter: {
+          __typename: 'Counter',
+          count: 3,
+        },
+      },
+    });
+  });
 
   it('writeFragment should be able to infer ROOT_QUERY', () => {
     const cache = new InMemoryCache();
@@ -3063,7 +3027,7 @@ describe('writing to the store', () => {
           count: 1,
         },
       });
-    }).toThrowError(/Could not identify object/);
+    }).toThrow(/Could not identify object/);
   });
 
   it('user objects should be able to have { __typename: "Subscription" }', () => {
@@ -3195,14 +3159,14 @@ describe('writing to the store', () => {
 
     function check(
       query: TypedDocumentNode<{
-        aField: string,
-        bField: string,
-        rootField: string,
+        aField: string;
+        bField: string;
+        rootField: string;
       }>,
       expectedContextValues: {
-        clientOnly: Record<string, boolean> | boolean,
-        deferred: Record<string, boolean> | boolean,
-      }
+        clientOnly: Record<string, boolean> | boolean;
+        deferred: Record<string, boolean> | boolean;
+      },
     ) {
       const { selectionSet } = getMainDefinition(query);
 
@@ -3223,7 +3187,7 @@ describe('writing to the store', () => {
             true: true,
             false: false,
           },
-        }
+        },
       );
 
       expect(flat.size).toBe(3);
@@ -3235,18 +3199,14 @@ describe('writing to the store', () => {
           expect(context.clientOnly).toBe(expectedContextValues.clientOnly);
         } else {
           expect(expectedContextValues.clientOnly).toHaveProperty(fieldName);
-          expect(context.clientOnly).toBe(
-            expectedContextValues.clientOnly[fieldName]
-          );
+          expect(context.clientOnly).toBe(expectedContextValues.clientOnly[fieldName]);
         }
 
         if (typeof expectedContextValues.deferred === 'boolean') {
           expect(context.deferred).toBe(expectedContextValues.deferred);
         } else {
           expect(expectedContextValues.deferred).toHaveProperty(fieldName);
-          expect(context.deferred).toBe(
-            expectedContextValues.deferred[fieldName]
-          );
+          expect(context.deferred).toBe(expectedContextValues.deferred[fieldName]);
         }
       });
     }
@@ -3276,7 +3236,7 @@ describe('writing to the store', () => {
             rootField: false,
           },
           deferred: false,
-        }
+        },
       );
 
       check(
@@ -3303,7 +3263,7 @@ describe('writing to the store', () => {
             rootField: false,
           },
           deferred: false,
-        }
+        },
       );
 
       check(
@@ -3330,7 +3290,7 @@ describe('writing to the store', () => {
             rootField: false,
           },
           deferred: false,
-        }
+        },
       );
 
       check(
@@ -3357,7 +3317,7 @@ describe('writing to the store', () => {
             rootField: false,
           },
           deferred: false,
-        }
+        },
       );
 
       check(
@@ -3384,7 +3344,7 @@ describe('writing to the store', () => {
             rootField: true,
           },
           deferred: false,
-        }
+        },
       );
 
       check(
@@ -3411,7 +3371,7 @@ describe('writing to the store', () => {
             rootField: true,
           },
           deferred: false,
-        }
+        },
       );
 
       check(
@@ -3438,7 +3398,7 @@ describe('writing to the store', () => {
             rootField: true,
           },
           deferred: false,
-        }
+        },
       );
 
       check(
@@ -3464,7 +3424,7 @@ describe('writing to the store', () => {
             rootField: false,
           },
           deferred: false,
-        }
+        },
       );
     });
 
@@ -3493,7 +3453,7 @@ describe('writing to the store', () => {
             bField: false,
             rootField: false,
           },
-        }
+        },
       );
 
       check(
@@ -3520,7 +3480,7 @@ describe('writing to the store', () => {
             bField: false,
             rootField: false,
           },
-        }
+        },
       );
 
       check(
@@ -3547,7 +3507,7 @@ describe('writing to the store', () => {
             bField: true,
             rootField: false,
           },
-        }
+        },
       );
 
       check(
@@ -3574,7 +3534,7 @@ describe('writing to the store', () => {
             bField: true,
             rootField: false,
           },
-        }
+        },
       );
 
       check(
@@ -3601,7 +3561,7 @@ describe('writing to the store', () => {
             bField: false,
             rootField: true,
           },
-        }
+        },
       );
 
       check(
@@ -3628,7 +3588,7 @@ describe('writing to the store', () => {
             bField: true,
             rootField: true,
           },
-        }
+        },
       );
 
       check(
@@ -3655,7 +3615,7 @@ describe('writing to the store', () => {
             bField: false,
             rootField: true,
           },
-        }
+        },
       );
 
       check(
@@ -3681,7 +3641,7 @@ describe('writing to the store', () => {
             bField: true,
             rootField: false,
           },
-        }
+        },
       );
     });
 
@@ -3714,7 +3674,7 @@ describe('writing to the store', () => {
             bField: false,
             rootField: false,
           },
-        }
+        },
       );
 
       check(
@@ -3745,7 +3705,7 @@ describe('writing to the store', () => {
             bField: false,
             rootField: true,
           },
-        }
+        },
       );
 
       check(
@@ -3776,7 +3736,7 @@ describe('writing to the store', () => {
             bField: true,
             rootField: true,
           },
-        }
+        },
       );
 
       check(
@@ -3807,7 +3767,7 @@ describe('writing to the store', () => {
             bField: true,
             rootField: false,
           },
-        }
+        },
       );
 
       check(
@@ -3839,7 +3799,7 @@ describe('writing to the store', () => {
             bField: false,
             rootField: true,
           },
-        }
+        },
       );
     });
 
@@ -3868,7 +3828,7 @@ describe('writing to the store', () => {
             bField: false,
             rootField: false,
           },
-        }
+        },
       );
 
       check(
@@ -3895,7 +3855,7 @@ describe('writing to the store', () => {
             bField: true,
             rootField: true,
           },
-        }
+        },
       );
 
       check(
@@ -3922,7 +3882,7 @@ describe('writing to the store', () => {
             bField: true,
             rootField: false,
           },
-        }
+        },
       );
 
       check(
@@ -3951,7 +3911,7 @@ describe('writing to the store', () => {
             bField: true,
             rootField: false,
           },
-        }
+        },
       );
     });
   });

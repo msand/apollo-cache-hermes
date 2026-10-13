@@ -1,4 +1,3 @@
-
 import * as React from 'rehackt';
 
 import {
@@ -45,11 +44,8 @@ export interface UseQueryRefHandlersResult<
  * @since 3.9.0
  * @param queryRef - A `QueryRef` returned from `useBackgroundQuery`, `useLoadableQuery`, or `createQueryPreloader`.
  */
-export function useQueryRefHandlers<
-  TData = unknown,
-  TVariables extends OperationVariables = OperationVariables,
->(
-  queryRef: QueryRef<TData, TVariables>
+export function useQueryRefHandlers<TData = unknown, TVariables extends OperationVariables = OperationVariables>(
+  queryRef: QueryRef<TData, TVariables>,
 ): UseQueryRefHandlersResult<TData, TVariables> {
   const unwrapped = unwrapQueryRef(queryRef);
 
@@ -58,21 +54,18 @@ export function useQueryRefHandlers<
     _useQueryRefHandlers,
     unwrapped
       ? unwrapped['observable']
-      // in the case of a "transported" queryRef object, we need to use the
-      // client that's available to us at the current position in the React tree
-      // that ApolloClient will then have the job to recreate a real queryRef from
-      // the transported object
-      // This is just a context read - it's fine to do this conditionally.
-      // This hook wrapper also shouldn't be optimized by React Compiler.
-      : useApolloClient()
+      : // in the case of a "transported" queryRef object, we need to use the
+        // client that's available to us at the current position in the React tree
+        // that ApolloClient will then have the job to recreate a real queryRef from
+        // the transported object
+        // This is just a context read - it's fine to do this conditionally.
+        // This hook wrapper also shouldn't be optimized by React Compiler.
+        useApolloClient(),
   )(queryRef);
 }
 
-function _useQueryRefHandlers<
-  TData = unknown,
-  TVariables extends OperationVariables = OperationVariables,
->(
-  queryRef: QueryRef<TData, TVariables>
+function _useQueryRefHandlers<TData = unknown, TVariables extends OperationVariables = OperationVariables>(
+  queryRef: QueryRef<TData, TVariables>,
 ): UseQueryRefHandlersResult<TData, TVariables> {
   assertWrappedQueryRef(queryRef);
   const [previousQueryRef, setPreviousQueryRef] = React.useState(queryRef);
@@ -90,27 +83,25 @@ function _useQueryRefHandlers<
   }
 
   const refetch: RefetchFunction<TData, TVariables> = React.useCallback(
-    (variables) => {
+    variables => {
       const promise = internalQueryRef.refetch(variables);
 
       setWrappedQueryRef(wrapQueryRef(internalQueryRef));
 
       return promise;
     },
-    [internalQueryRef]
+    [internalQueryRef],
   );
 
   const fetchMore: FetchMoreFunction<TData, TVariables> = React.useCallback(
-    (options) => {
-      const promise = internalQueryRef.fetchMore(
-        options as FetchMoreQueryOptions<any, any>
-      );
+    options => {
+      const promise = internalQueryRef.fetchMore(options as FetchMoreQueryOptions<any, any>);
 
       setWrappedQueryRef(wrapQueryRef(internalQueryRef));
 
       return promise;
     },
-    [internalQueryRef]
+    [internalQueryRef],
   );
 
   return { refetch, fetchMore };

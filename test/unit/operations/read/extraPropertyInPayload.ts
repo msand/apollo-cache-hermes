@@ -4,7 +4,6 @@ import { QueryResult, read, write } from '../../../../src/operations';
 import { query, strictConfig } from '../../../helpers';
 
 describe(`operations.read`, () => {
-
   const context = new CacheContext(strictConfig);
   const empty = new GraphSnapshot();
   const shipmentsQuery = query(`{
@@ -25,54 +24,54 @@ describe(`operations.read`, () => {
   }`);
 
   describe(`incomplete payload`, () => {
-
     let snapshot: GraphSnapshot;
     let readResult: QueryResult;
 
     beforeAll(() => {
-      snapshot = write(context, empty, shipmentsQuery, {
-        shipments: [
-          {
-            id: '0',
-            driver: {
-              name: 'Bob',
-              id: 'Bob-d0',
-              messages: [
-                { details: 'Hello' },
-                { details: 'world' },
+      snapshot = write(
+        context,
+        empty,
+        shipmentsQuery,
+        {
+          shipments: [
+            {
+              id: '0',
+              driver: {
+                name: 'Bob',
+                id: 'Bob-d0',
+                messages: [{ details: 'Hello' }, { details: 'world' }],
+              },
+              stopEtaSummary: [
+                {
+                  id: 'eta0',
+                  type: 'warning',
+                },
+                {
+                  id: 'eta1',
+                  type: 'warning',
+                },
               ],
+              extraProp: 'Oh mind!',
             },
-            stopEtaSummary: [
-              {
-                id: 'eta0',
-                type: 'warning',
+            {
+              id: '1',
+              driver: {
+                name: 'Joe',
+                id: 'Joe-d1',
+                messages: [{ details: 'Hello' }],
               },
-              {
-                id: 'eta1',
-                type: 'warning',
-              },
-            ],
-            extraProp: 'Oh mind!',
-          },
-          {
-            id: '1',
-            driver: {
-              name: 'Joe',
-              id: 'Joe-d1',
-              messages: [
-                { details: 'Hello' },
+              stopEtaSummary: [
+                {
+                  id: 'eta0',
+                  type: 'warning',
+                },
               ],
+              extraObject: 'WAT!!!',
             },
-            stopEtaSummary: [
-              {
-                id: 'eta0',
-                type: 'warning',
-              },
-            ],
-            extraObject: 'WAT!!!',
-          },
-        ],
-      }, true).snapshot;
+          ],
+        },
+        true,
+      ).snapshot;
       readResult = read(context, shipmentsQuery, snapshot);
     });
 
@@ -88,10 +87,7 @@ describe(`operations.read`, () => {
             driver: {
               name: 'Bob',
               id: 'Bob-d0',
-              messages: [
-                { details: 'Hello' },
-                { details: 'world' },
-              ],
+              messages: [{ details: 'Hello' }, { details: 'world' }],
             },
             stopEtaSummary: [
               {
@@ -109,9 +105,7 @@ describe(`operations.read`, () => {
             driver: {
               name: 'Joe',
               id: 'Joe-d1',
-              messages: [
-                { details: 'Hello' },
-              ],
+              messages: [{ details: 'Hello' }],
             },
             stopEtaSummary: [
               {
@@ -123,7 +117,5 @@ describe(`operations.read`, () => {
         ],
       });
     });
-
   });
-
 });

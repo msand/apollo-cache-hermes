@@ -18,32 +18,27 @@ describe('Cache', () => {
   function itWithInitialData(
     message: string,
     initialDataForCaches: { [key: string]: any }[],
-    callback: (...caches: Hermes[]) => any
+    callback: (...caches: Hermes[]) => any,
   ) {
     const cachesList: Hermes[][] = [
       initialDataForCaches.map(data =>
         new Hermes({
           addTypename: false,
-        }).restore(cloneDeep(data))
+        }).restore(cloneDeep(data)),
       ),
       initialDataForCaches.map(data =>
         new Hermes({
           addTypename: false,
-        }).restore(cloneDeep(data))
+        }).restore(cloneDeep(data)),
       ),
     ];
 
     cachesList.forEach((caches, i) => {
-      it(`${message} (${i + 1}/${cachesList.length})`, () =>
-        callback(...caches));
+      it(`${message} (${i + 1}/${cachesList.length})`, () => callback(...caches));
     });
   }
 
-  function itWithCacheConfig(
-    message: string,
-    config: CacheContext.Configuration,
-    callback: (cache: Hermes) => any
-  ) {
+  function itWithCacheConfig(message: string, config: CacheContext.Configuration, callback: (cache: Hermes) => any) {
     const caches = [
       new Hermes({
         addTypename: false,
@@ -72,7 +67,7 @@ describe('Cache', () => {
           },
         },
       ],
-      (proxy) => {
+      proxy => {
         expect(
           proxy.readQuery({
             query: gql`
@@ -80,7 +75,7 @@ describe('Cache', () => {
                 a
               }
             `,
-          })
+          }),
         ).toMatchObject({ a: 1 });
         expect(
           proxy.readQuery({
@@ -90,7 +85,7 @@ describe('Cache', () => {
                 c
               }
             `,
-          })
+          }),
         ).toMatchObject({ b: 2, c: 3 });
         expect(
           proxy.readQuery({
@@ -101,9 +96,9 @@ describe('Cache', () => {
                 c
               }
             `,
-          })
+          }),
         ).toMatchObject({ a: 1, b: 2, c: 3 });
-      }
+      },
     );
 
     itWithInitialData(
@@ -129,7 +124,7 @@ describe('Cache', () => {
           },
         },
       ],
-      (proxy) => {
+      proxy => {
         expect(
           proxy.readQuery({
             query: gql`
@@ -140,7 +135,7 @@ describe('Cache', () => {
                 }
               }
             `,
-          })
+          }),
         ).toMatchObject({ a: 1, d: { e: 4, h: { i: 7 } } });
         expect(
           proxy.readQuery({
@@ -155,7 +150,7 @@ describe('Cache', () => {
                 }
               }
             `,
-          })
+          }),
         ).toMatchObject({ a: 1, d: { e: 4, h: { i: 7 } } });
         expect(
           proxy.readQuery({
@@ -176,14 +171,14 @@ describe('Cache', () => {
                 }
               }
             `,
-          })
+          }),
         ).toMatchObject({
           a: 1,
           b: 2,
           c: 3,
           d: { e: 4, f: 5, g: 6, h: { i: 7, j: 8, k: 9 } },
         });
-      }
+      },
     );
 
     itWithInitialData(
@@ -196,7 +191,7 @@ describe('Cache', () => {
           },
         },
       ],
-      (proxy) => {
+      proxy => {
         expect(
           proxy.readQuery({
             query: gql`
@@ -209,9 +204,9 @@ describe('Cache', () => {
               literal: false,
               value: 42,
             },
-          })
+          }),
         ).toEqual({ a: 1, b: 2 });
-      }
+      },
     );
 
     itWithInitialData(
@@ -223,7 +218,7 @@ describe('Cache', () => {
           },
         },
       ],
-      (proxy) => {
+      proxy => {
         expect(
           proxy.readQuery({
             query: gql`
@@ -235,9 +230,9 @@ describe('Cache', () => {
               literal: false,
               value: null,
             },
-          })
+          }),
         ).toEqual({ a: 1 });
-      }
+      },
     );
 
     itWithInitialData(
@@ -250,7 +245,7 @@ describe('Cache', () => {
           },
         },
       ],
-      (proxy) => {
+      proxy => {
         const options = {
           query: gql`
             query ($literal: Boolean, $value: Int) {
@@ -267,7 +262,7 @@ describe('Cache', () => {
         const preQueryCopy = cloneDeep(options);
         expect(proxy.readQuery(options)).toEqual({ a: 1, b: 2 });
         expect(preQueryCopy).toEqual(options);
-      }
+      },
     );
   });
 
@@ -278,7 +273,7 @@ describe('Cache', () => {
         // Empty data, but still want to test with/without result caching.
         {},
       ],
-      (proxy) => {
+      proxy => {
         expect(() => {
           proxy.readFragment({
             id: 'x',
@@ -290,7 +285,7 @@ describe('Cache', () => {
               }
             `,
           });
-        }).toThrowError();
+        }).toThrow();
         expect(() => {
           // noinspection GraphQLMemberRedefinition,GraphQLMissingType
           proxy.readFragment({
@@ -301,48 +296,44 @@ describe('Cache', () => {
               }
             `,
           });
-        }).toThrowError();
-      }
+        }).toThrow();
+      },
     );
 
-    itWithInitialData(
-      'will throw an error when there is more than one fragment but no fragment name',
-      [{}],
-      (proxy) => {
-        expect(() => {
-          proxy.readFragment({
-            id: 'x',
-            fragment: gql`
-              fragment a on A {
-                a
-              }
+    itWithInitialData('will throw an error when there is more than one fragment but no fragment name', [{}], proxy => {
+      expect(() => {
+        proxy.readFragment({
+          id: 'x',
+          fragment: gql`
+            fragment a on A {
+              a
+            }
 
-              fragment b on B {
-                b
-              }
-            `,
-          });
-        }).toThrowError();
-        expect(() => {
-          proxy.readFragment({
-            id: 'x',
-            fragment: gql`
-              fragment a on A {
-                a
-              }
+            fragment b on B {
+              b
+            }
+          `,
+        });
+      }).toThrow();
+      expect(() => {
+        proxy.readFragment({
+          id: 'x',
+          fragment: gql`
+            fragment a on A {
+              a
+            }
 
-              fragment b on B {
-                b
-              }
+            fragment b on B {
+              b
+            }
 
-              fragment c on C {
-                c
-              }
-            `,
-          });
-        }).toThrowError();
-      }
-    );
+            fragment c on C {
+              c
+            }
+          `,
+        });
+      }).toThrow();
+    });
 
     itWithInitialData(
       'will read some deeply nested data from the store at any id',
@@ -370,7 +361,7 @@ describe('Cache', () => {
           },
         },
       ],
-      (proxy) => {
+      proxy => {
         expect(
           proxy.readFragment({
             id: 'foo',
@@ -382,7 +373,7 @@ describe('Cache', () => {
                 }
               }
             `,
-          })
+          }),
         ).toMatchObject({ e: 4, h: { i: 7 } });
         expect(
           proxy.readFragment({
@@ -399,7 +390,7 @@ describe('Cache', () => {
                 }
               }
             `,
-          })
+          }),
         ).toMatchObject({ e: 4, f: 5, g: 6, h: { i: 7, j: 8, k: 9 } });
         expect(
           proxy.readFragment({
@@ -409,7 +400,7 @@ describe('Cache', () => {
                 i
               }
             `,
-          })
+          }),
         ).toMatchObject({ i: 7 });
         expect(
           proxy.readFragment({
@@ -421,7 +412,7 @@ describe('Cache', () => {
                 k
               }
             `,
-          })
+          }),
         ).toMatchObject({ i: 7, j: 8, k: 9 });
         expect(
           proxy.readFragment({
@@ -445,7 +436,7 @@ describe('Cache', () => {
               }
             `,
             fragmentName: 'fragmentFoo',
-          })
+          }),
         ).toMatchObject({ e: 4, f: 5, g: 6, h: { i: 7, j: 8, k: 9 } });
         expect(
           proxy.readFragment({
@@ -469,9 +460,9 @@ describe('Cache', () => {
               }
             `,
             fragmentName: 'fragmentBar',
-          })
+          }),
         ).toMatchObject({ i: 7, j: 8, k: 9 });
-      }
+      },
     );
 
     itWithInitialData(
@@ -485,7 +476,7 @@ describe('Cache', () => {
           },
         },
       ],
-      (proxy) => {
+      proxy => {
         expect(
           proxy.readFragment({
             id: 'foo',
@@ -499,9 +490,9 @@ describe('Cache', () => {
               literal: false,
               value: 42,
             },
-          })
+          }),
         ).toMatchObject({ a: 1, b: 2 });
-      }
+      },
     );
 
     itWithInitialData(
@@ -529,7 +520,7 @@ describe('Cache', () => {
                 c
               }
             `,
-          })
+          }),
         ).toEqual(null);
         expect(
           client2.readFragment({
@@ -541,7 +532,7 @@ describe('Cache', () => {
                 c
               }
             `,
-          })
+          }),
         ).toEqual(null);
         expect(
           client3.readFragment({
@@ -553,14 +544,13 @@ describe('Cache', () => {
                 c
               }
             `,
-          })
+          }),
         ).toMatchObject({ a: 1, b: 2, c: 3 });
-      }
+      },
     );
 
     it('should not accidentally depend on unrelated entity fields', () => {
-      const cache = new Hermes({
-      });
+      const cache = new Hermes({});
 
       const bothNamesData = {
         __typename: 'Person',
@@ -633,7 +623,7 @@ describe('Cache', () => {
         cache.readQuery({
           id,
           query: firstNameQuery,
-        })
+        }),
       ).toEqual(firstNameResult);
 
       const lastNameResult = cache.readQuery({
@@ -690,7 +680,7 @@ describe('Cache', () => {
         cache.readQuery({
           id,
           query: lastNameQuery,
-        })
+        }),
       ).toMatchObject(lastNameResultWithoutFirstName);
     });
 
@@ -713,7 +703,7 @@ describe('Cache', () => {
 
       const id = cache.identify(data)!;
 
-      cache.recordOptimisticTransaction((proxy) => {
+      cache.recordOptimisticTransaction(proxy => {
         proxy.writeFragment({ id, fragment, data });
       }, 'optimistic Hugh');
 
@@ -732,15 +722,15 @@ describe('Cache', () => {
       expect(
         cache.readFragment(
           { id, fragment },
-          false // not optimistic
-        )
+          false, // not optimistic
+        ),
       ).toBe(null);
 
       expect(
         cache.readFragment(
           { id, fragment },
-          true // optimistic
-        )
+          true, // optimistic
+        ),
       ).toMatchObject({
         __typename: 'Person',
         firstName: 'Hugh',
@@ -760,8 +750,8 @@ describe('Cache', () => {
       expect(
         cache.readFragment(
           { id, fragment },
-          false // not optimistic
-        )
+          false, // not optimistic
+        ),
       ).toMatchObject({
         __typename: 'Person',
         firstName: 'HUGH',
@@ -771,8 +761,8 @@ describe('Cache', () => {
       expect(
         cache.readFragment(
           { id, fragment },
-          true // optimistic
-        )
+          true, // optimistic
+        ),
       ).toMatchObject({
         __typename: 'Person',
         firstName: 'Hugh',
@@ -784,8 +774,8 @@ describe('Cache', () => {
       expect(
         cache.readFragment(
           { id, fragment },
-          true // optimistic
-        )
+          true, // optimistic
+        ),
       ).toMatchObject({
         __typename: 'Person',
         firstName: 'HUGH',
@@ -795,7 +785,7 @@ describe('Cache', () => {
   });
 
   describe('writeQuery', () => {
-    itWithInitialData('will write some data to the store', [{}], (proxy) => {
+    itWithInitialData('will write some data to the store', [{}], proxy => {
       proxy.writeQuery({
         data: { a: 1 },
         query: gql`
@@ -969,213 +959,181 @@ describe('Cache', () => {
       });
     });
 
-    itWithInitialData(
-      'will write some data to the store with variables',
-      [{}],
-      (proxy) => {
-        proxy.writeQuery({
-          data: {
-            a: 1,
-            b: 2,
-          },
-          query: gql`
-            query ($literal: Boolean, $value: Int) {
-              a: field(literal: true, value: 42)
-              b: field(literal: $literal, value: $value)
-            }
-          `,
-          variables: {
-            literal: false,
-            value: 42,
-          },
-        });
+    itWithInitialData('will write some data to the store with variables', [{}], proxy => {
+      proxy.writeQuery({
+        data: {
+          a: 1,
+          b: 2,
+        },
+        query: gql`
+          query ($literal: Boolean, $value: Int) {
+            a: field(literal: true, value: 42)
+            b: field(literal: $literal, value: $value)
+          }
+        `,
+        variables: {
+          literal: false,
+          value: 42,
+        },
+      });
 
-        expect((proxy as Hermes).extract()).toEqual({
-          'ROOT_QUERY': {
-            'parameterized': [
-              {
-                'id': 'ROOT_QUERY❖["field"]❖{"literal":true,"value":42}',
-                'path': [
-                  'field',
-                ],
-              },
-              {
-                'id': 'ROOT_QUERY❖["field"]❖{"literal":false,"value":42}',
-                'path': [
-                  'field',
-                ],
-              },
-            ],
-            'type': 0,
-          },
-          'ROOT_QUERY❖["field"]❖{"literal":false,"value":42}': {
-            'data': 2,
-            'inbound': [
-              {
-                'id': 'ROOT_QUERY',
-                'path': [
-                  'field',
-                ],
-              },
-            ],
-            'type': 1,
-          },
-          'ROOT_QUERY❖["field"]❖{"literal":true,"value":42}': {
-            'data': 1,
-            'inbound': [
-              {
-                'id': 'ROOT_QUERY',
-                'path': [
-                  'field',
-                ],
-              },
-            ],
-            'type': 1,
-          },
-        });
-      }
-    );
+      expect((proxy as Hermes).extract()).toEqual({
+        ROOT_QUERY: {
+          parameterized: [
+            {
+              id: 'ROOT_QUERY❖["field"]❖{"literal":true,"value":42}',
+              path: ['field'],
+            },
+            {
+              id: 'ROOT_QUERY❖["field"]❖{"literal":false,"value":42}',
+              path: ['field'],
+            },
+          ],
+          type: 0,
+        },
+        'ROOT_QUERY❖["field"]❖{"literal":false,"value":42}': {
+          data: 2,
+          inbound: [
+            {
+              id: 'ROOT_QUERY',
+              path: ['field'],
+            },
+          ],
+          type: 1,
+        },
+        'ROOT_QUERY❖["field"]❖{"literal":true,"value":42}': {
+          data: 1,
+          inbound: [
+            {
+              id: 'ROOT_QUERY',
+              path: ['field'],
+            },
+          ],
+          type: 1,
+        },
+      });
+    });
 
-    itWithInitialData(
-      'will write some data to the store with variables where some are null',
-      [{}],
-      (proxy) => {
-        proxy.writeQuery({
-          data: {
-            a: 1,
-            b: 2,
-          },
-          query: gql`
-            query ($literal: Boolean, $value: Int) {
-              a: field(literal: true, value: 42)
-              b: field(literal: $literal, value: $value)
-            }
-          `,
-          variables: {
-            literal: false,
-            value: null,
-          },
-        });
+    itWithInitialData('will write some data to the store with variables where some are null', [{}], proxy => {
+      proxy.writeQuery({
+        data: {
+          a: 1,
+          b: 2,
+        },
+        query: gql`
+          query ($literal: Boolean, $value: Int) {
+            a: field(literal: true, value: 42)
+            b: field(literal: $literal, value: $value)
+          }
+        `,
+        variables: {
+          literal: false,
+          value: null,
+        },
+      });
 
-        expect((proxy as Hermes).extract()).toEqual({
-          'ROOT_QUERY': {
-            'parameterized': [
-              {
-                'id': 'ROOT_QUERY❖["field"]❖{"literal":true,"value":42}',
-                'path': [
-                  'field',
-                ],
-              },
-              {
-                'id': 'ROOT_QUERY❖["field"]❖{"literal":false,"value":null}',
-                'path': [
-                  'field',
-                ],
-              },
-            ],
-            'type': 0,
-          },
-          'ROOT_QUERY❖["field"]❖{"literal":false,"value":null}': {
-            'data': 2,
-            'inbound': [
-              {
-                'id': 'ROOT_QUERY',
-                'path': [
-                  'field',
-                ],
-              },
-            ],
-            'type': 1,
-          },
-          'ROOT_QUERY❖["field"]❖{"literal":true,"value":42}': {
-            'data': 1,
-            'inbound': [
-              {
-                'id': 'ROOT_QUERY',
-                'path': [
-                  'field',
-                ],
-              },
-            ],
-            'type': 1,
-          },
-        });
-      }
-    );
+      expect((proxy as Hermes).extract()).toEqual({
+        ROOT_QUERY: {
+          parameterized: [
+            {
+              id: 'ROOT_QUERY❖["field"]❖{"literal":true,"value":42}',
+              path: ['field'],
+            },
+            {
+              id: 'ROOT_QUERY❖["field"]❖{"literal":false,"value":null}',
+              path: ['field'],
+            },
+          ],
+          type: 0,
+        },
+        'ROOT_QUERY❖["field"]❖{"literal":false,"value":null}': {
+          data: 2,
+          inbound: [
+            {
+              id: 'ROOT_QUERY',
+              path: ['field'],
+            },
+          ],
+          type: 1,
+        },
+        'ROOT_QUERY❖["field"]❖{"literal":true,"value":42}': {
+          data: 1,
+          inbound: [
+            {
+              id: 'ROOT_QUERY',
+              path: ['field'],
+            },
+          ],
+          type: 1,
+        },
+      });
+    });
   });
 
   describe('writeFragment', () => {
-    itWithInitialData(
-      'will throw an error when there is no fragment',
-      [{}],
-      (proxy) => {
-        expect(() => {
-          proxy.writeFragment({
-            data: {},
-            id: 'x',
-            fragment: gql`
-              query {
-                a
-                b
-                c
-              }
-            `,
-          });
-        }).toThrowError();
-        expect(() => {
-          proxy.writeFragment({
-            data: {},
-            id: 'x',
-            fragment: gql`
-              schema {
-                query: Query
-              }
-            `,
-          });
-        }).toThrowError();
-      }
-    );
+    itWithInitialData('will throw an error when there is no fragment', [{}], proxy => {
+      expect(() => {
+        proxy.writeFragment({
+          data: {},
+          id: 'x',
+          fragment: gql`
+            query {
+              a
+              b
+              c
+            }
+          `,
+        });
+      }).toThrow();
+      expect(() => {
+        proxy.writeFragment({
+          data: {},
+          id: 'x',
+          fragment: gql`
+            schema {
+              query: Query
+            }
+          `,
+        });
+      }).toThrow();
+    });
 
-    itWithInitialData(
-      'will throw an error when there is more than one fragment but no fragment name',
-      [{}],
-      (proxy) => {
-        expect(() => {
-          proxy.writeFragment({
-            data: {},
-            id: 'x',
-            fragment: gql`
-              fragment a on A {
-                a
-              }
+    itWithInitialData('will throw an error when there is more than one fragment but no fragment name', [{}], proxy => {
+      expect(() => {
+        proxy.writeFragment({
+          data: {},
+          id: 'x',
+          fragment: gql`
+            fragment a on A {
+              a
+            }
 
-              fragment b on B {
-                b
-              }
-            `,
-          });
-        }).toThrowError();
-        expect(() => {
-          proxy.writeFragment({
-            data: {},
-            id: 'x',
-            fragment: gql`
-              fragment a on A {
-                a
-              }
+            fragment b on B {
+              b
+            }
+          `,
+        });
+      }).toThrow();
+      expect(() => {
+        proxy.writeFragment({
+          data: {},
+          id: 'x',
+          fragment: gql`
+            fragment a on A {
+              a
+            }
 
-              fragment b on B {
-                b
-              }
+            fragment b on B {
+              b
+            }
 
-              fragment c on C {
-                c
-              }
-            `,
-          });
-        }).toThrowError();
-      }
-    );
+            fragment c on C {
+              c
+            }
+          `,
+        });
+      }).toThrow();
+    });
 
     itWithCacheConfig(
       'will write some deeply nested data into the store at any id',
@@ -1183,7 +1141,7 @@ describe('Cache', () => {
         entityIdForNode: (o: any) => o.id,
         addTypename: false,
       },
-      (proxy) => {
+      proxy => {
         proxy.writeFragment({
           data: { __typename: 'Foo', e: 4, h: { id: 'bar', i: 7 } },
           id: 'foo',
@@ -1297,7 +1255,7 @@ describe('Cache', () => {
         });
 
         expect((proxy as Hermes).extract()).toMatchSnapshot();
-      }
+      },
     );
 
     itWithCacheConfig(
@@ -1305,9 +1263,9 @@ describe('Cache', () => {
       {
         addTypename: true,
       },
-      (proxy) => {
+      proxy => {
         const readWriteFragment = gql`
-          fragment aFragment on Query {
+          fragment aFragment on query {
             getSomething {
               id
             }
@@ -1328,7 +1286,7 @@ describe('Cache', () => {
           id: 'query',
         });
         expect(result).toEqual(data);
-      }
+      },
     );
 
     itWithCacheConfig(
@@ -1336,7 +1294,7 @@ describe('Cache', () => {
       {
         addTypename: true,
       },
-      (proxy) => {
+      proxy => {
         proxy.writeFragment({
           data: {
             a: 1,
@@ -1357,52 +1315,44 @@ describe('Cache', () => {
         });
 
         expect((proxy as Hermes).extract()).toEqual({
-          'foo': {
-            'data': {
-              '__typename': 'Foo',
+          foo: {
+            data: {
+              __typename: 'Foo',
             },
-            'parameterized': [
+            parameterized: [
               {
-                'id': 'foo❖["field"]❖{"literal":true,"value":42}',
-                'path': [
-                  'field',
-                ],
+                id: 'foo❖["field"]❖{"literal":true,"value":42}',
+                path: ['field'],
               },
               {
-                'id': 'foo❖["field"]❖{"literal":false,"value":42}',
-                'path': [
-                  'field',
-                ],
+                id: 'foo❖["field"]❖{"literal":false,"value":42}',
+                path: ['field'],
               },
             ],
-            'type': 0,
+            type: 0,
           },
           'foo❖["field"]❖{"literal":false,"value":42}': {
-            'data': 2,
-            'inbound': [
+            data: 2,
+            inbound: [
               {
-                'id': 'foo',
-                'path': [
-                  'field',
-                ],
+                id: 'foo',
+                path: ['field'],
               },
             ],
-            'type': 1,
+            type: 1,
           },
           'foo❖["field"]❖{"literal":true,"value":42}': {
-            'data': 1,
-            'inbound': [
+            data: 1,
+            inbound: [
               {
-                'id': 'foo',
-                'path': [
-                  'field',
-                ],
+                id: 'foo',
+                path: ['field'],
               },
             ],
-            'type': 1,
+            type: 1,
           },
         });
-      }
+      },
     );
   });
 
@@ -1418,9 +1368,9 @@ describe('Cache', () => {
 
       type QueryData = {
         me: {
-          __typename: string,
-          name: string,
-        },
+          __typename: string;
+          name: string;
+        };
       };
 
       const query: TypedDocumentNode<QueryData> = gql`
@@ -1440,7 +1390,7 @@ describe('Cache', () => {
         },
       });
 
-      cache.updateQuery({ query }, (data) => {
+      cache.updateQuery({ query }, data => {
         expect(data).toBe(null);
 
         cache.writeQuery({
@@ -1461,46 +1411,40 @@ describe('Cache', () => {
         };
       });
 
-      expect(results).toEqual([
-        { me: { __typename: 'Person', name: 'Ben Newman' } },
-      ]);
+      expect(results).toEqual([{ me: { __typename: 'Person', name: 'Ben Newman' } }]);
 
       expect(cache.extract()).toEqual({
         'Person:{"name":"Ben Newman"}': {
-          'data': {
-            '__typename': 'Person',
-            'name': 'Ben Newman',
+          data: {
+            __typename: 'Person',
+            name: 'Ben Newman',
           },
-          'inbound': [
+          inbound: [
             {
-              'id': 'ROOT_QUERY',
-              'path': [
-                'me',
-              ],
+              id: 'ROOT_QUERY',
+              path: ['me'],
             },
           ],
-          'type': 0,
-        }, /*
+          type: 0,
+        } /*
         'Person:{"name":"Ben"}': {
           'data': {
             '__typename': 'Person',
             'name': 'Ben',
           },
           'type': 0,
-        },*/
-        'ROOT_QUERY': {
-          'data': {
-            'me': undefined,
+        },*/,
+        ROOT_QUERY: {
+          data: {
+            me: undefined,
           },
-          'outbound': [
+          outbound: [
             {
-              'id': 'Person:{"name":"Ben Newman"}',
-              'path': [
-                'me',
-              ],
+              id: 'Person:{"name":"Ben Newman"}',
+              path: ['me'],
             },
           ],
-          'type': 0,
+          type: 0,
         },
       });
 
@@ -1521,7 +1465,7 @@ describe('Cache', () => {
           fragment: usernameFragment,
           returnPartialData: true,
         },
-        (data) => {
+        data => {
           expect(data).toMatchObject({
             __typename: 'Person',
           });
@@ -1554,7 +1498,7 @@ describe('Cache', () => {
             name: 'Ben Newman',
             username: 'benjamn',
           };
-        }
+        },
       );
 
       // Still just two results, thanks to cache.update{Query,Fragment} using
@@ -1566,49 +1510,45 @@ describe('Cache', () => {
 
       expect(cache.extract()).toEqual({
         'Person:{"name":"Ben Newman"}': {
-          'data': {
-            '__typename': 'Person',
-            'name': 'Ben Newman',
-            'username': 'benjamn',
+          data: {
+            __typename: 'Person',
+            name: 'Ben Newman',
+            username: 'benjamn',
           },
-          'type': 0,
-        }, /* Hermes does gc by default
+          type: 0,
+        } /* Hermes does gc by default
         'Person:{"name":"Ben"}': {
           'data': {
             '__typename': 'Person',
             'name': 'Ben',
           },
           'type': 0,
-        },*/
+        },*/,
         'Person:{"name":"Brian Kim"}': {
-          'data': {
-            '__typename': 'Person',
-            'name': 'Brian Kim',
-            'username': 'brainkim',
+          data: {
+            __typename: 'Person',
+            name: 'Brian Kim',
+            username: 'brainkim',
           },
-          'inbound': [
+          inbound: [
             {
-              'id': 'ROOT_QUERY',
-              'path': [
-                'me',
-              ],
+              id: 'ROOT_QUERY',
+              path: ['me'],
             },
           ],
-          'type': 0,
+          type: 0,
         },
-        'ROOT_QUERY': {
-          'data': {
-            'me': undefined,
+        ROOT_QUERY: {
+          data: {
+            me: undefined,
           },
-          'outbound': [
+          outbound: [
             {
-              'id': 'Person:{"name":"Brian Kim"}',
-              'path': [
-                'me',
-              ],
+              id: 'Person:{"name":"Brian Kim"}',
+              path: ['me'],
             },
           ],
-          'type': 0,
+          type: 0,
         },
       });
 
@@ -1985,7 +1925,7 @@ describe('Cache', () => {
             });
             return expected;
           },
-        })
+        }),
       ).toBe(expected);
 
       expect(
@@ -1995,7 +1935,7 @@ describe('Cache', () => {
             c.reset();
             return expected;
           },
-        })
+        }),
       ).toBe(expected);
 
       expect(
@@ -2015,7 +1955,7 @@ describe('Cache', () => {
           onWatchUpdated() {
             throw new Error('onWatchUpdated should not have been called');
           },
-        })
+        }),
       ).toBe(expected);
 
       expect(
@@ -2024,7 +1964,7 @@ describe('Cache', () => {
           update(_c) {
             return expected;
           },
-        })
+        }),
       ).toBe(expected);
 
       expect(
@@ -2044,7 +1984,7 @@ describe('Cache', () => {
           onWatchUpdated() {
             throw new Error('onWatchUpdated should not have been called');
           },
-        })
+        }),
       ).toBe(expected);
 
       expect(
@@ -2054,7 +1994,7 @@ describe('Cache', () => {
           update(_c) {
             return expected;
           },
-        })
+        }),
       ).toBe(expected);
 
       expect(
@@ -2068,11 +2008,11 @@ describe('Cache', () => {
                     __typename
                   }
                 `,
-              })
+              }),
             ).toMatchObject({ __typename: 'Query' });
             return expected;
           },
-        })
+        }),
       ).toBe(expected);
 
       const optimisticId = 'some optimistic ID';
@@ -2093,13 +2033,13 @@ describe('Cache', () => {
           onWatchUpdated() {
             throw new Error('onWatchUpdated should not have been called');
           },
-        })
+        }),
       ).toBe(expected);
     });
   });
 
   describe('performTransaction', () => {
-    itWithInitialData('will not broadcast mid-transaction', [{}], (cache) => {
+    itWithInitialData('will not broadcast mid-transaction', [{}], cache => {
       let numBroadcasts = 0;
 
       const query = gql`
@@ -2118,7 +2058,7 @@ describe('Cache', () => {
 
       expect(numBroadcasts).toEqual(0);
 
-      cache.performTransaction((proxy) => {
+      cache.performTransaction(proxy => {
         proxy.writeQuery({
           data: { a: 1 },
           query,
@@ -2145,7 +2085,7 @@ describe('Cache', () => {
   });
 
   describe('recordOptimisticTransaction', () => {
-    itWithInitialData('will only broadcast once', [{}], (cache) => {
+    itWithInitialData('will only broadcast once', [{}], cache => {
       let numBroadcasts = 0;
 
       const query = gql`
@@ -2164,7 +2104,7 @@ describe('Cache', () => {
 
       expect(numBroadcasts).toEqual(0);
 
-      cache.recordOptimisticTransaction((proxy) => {
+      cache.recordOptimisticTransaction(proxy => {
         proxy.writeQuery({
           data: { a: 1 },
           query,
@@ -2368,8 +2308,8 @@ describe('Hermes#broadcastWatches', () => {
 
     type Diff = Cache.DiffResult<{
       object: {
-        name: string,
-      },
+        name: string;
+      };
     }>;
     const diffs: Record<string, Diff[]> = Object.create(null);
     function addDiff(name: string, diff: Diff) {
@@ -2391,7 +2331,7 @@ describe('Hermes#broadcastWatches', () => {
         variables: { name: 'canonicalByDefault' },
         // Pass nothing for canonizeResults to let the default for
         // canonicalCache (true) prevail.
-      })
+      }),
     );
 
     unwatchers.add(
@@ -2400,7 +2340,7 @@ describe('Hermes#broadcastWatches', () => {
         variables: { name: 'nonCanonicalByDefault' },
         // Pass nothing for canonizeResults to let the default for
         // nonCanonicalCache (false) prevail.
-      })
+      }),
     );
 
     unwatchers.add(
@@ -2408,7 +2348,7 @@ describe('Hermes#broadcastWatches', () => {
         ...commonWatchOptions,
         variables: { name: 'canonicalByChoice' },
         canonizeResults: true, // Override the default.
-      })
+      }),
     );
 
     unwatchers.add(
@@ -2416,7 +2356,7 @@ describe('Hermes#broadcastWatches', () => {
         ...commonWatchOptions,
         variables: { name: 'nonCanonicalByChoice' },
         canonizeResults: false, // Override the default.
-      })
+      }),
     );
 
     function makeDiff(name: string): Diff {
@@ -2440,11 +2380,11 @@ describe('Hermes#broadcastWatches', () => {
       nonCanonicalByChoice: [nonCanonicalByChoiceDiff],
     });
 
-    [canonicalCache, nonCanonicalCache].forEach((cache) => {
+    [canonicalCache, nonCanonicalCache].forEach(cache => {
       // Hack: delete every watch.lastDiff, so subsequent results will be
       // broadcast, even though they are deeply equal to the previous results.
       // @ts-ignore
-      cache['watches'].forEach((watch) => {
+      cache['watches'].forEach(watch => {
         delete watch.lastDiff;
       });
     });
@@ -2460,15 +2400,9 @@ describe('Hermes#broadcastWatches', () => {
     // Every watcher receives the same (deeply equal) Diff a second time.
     expect(diffs).toMatchObject({
       canonicalByDefault: [canonicalByDefaultDiff, canonicalByDefaultDiff],
-      nonCanonicalByDefault: [
-        nonCanonicalByDefaultDiff,
-        nonCanonicalByDefaultDiff,
-      ],
+      nonCanonicalByDefault: [nonCanonicalByDefaultDiff, nonCanonicalByDefaultDiff],
       canonicalByChoice: [canonicalByChoiceDiff, canonicalByChoiceDiff],
-      nonCanonicalByChoice: [
-        nonCanonicalByChoiceDiff,
-        nonCanonicalByChoiceDiff,
-      ],
+      nonCanonicalByChoice: [nonCanonicalByChoiceDiff, nonCanonicalByChoiceDiff],
     });
 
     function expectCanonical(name: string) {
@@ -2622,12 +2556,12 @@ describe('Hermes#modify', () => {
 
     const query: TypedDocumentNode<{
       currentlyReading: {
-        title: string,
-        isbn: string,
+        title: string;
+        isbn: string;
         author: {
-          name: string,
-        },
-      },
+          name: string;
+        };
+      };
     }> = gql`
       query {
         currentlyReading {
@@ -2676,7 +2610,7 @@ describe('Hermes#modify', () => {
             return INVALIDATE;
           },
         },
-      })
+      }),
     ).toBe(false); // Nothing actually modified.
 
     const resultAfterAuthorInvalidation = read();
@@ -2693,7 +2627,7 @@ describe('Hermes#modify', () => {
         fields(_, { INVALIDATE }) {
           return INVALIDATE;
         },
-      })
+      }),
     ).toBe(false); // Nothing actually modified.
 
     const resultAfterBookInvalidation = read();
@@ -2704,7 +2638,7 @@ describe('Hermes#modify', () => {
       name: 'Maria Dahvana Headley',
     });
     expect(resultAfterBookInvalidation.currentlyReading.author).toBe(
-      resultAfterAuthorInvalidation.currentlyReading.author
+      resultAfterAuthorInvalidation.currentlyReading.author,
     );
   });
 
@@ -2736,7 +2670,7 @@ describe('Hermes#modify', () => {
     const currentlyReading = {
       __typename: 'Book',
       isbn: '147670032X',
-      title: 'Why We\'re Polarized',
+      title: "Why We're Polarized",
       author: {
         __typename: 'Author',
         name: 'Ezra Klein',
@@ -2753,59 +2687,51 @@ describe('Hermes#modify', () => {
 
     expect(cache.extract()).toEqual({
       'Author:{"name":"Ezra Klein"}': {
-        'data': {
-          '__typename': 'Author',
-          'name': 'Ezra Klein',
-          'yearOfBirth': 1983,
+        data: {
+          __typename: 'Author',
+          name: 'Ezra Klein',
+          yearOfBirth: 1983,
         },
-        'inbound': [
+        inbound: [
           {
-            'id': 'Book:{"isbn":"147670032X"}',
-            'path': [
-              'author',
-            ],
+            id: 'Book:{"isbn":"147670032X"}',
+            path: ['author'],
           },
         ],
-        'type': 0,
+        type: 0,
       },
       'Book:{"isbn":"147670032X"}': {
-        'data': {
-          '__typename': 'Book',
-          'author': undefined,
-          'isbn': '147670032X',
-          'title': 'Why We\'re Polarized',
+        data: {
+          __typename: 'Book',
+          author: undefined,
+          isbn: '147670032X',
+          title: "Why We're Polarized",
         },
-        'inbound': [
+        inbound: [
           {
-            'id': 'ROOT_QUERY',
-            'path': [
-              'currentlyReading',
-            ],
+            id: 'ROOT_QUERY',
+            path: ['currentlyReading'],
           },
         ],
-        'outbound': [
+        outbound: [
           {
-            'id': 'Author:{"name":"Ezra Klein"}',
-            'path': [
-              'author',
-            ],
+            id: 'Author:{"name":"Ezra Klein"}',
+            path: ['author'],
           },
         ],
-        'type': 0,
+        type: 0,
       },
-      'ROOT_QUERY': {
-        'data': {
-          'currentlyReading': undefined,
+      ROOT_QUERY: {
+        data: {
+          currentlyReading: undefined,
         },
-        'outbound': [
+        outbound: [
           {
-            'id': 'Book:{"isbn":"147670032X"}',
-            'path': [
-              'currentlyReading',
-            ],
+            id: 'Book:{"isbn":"147670032X"}',
+            path: ['currentlyReading'],
           },
         ],
-        'type': 0,
+        type: 0,
       },
     });
 
@@ -2843,7 +2769,7 @@ describe('Hermes#modify', () => {
       id: bookId,
       fields: {
         author(author: Reference, { readField }) {
-          expect(readField('title')).toBe('Why We\'re Polarized');
+          expect(readField('title')).toBe("Why We're Polarized");
           expect(readField('name', author)).toBe('Ezra Klein');
           cache.modify({
             fields: {
@@ -2867,58 +2793,50 @@ describe('Hermes#modify', () => {
     expect('yearOfBirth' in snapshotWithoutYOB[authorId]!).toBe(false);
     expect(snapshotWithoutYOB).toEqual({
       'Author:{"name":"Ezra Klein"}': {
-        'data': {
-          '__typename': 'Author',
-          'name': 'Ezra Klein',
+        data: {
+          __typename: 'Author',
+          name: 'Ezra Klein',
         },
-        'inbound': [
+        inbound: [
           {
-            'id': 'Book:{"isbn":"147670032X"}',
-            'path': [
-              'author',
-            ],
+            id: 'Book:{"isbn":"147670032X"}',
+            path: ['author'],
           },
         ],
-        'type': 0,
+        type: 0,
       },
       'Book:{"isbn":"147670032X"}': {
-        'data': {
-          '__typename': 'Book',
-          'author': undefined,
-          'isbn': '147670032X',
-          'title': 'Why We\'re Polarized',
+        data: {
+          __typename: 'Book',
+          author: undefined,
+          isbn: '147670032X',
+          title: "Why We're Polarized",
         },
-        'inbound': [
+        inbound: [
           {
-            'id': 'ROOT_QUERY',
-            'path': [
-              'currentlyReading',
-            ],
+            id: 'ROOT_QUERY',
+            path: ['currentlyReading'],
           },
         ],
-        'outbound': [
+        outbound: [
           {
-            'id': 'Author:{"name":"Ezra Klein"}',
-            'path': [
-              'author',
-            ],
+            id: 'Author:{"name":"Ezra Klein"}',
+            path: ['author'],
           },
         ],
-        'type': 0,
+        type: 0,
       },
-      'ROOT_QUERY': {
-        'data': {
-          'currentlyReading': undefined,
+      ROOT_QUERY: {
+        data: {
+          currentlyReading: undefined,
         },
-        'outbound': [
+        outbound: [
           {
-            'id': 'Book:{"isbn":"147670032X"}',
-            'path': [
-              'currentlyReading',
-            ],
+            id: 'Book:{"isbn":"147670032X"}',
+            path: ['currentlyReading'],
           },
         ],
-        'type': 0,
+        type: 0,
       },
     });
 
@@ -2941,8 +2859,10 @@ describe('Hermes#modify', () => {
       },
       ROOT_QUERY: {
         data: {
-          currentlyReading: null,
+          currentlyReading: undefined,
         },
+        // Like InMemoryCache, a dangling reference to the deleted Book.
+        outbound: [{ id: 'Book:{"isbn":"147670032X"}', path: ['currentlyReading'] }],
         type: 0,
       },
     });
@@ -2966,8 +2886,9 @@ describe('Hermes#modify', () => {
     expect(snapshotWithoutAuthor).toEqual({
       ROOT_QUERY: {
         data: {
-          currentlyReading: null,
+          currentlyReading: undefined,
         },
+        outbound: [{ id: 'Book:{"isbn":"147670032X"}', path: ['currentlyReading'] }],
         type: 0,
       },
     });
@@ -2987,27 +2908,17 @@ describe('Hermes#modify', () => {
 
           fields: {
             comments: {
-              merge(
-                existing: Reference[],
-                incoming: Reference[],
-                { args, mergeObjects }
-              ) {
+              merge(existing: Reference[], incoming: Reference[], { args, mergeObjects }) {
                 const merged = existing ? existing.slice(0) : [];
-                const end
-                  = args!.offset + Math.min(args!.limit, incoming.length);
+                const end = args!.offset + Math.min(args!.limit, incoming.length);
                 for (let i = args!.offset; i < end; ++i) {
-                  merged[i] = mergeObjects(
-                    merged[i],
-                    incoming[i - args!.offset]
-                  ) as Reference;
+                  merged[i] = mergeObjects(merged[i], incoming[i - args!.offset]) as Reference;
                 }
                 return merged;
               },
 
               read(existing: Reference[], { args }) {
-                const page
-                  = existing &&
-                  existing.slice(args!.offset, args!.offset + args!.limit);
+                const page = existing && existing.slice(args!.offset, args!.offset + args!.limit);
                 if (page && page.length > 0) {
                   return page;
                 }
@@ -3068,125 +2979,101 @@ describe('Hermes#modify', () => {
 
     expect(cache.extract()).toEqual({
       'Comment:{"id":"c1"}': {
-        'data': {
-          '__typename': 'Comment',
-          'id': 'c1',
-          'text': 'first post',
+        data: {
+          __typename: 'Comment',
+          id: 'c1',
+          text: 'first post',
         },
-        'inbound': [
+        inbound: [
           {
-            'id': 'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}',
-            'path': [
-              0,
-            ],
+            id: 'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}',
+            path: [0],
           },
         ],
-        'type': 0,
+        type: 0,
       },
       'Comment:{"id":"c2"}': {
-        'data': {
-          '__typename': 'Comment',
-          'id': 'c2',
-          'text': 'I have thoughts',
+        data: {
+          __typename: 'Comment',
+          id: 'c2',
+          text: 'I have thoughts',
         },
-        'inbound': [
+        inbound: [
           {
-            'id': 'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}',
-            'path': [
-              1,
-            ],
+            id: 'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}',
+            path: [1],
           },
         ],
-        'type': 0,
+        type: 0,
       },
       'Comment:{"id":"c3"}': {
-        'data': {
-          '__typename': 'Comment',
-          'id': 'c3',
-          'text': 'friendly ping',
+        data: {
+          __typename: 'Comment',
+          id: 'c3',
+          text: 'friendly ping',
         },
-        'inbound': [
+        inbound: [
           {
-            'id': 'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}',
-            'path': [
-              2,
-            ],
+            id: 'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}',
+            path: [2],
           },
         ],
-        'type': 0,
+        type: 0,
       },
-      'ROOT_QUERY': {
-        'data': {
-          'thread': undefined,
+      ROOT_QUERY: {
+        data: {
+          thread: undefined,
         },
-        'outbound': [
+        outbound: [
           {
-            'id': 'Thread:{"tid":123}',
-            'path': [
-              'thread',
-            ],
+            id: 'Thread:{"tid":123}',
+            path: ['thread'],
           },
         ],
-        'type': 0,
+        type: 0,
       },
       'Thread:{"tid":123}': {
-        'data': {
-          '__typename': 'Thread',
-          'tid': 123,
+        data: {
+          __typename: 'Thread',
+          tid: 123,
         },
-        'inbound': [
+        inbound: [
           {
-            'id': 'ROOT_QUERY',
-            'path': [
-              'thread',
-            ],
+            id: 'ROOT_QUERY',
+            path: ['thread'],
           },
         ],
-        'parameterized': [
+        parameterized: [
           {
-            'id': 'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}',
-            'path': [
-              'comments',
-            ],
+            id: 'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}',
+            path: ['comments'],
           },
         ],
-        'type': 0,
+        type: 0,
       },
       'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}': {
-        'data': [
-          undefined,
-          undefined,
-          undefined,
-        ],
-        'inbound': [
+        data: [undefined, undefined, undefined],
+        inbound: [
           {
-            'id': 'Thread:{"tid":123}',
-            'path': [
-              'comments',
-            ],
+            id: 'Thread:{"tid":123}',
+            path: ['comments'],
           },
         ],
-        'outbound': [
+        outbound: [
           {
-            'id': 'Comment:{"id":"c1"}',
-            'path': [
-              0,
-            ],
+            id: 'Comment:{"id":"c1"}',
+            path: [0],
           },
           {
-            'id': 'Comment:{"id":"c2"}',
-            'path': [
-              1,
-            ],
+            id: 'Comment:{"id":"c2"}',
+            path: [1],
           },
           {
-            'id': 'Comment:{"id":"c3"}',
-            'path': [
-              2,
-            ],
+            id: 'Comment:{"id":"c3"}',
+            path: [2],
           },
         ],
-        'type': 1,
+        type: 1,
       },
     });
 
@@ -3195,7 +3082,7 @@ describe('Hermes#modify', () => {
         comments(comments: readonly Reference[], { readField }) {
           // expect(Object.isFrozen(comments)).toBe(true); TODO
           expect(comments.length).toBe(3);
-          const filtered = comments.filter((comment) => {
+          const filtered = comments.filter(comment => {
             return readField('id', comment) !== 'c1';
           });
           expect(filtered.length).toBe(2);
@@ -3213,100 +3100,81 @@ describe('Hermes#modify', () => {
 
     expect(cache.extract()).toEqual({
       'Comment:{"id":"c2"}': {
-        'data': {
-          '__typename': 'Comment',
-          'id': 'c2',
-          'text': 'I have thoughts',
+        data: {
+          __typename: 'Comment',
+          id: 'c2',
+          text: 'I have thoughts',
         },
-        'inbound': [
+        inbound: [
           {
-            'id': 'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}',
-            'path': [
-              0,
-            ],
+            id: 'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}',
+            path: [0],
           },
         ],
-        'type': 0,
+        type: 0,
       },
       'Comment:{"id":"c3"}': {
-        'data': {
-          '__typename': 'Comment',
-          'id': 'c3',
-          'text': 'friendly ping',
+        data: {
+          __typename: 'Comment',
+          id: 'c3',
+          text: 'friendly ping',
         },
-        'inbound': [
+        inbound: [
           {
-            'id': 'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}',
-            'path': [
-              1,
-            ],
+            id: 'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}',
+            path: [1],
           },
         ],
-        'type': 0,
+        type: 0,
       },
-      'ROOT_QUERY': {
-        'data': { 'thread': undefined },
-        'outbound': [
+      ROOT_QUERY: {
+        data: { thread: undefined },
+        outbound: [
           {
-            'id': 'Thread:{"tid":123}',
-            'path': [
-              'thread',
-            ],
+            id: 'Thread:{"tid":123}',
+            path: ['thread'],
           },
         ],
-        'type': 0,
+        type: 0,
       },
       'Thread:{"tid":123}': {
-        'data': {
-          '__typename': 'Thread',
-          'tid': 123,
+        data: {
+          __typename: 'Thread',
+          tid: 123,
         },
-        'inbound': [
+        inbound: [
           {
-            'id': 'ROOT_QUERY',
-            'path': [
-              'thread',
-            ],
+            id: 'ROOT_QUERY',
+            path: ['thread'],
           },
         ],
-        'parameterized': [
+        parameterized: [
           {
-            'id': 'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}',
-            'path': [
-              'comments',
-            ],
+            id: 'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}',
+            path: ['comments'],
           },
         ],
-        'type': 0,
+        type: 0,
       },
       'Thread:{"tid":123}❖["comments"]❖{"offset":0,"limit":3}': {
-        'data': [
-          undefined,
-          undefined,
-        ],
-        'inbound': [
+        data: [undefined, undefined],
+        inbound: [
           {
-            'id': 'Thread:{"tid":123}',
-            'path': [
-              'comments',
-            ],
+            id: 'Thread:{"tid":123}',
+            path: ['comments'],
           },
         ],
-        'outbound': [
+        outbound: [
           {
-            'id': 'Comment:{"id":"c2"}',
-            'path': [
-              0,
-            ],
+            id: 'Comment:{"id":"c2"}',
+            path: [0],
           },
           {
-            'id': 'Comment:{"id":"c3"}',
-            'path': [
-              1,
-            ],
+            id: 'Comment:{"id":"c3"}',
+            path: [1],
           },
         ],
-        'type': 1,
+        type: 1,
       },
     });
   });
@@ -3321,7 +3189,7 @@ describe('Hermes#modify', () => {
       }
     `;
 
-    cache.recordOptimisticTransaction((c) => {
+    cache.recordOptimisticTransaction(c => {
       c.writeQuery({
         query,
         data: {
@@ -3408,54 +3276,46 @@ describe('Hermes#modify', () => {
 
     expect(cache.extract()).toEqual({
       'A:1': {
-        'data': {
-          '__typename': 'A',
-          'id': 1,
-          'value': 123,
+        data: {
+          __typename: 'A',
+          id: 1,
+          value: 123,
         },
-        'inbound': [
+        inbound: [
           {
-            'id': 'ROOT_QUERY',
-            'path': [
-              'a',
-            ],
+            id: 'ROOT_QUERY',
+            path: ['a'],
           },
         ],
-        'type': 0,
+        type: 0,
       },
       'B:1': {
-        'data': {
-          '__typename': 'B',
-          'id': 1,
-          'value': 321,
+        data: {
+          __typename: 'B',
+          id: 1,
+          value: 321,
         },
-        'inbound': [
+        inbound: [
           {
-            'id': 'ROOT_QUERY',
-            'path': [
-              'b',
-            ],
+            id: 'ROOT_QUERY',
+            path: ['b'],
           },
         ],
-        'type': 0,
+        type: 0,
       },
-      'ROOT_QUERY': {
-        'data': {},
-        'outbound': [
+      ROOT_QUERY: {
+        data: {},
+        outbound: [
           {
-            'id': 'A:1',
-            'path': [
-              'a',
-            ],
+            id: 'A:1',
+            path: ['a'],
           },
           {
-            'id': 'B:1',
-            'path': [
-              'b',
-            ],
+            id: 'B:1',
+            path: ['b'],
           },
         ],
-        'type': 0,
+        type: 0,
       },
     });
 
@@ -3479,11 +3339,7 @@ describe('Hermes#modify', () => {
       },
     });
 
-    function makeResult(
-      __typename: string,
-      value: number,
-      complete: boolean = true
-    ) {
+    function makeResult(__typename: string, value: number, complete: boolean = true) {
       return {
         complete,
         result: {
@@ -3534,9 +3390,7 @@ describe('Hermes#modify', () => {
 
     // Check that resetting the result cache does not trigger additional watch
     // notifications.
-    expect(
-      cache.gc()
-    ).toEqual([]);
+    expect(cache.gc()).toEqual([]);
     expect(aResults).toMatchObject([a123, a124]);
     expect(bResults).toMatchObject([b321, b322]);
     cache['broadcastWatches']();
@@ -3583,75 +3437,69 @@ describe('Hermes#modify', () => {
       });
     }
 
-    addBook('147670032X', 'Why We\'re Polarized');
+    addBook('147670032X', "Why We're Polarized");
     addBook('1760641790', 'How To Do Nothing');
     addBook('0735211280', 'Spineless');
 
     const fullSnapshot = {
-      'Book:{"isbn":"0735211280"}':  {
-        'data':  {
-          '__typename': 'Book',
-          'isbn': '0735211280',
-          'title': 'Spineless',
+      'Book:{"isbn":"0735211280"}': {
+        data: {
+          __typename: 'Book',
+          isbn: '0735211280',
+          title: 'Spineless',
         },
-        'inbound':  [
+        inbound: [
           {
-            'id': 'ROOT_QUERY❖["book"]❖{"isbn":"0735211280"}',
-            'path':  [],
+            id: 'ROOT_QUERY❖["book"]❖{"isbn":"0735211280"}',
+            path: [],
           },
         ],
-        'type': 0,
+        type: 0,
       },
-      'Book:{"isbn":"147670032X"}':  {
-        'data':  {
-          '__typename': 'Book',
-          'isbn': '147670032X',
-          'title': 'Why We\'re Polarized',
+      'Book:{"isbn":"147670032X"}': {
+        data: {
+          __typename: 'Book',
+          isbn: '147670032X',
+          title: "Why We're Polarized",
         },
-        'inbound':  [
+        inbound: [
           {
-            'id': 'ROOT_QUERY❖["book"]❖{"isbn":"147670032X"}',
-            'path':  [],
+            id: 'ROOT_QUERY❖["book"]❖{"isbn":"147670032X"}',
+            path: [],
           },
         ],
-        'type': 0,
+        type: 0,
       },
-      'Book:{"isbn":"1760641790"}':  {
-        'data':  {
-          '__typename': 'Book',
-          'isbn': '1760641790',
-          'title': 'How To Do Nothing',
+      'Book:{"isbn":"1760641790"}': {
+        data: {
+          __typename: 'Book',
+          isbn: '1760641790',
+          title: 'How To Do Nothing',
         },
-        'inbound':  [
+        inbound: [
           {
-            'id': 'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
-            'path':  [],
+            id: 'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
+            path: [],
           },
         ],
-        'type': 0,
+        type: 0,
       },
-      'ROOT_QUERY':  {
-        'parameterized':  [
+      ROOT_QUERY: {
+        parameterized: [
           {
-            'id': 'ROOT_QUERY❖["book"]❖{"isbn":"147670032X"}',
-            'path':  [
-              'book',
-            ],
+            id: 'ROOT_QUERY❖["book"]❖{"isbn":"147670032X"}',
+            path: ['book'],
           },
           {
-            'id': 'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
-            'path':  [
-              'book',
-            ],
+            id: 'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
+            path: ['book'],
           },
           {
-            'id': 'ROOT_QUERY❖["book"]❖{"isbn":"0735211280"}',
-            'path':  [
-              'book',
-            ],
+            id: 'ROOT_QUERY❖["book"]❖{"isbn":"0735211280"}',
+            path: ['book'],
           },
         ],
-        'type': 0,
+        type: 0,
       },
     };
 
@@ -3665,7 +3513,7 @@ describe('Hermes#modify', () => {
           book(
             book: Reference,
 
-            { fieldName, storeFieldName, isReference: isRef, readField, DELETE }
+            { fieldName, storeFieldName, isReference: isRef, readField, DELETE },
           ) {
             expect(fieldName).toBe('book');
             expect(isRef(book)).toBe(true);
@@ -3675,7 +3523,7 @@ describe('Hermes#modify', () => {
               readField({
                 fieldName: '__typename',
                 from: book,
-              })
+              }),
             ).toBe('Book');
 
             const parts = storeFieldName.split('❖');
@@ -3714,154 +3562,103 @@ describe('Hermes#modify', () => {
 
     expect(cache.extract()).toEqual({
       'Book:{"isbn":"0735211280"}': {
-        'data': {
-          '__typename': 'Book',
-          'isbn': '0735211280',
-          'title': 'Spineless',
+        data: {
+          __typename: 'Book',
+          isbn: '0735211280',
+          title: 'Spineless',
         },
-        'inbound': [
-          {
-            'id': 'ROOT_QUERY❖["book"]❖{"isbn":"0735211280"}',
-            'path': [],
-          },
-        ],
-        'type': 0,
+        type: 0,
       },
       'Book:{"isbn":"147670032X"}': {
-        'data': {
-          '__typename': 'Book',
-          'isbn': '147670032X',
-          'title': 'Why We\'re Polarized',
+        data: {
+          __typename: 'Book',
+          isbn: '147670032X',
+          title: "Why We're Polarized",
         },
-        'inbound': [
-          {
-            'id': 'ROOT_QUERY❖["book"]❖{"isbn":"147670032X"}',
-            'path': [],
-          },
-        ],
-        'type': 0,
+        type: 0,
       },
       'Book:{"isbn":"1760641790"}': {
-        'data': {
-          '__typename': 'Book',
-          'isbn': '1760641790',
-          'title': 'How To Do Nothing',
+        data: {
+          __typename: 'Book',
+          isbn: '1760641790',
+          title: 'How To Do Nothing',
         },
-        'inbound': [
+        inbound: [
           {
-            'id': 'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
-            'path': [],
+            id: 'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
+            path: [],
           },
         ],
-        'type': 0,
+        type: 0,
       },
-      'ROOT_QUERY': {
-        'data': {
-          'book': null,
-        },
-        'parameterized': [
+      ROOT_QUERY: {
+        parameterized: [
           {
-            'id': 'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
-            'path': [
-              'book',
-            ],
+            id: 'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
+            path: ['book'],
           },
         ],
-        'type': 0,
-      },
-      'ROOT_QUERY❖["book"]❖{"isbn":"0735211280"}': {
-        'data': null,
-        'outbound': [
-          {
-            'id': 'Book:{"isbn":"0735211280"}',
-            'path': [],
-          },
-        ],
-        'type': 1,
-      },
-      'ROOT_QUERY❖["book"]❖{"isbn":"147670032X"}': {
-        'data': null,
-        'outbound': [
-          {
-            'id': 'Book:{"isbn":"147670032X"}',
-            'path': [],
-          },
-        ],
-        'type': 1,
+        type: 0,
       },
       'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}': {
-        'data': null,
-        'inbound': [
+        data: null,
+        inbound: [
           {
-            'id': 'ROOT_QUERY',
-            'path': [
-              'book',
-            ],
+            id: 'ROOT_QUERY',
+            path: ['book'],
           },
         ],
-        'outbound': [
+        outbound: [
           {
-            'id': 'Book:{"isbn":"1760641790"}',
-            'path': [],
+            id: 'Book:{"isbn":"1760641790"}',
+            path: [],
           },
         ],
-        'type': 1,
+        type: 1,
       },
     });
 
-    expect(cache.gc().sort()).toEqual([
-      'Book:{"isbn":"0735211280"}',
-      'Book:{"isbn":"147670032X"}',
-      'ROOT_QUERY❖["book"]❖{"isbn":"0735211280"}',
-      'ROOT_QUERY❖["book"]❖{"isbn":"147670032X"}',
-    ]);
+    expect(cache.gc().sort()).toEqual(['Book:{"isbn":"0735211280"}', 'Book:{"isbn":"147670032X"}']);
 
     expect(cache.extract()).toEqual({
       'Book:{"isbn":"1760641790"}': {
-        'data': {
-          '__typename': 'Book',
-          'isbn': '1760641790',
-          'title': 'How To Do Nothing',
+        data: {
+          __typename: 'Book',
+          isbn: '1760641790',
+          title: 'How To Do Nothing',
         },
-        'inbound': [
+        inbound: [
           {
-            'id': 'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
-            'path': [],
+            id: 'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
+            path: [],
           },
         ],
-        'type': 0,
+        type: 0,
       },
-      'ROOT_QUERY': {
-        'data': {
-          'book': null,
-        },
-        'parameterized': [
+      ROOT_QUERY: {
+        parameterized: [
           {
-            'id': 'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
-            'path': [
-              'book',
-            ],
+            id: 'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
+            path: ['book'],
           },
         ],
-        'type': 0,
+        type: 0,
       },
       'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}': {
-        'data': null,
-        'inbound': [
+        data: null,
+        inbound: [
           {
-            'id': 'ROOT_QUERY',
-            'path': [
-              'book',
-            ],
+            id: 'ROOT_QUERY',
+            path: ['book'],
           },
         ],
-        'outbound': [
+        outbound: [
           {
-            'id': 'Book:{"isbn":"1760641790"}',
-            'path': [],
+            id: 'Book:{"isbn":"1760641790"}',
+            path: [],
           },
         ],
-        'type': 1,
+        type: 1,
       },
     });
 
@@ -3869,48 +3666,23 @@ describe('Hermes#modify', () => {
 
     expect(cache.extract()).toEqual({
       'Book:{"isbn":"1760641790"}': {
-        'data': {
-          '__typename': 'Book',
-          'isbn': '1760641790',
-          'title': 'How To Do Nothing',
+        data: {
+          __typename: 'Book',
+          isbn: '1760641790',
+          title: 'How To Do Nothing',
         },
-        'inbound': [
-          {
-            'id': 'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
-            'path': [],
-          },
-        ],
-        'type': 0,
+        type: 0,
       },
-      'ROOT_QUERY': {
-        'data': {
-          'book': null,
-        },
-        'type': 0,
-      },
-      'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}': {
-        'data': null,
-        'outbound': [
-          {
-            'id': 'Book:{"isbn":"1760641790"}',
-            'path': [],
-          },
-        ],
-        'type': 1,
+      ROOT_QUERY: {
+        type: 0,
       },
     });
 
-    expect(cache.gc()).toEqual([
-      'ROOT_QUERY❖["book"]❖{"isbn":"1760641790"}',
-      'Book:{"isbn":"1760641790"}',
-    ]);
+    expect(cache.gc()).toEqual(['Book:{"isbn":"1760641790"}']);
 
     expect(cache.extract()).toEqual({
-      'ROOT_QUERY': {
-        'data': {
-          'book': null,
-        },
-        'type': 0,
+      ROOT_QUERY: {
+        type: 0,
       },
     });
   });
@@ -3946,7 +3718,7 @@ describe('Hermes#modify', () => {
           fields(value) {
             throw new Error(`unexpected value: ${value}`);
           },
-        })
+        }),
       ).toBe(false);
     }
 
@@ -3962,11 +3734,11 @@ describe('Hermes#modify', () => {
 
 describe('TypedDocumentNode<Data, Variables>', () => {
   type Book = {
-    isbn?: string,
-    title: string,
+    isbn?: string;
+    title: string;
     author: {
-      name: string,
-    },
+      name: string;
+    };
   };
 
   const query: TypedDocumentNode<{ book: Book }, { isbn: string }> = gql`
@@ -4018,8 +3790,8 @@ describe('TypedDocumentNode<Data, Variables>', () => {
           fields: {
             book(existing, { args, toReference }) {
               return (
-                existing
-                ?? (args &&
+                existing ??
+                (args &&
                   toReference({
                     __typename: 'Book',
                     isbn: args.isbn,
@@ -4136,7 +3908,7 @@ describe('TypedDocumentNode<Data, Variables>', () => {
     cache.modify<Book>({
       id: cache.identify(ffplBook),
       fields: {
-        isbn: (value) => {
+        isbn: value => {
           expectTypeOf(value).toEqualTypeOf<string>();
           return value;
         },

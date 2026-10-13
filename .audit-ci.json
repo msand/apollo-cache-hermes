@@ -1,7 +1,5 @@
 {
   "critical": true,
   "report-type": "summary",
-  "advisories": [
-    755
-  ]
+  "advisories": [755]
 }

@@ -11,7 +11,6 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 // workflow in isolation, given the contextual state that must be passed around.
 describe(`operations.write`, () => {
   describe(`single references hanging off of a root`, () => {
-
     let snapshot: GraphSnapshot, editedNodeIds: Set<NodeId>;
     beforeAll(() => {
       const result = createSnapshot(
@@ -21,7 +20,7 @@ describe(`operations.write`, () => {
             name: 'Gouda',
           },
         },
-        `{ viewer { id name } }`
+        `{ viewer { id name } }`,
       );
 
       snapshot = result.snapshot;
@@ -77,6 +76,5 @@ describe(`operations.write`, () => {
     it(`only contains the two nodes`, () => {
       jestExpect(snapshot.allNodeIds()).toEqual(jestExpect.arrayContaining([QueryRootId, '123']));
     });
-
   });
 });

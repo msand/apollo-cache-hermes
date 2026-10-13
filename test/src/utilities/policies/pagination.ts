@@ -7,9 +7,7 @@ type KeyArgs = FieldPolicy<any>['keyArgs'];
 
 // A very basic pagination field policy that always concatenates new
 // results onto the existing array, without examining options.args.
-export function concatPagination<T = Reference>(
-  keyArgs: KeyArgs = false
-): FieldPolicy<T[]> {
+export function concatPagination<T = Reference>(keyArgs: KeyArgs = false): FieldPolicy<T[]> {
   return {
     keyArgs,
     merge(existing, incoming) {
@@ -22,9 +20,7 @@ export function concatPagination<T = Reference>(
 // the incoming data into the existing array. If your arguments are called
 // something different (like args.{start,count}), feel free to copy/paste
 // this implementation and make the appropriate changes.
-export function offsetLimitPagination<T = Reference>(
-  keyArgs: KeyArgs = false
-): FieldPolicy<T[]> {
+export function offsetLimitPagination<T = Reference>(keyArgs: KeyArgs = false): FieldPolicy<T[]> {
   return {
     keyArgs,
     merge(existing, incoming, { args }) {
@@ -60,26 +56,26 @@ export function offsetLimitPagination<T = Reference>(
 // (something I attempted in #7023, but abandoned because of #7088).
 export type TRelayEdge<TNode> =
   | {
-      cursor?: string,
-      node: TNode,
+      cursor?: string;
+      node: TNode;
     }
   | (Reference & { cursor?: string });
 
 export type TRelayPageInfo = {
-  hasPreviousPage: boolean,
-  hasNextPage: boolean,
-  startCursor: string,
-  endCursor: string,
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
+  startCursor: string;
+  endCursor: string;
 };
 
 export type TExistingRelay<TNode> = Readonly<{
-  edges: TRelayEdge<TNode>[],
-  pageInfo: TRelayPageInfo,
+  edges: TRelayEdge<TNode>[];
+  pageInfo: TRelayPageInfo;
 }>;
 
 export type TIncomingRelay<TNode> = {
-  edges?: TRelayEdge<TNode>[],
-  pageInfo?: TRelayPageInfo,
+  edges?: TRelayEdge<TNode>[];
+  pageInfo?: TRelayPageInfo;
 };
 
 export type RelayFieldPolicy<TNode> = FieldPolicy<
@@ -92,7 +88,7 @@ export type RelayFieldPolicy<TNode> = FieldPolicy<
 // one that handles Relay-style pagination, without Apollo Client knowing
 // anything about connections, edges, cursors, or pageInfo objects.
 export function relayStylePagination<TNode extends Reference = Reference>(
-  keyArgs: KeyArgs = false
+  keyArgs: KeyArgs = false,
 ): RelayFieldPolicy<TNode> {
   return {
     keyArgs,
@@ -103,7 +99,7 @@ export function relayStylePagination<TNode extends Reference = Reference>(
       const edges: TRelayEdge<TNode>[] = [];
       let firstEdgeCursor = '';
       let lastEdgeCursor = '';
-      existing.edges.forEach((edge) => {
+      existing.edges.forEach(edge => {
         // Edges themselves could be Reference objects, so it's important
         // to use readField to access the edge.edge.node property.
         if (canRead(readField('node', edge))) {
@@ -146,9 +142,8 @@ export function relayStylePagination<TNode extends Reference = Reference>(
         return existing;
       }
 
-      const incomingEdges
-        = incoming.edges
-          ? incoming.edges.map((edge) => {
+      const incomingEdges = incoming.edges
+        ? incoming.edges.map(edge => {
             if (isReference((edge = { ...edge }))) {
               // In case edge is a Reference, we read out its cursor field and
               // store it as an extra property of the Reference object.
@@ -156,7 +151,7 @@ export function relayStylePagination<TNode extends Reference = Reference>(
             }
             return edge;
           })
-          : [];
+        : [];
 
       if (incoming.pageInfo) {
         const { pageInfo } = incoming;
@@ -227,13 +222,7 @@ export function relayStylePagination<TNode extends Reference = Reference>(
       };
 
       if (incoming.pageInfo) {
-        const {
-          hasPreviousPage,
-          hasNextPage,
-          startCursor,
-          endCursor,
-          ...extras
-        } = incoming.pageInfo;
+        const { hasPreviousPage, hasNextPage, startCursor, endCursor, ...extras } = incoming.pageInfo;
 
         // If incoming.pageInfo had any extra non-standard properties,
         // assume they should take precedence over any existing properties

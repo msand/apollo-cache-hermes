@@ -6,11 +6,7 @@ export function omitDeep<T, K extends string>(value: T, key: K) {
   return __omitDeep(value, key);
 }
 
-function __omitDeep<T, K extends string>(
-  value: T,
-  key: K,
-  known = new Map<any, any>()
-): DeepOmit<T, K> {
+function __omitDeep<T, K extends string>(value: T, key: K, known = new Map<any, any>()): DeepOmit<T, K> {
   if (known.has(value)) {
     return known.get(value);
   }
@@ -35,7 +31,7 @@ function __omitDeep<T, K extends string>(
     const obj = Object.create(Object.getPrototypeOf(value));
     known.set(value, obj);
 
-    Object.keys(value).forEach((k) => {
+    Object.keys(value).forEach(k => {
       if (k === key) {
         modified = true;
         return;

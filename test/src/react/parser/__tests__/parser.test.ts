@@ -22,7 +22,7 @@ describe('parser', () => {
       }
     `;
 
-    expect(parser.bind(null, query)).toThrowError(/react-apollo only supports/);
+    expect(parser.bind(null, query)).toThrow(/react-apollo only supports/);
   });
 
   it('should error if multiple operations are present', () => {
@@ -40,16 +40,14 @@ describe('parser', () => {
       }
     `;
 
-    expect(parser.bind(null, query)).toThrowError(/react-apollo only supports/);
+    expect(parser.bind(null, query)).toThrow(/react-apollo only supports/);
   });
 
   it('should error if not a DocumentNode', () => {
     const query = `
       query One { user { name } }
     `;
-    expect(parser.bind(null, query as any)).toThrowError(
-      /not a valid GraphQL DocumentNode/
-    );
+    expect(parser.bind(null, query as any)).toThrow(/not a valid GraphQL DocumentNode/);
   });
 
   it('should return the name of the operation', () => {
@@ -186,9 +184,7 @@ describe('parser', () => {
       }
     `;
     definition = subscription.definitions[0] as OperationDefinition;
-    expect(parser(subscription).variables).toEqual(
-      definition.variableDefinitions
-    );
+    expect(parser(subscription).variables).toEqual(definition.variableDefinitions);
   });
 
   it('should not error if the operation has no variables', () => {
@@ -220,8 +216,6 @@ describe('parser', () => {
       }
     `;
     definition = subscription.definitions[0] as OperationDefinition;
-    expect(parser(subscription).variables).toEqual(
-      definition.variableDefinitions
-    );
+    expect(parser(subscription).variables).toEqual(definition.variableDefinitions);
   });
 });

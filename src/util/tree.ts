@@ -1,4 +1,4 @@
-import { ParsedQueryWithVariables } from '../ParsedQueryNode';
+import { ParsedQueryNode, ParsedQueryWithVariables } from '../ParsedQueryNode';
 import { JsonObject, JsonValue, PathPart } from '../primitive';
 
 class OperationWalkNode {
@@ -15,11 +15,21 @@ class OperationWalkNode {
 export type OperationVisitor = (parent: JsonValue | undefined, fields: string[], path: (string | number)[]) => boolean;
 
 /**
+ * Whether a field is selected for the given parent value (e.g. whether its
+ * fragment's type condition matches).
+ */
+export type SelectionFilter = (node: ParsedQueryNode<any>, parent: JsonValue | undefined) => boolean;
+
+/**
  * Walk and run on ParsedQueryNode and the result.
  * This is used to verify result of the read operation.
  */
-export function walkOperation(rootOperation: ParsedQueryWithVariables, result: JsonObject | undefined, visitor: OperationVisitor) {
-
+export function walkOperation(
+  rootOperation: ParsedQueryWithVariables,
+  result: JsonObject | undefined,
+  isSelected: SelectionFilter | undefined,
+  visitor: OperationVisitor,
+) {
   // Perform the walk as a depth-first traversal; and unlike the payload walk,
   // we don't bother tracking the path.
   const queue = [new OperationWalkNode(rootOperation, [], result)];
@@ -38,10 +48,11 @@ export function walkOperation(rootOperation: ParsedQueryWithVariables, result: J
     }
 
     const fields: string[] = [];
-    // TODO: Directives?
     for (const fieldName in parsedOperation) {
+      const node = parsedOperation[fieldName];
+      if (isSelected && !isSelected(node, parent)) continue;
       fields.push(fieldName);
-      const nextParsedQuery = parsedOperation[fieldName].children;
+      const nextParsedQuery = node.children;
       if (nextParsedQuery) {
         queue.push(new OperationWalkNode(nextParsedQuery, [...path, fieldName], get(parent, fieldName)));
       }

@@ -31,12 +31,12 @@ export interface BaseRender {
 type Screen = typeof screen;
 /** @internal */
 export type SyncScreen = {
-  [K in keyof Screen]: K extends `find${string}` ?
-    {
-      /** @deprecated A snapshot is static, so avoid async queries! */
-      (...args: Parameters<Screen[K]>): ReturnType<Screen[K]>,
-    }
-  : Screen[K];
+  [K in keyof Screen]: K extends `find${string}`
+    ? {
+        /** @deprecated A snapshot is static, so avoid async queries! */
+        (...args: Parameters<Screen[K]>): ReturnType<Screen[K]>;
+      }
+    : Screen[K];
 };
 
 /** @internal */
@@ -81,7 +81,7 @@ export class RenderInstance<Snapshot> implements Render<Snapshot> {
     baseRender: BaseRender,
     public snapshot: Snapshot,
     private stringifiedDOM: string | undefined,
-    public renderedComponents: Array<string | React.ComponentType>
+    public renderedComponents: Array<string | React.ComponentType>,
   ) {
     this.id = baseRender.id;
     this.phase = baseRender.phase;
@@ -96,14 +96,12 @@ export class RenderInstance<Snapshot> implements Render<Snapshot> {
   get domSnapshot() {
     if (this._domSnapshot) return this._domSnapshot;
     if (!this.stringifiedDOM) {
-      throw new Error(
-        'DOM snapshot is not available - please set the `snapshotDOM` option'
-      );
+      throw new Error('DOM snapshot is not available - please set the `snapshotDOM` option');
     }
 
     const virtualConsole = new VirtualConsole();
     const stackTrace = captureStackTrace('RenderInstance.get');
-    virtualConsole.on('jsdomError', (error) => {
+    virtualConsole.on('jsdomError', error => {
       throw applyStackTrace(error, stackTrace);
     });
 
@@ -127,13 +125,9 @@ export class RenderInstance<Snapshot> implements Render<Snapshot> {
 
   get withinDOM(): () => SyncScreen {
     const snapScreen = Object.assign(within(this.domSnapshot), {
-      debug: (
-        ...[dom = this.domSnapshot, ...rest]: Parameters<typeof screen.debug>
-      ) => screen.debug(dom, ...rest),
+      debug: (...[dom = this.domSnapshot, ...rest]: Parameters<typeof screen.debug>) => screen.debug(dom, ...rest),
       logTestingPlaygroundURL: (
-        ...[dom = this.domSnapshot, ...rest]: Parameters<
-          typeof screen.logTestingPlaygroundURL
-        >
+        ...[dom = this.domSnapshot, ...rest]: Parameters<typeof screen.logTestingPlaygroundURL>
       ) => screen.logTestingPlaygroundURL(dom, ...rest),
     });
     return () => snapScreen;
@@ -198,7 +192,7 @@ export function errorOnDomInteraction() {
     but still use \`screen\` to get elements for simulating user interaction.
     `);
   }
-  events.forEach((event) => {
+  events.forEach(event => {
     document.addEventListener(event, warnOnDomInteraction);
   });
 }

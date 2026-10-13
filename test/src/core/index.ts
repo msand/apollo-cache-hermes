@@ -2,10 +2,7 @@
 
 export type { ApolloClientOptions, DefaultOptions } from './ApolloClient';
 export { ApolloClient, mergeOptions } from './ApolloClient';
-export type {
-  FetchMoreOptions,
-  UpdateQueryOptions,
-} from './ObservableQuery';
+export type { FetchMoreOptions, UpdateQueryOptions } from './ObservableQuery';
 export { ObservableQuery } from './ObservableQuery';
 export type {
   QueryOptions,
@@ -43,14 +40,7 @@ export type {
   WatchFragmentOptions,
   WatchFragmentResult,
 } from '../cache/index';
-export {
-  Cache,
-  ApolloCache,
-  InMemoryCache,
-  MissingFieldError,
-  defaultDataIdFromObject,
-  makeVar,
-} from '../cache/index';
+export { Cache, ApolloCache, InMemoryCache, MissingFieldError, defaultDataIdFromObject, makeVar } from '../cache/index';
 
 export * from '../cache/inmemory/types';
 
@@ -59,12 +49,7 @@ export * from '../cache/inmemory/types';
 export * from '../link/core/index';
 export * from '../link/http/index';
 export type { ServerError } from '../link/utils/index';
-export {
-  fromError,
-  toPromise,
-  fromPromise,
-  throwServerError,
-} from '../link/utils/index';
+export { fromError, toPromise, fromPromise, throwServerError } from '../link/utils/index';
 
 /* Utilities */
 
@@ -75,12 +60,7 @@ export type {
   Reference,
   StoreObject,
 } from '../utilities/index';
-export {
-  DocumentTransform,
-  Observable,
-  isReference,
-  makeReference,
-} from '../utilities/index';
+export { DocumentTransform, Observable, isReference, makeReference } from '../utilities/index';
 
 /* Supporting */
 

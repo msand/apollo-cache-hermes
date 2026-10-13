@@ -14,7 +14,10 @@ import { iterParameterized, iterRefs, lazyImmutableDeepSet } from '../util';
  *
  * @throws Will throw an error if there is no corresponding node type
  */
-export function extract<TSerialized>(graphSnapshot: GraphSnapshot, cacheContext: CacheContext<TSerialized>): Serializable.GraphSnapshot {
+export function extract<TSerialized>(
+  graphSnapshot: GraphSnapshot,
+  cacheContext: CacheContext<TSerialized>,
+): Serializable.GraphSnapshot {
   const result: Serializable.GraphSnapshot = {};
   const entities = graphSnapshot._values;
   // We don't need to check for hasOwnProperty because data._values is
@@ -29,7 +32,9 @@ export function extract<TSerialized>(graphSnapshot: GraphSnapshot, cacheContext:
     } else if (nodeSnapshot instanceof ParameterizedValueSnapshot) {
       type = Serializable.NodeSnapshotType.ParameterizedValueSnapshot;
     } else {
-      throw new Error(`${nodeSnapshot.constructor.name} does not have corresponding enum value in Serializable.NodeSnapshotType`);
+      throw new Error(
+        `${nodeSnapshot.constructor.name} does not have corresponding enum value in Serializable.NodeSnapshotType`,
+      );
     }
 
     const serializedEntity: Serializable.NodeSnapshot = { type };
@@ -72,12 +77,20 @@ export function extract<TSerialized>(graphSnapshot: GraphSnapshot, cacheContext:
   return result;
 }
 
-function extractSerializableData(graphSnapshot: GraphSnapshot, nodeSnapshot: NodeSnapshot): NestedValue<JsonValue | undefined> {
+function extractSerializableData(
+  graphSnapshot: GraphSnapshot,
+  nodeSnapshot: NodeSnapshot,
+): NestedValue<JsonValue | undefined> {
   // If there is no outbound, then data is a value
   // 'data' can also be undefined or null even though there exist an
   // outbound reference (e.g referencing ParameterizedValueSnapshot).
   // We can simply skip extraction of such data.
   if (!nodeSnapshot.outbound || !nodeSnapshot.data) {
+    // A node that is a dangling reference (to a deleted entity) is serialized like a reference.
+    const reference = nodeSnapshot.outbound?.get('');
+    if (nodeSnapshot.data === undefined && reference && !graphSnapshot.getNodeSnapshot(reference.id)) {
+      return null;
+    }
     return nodeSnapshot.data;
   }
 
@@ -90,14 +103,24 @@ function extractSerializableData(graphSnapshot: GraphSnapshot, nodeSnapshot: Nod
     // Only reference to EntitySnapshot is recorded in the data property
     // So we didn't end up set the value to be 'undefined' in the output
     // in every case
-    if (graphSnapshot.getNodeSnapshot(outbound.id) instanceof EntitySnapshot) {
+    // A dangling reference (to a deleted entity) is serialized as a reference, too.
+    const target = graphSnapshot.getNodeSnapshot(outbound.id);
+    if (
+      target instanceof EntitySnapshot ||
+      (!target && nodeSnapshot.outbound.get(outbound.path.join('.')) === outbound)
+    ) {
       // we have to write out 'null' here to differentiate between
       // data doesn't exist and data is a reference.
       //
       // In the case of parameterized field hanging off of a root
       // the data at the ROOTQUERY node will be undefined with outbound
       // reference to the parameterized node.
-      extractedData = lazyImmutableDeepSet(extractedData, nodeSnapshot.data, outbound.path, outbound.path.length === 0 ? null : undefined);
+      extractedData = lazyImmutableDeepSet(
+        extractedData,
+        nodeSnapshot.data,
+        outbound.path,
+        outbound.path.length === 0 ? null : undefined,
+      );
     }
   }
 

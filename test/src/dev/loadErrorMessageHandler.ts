@@ -25,8 +25,5 @@ const handler = ((message: string | number, args: unknown[]) => {
     if (!message || !definition?.message) return;
     message = definition.message;
   }
-  return args.reduce<string>(
-    (msg, arg) => msg.replace(/%[sdfo]/, String(arg)),
-    String(message)
-  );
+  return args.reduce<string>((msg, arg) => msg.replace(/%[sdfo]/, String(arg)), String(message));
 }) as ErrorMessageHandler & ErrorCodes;

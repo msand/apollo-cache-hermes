@@ -36,14 +36,14 @@ interface EnterLeaveVisitor<TVisitedNode extends ASTNode> {
 }
 
 export type RemoveNodeConfig<N> = {
-  name?: string,
-  test?: (node: N) => boolean,
-  remove?: boolean,
+  name?: string;
+  test?: (node: N) => boolean;
+  remove?: boolean;
 };
 
 export type GetNodeConfig<N> = {
-  name?: string,
-  test?: (node: N) => boolean,
+  name?: string;
+  test?: (node: N) => boolean;
 };
 
 export type RemoveDirectiveConfig = RemoveNodeConfig<DirectiveNode>;
@@ -51,10 +51,8 @@ export type GetDirectiveConfig = GetNodeConfig<DirectiveNode>;
 export type RemoveArgumentsConfig = RemoveNodeConfig<ArgumentNode>;
 export type GetFragmentSpreadConfig = GetNodeConfig<FragmentSpreadNode>;
 export type RemoveFragmentSpreadConfig = RemoveNodeConfig<FragmentSpreadNode>;
-export type RemoveFragmentDefinitionConfig =
-  RemoveNodeConfig<FragmentDefinitionNode>;
-export type RemoveVariableDefinitionConfig =
-  RemoveNodeConfig<VariableDefinitionNode>;
+export type RemoveFragmentDefinitionConfig = RemoveNodeConfig<FragmentDefinitionNode>;
+export type RemoveVariableDefinitionConfig = RemoveNodeConfig<VariableDefinitionNode>;
 
 const TYPENAME_FIELD: FieldNode = {
   kind: Kind.FIELD,
@@ -64,42 +62,30 @@ const TYPENAME_FIELD: FieldNode = {
   },
 };
 
-function isEmpty(
-  op: OperationDefinitionNode | FragmentDefinitionNode,
-  fragmentMap: FragmentMap
-): boolean {
+function isEmpty(op: OperationDefinitionNode | FragmentDefinitionNode, fragmentMap: FragmentMap): boolean {
   return (
     !op ||
     op.selectionSet.selections.every(
-      selection =>
-        selection.kind === Kind.FRAGMENT_SPREAD &&
-        isEmpty(fragmentMap[selection.name.value], fragmentMap)
+      selection => selection.kind === Kind.FRAGMENT_SPREAD && isEmpty(fragmentMap[selection.name.value], fragmentMap),
     )
   );
 }
 
 function nullIfDocIsEmpty(doc: DocumentNode) {
-  return (
-    isEmpty(
-      getOperationDefinition(doc) || getFragmentDefinition(doc),
-      createFragmentMap(getFragmentDefinitions(doc))
-    )
+  return isEmpty(
+    getOperationDefinition(doc) || getFragmentDefinition(doc),
+    createFragmentMap(getFragmentDefinitions(doc)),
   )
     ? null
     : doc;
 }
 
-function getDirectiveMatcher(
-  configs: (RemoveDirectiveConfig | GetDirectiveConfig)[]
-) {
+function getDirectiveMatcher(configs: (RemoveDirectiveConfig | GetDirectiveConfig)[]) {
   const names = new Map<string, RemoveDirectiveConfig | GetDirectiveConfig>();
 
-  const tests = new Map<
-    (directive: DirectiveNode) => boolean,
-    RemoveDirectiveConfig | GetDirectiveConfig
-  >();
+  const tests = new Map<(directive: DirectiveNode) => boolean, RemoveDirectiveConfig | GetDirectiveConfig>();
 
-  configs.forEach((directive) => {
+  configs.forEach(directive => {
     if (directive) {
       if (directive.name) {
         names.set(directive.name, directive);
@@ -137,9 +123,7 @@ interface InternalInUseInfo {
 function makeInUseGetterFunction<TKey>(defaultKey: TKey) {
   const map = new Map<TKey, InternalInUseInfo>();
 
-  return function inUseGetterFunction(
-    key: TKey = defaultKey
-  ): InternalInUseInfo {
+  return function inUseGetterFunction(key: TKey = defaultKey): InternalInUseInfo {
     let inUse = map.get(key);
     if (!inUse) {
       map.set(
@@ -151,7 +135,7 @@ function makeInUseGetterFunction<TKey>(defaultKey: TKey) {
           // removeDirectivesFromDocument below.
           variables: new Set(),
           fragmentSpreads: new Set(),
-        })
+        }),
       );
     }
     return inUse;
@@ -160,7 +144,7 @@ function makeInUseGetterFunction<TKey>(defaultKey: TKey) {
 
 export function removeDirectivesFromDocument(
   directives: RemoveDirectiveConfig[],
-  doc: DocumentNode
+  doc: DocumentNode,
 ): DocumentNode | null {
   checkDocument(doc);
 
@@ -170,14 +154,8 @@ export function removeDirectivesFromDocument(
   // appropriate for that case as well.
   const getInUseByOperationName = makeInUseGetterFunction<string>('');
   const getInUseByFragmentName = makeInUseGetterFunction<string>('');
-  const getInUse = (
-    ancestors: readonly (ASTNode | readonly ASTNode[])[]
-  ): InternalInUseInfo | null => {
-    for (
-      let p = 0, ancestor: ASTNode | readonly ASTNode[];
-      p < ancestors.length && (ancestor = ancestors[p]);
-      ++p
-    ) {
+  const getInUse = (ancestors: readonly (ASTNode | readonly ASTNode[])[]): InternalInUseInfo | null => {
+    for (let p = 0, ancestor: ASTNode | readonly ASTNode[]; p < ancestors.length && (ancestor = ancestors[p]); ++p) {
       if (isArray(ancestor)) continue;
       if (ancestor.kind === Kind.OPERATION_DEFINITION) {
         // If an operation is anonymous, we use the empty string as its key.
@@ -201,11 +179,7 @@ export function removeDirectivesFromDocument(
   const directiveMatcher = getDirectiveMatcher(directives);
   const shouldRemoveField = (nodeDirectives: FieldNode['directives']) =>
     isNonEmptyArray(nodeDirectives) &&
-    nodeDirectives
-      .map(directiveMatcher)
-      .some(
-        (config: RemoveDirectiveConfig | undefined) => config && config.remove
-      );
+    nodeDirectives.map(directiveMatcher).some((config: RemoveDirectiveConfig | undefined) => config && config.remove);
 
   const originalFragmentDefsByPath = new Map<string, FragmentDefinitionNode>();
 
@@ -216,9 +190,7 @@ export function removeDirectivesFromDocument(
   // original doc immediately without any modifications.
   let firstVisitMadeChanges = false;
 
-  const fieldOrInlineFragmentVisitor: EnterLeaveVisitor<
-    FieldNode | InlineFragmentNode
-  > = {
+  const fieldOrInlineFragmentVisitor: EnterLeaveVisitor<FieldNode | InlineFragmentNode> = {
     enter(node) {
       if (shouldRemoveField(node.directives)) {
         firstVisitMadeChanges = true;
@@ -274,9 +246,7 @@ export function removeDirectivesFromDocument(
         originalFragmentDefsByPath.set(JSON.stringify(path), node);
       },
       leave(node, _key, _parent, path) {
-        const originalNode = originalFragmentDefsByPath.get(
-          JSON.stringify(path)
-        );
+        const originalNode = originalFragmentDefsByPath.get(JSON.stringify(path));
         if (node === originalNode) {
           // If the FragmentNode received by this leave function is identical to
           // the one received by the corresponding enter function (above), then
@@ -293,9 +263,7 @@ export function removeDirectivesFromDocument(
           // only fragments makes the document useless.
           operationCount > 0 &&
           node.selectionSet.selections.every(
-            selection =>
-              selection.kind === Kind.FIELD &&
-              selection.name.value === '__typename'
+            selection => selection.kind === Kind.FIELD && selection.name.value === '__typename',
           )
         ) {
           // This is a somewhat opinionated choice: if a FragmentDefinition ends
@@ -336,10 +304,8 @@ export function removeDirectivesFromDocument(
     if (!inUse.transitiveVars) {
       inUse.transitiveVars = new Set(inUse.variables);
       if (!inUse.removed) {
-        inUse.fragmentSpreads.forEach((childFragmentName) => {
-          populateTransitiveVars(
-            getInUseByFragmentName(childFragmentName)
-          ).transitiveVars!.forEach((varName) => {
+        inUse.fragmentSpreads.forEach(childFragmentName => {
+          populateTransitiveVars(getInUseByFragmentName(childFragmentName)).transitiveVars!.forEach(varName => {
             inUse.transitiveVars!.add(varName);
           });
         });
@@ -352,13 +318,13 @@ export function removeDirectivesFromDocument(
   // operations and fragment definitions, we now need to compute the set of all
   // spreads used (transitively) by any operations in the document.
   const allFragmentNamesUsed = new Set<string>();
-  docWithoutDirectiveSubtrees.definitions.forEach((def) => {
+  docWithoutDirectiveSubtrees.definitions.forEach(def => {
     if (def.kind === Kind.OPERATION_DEFINITION) {
-      populateTransitiveVars(
-        getInUseByOperationName(def.name && def.name.value)
-      ).fragmentSpreads.forEach((childFragmentName) => {
-        allFragmentNamesUsed.add(childFragmentName);
-      });
+      populateTransitiveVars(getInUseByOperationName(def.name && def.name.value)).fragmentSpreads.forEach(
+        childFragmentName => {
+          allFragmentNamesUsed.add(childFragmentName);
+        },
+      );
     } else if (
       def.kind === Kind.FRAGMENT_DEFINITION &&
       // If there are no operations in the document, then all fragment
@@ -374,12 +340,10 @@ export function removeDirectivesFromDocument(
   // Now that we have added all fragment spreads used by operations to the
   // allFragmentNamesUsed set, we can complete the set by transitively adding
   // all fragment spreads used by those fragments, and so on.
-  allFragmentNamesUsed.forEach((fragmentName) => {
+  allFragmentNamesUsed.forEach(fragmentName => {
     // Once all the childFragmentName strings added here have been seen already,
     // the top-level allFragmentNamesUsed.forEach loop will terminate.
-    populateTransitiveVars(
-      getInUseByFragmentName(fragmentName)
-    ).fragmentSpreads.forEach((childFragmentName) => {
+    populateTransitiveVars(getInUseByFragmentName(fragmentName)).fragmentSpreads.forEach(childFragmentName => {
       allFragmentNamesUsed.add(childFragmentName);
     });
   });
@@ -389,15 +353,10 @@ export function removeDirectivesFromDocument(
       // A fragment definition will be removed if there are no spreads that refer
       // to it, or the fragment was explicitly removed because it had no fields
       // other than __typename.
-      (
-        !allFragmentNamesUsed.has(fragmentName) ||
-        getInUseByFragmentName(fragmentName).removed
-      )
+      !allFragmentNamesUsed.has(fragmentName) || getInUseByFragmentName(fragmentName).removed
     );
 
-  const enterVisitor: EnterLeaveVisitor<
-    FragmentSpreadNode | FragmentDefinitionNode
-  > = {
+  const enterVisitor: EnterLeaveVisitor<FragmentSpreadNode | FragmentDefinitionNode> = {
     enter(node) {
       if (fragmentWillBeRemoved(node.name.value)) {
         return null;
@@ -421,7 +380,7 @@ export function removeDirectivesFromDocument(
           if (node.variableDefinitions) {
             const usedVariableNames = populateTransitiveVars(
               // If an operation is anonymous, we use the empty string as its key.
-              getInUseByOperationName(node.name && node.name.value)
+              getInUseByOperationName(node.name && node.name.value),
             ).transitiveVars!;
 
             // According to the GraphQL spec, all variables declared by an
@@ -439,88 +398,76 @@ export function removeDirectivesFromDocument(
               return {
                 ...node,
                 variableDefinitions: node.variableDefinitions.filter(varDef =>
-                  usedVariableNames.has(varDef.variable.name.value)
+                  usedVariableNames.has(varDef.variable.name.value),
                 ),
               };
             }
           }
         },
       },
-    })
+    }),
   );
 }
 
 export const addTypenameToDocument = Object.assign(
-    <N extends ASTNode>(doc: N) => {
-      return visit(doc, {
-        SelectionSet: {
-          enter(node, _key, parent) {
+  <N extends ASTNode>(doc: N) => {
+    return visit(doc, {
+      SelectionSet: {
+        enter(node, _key, parent) {
           // Don't add __typename to OperationDefinitions.
-            if (
-              parent &&
-            (parent as OperationDefinitionNode).kind
-              === Kind.OPERATION_DEFINITION
-            ) {
-              return;
-            }
+          if (parent && (parent as OperationDefinitionNode).kind === Kind.OPERATION_DEFINITION) {
+            return;
+          }
 
-            // No changes if no selections.
-            const { selections } = node;
-            if (!selections) {
-              return;
-            }
+          // No changes if no selections.
+          const { selections } = node;
+          if (!selections) {
+            return;
+          }
 
-            // If selections already have a __typename, or are part of an
-            // introspection query, do nothing.
-            const skip = selections.some((selection) => {
-              return (
-                isField(selection) &&
-              (selection.name.value === '__typename' ||
-                selection.name.value.lastIndexOf('__', 0) === 0)
-              );
-            });
-            if (skip) {
-              return;
-            }
+          // If selections already have a __typename, or are part of an
+          // introspection query, do nothing.
+          const skip = selections.some(selection => {
+            return (
+              isField(selection) &&
+              (selection.name.value === '__typename' || selection.name.value.lastIndexOf('__', 0) === 0)
+            );
+          });
+          if (skip) {
+            return;
+          }
 
-            // If this SelectionSet is @export-ed as an input variable, it should
-            // not have a __typename field (see issue #4691).
-            const field = parent as FieldNode;
-            if (
-              isField(field) &&
-            field.directives &&
-            field.directives.some(d => d.name.value === 'export')
-            ) {
-              return;
-            }
+          // If this SelectionSet is @export-ed as an input variable, it should
+          // not have a __typename field (see issue #4691).
+          const field = parent as FieldNode;
+          if (isField(field) && field.directives && field.directives.some(d => d.name.value === 'export')) {
+            return;
+          }
 
-            // Create and return a new SelectionSet with a __typename Field.
-            return {
-              ...node,
-              selections: [...selections, TYPENAME_FIELD],
-            };
-          },
+          // Create and return a new SelectionSet with a __typename Field.
+          return {
+            ...node,
+            selections: [...selections, TYPENAME_FIELD],
+          };
         },
-      });
-    },
-    {
-      added(field: FieldNode): boolean {
-        return field === TYPENAME_FIELD;
       },
-    }
+    });
+  },
+  {
+    added(field: FieldNode): boolean {
+      return field === TYPENAME_FIELD;
+    },
+  },
 );
 
 const connectionRemoveConfig = {
   test: (directive: DirectiveNode) => {
     const willRemove = directive.name.value === 'connection';
     if (willRemove) {
-      if (
-        !directive.arguments ||
-        !directive.arguments.some(arg => arg.name.value === 'key')
-      ) {
+      if (!directive.arguments || !directive.arguments.some(arg => arg.name.value === 'key')) {
         invariant.warn(
-          'Removing an @connection directive even though it does not have a key. '
-            + 'You may want to use the key parameter to specify a store key.'
+          'Removing an @connection directive even though it does not have a key. ' +
+            'You may want to use the key parameter to specify a store key.',
         );
       }
     }
@@ -530,30 +477,25 @@ const connectionRemoveConfig = {
 };
 
 export function removeConnectionDirectiveFromDocument(doc: DocumentNode) {
-  return removeDirectivesFromDocument(
-    [connectionRemoveConfig],
-    checkDocument(doc)
-  );
+  return removeDirectivesFromDocument([connectionRemoveConfig], checkDocument(doc));
 }
 
 function hasDirectivesInSelectionSet(
   directives: GetDirectiveConfig[],
   selectionSet: SelectionSetNode | undefined,
-  nestedCheck = true
+  nestedCheck = true,
 ): boolean {
   return (
     !!selectionSet &&
     selectionSet.selections &&
-    selectionSet.selections.some(selection =>
-      hasDirectivesInSelection(directives, selection, nestedCheck)
-    )
+    selectionSet.selections.some(selection => hasDirectivesInSelection(directives, selection, nestedCheck))
   );
 }
 
 function hasDirectivesInSelection(
   directives: GetDirectiveConfig[],
   selection: SelectionNode,
-  nestedCheck = true
+  nestedCheck = true,
 ): boolean {
   if (!isField(selection)) {
     return true;
@@ -565,12 +507,7 @@ function hasDirectivesInSelection(
 
   return (
     selection.directives.some(getDirectiveMatcher(directives)) ||
-    (nestedCheck &&
-      hasDirectivesInSelectionSet(
-        directives,
-        selection.selectionSet,
-        nestedCheck
-      ))
+    (nestedCheck && hasDirectivesInSelectionSet(directives, selection.selectionSet, nestedCheck))
   );
 }
 
@@ -581,16 +518,12 @@ function getArgumentMatcher(config: RemoveArgumentsConfig[]) {
         argument.value &&
         argument.value.kind === Kind.VARIABLE &&
         argument.value.name &&
-        (aConfig.name === argument.value.name.value ||
-          (aConfig.test && aConfig.test(argument)))
+        (aConfig.name === argument.value.name.value || (aConfig.test && aConfig.test(argument))),
     );
   };
 }
 
-export function removeArgumentsFromDocument(
-  config: RemoveArgumentsConfig[],
-  doc: DocumentNode
-): DocumentNode | null {
+export function removeArgumentsFromDocument(config: RemoveArgumentsConfig[], doc: DocumentNode): DocumentNode | null {
   const argMatcher = getArgumentMatcher(config);
 
   return nullIfDocIsEmpty(
@@ -600,15 +533,9 @@ export function removeArgumentsFromDocument(
           return {
             ...node,
             // Remove matching top level variables definitions.
-            variableDefinitions:
-              node.variableDefinitions
-                ? node.variableDefinitions.filter(
-                  varDef =>
-                    !config.some(
-                      arg => arg.name === varDef.variable.name.value
-                    )
-                )
-                : [],
+            variableDefinitions: node.variableDefinitions
+              ? node.variableDefinitions.filter(varDef => !config.some(arg => arg.name === varDef.variable.name.value))
+              : [],
           };
         },
       },
@@ -617,14 +544,12 @@ export function removeArgumentsFromDocument(
         enter(node) {
           // If `remove` is set to true for an argument, and an argument match
           // is found for a field, remove the field as well.
-          const shouldRemoveField = config.some(
-            argConfig => argConfig.remove
-          );
+          const shouldRemoveField = config.some(argConfig => argConfig.remove);
 
           if (shouldRemoveField) {
             let argMatchCount = 0;
             if (node.arguments) {
-              node.arguments.forEach((arg) => {
+              node.arguments.forEach(arg => {
                 if (argMatcher(arg)) {
                   argMatchCount += 1;
                 }
@@ -646,17 +571,15 @@ export function removeArgumentsFromDocument(
           }
         },
       },
-    })
+    }),
   );
 }
 
 export function removeFragmentSpreadFromDocument(
   config: RemoveFragmentSpreadConfig[],
-  doc: DocumentNode
+  doc: DocumentNode,
 ): DocumentNode | null {
-  function enter(
-    node: FragmentSpreadNode | FragmentDefinitionNode
-  ): null | void {
+  function enter(node: FragmentSpreadNode | FragmentDefinitionNode): null | void {
     if (config.some(def => def.name === node.name.value)) {
       return null;
     }
@@ -666,16 +589,14 @@ export function removeFragmentSpreadFromDocument(
     visit(doc, {
       FragmentSpread: { enter },
       FragmentDefinition: { enter },
-    })
+    }),
   );
 }
 
 // If the incoming document is a query, return it as is. Otherwise, build a
 // new document containing a query operation based on the selection set
 // of the previous main operation.
-export function buildQueryFromSelectionSet(
-  document: DocumentNode
-): DocumentNode {
+export function buildQueryFromSelectionSet(document: DocumentNode): DocumentNode {
   const definition = getMainDefinition(document);
   const definitionOperation = (definition as OperationDefinitionNode).operation;
 
@@ -699,9 +620,7 @@ export function buildQueryFromSelectionSet(
 }
 
 // Remove fields / selection sets that include an @client directive.
-export function removeClientSetsFromDocument(
-  document: DocumentNode
-): DocumentNode | null {
+export function removeClientSetsFromDocument(document: DocumentNode): DocumentNode | null {
   checkDocument(document);
 
   const modifiedDoc = removeDirectivesFromDocument(
@@ -711,7 +630,7 @@ export function removeClientSetsFromDocument(
         remove: true,
       },
     ],
-    document
+    document,
   );
 
   return modifiedDoc;

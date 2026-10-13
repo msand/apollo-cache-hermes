@@ -25,18 +25,15 @@ describe(`context.CacheContext`, () => {
     const cache = new Cache({ ...strictConfig, onChange: mockOnChange });
 
     it(`trigger onChange callback when write to cache`, () => {
-      cache.write(
-        graphqlQuery,
-        {
-          foo: {
-            id: 0,
-            bar: {
-              id: 1,
-              name: 'Gouda',
-            },
+      cache.write(graphqlQuery, {
+        foo: {
+          id: 0,
+          bar: {
+            id: 1,
+            name: 'Gouda',
           },
-        }
-      );
+        },
+      });
 
       const bar = { id: 1, name: 'Gouda' };
       const foo = {
@@ -50,11 +47,7 @@ describe(`context.CacheContext`, () => {
           /* inbound */ [{ id: QueryRootId, path: ['foo'] }],
           /* outbound */ [{ id: '1', path: ['bar'] }],
         ),
-        '1': new EntitySnapshot(
-          bar,
-          /* inbound */ [{ id: '0', path: ['bar'] }],
-          /* outbound */ undefined,
-        ),
+        '1': new EntitySnapshot(bar, /* inbound */ [{ id: '0', path: ['bar'] }], /* outbound */ undefined),
         [QueryRootId]: new EntitySnapshot(
           {
             foo,
@@ -75,19 +68,16 @@ describe(`context.CacheContext`, () => {
     });
 
     it(`trigger onChange callback when write with transaction`, () => {
-      cache.transaction(true, (transaction) => {
-        transaction.write(
-          graphqlQuery,
-          {
-            foo: {
-              id: 0,
-              bar: {
-                id: 1,
-                name: 'Munster',
-              },
+      cache.transaction(true, transaction => {
+        transaction.write(graphqlQuery, {
+          foo: {
+            id: 0,
+            bar: {
+              id: 1,
+              name: 'Munster',
             },
-          }
-        );
+          },
+        });
       });
 
       const bar = { id: 1, name: 'Munster' };
@@ -102,11 +92,7 @@ describe(`context.CacheContext`, () => {
           /* inbound */ [{ id: QueryRootId, path: ['foo'] }],
           /* outbound */ [{ id: '1', path: ['bar'] }],
         ),
-        '1': new EntitySnapshot(
-          bar,
-          /* inbound */ [{ id: '0', path: ['bar'] }],
-          /* outbound */ undefined,
-        ),
+        '1': new EntitySnapshot(bar, /* inbound */ [{ id: '0', path: ['bar'] }], /* outbound */ undefined),
         [QueryRootId]: new EntitySnapshot(
           {
             foo,
@@ -130,6 +116,5 @@ describe(`context.CacheContext`, () => {
       cache.read(graphqlQuery);
       expect(mockOnChange.mock.calls.length).to.equal(0);
     });
-
   });
 });

@@ -1,12 +1,6 @@
 import type { DocumentNode, FieldNode } from 'graphql';
 
-import type {
-  Reference,
-  StoreObject,
-  StoreValue,
-  isReference,
-  AsStoreObject,
-} from '../../../utilities/index';
+import type { Reference, StoreObject, StoreValue, isReference, AsStoreObject } from '../../../utilities/index';
 import type { StorageType } from '../../inmemory/policies';
 
 // The Readonly<T> type only really works for object types, since it marks
@@ -21,7 +15,7 @@ export type SafeReadonly<T> = T extends object ? Readonly<T> : T;
 export type MissingTree =
   | string
   | {
-      readonly [key: string]: MissingTree,
+      readonly [key: string]: MissingTree;
     };
 
 export class MissingFieldError extends Error {
@@ -29,7 +23,7 @@ export class MissingFieldError extends Error {
     public readonly message: string,
     public readonly path: MissingTree | Array<string | number>,
     public readonly query: DocumentNode,
-    public readonly variables?: Record<string, any>
+    public readonly variables?: Record<string, any>,
   ) {
     // 'Error' breaks prototype chain here
     super(message);
@@ -66,15 +60,12 @@ export interface ReadFieldOptions extends FieldSpecifier {
 
 export interface ReadFieldFunction {
   <V = StoreValue>(options: ReadFieldOptions): SafeReadonly<V> | undefined;
-  <V = StoreValue>(
-    fieldName: string,
-    from?: StoreObject | Reference
-  ): SafeReadonly<V> | undefined;
+  <V = StoreValue>(fieldName: string, from?: StoreObject | Reference): SafeReadonly<V> | undefined;
 }
 
 export type ToReferenceFunction = (
   objOrIdOrRef: StoreObject | string | Reference,
-  mergeIntoStore?: boolean
+  mergeIntoStore?: boolean,
 ) => Reference | undefined;
 
 export type CanReadFunction = (value: StoreValue) => boolean;
@@ -93,41 +84,34 @@ export interface IgnoreModifier {
 }
 
 export type ModifierDetails = {
-  DELETE: DeleteModifier,
-  INVALIDATE: InvalidateModifier,
-  fieldName: string,
-  storeFieldName: string,
-  readField: ReadFieldFunction,
-  canRead: CanReadFunction,
-  isReference: typeof isReference,
-  toReference: ToReferenceFunction,
-  storage: StorageType,
+  DELETE: DeleteModifier;
+  INVALIDATE: InvalidateModifier;
+  fieldName: string;
+  storeFieldName: string;
+  readField: ReadFieldFunction;
+  canRead: CanReadFunction;
+  isReference: typeof isReference;
+  toReference: ToReferenceFunction;
+  storage: StorageType;
 };
 
-export type Modifier<T> = (
-  value: T,
-  details: ModifierDetails
-) => T | DeleteModifier | InvalidateModifier | undefined;
+export type Modifier<T> = (value: T, details: ModifierDetails) => T | DeleteModifier | InvalidateModifier | undefined;
 
 type StoreObjectValueMaybeReference<StoreVal> =
-  StoreVal extends Array<Record<string, any>> ?
-    StoreVal extends Array<infer Item> ?
-      Item extends Record<string, any> ?
-        ReadonlyArray<AsStoreObject<Item> | Reference>
+  StoreVal extends Array<Record<string, any>>
+    ? StoreVal extends Array<infer Item>
+      ? Item extends Record<string, any>
+        ? ReadonlyArray<AsStoreObject<Item> | Reference>
+        : never
       : never
-    : never
-  : StoreVal extends Record<string, any> ? AsStoreObject<StoreVal> | Reference
-  : StoreVal;
+    : StoreVal extends Record<string, any>
+      ? AsStoreObject<StoreVal> | Reference
+      : StoreVal;
 
 export type AllFieldsModifier<Entity extends Record<string, any>> = Modifier<
-  Entity[keyof Entity] extends infer Value ?
-    StoreObjectValueMaybeReference<Exclude<Value, undefined>>
-  : never
+  Entity[keyof Entity] extends infer Value ? StoreObjectValueMaybeReference<Exclude<Value, undefined>> : never
 >;
 
-export type Modifiers<T extends Record<string, any> = Record<string, unknown>> =
-  Partial<{
-    [FieldName in keyof T]: Modifier<
-      StoreObjectValueMaybeReference<Exclude<T[FieldName], undefined>>
-    >;
-  }>;
+export type Modifiers<T extends Record<string, any> = Record<string, unknown>> = Partial<{
+  [FieldName in keyof T]: Modifier<StoreObjectValueMaybeReference<Exclude<T[FieldName], undefined>>>;
+}>;

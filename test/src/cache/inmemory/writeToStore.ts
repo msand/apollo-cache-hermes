@@ -7,13 +7,7 @@ import { NormalizedCache } from '@apollo/client/cache';
 import { ReadMergeModifyContext } from '@apollo/client';
 
 import { invariant, newInvariantError } from '../../utilities/globals/index';
-import type {
-  FragmentMap,
-  FragmentMapFunction,
-  StoreValue,
-  StoreObject,
-  Reference,
-} from '../../utilities/index';
+import type { FragmentMap, FragmentMapFunction, StoreValue, StoreObject, Reference } from '../../utilities/index';
 import {
   getFragmentFromSelection,
   getDefaultValues,
@@ -33,10 +27,7 @@ import {
 import type { Cache } from '../../core/index';
 import type { ReadFieldFunction } from '../core/types/common';
 
-import type {
-  MergeTree,
-  InMemoryCacheConfig,
-} from './types';
+import type { MergeTree, InMemoryCacheConfig } from './types';
 import {
   isArray,
   makeProcessedFieldsMerger,
@@ -51,7 +42,7 @@ import { normalizeReadFieldOptions } from './policies';
 
 export interface WriteContext extends ReadMergeModifyContext {
   readonly written: {
-    [dataId: string]: SelectionSetNode[],
+    [dataId: string]: SelectionSetNode[];
   };
   readonly fragmentMap: FragmentMap;
   lookupFragment: FragmentMapFunction;
@@ -62,9 +53,9 @@ export interface WriteContext extends ReadMergeModifyContext {
   incomingById: Map<
     string,
     {
-      storeObject: StoreObject,
-      mergeTree?: MergeTree,
-      fieldNodeSet: Set<FieldNode>,
+      storeObject: StoreObject;
+      mergeTree?: MergeTree;
+      fieldNodeSet: Set<FieldNode>;
     }
   >;
   // Directive metadata for @client and @defer. We could use a bitfield for this
@@ -75,10 +66,7 @@ export interface WriteContext extends ReadMergeModifyContext {
   flavors: Map<string, FlavorableWriteContext>;
 }
 
-type FlavorableWriteContext = Pick<
-  WriteContext,
-  'clientOnly' | 'deferred' | 'flavors'
->;
+type FlavorableWriteContext = Pick<WriteContext, 'clientOnly' | 'deferred' | 'flavors'>;
 
 // Since there are only four possible combinations of context.clientOnly and
 // context.deferred values, we should need at most four "flavors" of any given
@@ -88,21 +76,21 @@ type FlavorableWriteContext = Pick<
 function getContextFlavor<TContext extends FlavorableWriteContext>(
   context: TContext,
   clientOnly: TContext['clientOnly'],
-  deferred: TContext['deferred']
+  deferred: TContext['deferred'],
 ): TContext {
   const key = `${clientOnly}${deferred}`;
   let flavored = context.flavors.get(key);
   if (!flavored) {
     context.flavors.set(
       key,
-      (flavored
-        = context.clientOnly === clientOnly && context.deferred === deferred
+      (flavored =
+        context.clientOnly === clientOnly && context.deferred === deferred
           ? context
           : {
-            ...context,
-            clientOnly,
-            deferred,
-          })
+              ...context,
+              clientOnly,
+              deferred,
+            }),
     );
   }
   return flavored as TContext;
@@ -120,12 +108,12 @@ export class StoreWriter {
   constructor(
     public readonly cache: InMemoryCache,
     private reader?: StoreReader,
-    private fragments?: InMemoryCacheConfig['fragments']
+    private fragments?: InMemoryCacheConfig['fragments'],
   ) {}
 
   public writeToStore(
     store: NormalizedCache,
-    { query, result, dataId, variables, overwrite }: Cache.WriteOptions
+    { query, result, dataId, variables, overwrite }: Cache.WriteOptions,
   ): Reference | undefined {
     const operationDefinition = getOperationDefinition(query)!;
     const merger = makeProcessedFieldsMerger();
@@ -165,68 +153,51 @@ export class StoreWriter {
 
     // So far, the store has not been modified, so now it's time to process
     // context.incomingById and merge those incoming fields into context.store.
-    context.incomingById.forEach(
-      ({ storeObject, mergeTree, fieldNodeSet }, dataId) => {
-        const entityRef = makeReference(dataId);
+    context.incomingById.forEach(({ storeObject, mergeTree, fieldNodeSet }, dataId) => {
+      const entityRef = makeReference(dataId);
 
-        if (mergeTree && mergeTree.map.size) {
-          const applied = this.applyMerges(
-            mergeTree,
-            entityRef,
-            storeObject,
-            context
-          );
-          if (isReference(applied)) {
-            // Assume References returned by applyMerges have already been merged
-            // into the store. See makeMergeObjectsFunction in policies.ts for an
-            // example of how this can happen.
-            return;
-          }
-          // Otherwise, applyMerges returned a StoreObject, whose fields we should
-          // merge into the store (see store.merge statement below).
-          storeObject = applied;
+      if (mergeTree && mergeTree.map.size) {
+        const applied = this.applyMerges(mergeTree, entityRef, storeObject, context);
+        if (isReference(applied)) {
+          // Assume References returned by applyMerges have already been merged
+          // into the store. See makeMergeObjectsFunction in policies.ts for an
+          // example of how this can happen.
+          return;
         }
-
-        if (__DEV__ && !context.overwrite) {
-          const fieldsWithSelectionSets: Record<string, true>
-            = Object.create(null);
-          fieldNodeSet.forEach((field) => {
-            if (field.selectionSet) {
-              fieldsWithSelectionSets[field.name.value] = true;
-            }
-          });
-
-          const hasSelectionSet = (storeFieldName: string) =>
-            fieldsWithSelectionSets[fieldNameFromStoreName(storeFieldName)]
-            === true;
-
-          const hasMergeFunction = (storeFieldName: string) => {
-            const childTree = mergeTree && mergeTree.map.get(storeFieldName);
-            return Boolean(childTree && childTree.info && childTree.info.merge);
-          };
-
-          Object.keys(storeObject).forEach((storeFieldName) => {
-            // If a merge function was defined for this field, trust that it
-            // did the right thing about (not) clobbering data. If the field
-            // has no selection set, it's a scalar field, so it doesn't need
-            // a merge function (even if it's an object, like JSON data).
-            if (
-              hasSelectionSet(storeFieldName) &&
-              !hasMergeFunction(storeFieldName)
-            ) {
-              warnAboutDataLoss(
-                entityRef,
-                storeObject,
-                storeFieldName,
-                context.store
-              );
-            }
-          });
-        }
-
-        store.merge(dataId, storeObject);
+        // Otherwise, applyMerges returned a StoreObject, whose fields we should
+        // merge into the store (see store.merge statement below).
+        storeObject = applied;
       }
-    );
+
+      if (__DEV__ && !context.overwrite) {
+        const fieldsWithSelectionSets: Record<string, true> = Object.create(null);
+        fieldNodeSet.forEach(field => {
+          if (field.selectionSet) {
+            fieldsWithSelectionSets[field.name.value] = true;
+          }
+        });
+
+        const hasSelectionSet = (storeFieldName: string) =>
+          fieldsWithSelectionSets[fieldNameFromStoreName(storeFieldName)] === true;
+
+        const hasMergeFunction = (storeFieldName: string) => {
+          const childTree = mergeTree && mergeTree.map.get(storeFieldName);
+          return Boolean(childTree && childTree.info && childTree.info.merge);
+        };
+
+        Object.keys(storeObject).forEach(storeFieldName => {
+          // If a merge function was defined for this field, trust that it
+          // did the right thing about (not) clobbering data. If the field
+          // has no selection set, it's a scalar field, so it doesn't need
+          // a merge function (even if it's an object, like JSON data).
+          if (hasSelectionSet(storeFieldName) && !hasMergeFunction(storeFieldName)) {
+            warnAboutDataLoss(entityRef, storeObject, storeFieldName, context.store);
+          }
+        });
+      }
+
+      store.merge(dataId, storeObject);
+    });
 
     // Any IDs written explicitly to the cache will be retained as
     // reachable root IDs for garbage collection purposes. Although this
@@ -256,8 +227,8 @@ export class StoreWriter {
     // If typename was not passed in, infer it. Note that typename is
     // always passed in for tricky-to-infer cases such as "Query" for
     // ROOT_QUERY.
-    const typename: string | undefined
-      = (dataId && policies.rootTypenamesById[dataId]) ||
+    const typename: string | undefined =
+      (dataId && policies.rootTypenamesById[dataId]) ||
       getTypenameFromResult(result, selectionSet, context.fragmentMap) ||
       (dataId && (context.store.get(dataId, '__typename') as string));
 
@@ -273,12 +244,8 @@ export class StoreWriter {
     // pending in context.incomingById, which is important whenever keyFields
     // need to be extracted from a child object that processSelectionSet has
     // turned into a Reference.
-    const readField: ReadFieldFunction = function(this: void) {
-      const options = normalizeReadFieldOptions(
-        arguments,
-        incoming,
-        context.variables
-      );
+    const readField: ReadFieldFunction = function (this: void) {
+      const options = normalizeReadFieldOptions(arguments, incoming, context.variables);
 
       if (isReference(options.from)) {
         const info = context.incomingById.get(options.from.__ref);
@@ -288,7 +255,7 @@ export class StoreWriter {
               ...options,
               from: info.storeObject,
             },
-            context
+            context,
           );
 
           if (result !== void 0) {
@@ -309,7 +276,7 @@ export class StoreWriter {
       // by the flattenFields method, but some fields may be assigned a modified
       // context, depending on the presence of @client and other directives.
       context,
-      typename
+      typename,
     ).forEach((context, field) => {
       const resultFieldKey = resultKeyNameFromField(field);
       const value = result[resultFieldKey];
@@ -331,10 +298,8 @@ export class StoreWriter {
           field,
           // Reset context.clientOnly and context.deferred to their default
           // values before processing nested selection sets.
-          field.selectionSet
-            ? getContextFlavor(context, false, false)
-            : context,
-          childTree
+          field.selectionSet ? getContextFlavor(context, false, false) : context,
+          childTree,
         );
 
         // To determine if this field holds a child object with a merge function
@@ -344,18 +309,11 @@ export class StoreWriter {
 
         // The field's value can be an object that has a __typename only if the
         // field has a selection set. Otherwise incomingValue is scalar.
-        if (
-          field.selectionSet &&
-          (isReference(incomingValue) || storeValueIsStoreObject(incomingValue))
-        ) {
+        if (field.selectionSet && (isReference(incomingValue) || storeValueIsStoreObject(incomingValue))) {
           childTypename = readField<string>('__typename', incomingValue);
         }
 
-        const merge = policies.getMergeFunction(
-          typename,
-          field.name.value,
-          childTypename
-        );
+        const merge = policies.getMergeFunction(typename, field.name.value, childTypename);
 
         if (merge) {
           childTree.info = {
@@ -381,11 +339,7 @@ export class StoreWriter {
         // not be cause for alarm.
         !policies.getReadFunction(typename, field.name.value)
       ) {
-        invariant.error(
-          `Missing field '%s' while writing result %o`,
-          resultKeyNameFromField(field),
-          result
-        );
+        invariant.error(`Missing field '%s' while writing result %o`, resultKeyNameFromField(field), result);
       }
     });
 
@@ -432,10 +386,7 @@ export class StoreWriter {
       // returned if we were to reread the result with the same inputs,
       // then we can skip the rest of the processSelectionSet work for
       // this object, and immediately return a Reference to it.
-      if (
-        this.reader &&
-        this.reader.isFresh(result, dataRef, selectionSet, context)
-      ) {
+      if (this.reader && this.reader.isFresh(result, dataRef, selectionSet, context)) {
         return dataRef;
       }
 
@@ -461,12 +412,7 @@ export class StoreWriter {
     return incoming;
   }
 
-  private processFieldValue(
-    value: any,
-    field: FieldNode,
-    context: WriteContext,
-    mergeTree: MergeTree
-  ): StoreValue {
+  private processFieldValue(value: any, field: FieldNode, context: WriteContext, mergeTree: MergeTree): StoreValue {
     if (!field.selectionSet || value === null) {
       // In development, we need to clone scalar values so that they can be
       // safely frozen with maybeDeepFreeze in readFromStore.ts. In production,
@@ -476,12 +422,7 @@ export class StoreWriter {
 
     if (isArray(value)) {
       return value.map((item, i) => {
-        const value = this.processFieldValue(
-          item,
-          field,
-          context,
-          getChildMergeTree(mergeTree, i)
-        );
+        const value = this.processFieldValue(item, field, context, getChildMergeTree(mergeTree, i));
         maybeRecycleChildMergeTree(mergeTree, i);
         return value;
       });
@@ -500,18 +441,13 @@ export class StoreWriter {
   private flattenFields<
     TContext extends Pick<
       WriteContext,
-      | 'clientOnly'
-      | 'deferred'
-      | 'flavors'
-      | 'fragmentMap'
-      | 'lookupFragment'
-      | 'variables'
+      'clientOnly' | 'deferred' | 'flavors' | 'fragmentMap' | 'lookupFragment' | 'variables'
     >,
   >(
     selectionSet: SelectionSetNode,
     result: Record<string, any>,
     context: TContext,
-    typename = getTypenameFromResult(result, selectionSet, context.fragmentMap)
+    typename = getTypenameFromResult(result, selectionSet, context.fragmentMap),
   ): Map<FieldNode, TContext> {
     const fieldMap = new Map<FieldNode, TContext>();
     const { policies } = this.cache;
@@ -525,14 +461,10 @@ export class StoreWriter {
       // values as well, potentially revisiting selection sets that were
       // previously visited with different inherited configurations of those
       // directives.
-      visited?: boolean,
+      visited?: boolean;
     }>(false); // No need for WeakMap, since limitingTrie does not escape.
 
-    (function flatten(
-      this: void,
-      selectionSet: SelectionSetNode,
-      inheritedContext: TContext
-    ) {
+    (function flatten(this: void, selectionSet: SelectionSetNode, inheritedContext: TContext) {
       const visitedNode = limitingTrie.lookup(
         selectionSet,
         // Because we take inheritedClientOnly and inheritedDeferred into
@@ -540,12 +472,12 @@ export class StoreWriter {
         // the same selection set to be flattened more than once, if it appears
         // in the query with different @client and/or @directive configurations.
         inheritedContext.clientOnly,
-        inheritedContext.deferred
+        inheritedContext.deferred,
       );
       if (visitedNode.visited) return;
       visitedNode.visited = true;
 
-      selectionSet.selections.forEach((selection) => {
+      selectionSet.selections.forEach(selection => {
         if (!shouldInclude(selection, context.variables)) return;
 
         let { clientOnly, deferred } = inheritedContext;
@@ -556,7 +488,7 @@ export class StoreWriter {
           !(clientOnly && deferred) &&
           isNonEmptyArray(selection.directives)
         ) {
-          selection.directives.forEach((dir) => {
+          selection.directives.forEach(dir => {
             const name = dir.name.value;
             if (name === 'client') clientOnly = true;
             if (name === 'defer') {
@@ -584,40 +516,20 @@ export class StoreWriter {
             deferred = deferred && existing.deferred;
           }
 
-          fieldMap.set(
-            selection,
-            getContextFlavor(context, clientOnly, deferred)
-          );
+          fieldMap.set(selection, getContextFlavor(context, clientOnly, deferred));
         } else {
-          const fragment = getFragmentFromSelection(
-            selection,
-            context.lookupFragment
-          );
+          const fragment = getFragmentFromSelection(selection, context.lookupFragment);
 
           if (!fragment && selection.kind === Kind.FRAGMENT_SPREAD) {
-            throw newInvariantError(
-              `No fragment named %s`,
-              selection.name.value
-            );
+            throw newInvariantError(`No fragment named %s`, selection.name.value);
           }
 
-          if (
-            fragment &&
-            policies.fragmentMatches(
-              fragment,
-              typename,
-              result,
-              context.variables
-            )
-          ) {
-            flatten(
-              fragment.selectionSet,
-              getContextFlavor(context, clientOnly, deferred)
-            );
+          if (fragment && policies.fragmentMatches(fragment, typename, result, context.variables)) {
+            flatten(fragment.selectionSet, getContextFlavor(context, clientOnly, deferred));
           }
         }
       });
-    }(selectionSet, context));
+    })(selectionSet, context);
 
     return fieldMap;
   }
@@ -627,20 +539,18 @@ export class StoreWriter {
     existing: StoreValue,
     incoming: T,
     context: WriteContext,
-    getStorageArgs?: Parameters<EntityStore['getStorage']>
+    getStorageArgs?: Parameters<EntityStore['getStorage']>,
   ): T | Reference {
     if (mergeTree.map.size && !isReference(incoming)) {
-      const e: StoreObject | Reference | undefined
+      const e: StoreObject | Reference | undefined =
         // Items in the same position in different arrays are not
         // necessarily related to each other, so when incoming is an array
         // we process its elements as if there was no existing data.
-        = (
-          !isArray(incoming) &&
-          // Likewise, existing must be either a Reference or a StoreObject
-          // in order for its fields to be safe to merge with the fields of
-          // the incoming object.
-          (isReference(existing) || storeValueIsStoreObject(existing))
-        )
+        !isArray(incoming) &&
+        // Likewise, existing must be either a Reference or a StoreObject
+        // in order for its fields to be safe to merge with the fields of
+        // the incoming object.
+        (isReference(existing) || storeValueIsStoreObject(existing))
           ? existing
           : void 0;
 
@@ -664,17 +574,12 @@ export class StoreWriter {
       // to preserve the type of numeric keys.
       let changedFields: Map<string | number, StoreValue> | undefined;
 
-      const getValue = (
-        from: typeof e | typeof i,
-        name: string | number
-      ): StoreValue => {
-        return (
-          isArray(from)
-            ? typeof name === 'number'
-              ? from[name]
-              : void 0
-            : context.store.getFieldValue(from, String(name))
-        );
+      const getValue = (from: typeof e | typeof i, name: string | number): StoreValue => {
+        return isArray(from)
+          ? typeof name === 'number'
+            ? from[name]
+            : void 0
+          : context.store.getFieldValue(from, String(name));
       };
 
       mergeTree.map.forEach((childTree, storeFieldName) => {
@@ -685,13 +590,7 @@ export class StoreWriter {
         if (getStorageArgs) {
           getStorageArgs.push(storeFieldName);
         }
-        const aVal = this.applyMerges(
-          childTree,
-          eVal,
-          iVal,
-          context,
-          getStorageArgs
-        );
+        const aVal = this.applyMerges(childTree, eVal, iVal, context, getStorageArgs);
         if (aVal !== iVal) {
           changedFields = changedFields || new Map();
           changedFields.set(storeFieldName, aVal);
@@ -716,7 +615,7 @@ export class StoreWriter {
         incoming,
         mergeTree.info,
         context,
-        getStorageArgs && context.store.getStorage(...getStorageArgs)
+        getStorageArgs && context.store.getStorage(...getStorageArgs),
       );
     }
 
@@ -726,36 +625,27 @@ export class StoreWriter {
 
 const emptyMergeTreePool: MergeTree[] = [];
 
-function getChildMergeTree(
-  { map }: MergeTree,
-  name: string | number
-): MergeTree {
+function getChildMergeTree({ map }: MergeTree, name: string | number): MergeTree {
   if (!map.has(name)) {
     map.set(name, emptyMergeTreePool.pop() || { map: new Map() });
   }
   return map.get(name)!;
 }
 
-function mergeMergeTrees(
-  left: MergeTree | undefined,
-  right: MergeTree | undefined
-): MergeTree {
+function mergeMergeTrees(left: MergeTree | undefined, right: MergeTree | undefined): MergeTree {
   if (left === right || !right || mergeTreeIsEmpty(right)) return left!;
   if (!left || mergeTreeIsEmpty(left)) return right;
 
-  const info
-    = left.info && right.info
+  const info =
+    left.info && right.info
       ? {
-        ...left.info,
-        ...right.info,
-      }
+          ...left.info,
+          ...right.info,
+        }
       : left.info || right.info;
 
   const needToMergeMaps = left.map.size && right.map.size;
-  const map
-    = needToMergeMaps ? new Map()
-      : left.map.size ? left.map
-        : right.map;
+  const map = needToMergeMaps ? new Map() : left.map.size ? left.map : right.map;
 
   const merged = { info, map };
 
@@ -767,11 +657,8 @@ function mergeMergeTrees(
       remainingRightKeys.delete(key);
     });
 
-    remainingRightKeys.forEach((key) => {
-      merged.map.set(
-        key,
-        mergeMergeTrees(right.map.get(key), left.map.get(key))
-      );
+    remainingRightKeys.forEach(key => {
+      merged.map.set(key, mergeMergeTrees(right.map.get(key), left.map.get(key)));
     });
   }
 
@@ -798,7 +685,7 @@ function warnAboutDataLoss(
   existingRef: Reference,
   incomingObj: StoreObject,
   storeFieldName: string,
-  store: NormalizedCache
+  store: NormalizedCache,
 ) {
   const getChild = (objOrRef: StoreObject | Reference): StoreObject | false => {
     const child = store.getFieldValue<StoreObject>(objOrRef, storeFieldName);
@@ -822,17 +709,12 @@ function warnAboutDataLoss(
   // If we're replacing every key of the existing object, then the
   // existing data would be overwritten even if the objects were
   // normalized, so warning would not be helpful here.
-  if (
-    Object.keys(existing).every(
-      key => store.getFieldValue(incoming, key) !== void 0
-    )
-  ) {
+  if (Object.keys(existing).every(key => store.getFieldValue(incoming, key) !== void 0)) {
     return;
   }
 
-  const parentType
-    = store.getFieldValue<string>(existingRef, '__typename') ||
-    store.getFieldValue<string>(incomingObj, '__typename');
+  const parentType =
+    store.getFieldValue<string>(existingRef, '__typename') || store.getFieldValue<string>(incomingObj, '__typename');
   const fieldName = fieldNameFromStoreName(storeFieldName);
   const typeDotName = `${parentType}.${fieldName}`;
   // Avoid warning more than once for the same type and field name.
@@ -843,7 +725,7 @@ function warnAboutDataLoss(
   // Arrays do not have __typename fields, and always need a custom merge
   // function, even if their elements are normalized entities.
   if (!isArray(existing) && !isArray(incoming)) {
-    [existing, incoming].forEach((child) => {
+    [existing, incoming].forEach(child => {
       const typename = store.getFieldValue(child, '__typename');
       if (typeof typename === 'string' && !childTypenames.includes(typename)) {
         childTypenames.push(typename);
@@ -869,12 +751,10 @@ For more information about these options, please refer to the documentation:
     fieldName,
     parentType,
     childTypenames.length
-      ? `either ensure all objects of type ${
-        childTypenames.join(' and ')
-      } have an ID or a custom merge function, or `
+      ? `either ensure all objects of type ${childTypenames.join(' and ')} have an ID or a custom merge function, or `
       : '',
     typeDotName,
     { ...existing },
-    { ...incoming }
+    { ...incoming },
   );
 }

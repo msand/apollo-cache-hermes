@@ -1,13 +1,6 @@
-export type {
-  MockedResponse,
-  MockLinkOptions,
-  ResultFunction,
-} from './mocking/mockLink';
+export type { MockedResponse, MockLinkOptions, ResultFunction } from './mocking/mockLink';
 export { MockLink, mockSingleLink } from './mocking/mockLink';
-export {
-  MockSubscriptionLink,
-  mockObservableLink,
-} from './mocking/mockSubscriptionLink';
+export { MockSubscriptionLink, mockObservableLink } from './mocking/mockSubscriptionLink';
 export { createMockClient } from './mocking/mockClient';
 export { default as subscribeAndCount } from './subscribeAndCount';
 export { itAsync } from './itAsync';

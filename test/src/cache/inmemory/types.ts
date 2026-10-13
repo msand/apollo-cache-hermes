@@ -1,26 +1,11 @@
 import type { DocumentNode, FieldNode } from 'graphql';
 
 import type { Transaction } from '../core/cache';
-import type {
-  StoreObject,
-  StoreValue,
-  Reference,
-} from '../../utilities/index';
-import type {
-  Modifiers,
-  ToReferenceFunction,
-  CanReadFunction,
-  AllFieldsModifier,
-} from '../core/types/common';
+import type { StoreObject, StoreValue, Reference } from '../../utilities/index';
+import type { Modifiers, ToReferenceFunction, CanReadFunction, AllFieldsModifier } from '../core/types/common';
 
 import type { FieldValueGetter } from './entityStore';
-import type {
-  TypePolicies,
-  PossibleTypesMap,
-  KeyFieldsFunction,
-  StorageType,
-  FieldMergeFunction,
-} from './policies';
+import type { TypePolicies, PossibleTypesMap, KeyFieldsFunction, StorageType, FieldMergeFunction } from './policies';
 import type { FragmentRegistryAPI } from './fragmentRegistry';
 
 export type { StoreObject, StoreValue, Reference };
@@ -49,7 +34,7 @@ export interface NormalizedCache {
 
   modify<Entity extends Record<string, any>>(
     dataId: string,
-    fields: Modifiers<Entity> | AllFieldsModifier<Entity>
+    fields: Modifiers<Entity> | AllFieldsModifier<Entity>,
   ): boolean;
   delete(dataId: string, fieldName?: string): boolean;
   clear(): void;
@@ -79,10 +64,7 @@ export interface NormalizedCache {
   toReference: ToReferenceFunction;
   canRead: CanReadFunction;
 
-  getStorage(
-    idOrObj: string | StoreObject,
-    ...storeFieldNames: (string | number)[]
-  ): StorageType;
+  getStorage(idOrObj: string | StoreObject, ...storeFieldNames: (string | number)[]): StorageType;
 }
 
 /**
@@ -97,28 +79,28 @@ export interface NormalizedCacheObject {
     // directly with cache.writeFragment or retained explicitly with
     // cache.retain. When such IDs exist, we include them in the __META
     // section so that they can survive cache.{extract,restore}.
-    extraRootIds: string[],
+    extraRootIds: string[];
   };
   [dataId: string]: StoreObject | undefined;
 }
 
 export type OptimisticStoreItem = {
-  id: string,
-  data: NormalizedCacheObject,
-  transaction: Transaction<NormalizedCacheObject>,
+  id: string;
+  data: NormalizedCacheObject;
+  transaction: Transaction<NormalizedCacheObject>;
 };
 
 export type ReadQueryOptions = {
   /**
    * The Apollo Client store object.
    */
-  store: NormalizedCache,
+  store: NormalizedCache;
   /**
    * A parsed GraphQL query document.
    */
-  query: DocumentNode,
-  variables?: Object,
-  previousResult?: any,
+  query: DocumentNode;
+  variables?: Object;
+  previousResult?: any;
   /**
    * @deprecated
    * Using `canonizeResults` can result in memory leaks so we generally do not
@@ -126,18 +108,18 @@ export type ReadQueryOptions = {
    * A future version of Apollo Client will contain a similar feature without
    * the risk of memory leaks.
    */
-  canonizeResults?: boolean,
-  rootId?: string,
-  config?: ApolloReducerConfig,
+  canonizeResults?: boolean;
+  rootId?: string;
+  config?: ApolloReducerConfig;
 };
 
 export type DiffQueryAgainstStoreOptions = ReadQueryOptions & {
-  returnPartialData?: boolean,
+  returnPartialData?: boolean;
 };
 
 export type ApolloReducerConfig = {
-  dataIdFromObject?: KeyFieldsFunction,
-  addTypename?: boolean,
+  dataIdFromObject?: KeyFieldsFunction;
+  addTypename?: boolean;
 };
 
 export interface InMemoryCacheConfig extends ApolloReducerConfig {

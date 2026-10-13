@@ -8,7 +8,6 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.restore`, () => {
   describe(`2d array of parameterized references`, () => {
-
     let restoreGraphSnapshot: GraphSnapshot, originalGraphSnapshot: GraphSnapshot;
     beforeAll(() => {
       const cacheContext = createStrictCacheContext();
@@ -20,11 +19,7 @@ describe(`operations.restore`, () => {
                 { id: 'a', value: 1 },
                 { id: 'b', value: 2 },
               ],
-              [
-                { id: 'c', value: 3 },
-                { id: 'd', value: 4 },
-                null,
-              ],
+              [{ id: 'c', value: 3 }, { id: 'd', value: 4 }, null],
             ],
           },
         },
@@ -40,60 +35,54 @@ describe(`operations.restore`, () => {
         { tableName: 'This is table name' },
       );
 
-      const parameterizedId = nodeIdForParameterizedValue(
-        QueryRootId,
-        ['rows', 'elements'],
-        { table: 'This is table name' },
-      );
+      const parameterizedId = nodeIdForParameterizedValue(QueryRootId, ['rows', 'elements'], {
+        table: 'This is table name',
+      });
 
-      restoreGraphSnapshot = restore({
-        [QueryRootId]: {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          parameterized: [{ id: parameterizedId, path: ['rows', 'elements'] }],
-          data: undefined,
-        },
-        [parameterizedId]: {
-          type: Serializable.NodeSnapshotType.ParameterizedValueSnapshot,
-          inbound: [{ id: QueryRootId, path: ['rows', 'elements'] }],
-          outbound: [
-            { id: 'a', path: [0, 0] },
-            { id: 'b', path: [0, 1] },
-            { id: 'c', path: [1, 0] },
-            { id: 'd', path: [1, 1] },
-          ],
-          data: [
-            [
-              null,
-              null,
+      restoreGraphSnapshot = restore(
+        {
+          [QueryRootId]: {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            parameterized: [{ id: parameterizedId, path: ['rows', 'elements'] }],
+            data: undefined,
+          },
+          [parameterizedId]: {
+            type: Serializable.NodeSnapshotType.ParameterizedValueSnapshot,
+            inbound: [{ id: QueryRootId, path: ['rows', 'elements'] }],
+            outbound: [
+              { id: 'a', path: [0, 0] },
+              { id: 'b', path: [0, 1] },
+              { id: 'c', path: [1, 0] },
+              { id: 'd', path: [1, 1] },
             ],
-            [
-              null,
-              null,
-              null,
+            data: [
+              [null, null],
+              [null, null, null],
             ],
-          ],
+          },
+          a: {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            inbound: [{ id: parameterizedId, path: [0, 0] }],
+            data: { id: 'a', value: 1 },
+          },
+          b: {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            inbound: [{ id: parameterizedId, path: [0, 1] }],
+            data: { id: 'b', value: 2 },
+          },
+          c: {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            inbound: [{ id: parameterizedId, path: [1, 0] }],
+            data: { id: 'c', value: 3 },
+          },
+          d: {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            inbound: [{ id: parameterizedId, path: [1, 1] }],
+            data: { id: 'd', value: 4 },
+          },
         },
-        'a': {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          inbound: [{ id: parameterizedId, path: [0, 0] }],
-          data: { id: 'a', value: 1 },
-        },
-        'b': {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          inbound: [{ id: parameterizedId, path: [0, 1] }],
-          data: { id: 'b', value: 2 },
-        },
-        'c': {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          inbound: [{ id: parameterizedId, path: [1, 0] }],
-          data: { id: 'c', value: 3 },
-        },
-        'd': {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          inbound: [{ id: parameterizedId, path: [1, 1] }],
-          data: { id: 'd', value: 4 },
-        },
-      }, cacheContext).cacheSnapshot.baseline;
+        cacheContext,
+      ).cacheSnapshot.baseline;
     });
 
     it(`restores GraphSnapshot from JSON serializable object`, () => {
@@ -103,6 +92,5 @@ describe(`operations.restore`, () => {
     it(`correctly restores different types of NodeSnapshot`, () => {
       jestExpect(restoreGraphSnapshot.getNodeSnapshot(QueryRootId)).toBeInstanceOf(EntitySnapshot);
     });
-
   });
 });

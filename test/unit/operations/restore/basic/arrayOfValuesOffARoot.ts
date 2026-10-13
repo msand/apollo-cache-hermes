@@ -8,7 +8,6 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 
 describe(`operations.restore`, () => {
   describe(`new array of values hanging off of a root`, () => {
-
     let restoreGraphSnapshot: GraphSnapshot, originalGraphSnapshot: GraphSnapshot;
     beforeAll(() => {
       const cacheContext = createStrictCacheContext();
@@ -26,26 +25,29 @@ describe(`operations.restore`, () => {
           ],
         },
         `{ viewer { postal name } }`,
-        cacheContext
+        cacheContext,
       );
 
-      restoreGraphSnapshot = restore({
-        [QueryRootId]: {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          data: {
-            viewer: [
-              {
-                postal: 123,
-                name: 'Gouda',
-              },
-              {
-                postal: 456,
-                name: 'Brie',
-              },
-            ],
+      restoreGraphSnapshot = restore(
+        {
+          [QueryRootId]: {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            data: {
+              viewer: [
+                {
+                  postal: 123,
+                  name: 'Gouda',
+                },
+                {
+                  postal: 456,
+                  name: 'Brie',
+                },
+              ],
+            },
           },
         },
-      }, cacheContext).cacheSnapshot.baseline;
+        cacheContext,
+      ).cacheSnapshot.baseline;
     });
 
     it(`restores GraphSnapshot from JSON serializable object`, () => {
@@ -55,6 +57,5 @@ describe(`operations.restore`, () => {
     it(`correctly restores different types of NodeSnapshot`, () => {
       jestExpect(restoreGraphSnapshot.getNodeSnapshot(QueryRootId)).toBeInstanceOf(EntitySnapshot);
     });
-
   });
 });

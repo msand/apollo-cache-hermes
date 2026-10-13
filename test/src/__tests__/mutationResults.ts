@@ -4,10 +4,7 @@ import { GraphQLError } from 'graphql';
 import { ApolloClient, ApolloLink, InMemoryCache } from '@apollo/client';
 
 import { FetchResult } from '../core';
-import {
-  Observable,
-  ObservableSubscription as Subscription,
-} from '../utilities';
+import { Observable, ObservableSubscription as Subscription } from '../utilities';
 import { itAsync, subscribeAndCount, mockSingleLink } from '../testing';
 import { spyOnConsole } from '../testing/internal';
 import { Hermes } from '../../../src';
@@ -120,17 +117,14 @@ describe('mutation results', () => {
     },
   };
 
-  function setupObsQuery(
-    reject: (reason: any) => any,
-    ...mockedResponses: any[]
-  ) {
+  function setupObsQuery(reject: (reason: any) => any, ...mockedResponses: any[]) {
     const client = new ApolloClient({
       link: mockSingleLink(
         {
           request: { query: queryWithTypename } as any,
           result,
         },
-        ...mockedResponses
+        ...mockedResponses,
       ),
       cache: new InMemoryCache({
         dataIdFromObject: (obj: any) => {
@@ -153,11 +147,7 @@ describe('mutation results', () => {
     };
   }
 
-  function setupDelayObsQuery(
-    reject: (reason: any) => any,
-    delay: number,
-    ...mockedResponses: any[]
-  ) {
+  function setupDelayObsQuery(reject: (reason: any) => any, delay: number, ...mockedResponses: any[]) {
     const client = new ApolloClient({
       link: mockSingleLink(
         {
@@ -165,7 +155,7 @@ describe('mutation results', () => {
           result,
           delay,
         },
-        ...mockedResponses
+        ...mockedResponses,
       ).setOnError(reject),
       cache: new InMemoryCache({
         dataIdFromObject: (obj: any) => {
@@ -196,244 +186,233 @@ describe('mutation results', () => {
       .then(resolve, reject);
   });
 
-  itAsync(
-    'correctly integrates field changes by default',
-    (resolve, reject) => {
-      const mutation = gql`
-        mutation setCompleted {
-          setCompleted(todoId: "3") {
-            id
-            completed
-            __typename
-          }
+  itAsync('correctly integrates field changes by default', (resolve, reject) => {
+    const mutation = gql`
+      mutation setCompleted {
+        setCompleted(todoId: "3") {
+          id
+          completed
           __typename
         }
-      `;
-
-      const mutationResult = {
-        data: {
-          __typename: 'Mutation',
-          setCompleted: {
-            __typename: 'Todo',
-            id: '3',
-            completed: true,
-          },
-        },
-      };
-
-      const { client, obsQuery } = setupObsQuery(reject, {
-        request: { query: mutation },
-        result: mutationResult,
-      });
-
-      return obsQuery
-        .result()
-        .then(() => {
-          return client.mutate({ mutation });
-        })
-        .then(() => {
-          return client.query({ query });
-        })
-        .then((newResult: any) => {
-          expect(newResult.data.todoList.todos[0].completed).toBe(true);
-        })
-        .then(resolve, reject);
-    }
-  );
-
-  itAsync(
-    'correctly integrates field changes by default with variables',
-    (resolve, reject) => {
-      const query = gql`
-        query getMini($id: ID!) {
-          mini(id: $id) {
-            id
-            cover(maxWidth: 600, maxHeight: 400)
-            __typename
-          }
-        }
-      `;
-      const mutation = gql`
-        mutation upload($signature: String!) {
-          mini: submitMiniCoverS3DirectUpload(signature: $signature) {
-            id
-            cover(maxWidth: 600, maxHeight: 400)
-            __typename
-          }
-        }
-      `;
-
-      const link = mockSingleLink(
-        {
-          request: {
-            query,
-            variables: { id: 1 },
-          } as any,
-          delay: 100,
-          result: {
-            data: { mini: { id: 1, cover: 'image', __typename: 'Mini' } },
-          },
-        },
-        {
-          request: {
-            query: mutation,
-            variables: { signature: '1234' },
-          } as any,
-          delay: 150,
-          result: {
-            data: { mini: { id: 1, cover: 'image2', __typename: 'Mini' } },
-          },
-        }
-      ).setOnError(reject);
-
-      interface Data {
-        mini: { id: number, cover: string, __typename: string };
+        __typename
       }
-      const client = new ApolloClient({
-        link,
-        cache: new Hermes({
-          dataIdFromObject: (obj: any) => {
-            if (obj.id && obj.__typename) {
-              return obj.__typename + obj.id;
-            }
-            return null;
-          },
-        }),
-      });
+    `;
 
-      const obs = client.watchQuery<Data>({
-        query,
-        variables: { id: 1 },
-        notifyOnNetworkStatusChange: false,
-      });
-
-      let count = 0;
-      obs.subscribe({
-        next: (result) => {
-          if (count === 0) {
-            client.mutate({ mutation, variables: { signature: '1234' } });
-            expect(result.data!.mini.cover).toBe('image');
-
-            setTimeout(() => {
-              if (count === 0) {
-                reject(
-                  new Error('mutate did not re-call observable with next value')
-                );
-              }
-            }, 250);
-          }
-          if (count === 1) {
-            expect(result.data!.mini.cover).toBe('image2');
-            resolve();
-          }
-          count++;
+    const mutationResult = {
+      data: {
+        __typename: 'Mutation',
+        setCompleted: {
+          __typename: 'Todo',
+          id: '3',
+          completed: true,
         },
-        error: reject,
-      });
-    }
-  );
+      },
+    };
 
-  itAsync(
-    'should write results to cache according to errorPolicy',
-    async(resolve, reject) => {
-      const expectedFakeError = new GraphQLError('expected/fake error');
+    const { client, obsQuery } = setupObsQuery(reject, {
+      request: { query: mutation },
+      result: mutationResult,
+    });
 
-      const client = new ApolloClient({
-        cache: new Hermes({
-          typePolicies: {
-            Person: {
-              keyFields: ['name'],
-            },
-          },
-        }),
+    return obsQuery
+      .result()
+      .then(() => {
+        return client.mutate({ mutation });
+      })
+      .then(() => {
+        return client.query({ query });
+      })
+      .then((newResult: any) => {
+        expect(newResult.data.todoList.todos[0].completed).toBe(true);
+      })
+      .then(resolve, reject);
+  });
 
-        link: new ApolloLink(
-          operation =>
-            new Observable((observer) => {
-              observer.next({
-                errors: [expectedFakeError],
-                data: {
-                  newPerson: {
-                    __typename: 'Person',
-                    name: operation.variables.newName,
-                  },
-                },
-              });
-              observer.complete();
-            })
-        ).setOnError(reject),
-      });
-
-      const mutation = gql`
-        mutation AddNewPerson($newName: String!) {
-          newPerson(name: $newName) {
-            name
-          }
+  itAsync('correctly integrates field changes by default with variables', (resolve, reject) => {
+    const query = gql`
+      query getMini($id: ID!) {
+        mini(id: $id) {
+          id
+          cover(maxWidth: 600, maxHeight: 400)
+          __typename
         }
-      `;
+      }
+    `;
+    const mutation = gql`
+      mutation upload($signature: String!) {
+        mini: submitMiniCoverS3DirectUpload(signature: $signature) {
+          id
+          cover(maxWidth: 600, maxHeight: 400)
+          __typename
+        }
+      }
+    `;
 
-      await client
-        .mutate({
-          mutation,
-          variables: {
-            newName: 'Hugh Willson',
-          },
-        })
-        .then(
-          () => {
-            reject('should have thrown for default errorPolicy');
-          },
-          (error) => {
-            expect(error.message).toBe(expectedFakeError.message);
-          }
-        );
-
-      expect(client.cache.extract()).toMatchSnapshot();
-
-      const ignoreErrorsResult = await client.mutate({
-        mutation,
-        errorPolicy: 'ignore',
-        variables: {
-          newName: 'Jenn Creighton',
+    const link = mockSingleLink(
+      {
+        request: {
+          query,
+          variables: { id: 1 },
+        } as any,
+        delay: 100,
+        result: {
+          data: { mini: { id: 1, cover: 'image', __typename: 'Mini' } },
         },
-      });
-
-      expect(ignoreErrorsResult).toEqual({
-        data: {
-          newPerson: {
-            __typename: 'Person',
-            name: 'Jenn Creighton',
-          },
+      },
+      {
+        request: {
+          query: mutation,
+          variables: { signature: '1234' },
+        } as any,
+        delay: 150,
+        result: {
+          data: { mini: { id: 1, cover: 'image2', __typename: 'Mini' } },
         },
-      });
+      },
+    ).setOnError(reject);
 
-      expect(client.cache.extract()).toMatchSnapshot();
-
-      const allErrorsResult = await client.mutate({
-        mutation,
-        errorPolicy: 'all',
-        variables: {
-          newName: 'Ellen Shapiro',
-        },
-      });
-
-      expect(allErrorsResult).toEqual({
-        data: {
-          newPerson: {
-            __typename: 'Person',
-            name: 'Ellen Shapiro',
-          },
-        },
-        errors: [expectedFakeError],
-      });
-
-      expect(client.cache.extract()).toMatchSnapshot();
-
-      resolve();
+    interface Data {
+      mini: { id: number; cover: string; __typename: string };
     }
-  );
+    const client = new ApolloClient({
+      link,
+      cache: new Hermes({
+        dataIdFromObject: (obj: any) => {
+          if (obj.id && obj.__typename) {
+            return obj.__typename + obj.id;
+          }
+          return null;
+        },
+      }),
+    });
 
-  it('should warn when the result fields don\'t match the query fields', async() => {
+    const obs = client.watchQuery<Data>({
+      query,
+      variables: { id: 1 },
+      notifyOnNetworkStatusChange: false,
+    });
+
+    let count = 0;
+    obs.subscribe({
+      next: result => {
+        if (count === 0) {
+          client.mutate({ mutation, variables: { signature: '1234' } });
+          expect(result.data!.mini.cover).toBe('image');
+
+          setTimeout(() => {
+            if (count === 0) {
+              reject(new Error('mutate did not re-call observable with next value'));
+            }
+          }, 250);
+        }
+        if (count === 1) {
+          expect(result.data!.mini.cover).toBe('image2');
+          resolve();
+        }
+        count++;
+      },
+      error: reject,
+    });
+  });
+
+  itAsync('should write results to cache according to errorPolicy', async (resolve, reject) => {
+    const expectedFakeError = new GraphQLError('expected/fake error');
+
+    const client = new ApolloClient({
+      cache: new Hermes({
+        typePolicies: {
+          Person: {
+            keyFields: ['name'],
+          },
+        },
+      }),
+
+      link: new ApolloLink(
+        operation =>
+          new Observable(observer => {
+            observer.next({
+              errors: [expectedFakeError],
+              data: {
+                newPerson: {
+                  __typename: 'Person',
+                  name: operation.variables.newName,
+                },
+              },
+            });
+            observer.complete();
+          }),
+      ).setOnError(reject),
+    });
+
+    const mutation = gql`
+      mutation AddNewPerson($newName: String!) {
+        newPerson(name: $newName) {
+          name
+        }
+      }
+    `;
+
+    await client
+      .mutate({
+        mutation,
+        variables: {
+          newName: 'Hugh Willson',
+        },
+      })
+      .then(
+        () => {
+          reject('should have thrown for default errorPolicy');
+        },
+        error => {
+          expect(error.message).toBe(expectedFakeError.message);
+        },
+      );
+
+    expect(client.cache.extract()).toMatchSnapshot();
+
+    const ignoreErrorsResult = await client.mutate({
+      mutation,
+      errorPolicy: 'ignore',
+      variables: {
+        newName: 'Jenn Creighton',
+      },
+    });
+
+    expect(ignoreErrorsResult).toEqual({
+      data: {
+        newPerson: {
+          __typename: 'Person',
+          name: 'Jenn Creighton',
+        },
+      },
+    });
+
+    expect(client.cache.extract()).toMatchSnapshot();
+
+    const allErrorsResult = await client.mutate({
+      mutation,
+      errorPolicy: 'all',
+      variables: {
+        newName: 'Ellen Shapiro',
+      },
+    });
+
+    expect(allErrorsResult).toEqual({
+      data: {
+        newPerson: {
+          __typename: 'Person',
+          name: 'Ellen Shapiro',
+        },
+      },
+      errors: [expectedFakeError],
+    });
+
+    expect(client.cache.extract()).toMatchSnapshot();
+
+    resolve();
+  });
+
+  it("should warn when the result fields don't match the query fields", async () => {
     using _consoleSpies = spyOnConsole.takeSnapshots('error');
     await new Promise((resolve, reject) => {
       let handle: any;
@@ -493,14 +472,14 @@ describe('mutation results', () => {
         {
           request: { query: mutationTodo },
           result: mutationTodoResult,
-        }
+        },
       );
 
       return obsQuery
         .result()
         .then(() => {
           // we have to actually subscribe to the query to be able to update it
-          return new Promise((resolve) => {
+          return new Promise(resolve => {
             handle = client.watchQuery({ query: queryTodos });
             subscriptionHandle = handle.subscribe({
               next(res: any) {
@@ -521,10 +500,10 @@ describe('mutation results', () => {
                 return newResults;
               },
             },
-          })
+          }),
         )
         .finally(() => subscriptionHandle.unsubscribe())
-        .then((result) => {
+        .then(result => {
           expect(result).toEqual(mutationTodoResult);
         })
         .then(resolve, reject);
@@ -535,7 +514,7 @@ describe('mutation results', () => {
     const startTime = Date.now();
     const link = new ApolloLink(
       operation =>
-        new Observable((observer) => {
+        new Observable(observer => {
           observer.next({
             data: {
               __typename: 'Mutation',
@@ -546,7 +525,7 @@ describe('mutation results', () => {
             },
           });
           observer.complete();
-        })
+        }),
     );
 
     const mutation = gql`
@@ -593,20 +572,24 @@ describe('mutation results', () => {
               data: {
                 doSomething: { __typename, time },
               },
-            }
+            },
           ) {
             expect(__typename).toBe('MutationPayload');
             expect(time).toBeInstanceOf(Date);
             expect(time.getTime()).toBe(startTime);
             expect(timeReadCount).toBe(1);
             expect(timeMergeCount).toBe(1);
+            // Hermes: extract() nests each node's fields under `data`.
             expect(cache.extract()).toEqual({
               ROOT_MUTATION: {
-                __typename: 'Mutation',
-                doSomething: {
-                  __typename: 'MutationPayload',
-                  time: startTime,
+                data: {
+                  __typename: 'Mutation',
+                  doSomething: {
+                    __typename: 'MutationPayload',
+                    time: startTime,
+                  },
                 },
+                type: 0,
               },
             });
           },
@@ -626,12 +609,16 @@ describe('mutation results', () => {
             // The contents of the ROOT_MUTATION object exist only briefly, for the
             // duration of the mutation update, and are removed after the mutation
             // write is finished.
+            // Hermes: extract() nests each node's fields under `data`.
             expect(client.cache.extract()).toEqual({
               ROOT_MUTATION: {
-                __typename: 'Mutation',
+                data: {
+                  __typename: 'Mutation',
+                },
+                type: 0,
               },
             });
-          }
+          },
         );
     });
 
@@ -672,20 +659,24 @@ describe('mutation results', () => {
               data: {
                 doSomething: { __typename, time },
               },
-            }
+            },
           ) {
             expect(__typename).toBe('MutationPayload');
             expect(time).toBeInstanceOf(Date);
             expect(time.getTime()).toBe(startTime);
             expect(timeReadCount).toBe(1);
             expect(timeMergeCount).toBe(1);
+            // Hermes: extract() nests each node's fields under `data`.
             expect(cache.extract()).toEqual({
               ROOT_MUTATION: {
-                __typename: 'Mutation',
-                doSomething: {
-                  __typename: 'MutationPayload',
-                  time: startTime,
+                data: {
+                  __typename: 'Mutation',
+                  doSomething: {
+                    __typename: 'MutationPayload',
+                    time: startTime,
+                  },
                 },
+                type: 0,
               },
             });
           },
@@ -702,20 +693,24 @@ describe('mutation results', () => {
             expect(timeReadCount).toBe(1);
             expect(timeMergeCount).toBe(1);
 
+            // Hermes: extract() nests each node's fields under `data`.
             expect(client.cache.extract()).toEqual({
               ROOT_MUTATION: {
-                __typename: 'Mutation',
-                doSomething: {
-                  __typename: 'MutationPayload',
-                  time: startTime,
+                data: {
+                  __typename: 'Mutation',
+                  doSomething: {
+                    __typename: 'MutationPayload',
+                    time: startTime,
+                  },
                 },
+                type: 0,
               },
             });
-          }
+          },
         );
     });
 
-    it('mutation update function runs even when fetchPolicy is "no-cache"', async() => {
+    it('mutation update function runs even when fetchPolicy is "no-cache"', async () => {
       let timeReadCount = 0;
       let timeMergeCount = 0;
       let mutationUpdateCount = 0;
@@ -753,7 +748,7 @@ describe('mutation results', () => {
               data: {
                 doSomething: { __typename, time },
               },
-            }
+            },
           ) {
             expect(++mutationUpdateCount).toBe(1);
             expect(__typename).toBe('MutationPayload');
@@ -777,7 +772,7 @@ describe('mutation results', () => {
             expect(timeMergeCount).toBe(0);
             expect(mutationUpdateCount).toBe(1);
             expect(client.cache.extract()).toEqual({});
-          }
+          },
         );
     });
   });
@@ -819,7 +814,7 @@ describe('mutation results', () => {
         .result()
         .then(() => {
           // we have to actually subscribe to the query to be able to update it
-          return new Promise((resolve) => {
+          return new Promise(resolve => {
             const handle = client.watchQuery({ query });
             subscriptionHandle = handle.subscribe({
               next(res) {
@@ -835,15 +830,13 @@ describe('mutation results', () => {
               todoList: (prev, options) => {
                 const mResult = options.mutationResult as any;
                 expect(mResult.data.createTodo.id).toBe('99');
-                expect(mResult.data.createTodo.text).toBe(
-                  'This one was created with a mutation.'
-                );
+                expect(mResult.data.createTodo.text).toBe('This one was created with a mutation.');
                 const state = cloneDeep(prev) as any;
                 state.todoList.todos.unshift(mResult.data.createTodo);
                 return state;
               },
             },
-          })
+          }),
         )
         .then(() => client.query({ query }))
         .then((newResult: any) => {
@@ -853,217 +846,193 @@ describe('mutation results', () => {
           expect(newResult.data.todoList.todos.length).toBe(4);
 
           // Since we used `prepend` it should be at the front
-          expect(newResult.data.todoList.todos[0].text).toBe(
-            'This one was created with a mutation.'
-          );
+          expect(newResult.data.todoList.todos[0].text).toBe('This one was created with a mutation.');
         })
         .then(resolve, reject);
     });
 
-    itAsync(
-      'does not fail if optional query variables are not supplied',
-      (resolve, reject) => {
-        let subscriptionHandle: Subscription;
-        const mutationWithVars = gql`
-          mutation createTodo($requiredVar: String!, $optionalVar: String) {
-            createTodo(requiredVar: $requiredVar, optionalVar: $optionalVar) {
-              id
-              text
-              completed
-              __typename
-            }
+    itAsync('does not fail if optional query variables are not supplied', (resolve, reject) => {
+      let subscriptionHandle: Subscription;
+      const mutationWithVars = gql`
+        mutation createTodo($requiredVar: String!, $optionalVar: String) {
+          createTodo(requiredVar: $requiredVar, optionalVar: $optionalVar) {
+            id
+            text
+            completed
             __typename
           }
-        `;
+          __typename
+        }
+      `;
 
-        // the test will pass if optionalVar is uncommented
-        const variables = {
-          requiredVar: 'x',
-          // optionalVar: 'y',
-        };
-        const { client, obsQuery } = setupObsQuery(reject, {
-          request: {
-            query: mutationWithVars,
-            variables,
-          },
-          result: mutationResult,
-        });
+      // the test will pass if optionalVar is uncommented
+      const variables = {
+        requiredVar: 'x',
+        // optionalVar: 'y',
+      };
+      const { client, obsQuery } = setupObsQuery(reject, {
+        request: {
+          query: mutationWithVars,
+          variables,
+        },
+        result: mutationResult,
+      });
 
-        return obsQuery
-          .result()
-          .then(() => {
-            // we have to actually subscribe to the query to be able to update it
-            return new Promise((resolve) => {
-              const handle = client.watchQuery({
-                query,
-                variables,
-              });
-              subscriptionHandle = handle.subscribe({
-                next(res) {
-                  resolve(res);
-                },
-              });
-            });
-          })
-          .then(() =>
-            client.mutate({
-              mutation: mutationWithVars,
+      return obsQuery
+        .result()
+        .then(() => {
+          // we have to actually subscribe to the query to be able to update it
+          return new Promise(resolve => {
+            const handle = client.watchQuery({
+              query,
               variables,
+            });
+            subscriptionHandle = handle.subscribe({
+              next(res) {
+                resolve(res);
+              },
+            });
+          });
+        })
+        .then(() =>
+          client.mutate({
+            mutation: mutationWithVars,
+            variables,
+            updateQueries: {
+              todoList: (prev, options) => {
+                const mResult = options.mutationResult as any;
+                expect(mResult.data.createTodo.id).toBe('99');
+                expect(mResult.data.createTodo.text).toBe('This one was created with a mutation.');
+                const state = cloneDeep(prev) as any;
+                state.todoList.todos.unshift(mResult.data.createTodo);
+                return state;
+              },
+            },
+          }),
+        )
+        .then(() => {
+          return client.query({ query });
+        })
+        .then((newResult: any) => {
+          subscriptionHandle.unsubscribe();
+
+          // There should be one more todo item than before
+          expect(newResult.data.todoList.todos.length).toBe(4);
+
+          // Since we used `prepend` it should be at the front
+          expect(newResult.data.todoList.todos[0].text).toBe('This one was created with a mutation.');
+        })
+        .then(resolve, reject);
+    });
+
+    itAsync('does not fail if the query did not complete correctly', (resolve, reject) => {
+      const { client, obsQuery } = setupObsQuery(reject, {
+        request: { query: mutation },
+        result: mutationResult,
+      });
+      const subs = obsQuery.subscribe({
+        next: () => null,
+      });
+      // Cancel the query right away!
+      subs.unsubscribe();
+      return client
+        .mutate({
+          mutation,
+          updateQueries: {
+            todoList: (prev, options) => {
+              const mResult = options.mutationResult as any;
+              expect(mResult.data.createTodo.id).toBe('99');
+              expect(mResult.data.createTodo.text).toBe('This one was created with a mutation.');
+
+              const state = cloneDeep(prev) as any;
+              state.todoList.todos.unshift(mResult.data.createTodo);
+              return state;
+            },
+          },
+        })
+        .then(resolve, reject);
+    });
+
+    itAsync('does not fail if the query did not finish loading', (resolve, reject) => {
+      const { client, obsQuery } = setupDelayObsQuery(reject, 15, {
+        request: { query: mutation },
+        result: mutationResult,
+      });
+      obsQuery.subscribe({
+        next: () => null,
+      });
+      return client
+        .mutate({
+          mutation,
+          updateQueries: {
+            todoList: (prev, options) => {
+              const mResult = options.mutationResult as any;
+              expect(mResult.data.createTodo.id).toBe('99');
+              expect(mResult.data.createTodo.text).toBe('This one was created with a mutation.');
+
+              const state = cloneDeep(prev) as any;
+              state.todoList.todos.unshift(mResult.data.createTodo);
+              return state;
+            },
+          },
+        })
+        .then(resolve, reject);
+    });
+
+    itAsync('does not make next queries fail if a mutation fails', (resolve, reject) => {
+      const { client, obsQuery } = setupObsQuery(
+        error => {
+          throw error;
+        },
+        {
+          request: { query: mutation },
+          result: { errors: [new Error('mock error')] },
+        },
+        {
+          request: { query: queryWithTypename },
+          result,
+        },
+      );
+
+      obsQuery.subscribe({
+        next() {
+          client
+            .mutate({
+              mutation,
               updateQueries: {
                 todoList: (prev, options) => {
                   const mResult = options.mutationResult as any;
-                  expect(mResult.data.createTodo.id).toBe('99');
-                  expect(mResult.data.createTodo.text).toBe(
-                    'This one was created with a mutation.'
-                  );
                   const state = cloneDeep(prev) as any;
-                  state.todoList.todos.unshift(mResult.data.createTodo);
+                  // It's unfortunate that this function is called at all, but we are removing
+                  // the updateQueries API soon so it won't matter.
+                  state.todoList.todos.unshift(mResult.data && mResult.data.createTodo);
                   return state;
                 },
               },
             })
-          )
-          .then(() => {
-            return client.query({ query });
-          })
-          .then((newResult: any) => {
-            subscriptionHandle.unsubscribe();
-
-            // There should be one more todo item than before
-            expect(newResult.data.todoList.todos.length).toBe(4);
-
-            // Since we used `prepend` it should be at the front
-            expect(newResult.data.todoList.todos[0].text).toBe(
-              'This one was created with a mutation.'
-            );
-          })
-          .then(resolve, reject);
-      }
-    );
-
-    itAsync(
-      'does not fail if the query did not complete correctly',
-      (resolve, reject) => {
-        const { client, obsQuery } = setupObsQuery(reject, {
-          request: { query: mutation },
-          result: mutationResult,
-        });
-        const subs = obsQuery.subscribe({
-          next: () => null,
-        });
-        // Cancel the query right away!
-        subs.unsubscribe();
-        return client
-          .mutate({
-            mutation,
-            updateQueries: {
-              todoList: (prev, options) => {
-                const mResult = options.mutationResult as any;
-                expect(mResult.data.createTodo.id).toBe('99');
-                expect(mResult.data.createTodo.text).toBe(
-                  'This one was created with a mutation.'
-                );
-
-                const state = cloneDeep(prev) as any;
-                state.todoList.todos.unshift(mResult.data.createTodo);
-                return state;
-              },
-            },
-          })
-          .then(resolve, reject);
-      }
-    );
-
-    itAsync(
-      'does not fail if the query did not finish loading',
-      (resolve, reject) => {
-        const { client, obsQuery } = setupDelayObsQuery(reject, 15, {
-          request: { query: mutation },
-          result: mutationResult,
-        });
-        obsQuery.subscribe({
-          next: () => null,
-        });
-        return client
-          .mutate({
-            mutation,
-            updateQueries: {
-              todoList: (prev, options) => {
-                const mResult = options.mutationResult as any;
-                expect(mResult.data.createTodo.id).toBe('99');
-                expect(mResult.data.createTodo.text).toBe(
-                  'This one was created with a mutation.'
-                );
-
-                const state = cloneDeep(prev) as any;
-                state.todoList.todos.unshift(mResult.data.createTodo);
-                return state;
-              },
-            },
-          })
-          .then(resolve, reject);
-      }
-    );
-
-    itAsync(
-      'does not make next queries fail if a mutation fails',
-      (resolve, reject) => {
-        const { client, obsQuery } = setupObsQuery(
-          (error) => {
-            throw error;
-          },
-          {
-            request: { query: mutation },
-            result: { errors: [new Error('mock error')] },
-          },
-          {
-            request: { query: queryWithTypename },
-            result,
-          }
-        );
-
-        obsQuery.subscribe({
-          next() {
-            client
-              .mutate({
-                mutation,
-                updateQueries: {
-                  todoList: (prev, options) => {
-                    const mResult = options.mutationResult as any;
-                    const state = cloneDeep(prev) as any;
-                    // It's unfortunate that this function is called at all, but we are removing
-                    // the updateQueries API soon so it won't matter.
-                    state.todoList.todos.unshift(
-                      mResult.data && mResult.data.createTodo
-                    );
-                    return state;
-                  },
-                },
-              })
-              .then(
-                () => reject(new Error('Mutation should have failed')),
-                () =>
-                  client.mutate({
-                    mutation,
-                    updateQueries: {
-                      todoList: (prev, options) => {
-                        const mResult = options.mutationResult as any;
-                        const state = cloneDeep(prev) as any;
-                        state.todoList.todos.unshift(mResult.data.createTodo);
-                        return state;
-                      },
+            .then(
+              () => reject(new Error('Mutation should have failed')),
+              () =>
+                client.mutate({
+                  mutation,
+                  updateQueries: {
+                    todoList: (prev, options) => {
+                      const mResult = options.mutationResult as any;
+                      const state = cloneDeep(prev) as any;
+                      state.todoList.todos.unshift(mResult.data.createTodo);
+                      return state;
                     },
-                  })
-              )
-              .then(
-                () => reject(new Error('Mutation should have failed')),
-                () => obsQuery.refetch()
-              )
-              .then(resolve, reject);
-          },
-        });
-      }
-    );
+                  },
+                }),
+            )
+            .then(
+              () => reject(new Error('Mutation should have failed')),
+              () => obsQuery.refetch(),
+            )
+            .then(resolve, reject);
+        },
+      });
+    });
 
     itAsync('error handling in reducer functions', (resolve, reject) => {
       let subscriptionHandle: Subscription;
@@ -1076,7 +1045,7 @@ describe('mutation results', () => {
         .result()
         .then(() => {
           // we have to actually subscribe to the query to be able to update it
-          return new Promise((resolve) => {
+          return new Promise(resolve => {
             const handle = client.watchQuery({ query });
             subscriptionHandle = handle.subscribe({
               next(res) {
@@ -1093,118 +1062,115 @@ describe('mutation results', () => {
                 throw new Error(`Hello... It's me.`);
               },
             },
-          })
+          }),
         )
         .then(
           () => {
             subscriptionHandle.unsubscribe();
             reject('should have thrown');
           },
-          (error) => {
+          error => {
             subscriptionHandle.unsubscribe();
             expect(error.message).toBe(`Hello... It's me.`);
-          }
+          },
         )
         .then(resolve, reject);
     });
   });
 
-  itAsync(
-    'does not fail if one of the previous queries did not complete correctly',
-    (resolve, reject) => {
-      const variableQuery = gql`
-        query Echo($message: String) {
-          echo(message: $message)
+  itAsync('does not fail if one of the previous queries did not complete correctly', (resolve, reject) => {
+    const variableQuery = gql`
+      query Echo($message: String) {
+        echo(message: $message)
+      }
+    `;
+
+    const variables1 = {
+      message: 'a',
+    };
+
+    const result1 = {
+      data: {
+        echo: 'a',
+      },
+    };
+
+    const variables2 = {
+      message: 'b',
+    };
+
+    const result2 = {
+      data: {
+        echo: 'b',
+      },
+    };
+
+    const resetMutation = gql`
+      mutation Reset {
+        reset {
+          echo
         }
-      `;
+      }
+    `;
 
-      const variables1 = {
-        message: 'a',
-      };
-
-      const result1 = {
-        data: {
-          echo: 'a',
+    const resetMutationResult = {
+      data: {
+        reset: {
+          echo: '0',
         },
-      };
+      },
+    };
 
-      const variables2 = {
-        message: 'b',
-      };
-
-      const result2 = {
-        data: {
-          echo: 'b',
+    const client = new ApolloClient({
+      link: mockSingleLink(
+        {
+          request: { query: variableQuery, variables: variables1 } as any,
+          result: result1,
         },
-      };
-
-      const resetMutation = gql`
-        mutation Reset {
-          reset {
-            echo
-          }
-        }
-      `;
-
-      const resetMutationResult = {
-        data: {
-          reset: {
-            echo: '0',
-          },
+        {
+          request: { query: variableQuery, variables: variables2 } as any,
+          result: result2,
         },
-      };
+        {
+          request: { query: resetMutation } as any,
+          result: resetMutationResult,
+        },
+      ).setOnError(reject),
+      cache: new Hermes({ addTypename: false }),
+    });
 
-      const client = new ApolloClient({
-        link: mockSingleLink(
-          {
-            request: { query: variableQuery, variables: variables1 } as any,
-            result: result1,
-          },
-          {
-            request: { query: variableQuery, variables: variables2 } as any,
-            result: result2,
-          },
-          {
-            request: { query: resetMutation } as any,
-            result: resetMutationResult,
-          }
-        ).setOnError(reject),
-        cache: new Hermes({ addTypename: false }),
-      });
+    const watchedQuery = client.watchQuery({
+      query: variableQuery,
+      variables: variables1,
+    });
 
-      const watchedQuery = client.watchQuery({
-        query: variableQuery,
-        variables: variables1,
-      });
+    const firstSubs = watchedQuery.subscribe({
+      next: () => null,
+      error: reject,
+    });
 
-      const firstSubs = watchedQuery.subscribe({
-        next: () => null,
-        error: reject,
-      });
+    // Cancel the query right away!
+    firstSubs.unsubscribe();
 
-      // Cancel the query right away!
-      firstSubs.unsubscribe();
-
-      subscribeAndCount(reject, watchedQuery, (count, result) => {
-        if (count === 1) {
-          expect(result.data).toEqual({ echo: 'b' });
-          client.mutate({
-            mutation: resetMutation,
-            updateQueries: {
-              Echo: () => {
-                return { echo: '0' };
-              },
+    subscribeAndCount(reject, watchedQuery, (count, result) => {
+      if (count === 1) {
+        expect(result.data).toEqual({ echo: 'b' });
+        client.mutate({
+          mutation: resetMutation,
+          updateQueries: {
+            Echo: () => {
+              return { echo: '0' };
             },
-          });
-        } else if (count === 2) {
-          expect(result.data).toEqual({ echo: '0' });
-          resolve();
-        }
-      });
+          },
+        });
+      } else if (count === 2) {
+        expect(result.data).toEqual({ echo: '0' });
+        resolve();
+      }
+    });
 
-      watchedQuery.refetch(variables2);
-    }
-  );
+    watchedQuery.refetch(variables2);
+  });
 
   itAsync('allows mutations with optional arguments', (resolve, reject) => {
     let count = 0;
@@ -1213,7 +1179,7 @@ describe('mutation results', () => {
       cache: new Hermes({ addTypename: false }),
       link: ApolloLink.from([
         ({ variables }: any) =>
-          new Observable((observer) => {
+          new Observable(observer => {
             switch (count++) {
               case 0:
                 expect(variables).toEqual({ a: 1, b: 2 });
@@ -1241,7 +1207,6 @@ describe('mutation results', () => {
                 return;
               default:
                 observer.error(new Error('Too many network calls.'));
-
             }
           }),
       ] as any),
@@ -1270,12 +1235,9 @@ describe('mutation results', () => {
         mutation,
       }),
     ])
-      .then((results) => {
-        expect(client.cache.extract()).toEqual({
-          ROOT_MUTATION: {
-            __typename: 'Mutation',
-          },
-        });
+      .then(results => {
+        // Hermes: root nodes do not store a __typename, so the emptied ROOT_MUTATION is removed entirely.
+        expect(client.cache.extract()).toEqual({});
         expect(results).toEqual([
           { data: { result: 'hello' } },
           { data: { result: 'world' } },
@@ -1293,7 +1255,7 @@ describe('mutation results', () => {
       cache: new Hermes({ addTypename: false }),
       link: ApolloLink.from([
         ({ variables }: any) =>
-          new Observable((observer) => {
+          new Observable(observer => {
             switch (count++) {
               case 0:
                 expect(variables).toEqual({
@@ -1323,7 +1285,6 @@ describe('mutation results', () => {
                 return;
               default:
                 observer.error(new Error('Too many network calls.'));
-
             }
           }),
       ] as any),
@@ -1349,12 +1310,9 @@ describe('mutation results', () => {
         variables: { c: 3 },
       }),
     ])
-      .then((results) => {
-        expect(client.cache.extract()).toEqual({
-          ROOT_MUTATION: {
-            __typename: 'Mutation',
-          },
-        });
+      .then(results => {
+        // Hermes: root nodes do not store a __typename, so the emptied ROOT_MUTATION is removed entirely.
+        expect(client.cache.extract()).toEqual({});
         expect(results).toEqual([
           { data: { result: 'hello' } },
           { data: { result: 'world' } },
@@ -1364,87 +1322,80 @@ describe('mutation results', () => {
       .then(resolve, reject);
   });
 
-  itAsync(
-    'will pass null to the network interface when provided',
-    (resolve, reject) => {
-      let count = 0;
+  itAsync('will pass null to the network interface when provided', (resolve, reject) => {
+    let count = 0;
 
-      const client = new ApolloClient({
-        cache: new Hermes({ addTypename: false }),
-        link: ApolloLink.from([
-          ({ variables }: any) =>
-            new Observable((observer) => {
-              switch (count++) {
-                case 0:
-                  expect(variables).toEqual({
-                    a: 1,
-                    b: 2,
-                    c: null,
-                  });
-                  observer.next({ data: { result: 'hello' } });
-                  observer.complete();
-                  return;
-                case 1:
-                  expect(variables).toEqual({
-                    a: 1,
-                    b: null,
-                    c: 3,
-                  });
-                  observer.next({ data: { result: 'world' } });
-                  observer.complete();
-                  return;
-                case 2:
-                  expect(variables).toEqual({
-                    a: null,
-                    b: null,
-                    c: null,
-                  });
-                  observer.next({ data: { result: 'moon' } });
-                  observer.complete();
-                  return;
-                default:
-                  observer.error(new Error('Too many network calls.'));
+    const client = new ApolloClient({
+      cache: new Hermes({ addTypename: false }),
+      link: ApolloLink.from([
+        ({ variables }: any) =>
+          new Observable(observer => {
+            switch (count++) {
+              case 0:
+                expect(variables).toEqual({
+                  a: 1,
+                  b: 2,
+                  c: null,
+                });
+                observer.next({ data: { result: 'hello' } });
+                observer.complete();
+                return;
+              case 1:
+                expect(variables).toEqual({
+                  a: 1,
+                  b: null,
+                  c: 3,
+                });
+                observer.next({ data: { result: 'world' } });
+                observer.complete();
+                return;
+              case 2:
+                expect(variables).toEqual({
+                  a: null,
+                  b: null,
+                  c: null,
+                });
+                observer.next({ data: { result: 'moon' } });
+                observer.complete();
+                return;
+              default:
+                observer.error(new Error('Too many network calls.'));
+            }
+          }),
+      ] as any),
+    });
 
-              }
-            }),
-        ] as any),
-      });
+    const mutation = gql`
+      mutation ($a: Int!, $b: Int, $c: Int) {
+        result(a: $a, b: $b, c: $c)
+      }
+    `;
 
-      const mutation = gql`
-        mutation ($a: Int!, $b: Int, $c: Int) {
-          result(a: $a, b: $b, c: $c)
-        }
-      `;
-
-      Promise.all([
-        client.mutate({
-          mutation,
-          variables: { a: 1, b: 2, c: null },
-        }),
-        client.mutate({
-          mutation,
-          variables: { a: 1, b: null, c: 3 },
-        }),
-        client.mutate({
-          mutation,
-          variables: { a: null, b: null, c: null },
-        }),
-      ])
-        .then((results) => {
-          expect(client.cache.extract()).toEqual({
-            ROOT_MUTATION: {
-              __typename: 'Mutation',
-            },
-          });
-          expect(results).toEqual([
-            { data: { result: 'hello' } },
-            { data: { result: 'world' } },
-            { data: { result: 'moon' } },
-          ]);
-        })
-        .then(resolve, reject);
-    }
-  );
+    Promise.all([
+      client.mutate({
+        mutation,
+        variables: { a: 1, b: 2, c: null },
+      }),
+      client.mutate({
+        mutation,
+        variables: { a: 1, b: null, c: 3 },
+      }),
+      client.mutate({
+        mutation,
+        variables: { a: null, b: null, c: null },
+      }),
+    ])
+      .then(results => {
+        // Hermes: root nodes do not store a __typename, so the emptied ROOT_MUTATION is removed entirely.
+        expect(client.cache.extract()).toEqual({});
+        expect(results).toEqual([
+          { data: { result: 'hello' } },
+          { data: { result: 'world' } },
+          { data: { result: 'moon' } },
+        ]);
+      })
+      .then(resolve, reject);
+  });
 
   describe('store transaction updater', () => {
     const mutation = gql`
@@ -1483,7 +1434,7 @@ describe('mutation results', () => {
         .result()
         .then(() => {
           // we have to actually subscribe to the query to be able to update it
-          return new Promise((resolve) => {
+          return new Promise(resolve => {
             const handle = client.watchQuery({ query });
             subscriptionHandle = handle.subscribe({
               next(res) {
@@ -1497,9 +1448,7 @@ describe('mutation results', () => {
             mutation,
             update: (proxy, mResult: any) => {
               expect(mResult.data.createTodo.id).toBe('99');
-              expect(mResult.data.createTodo.text).toBe(
-                'This one was created with a mutation.'
-              );
+              expect(mResult.data.createTodo.text).toBe('This one was created with a mutation.');
 
               const id = 'TodoList5';
               const fragment = gql`
@@ -1524,7 +1473,7 @@ describe('mutation results', () => {
                 fragment,
               });
             },
-          })
+          }),
         )
         .then(() => {
           return client.query({ query });
@@ -1536,68 +1485,126 @@ describe('mutation results', () => {
           expect(newResult.data.todoList.todos.length).toBe(4);
 
           // Since we used `prepend` it should be at the front
-          expect(newResult.data.todoList.todos[0].text).toBe(
-            'This one was created with a mutation.'
-          );
+          expect(newResult.data.todoList.todos[0].text).toBe('This one was created with a mutation.');
         })
         .then(resolve, reject);
     });
 
-    itAsync(
-      'does not fail if optional query variables are not supplied',
-      (resolve, reject) => {
-        let subscriptionHandle: Subscription;
-        const mutationWithVars = gql`
-          mutation createTodo($requiredVar: String!, $optionalVar: String) {
-            createTodo(requiredVar: $requiredVar, optionalVar: $optionalVar) {
-              id
-              text
-              completed
-              __typename
-            }
+    itAsync('does not fail if optional query variables are not supplied', (resolve, reject) => {
+      let subscriptionHandle: Subscription;
+      const mutationWithVars = gql`
+        mutation createTodo($requiredVar: String!, $optionalVar: String) {
+          createTodo(requiredVar: $requiredVar, optionalVar: $optionalVar) {
+            id
+            text
+            completed
             __typename
           }
-        `;
+          __typename
+        }
+      `;
 
-        // the test will pass if optionalVar is uncommented
-        const variables = {
-          requiredVar: 'x',
-          // optionalVar: 'y',
-        };
+      // the test will pass if optionalVar is uncommented
+      const variables = {
+        requiredVar: 'x',
+        // optionalVar: 'y',
+      };
 
-        const { client, obsQuery } = setupObsQuery(reject, {
-          request: {
-            query: mutationWithVars,
-            variables,
-          },
-          result: mutationResult,
-        });
+      const { client, obsQuery } = setupObsQuery(reject, {
+        request: {
+          query: mutationWithVars,
+          variables,
+        },
+        result: mutationResult,
+      });
 
-        return obsQuery
-          .result()
-          .then(() => {
-            // we have to actually subscribe to the query to be able to update it
-            return new Promise((resolve) => {
-              const handle = client.watchQuery({
-                query,
-                variables,
-              });
-              subscriptionHandle = handle.subscribe({
-                next(res) {
-                  resolve(res);
-                },
-              });
-            });
-          })
-          .then(() =>
-            client.mutate({
-              mutation: mutationWithVars,
+      return obsQuery
+        .result()
+        .then(() => {
+          // we have to actually subscribe to the query to be able to update it
+          return new Promise(resolve => {
+            const handle = client.watchQuery({
+              query,
               variables,
+            });
+            subscriptionHandle = handle.subscribe({
+              next(res) {
+                resolve(res);
+              },
+            });
+          });
+        })
+        .then(() =>
+          client.mutate({
+            mutation: mutationWithVars,
+            variables,
+            update: (proxy, mResult: any) => {
+              expect(mResult.data.createTodo.id).toBe('99');
+              expect(mResult.data.createTodo.text).toBe('This one was created with a mutation.');
+
+              const id = 'TodoList5';
+              const fragment = gql`
+                fragment todoList on TodoList {
+                  todos {
+                    id
+                    text
+                    completed
+                    __typename
+                  }
+                }
+              `;
+
+              const data: any = proxy.readFragment({ id, fragment });
+
+              proxy.writeFragment({
+                data: {
+                  ...data,
+                  todos: [mResult.data.createTodo, ...data.todos],
+                },
+                id,
+                fragment,
+              });
+            },
+          }),
+        )
+        .then(() => {
+          return client.query({ query });
+        })
+        .then((newResult: any) => {
+          subscriptionHandle.unsubscribe();
+
+          // There should be one more todo item than before
+          expect(newResult.data.todoList.todos.length).toBe(4);
+
+          // Since we used `prepend` it should be at the front
+          expect(newResult.data.todoList.todos[0].text).toBe('This one was created with a mutation.');
+        })
+        .then(resolve, reject);
+    });
+
+    itAsync('does not make next queries fail if a mutation fails', (resolve, reject) => {
+      const { client, obsQuery } = setupObsQuery(
+        error => {
+          throw error;
+        },
+        {
+          request: { query: mutation },
+          result: { errors: [new Error('mock error')] },
+        },
+        {
+          request: { query: queryWithTypename },
+          result,
+        },
+      );
+
+      obsQuery.subscribe({
+        next() {
+          client
+            .mutate({
+              mutation,
               update: (proxy, mResult: any) => {
                 expect(mResult.data.createTodo.id).toBe('99');
-                expect(mResult.data.createTodo.text).toBe(
-                  'This one was created with a mutation.'
-                );
+                expect(mResult.data.createTodo.text).toBe('This one was created with a mutation.');
 
                 const id = 'TodoList5';
                 const fragment = gql`
@@ -1623,122 +1630,48 @@ describe('mutation results', () => {
                 });
               },
             })
-          )
-          .then(() => {
-            return client.query({ query });
-          })
-          .then((newResult: any) => {
-            subscriptionHandle.unsubscribe();
+            .then(
+              () => reject(new Error('Mutation should have failed')),
+              () =>
+                client.mutate({
+                  mutation,
+                  update: (proxy, mResult: any) => {
+                    expect(mResult.data.createTodo.id).toBe('99');
+                    expect(mResult.data.createTodo.text).toBe('This one was created with a mutation.');
 
-            // There should be one more todo item than before
-            expect(newResult.data.todoList.todos.length).toBe(4);
-
-            // Since we used `prepend` it should be at the front
-            expect(newResult.data.todoList.todos[0].text).toBe(
-              'This one was created with a mutation.'
-            );
-          })
-          .then(resolve, reject);
-      }
-    );
-
-    itAsync(
-      'does not make next queries fail if a mutation fails',
-      (resolve, reject) => {
-        const { client, obsQuery } = setupObsQuery(
-          (error) => {
-            throw error;
-          },
-          {
-            request: { query: mutation },
-            result: { errors: [new Error('mock error')] },
-          },
-          {
-            request: { query: queryWithTypename },
-            result,
-          }
-        );
-
-        obsQuery.subscribe({
-          next() {
-            client
-              .mutate({
-                mutation,
-                update: (proxy, mResult: any) => {
-                  expect(mResult.data.createTodo.id).toBe('99');
-                  expect(mResult.data.createTodo.text).toBe(
-                    'This one was created with a mutation.'
-                  );
-
-                  const id = 'TodoList5';
-                  const fragment = gql`
-                    fragment todoList on TodoList {
-                      todos {
-                        id
-                        text
-                        completed
-                        __typename
-                      }
-                    }
-                  `;
-
-                  const data: any = proxy.readFragment({ id, fragment });
-
-                  proxy.writeFragment({
-                    data: {
-                      ...data,
-                      todos: [mResult.data.createTodo, ...data.todos],
-                    },
-                    id,
-                    fragment,
-                  });
-                },
-              })
-              .then(
-                () => reject(new Error('Mutation should have failed')),
-                () =>
-                  client.mutate({
-                    mutation,
-                    update: (proxy, mResult: any) => {
-                      expect(mResult.data.createTodo.id).toBe('99');
-                      expect(mResult.data.createTodo.text).toBe(
-                        'This one was created with a mutation.'
-                      );
-
-                      const id = 'TodoList5';
-                      const fragment = gql`
-                        fragment todoList on TodoList {
-                          todos {
-                            id
-                            text
-                            completed
-                            __typename
-                          }
+                    const id = 'TodoList5';
+                    const fragment = gql`
+                      fragment todoList on TodoList {
+                        todos {
+                          id
+                          text
+                          completed
+                          __typename
                         }
-                      `;
+                      }
+                    `;
 
-                      const data: any = proxy.readFragment({ id, fragment });
+                    const data: any = proxy.readFragment({ id, fragment });
 
-                      proxy.writeFragment({
-                        data: {
-                          ...data,
-                          todos: [mResult.data.createTodo, ...data.todos],
-                        },
-                        id,
-                        fragment,
-                      });
-                    },
-                  })
-              )
-              .then(
-                () => reject(new Error('Mutation should have failed')),
-                () => obsQuery.refetch()
-              )
-              .then(resolve, reject);
-          },
-        });
-      }
-    );
+                    proxy.writeFragment({
+                      data: {
+                        ...data,
+                        todos: [mResult.data.createTodo, ...data.todos],
+                      },
+                      id,
+                      fragment,
+                    });
+                  },
+                }),
+            )
+            .then(
+              () => reject(new Error('Mutation should have failed')),
+              () => obsQuery.refetch(),
+            )
+            .then(resolve, reject);
+        },
+      });
+    });
 
     itAsync('error handling in reducer functions', (resolve, reject) => {
       let subscriptionHandle: Subscription;
@@ -1751,7 +1684,7 @@ describe('mutation results', () => {
         .result()
         .then(() => {
           // we have to actually subscribe to the query to be able to update it
-          return new Promise((resolve) => {
+          return new Promise(resolve => {
             const handle = client.watchQuery({ query });
             subscriptionHandle = handle.subscribe({
               next(res) {
@@ -1766,94 +1699,88 @@ describe('mutation results', () => {
             update: () => {
               throw new Error(`Hello... It's me.`);
             },
-          })
+          }),
         )
         .then(
           () => {
             subscriptionHandle.unsubscribe();
             reject('should have thrown');
           },
-          (error) => {
+          error => {
             subscriptionHandle.unsubscribe();
             expect(error.message).toBe(`Hello... It's me.`);
-          }
+          },
         )
         .then(resolve, reject);
     });
 
-    itAsync(
-      'mutate<MyType>() data should never be `undefined` in case of success',
-      (resolve, reject) => {
-        const mutation = gql`
-          mutation Foo {
-            foo {
-              bar
-            }
+    itAsync('mutate<MyType>() data should never be `undefined` in case of success', (resolve, reject) => {
+      const mutation = gql`
+        mutation Foo {
+          foo {
+            bar
           }
-        `;
+        }
+      `;
 
-        const result1 = {
-          data: {
-            foo: {
-              bar: 'a',
-            },
+      const result1 = {
+        data: {
+          foo: {
+            bar: 'a',
           },
-        };
+        },
+      };
 
-        const client = new ApolloClient({
-          link: mockSingleLink({
-            request: { query: mutation } as any,
-            result: result1,
-          }).setOnError(reject),
-          cache: new Hermes({ addTypename: false }),
-        });
+      const client = new ApolloClient({
+        link: mockSingleLink({
+          request: { query: mutation } as any,
+          result: result1,
+        }).setOnError(reject),
+        cache: new Hermes({ addTypename: false }),
+      });
 
-        client
-          .mutate<{ foo: { bar: string } }>({
-            mutation,
-          })
-          .then((result) => {
-            // This next line should **not** raise "TS2533: Object is possibly 'null' or 'undefined'.", even without `!` operator
-            if (result.data!.foo.bar) {
-              resolve();
-            }
-          }, reject);
-      }
-    );
+      client
+        .mutate<{ foo: { bar: string } }>({
+          mutation,
+        })
+        .then(result => {
+          // This next line should **not** raise "TS2533: Object is possibly 'null' or 'undefined'.", even without `!` operator
+          if (result.data!.foo.bar) {
+            resolve();
+          }
+        }, reject);
+    });
 
-    itAsync(
-      'data might be undefined in case of failure with errorPolicy = ignore',
-      async(resolve, reject) => {
-        const client = new ApolloClient({
-          cache: new Hermes(),
-          link: new ApolloLink(
-            () =>
-              new Observable<FetchResult<{ foo: string }>>((observer) => {
-                observer.next({
-                  errors: [new GraphQLError('Oops')],
-                });
-                observer.complete();
-              })
-          ).setOnError(reject),
-        });
+    itAsync('data might be undefined in case of failure with errorPolicy = ignore', async (resolve, reject) => {
+      const client = new ApolloClient({
+        cache: new Hermes(),
+        link: new ApolloLink(
+          () =>
+            new Observable<FetchResult<{ foo: string }>>(observer => {
+              observer.next({
+                errors: [new GraphQLError('Oops')],
+              });
+              observer.complete();
+            }),
+        ).setOnError(reject),
+      });
 
-        const ignoreErrorsResult = await client.mutate({
-          mutation: gql`
-            mutation Foo {
-              foo
-            }
-          `,
-          fetchPolicy: 'no-cache',
-          errorPolicy: 'ignore',
-        });
+      const ignoreErrorsResult = await client.mutate({
+        mutation: gql`
+          mutation Foo {
+            foo
+          }
+        `,
+        fetchPolicy: 'no-cache',
+        errorPolicy: 'ignore',
+      });
 
-        expect(ignoreErrorsResult).toEqual({
-          data: undefined,
-          errors: undefined,
-        });
+      expect(ignoreErrorsResult).toEqual({
+        data: undefined,
+        errors: undefined,
+      });
 
-        resolve();
-      }
-    );
+      resolve();
+    });
   });
 });

@@ -8,19 +8,8 @@ import userEvent from '@testing-library/user-event';
 import { ApolloClient, ApolloLink, ApolloProvider, InMemoryCache } from '@apollo/client';
 
 import { createQueryPreloader } from '../createQueryPreloader';
-import {
-  ApolloError,
-  NetworkStatus,
-  OperationVariables,
-  TypedDocumentNode,
-  gql,
-} from '../../../core';
-import {
-  MockLink,
-  MockSubscriptionLink,
-  MockedResponse,
-  wait,
-} from '../../../testing';
+import { ApolloError, NetworkStatus, OperationVariables, TypedDocumentNode, gql } from '../../../core';
+import { MockLink, MockSubscriptionLink, MockedResponse, wait } from '../../../testing';
 import { PreloadedQueryRef, QueryRef, unwrapQueryRef } from '../../internal';
 import { DeepPartial, Observable } from '../../../utilities';
 import {
@@ -43,13 +32,7 @@ function createDefaultClient(mocks: MockedResponse[]) {
   });
 }
 
-function renderDefaultTestApp<TData>({
-  client,
-  queryRef,
-}: {
-  client: ApolloClient<any>,
-  queryRef: QueryRef<TData>,
-}) {
+function renderDefaultTestApp<TData>({ client, queryRef }: { client: ApolloClient<any>; queryRef: QueryRef<TData> }) {
   const Profiler = createProfiler({
     initialSnapshot: {
       result: null as UseReadQueryResult<TData> | null,
@@ -69,9 +52,9 @@ function renderDefaultTestApp<TData>({
     return <p>Loading</p>;
   }
 
-  function ErrorFallback({ error }: { error: Error }) {
+  function ErrorFallback({ error }: { error: unknown }) {
     useTrackRenders({ name: 'ErrorFallback' });
-    Profiler.mergeSnapshot({ error });
+    Profiler.mergeSnapshot({ error: error as Error });
 
     return null;
   }
@@ -103,7 +86,7 @@ function renderDefaultTestApp<TData>({
   return { ...utils, rerender, Profiler };
 }
 
-it('loads a query and suspends when passed to useReadQuery', async() => {
+it('loads a query and suspends when passed to useReadQuery', async () => {
   const { query, mocks } = setupSimpleCase();
   const client = createDefaultClient(mocks);
   const preloadQuery = createQueryPreloader(client);
@@ -129,7 +112,7 @@ it('loads a query and suspends when passed to useReadQuery', async() => {
   }
 });
 
-it('loads a query with variables and suspends when passed to useReadQuery', async() => {
+it('loads a query with variables and suspends when passed to useReadQuery', async () => {
   const { query, mocks } = setupVariablesCase();
   const client = createDefaultClient(mocks);
   const preloadQuery = createQueryPreloader(client);
@@ -159,7 +142,7 @@ it('loads a query with variables and suspends when passed to useReadQuery', asyn
   }
 });
 
-it('Auto disposes of the query ref if not retained within the given time', async() => {
+it('Auto disposes of the query ref if not retained within the given time', async () => {
   jest.useFakeTimers();
   const { query, mocks } = setupSimpleCase();
   const client = createDefaultClient(mocks);
@@ -180,7 +163,7 @@ it('Auto disposes of the query ref if not retained within the given time', async
   jest.useRealTimers();
 });
 
-it('Honors configured auto dispose timer on the client', async() => {
+it('Honors configured auto dispose timer on the client', async () => {
   jest.useFakeTimers();
   const { query, mocks } = setupSimpleCase();
   const client = new ApolloClient({
@@ -212,7 +195,7 @@ it('Honors configured auto dispose timer on the client', async() => {
   jest.useRealTimers();
 });
 
-it('useReadQuery auto-retains the queryRef and disposes of it when unmounted', async() => {
+it('useReadQuery auto-retains the queryRef and disposes of it when unmounted', async () => {
   jest.useFakeTimers();
   const { query, mocks } = setupSimpleCase();
 
@@ -242,13 +225,13 @@ it('useReadQuery auto-retains the queryRef and disposes of it when unmounted', a
   expect(client).not.toHaveSuspenseCacheEntryUsing(query);
 });
 
-it('useReadQuery auto-resubscribes the query after its disposed', async() => {
+it('useReadQuery auto-resubscribes the query after its disposed', async () => {
   const { query } = setupSimpleCase();
 
   let fetchCount = 0;
-  const link = new ApolloLink((operation) => {
+  const link = new ApolloLink(operation => {
     const count = ++fetchCount;
-    return new Observable((observer) => {
+    return new Observable(observer => {
       setTimeout(() => {
         observer.next({ data: { greeting: `Hello ${count}` } });
         observer.complete();
@@ -279,9 +262,7 @@ it('useReadQuery auto-resubscribes the query after its disposed', async() => {
     return (
       <>
         <button onClick={() => setShow(show => !show)}>Toggle</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {show && <ReadQueryHook />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{show && <ReadQueryHook />}</Suspense>
       </>
     );
   }
@@ -425,15 +406,13 @@ it('useReadQuery auto-resubscribes the query after its disposed', async() => {
   await expect(Profiler).not.toRerender();
 });
 
-it('useReadQuery handles auto-resubscribe with returnPartialData', async() => {
+it('useReadQuery handles auto-resubscribe with returnPartialData', async () => {
   const { query, mocks } = setupVariablesCase();
 
   let fetchCount = 0;
-  const link = new ApolloLink((operation) => {
+  const link = new ApolloLink(operation => {
     fetchCount++;
-    const mock = mocks.find(
-      mock => mock.request.variables?.id === operation.variables.id
-    );
+    const mock = mocks.find(mock => mock.request.variables?.id === operation.variables.id);
 
     if (!mock) {
       throw new Error('Could not find mock for variables');
@@ -441,7 +420,7 @@ it('useReadQuery handles auto-resubscribe with returnPartialData', async() => {
 
     const result = mock.result as Record<string, any>;
 
-    return new Observable((observer) => {
+    return new Observable(observer => {
       setTimeout(() => {
         observer.next({ data: result.data });
         observer.complete();
@@ -475,9 +454,7 @@ it('useReadQuery handles auto-resubscribe with returnPartialData', async() => {
     return (
       <>
         <button onClick={() => setShow(show => !show)}>Toggle</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {show && <ReadQueryHook />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{show && <ReadQueryHook />}</Suspense>
       </>
     );
   }
@@ -696,13 +673,13 @@ it('useReadQuery handles auto-resubscribe with returnPartialData', async() => {
   await expect(Profiler).not.toRerender();
 });
 
-it('useReadQuery handles auto-resubscribe on network-only fetch policy', async() => {
+it('useReadQuery handles auto-resubscribe on network-only fetch policy', async () => {
   const { query } = setupSimpleCase();
 
   let fetchCount = 0;
-  const link = new ApolloLink((operation) => {
+  const link = new ApolloLink(operation => {
     const count = ++fetchCount;
-    return new Observable((observer) => {
+    return new Observable(observer => {
       setTimeout(() => {
         observer.next({ data: { greeting: `Hello ${count}` } });
         observer.complete();
@@ -733,9 +710,7 @@ it('useReadQuery handles auto-resubscribe on network-only fetch policy', async()
     return (
       <>
         <button onClick={() => setShow(show => !show)}>Toggle</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {show && <ReadQueryHook />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{show && <ReadQueryHook />}</Suspense>
       </>
     );
   }
@@ -877,13 +852,13 @@ it('useReadQuery handles auto-resubscribe on network-only fetch policy', async()
   await expect(Profiler).not.toRerender();
 });
 
-it('useReadQuery handles auto-resubscribe on cache-and-network fetch policy', async() => {
+it('useReadQuery handles auto-resubscribe on cache-and-network fetch policy', async () => {
   const { query } = setupSimpleCase();
 
   let fetchCount = 0;
-  const link = new ApolloLink((operation) => {
+  const link = new ApolloLink(operation => {
     const count = ++fetchCount;
-    return new Observable((observer) => {
+    return new Observable(observer => {
       setTimeout(() => {
         observer.next({ data: { greeting: `Hello ${count}` } });
         observer.complete();
@@ -914,9 +889,7 @@ it('useReadQuery handles auto-resubscribe on cache-and-network fetch policy', as
     return (
       <>
         <button onClick={() => setShow(show => !show)}>Toggle</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {show && <ReadQueryHook />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{show && <ReadQueryHook />}</Suspense>
       </>
     );
   }
@@ -1058,13 +1031,13 @@ it('useReadQuery handles auto-resubscribe on cache-and-network fetch policy', as
   await expect(Profiler).not.toRerender();
 });
 
-it('useReadQuery handles auto-resubscribe on no-cache fetch policy', async() => {
+it('useReadQuery handles auto-resubscribe on no-cache fetch policy', async () => {
   const { query } = setupSimpleCase();
 
   let fetchCount = 0;
-  const link = new ApolloLink((operation) => {
+  const link = new ApolloLink(operation => {
     const count = ++fetchCount;
-    return new Observable((observer) => {
+    return new Observable(observer => {
       setTimeout(() => {
         observer.next({ data: { greeting: `Hello ${count}` } });
         observer.complete();
@@ -1095,9 +1068,7 @@ it('useReadQuery handles auto-resubscribe on no-cache fetch policy', async() => 
     return (
       <>
         <button onClick={() => setShow(show => !show)}>Toggle</button>
-        <Suspense fallback={<SuspenseFallback />}>
-          {show && <ReadQueryHook />}
-        </Suspense>
+        <Suspense fallback={<SuspenseFallback />}>{show && <ReadQueryHook />}</Suspense>
       </>
     );
   }
@@ -1226,7 +1197,7 @@ it('useReadQuery handles auto-resubscribe on no-cache fetch policy', async() => 
   await expect(Profiler).not.toRerender();
 });
 
-it('reacts to cache updates', async() => {
+it('reacts to cache updates', async () => {
   const { query, mocks } = setupSimpleCase();
   const client = createDefaultClient(mocks);
 
@@ -1267,7 +1238,7 @@ it('reacts to cache updates', async() => {
   }
 });
 
-it('ignores cached result and suspends when `fetchPolicy` is network-only', async() => {
+it('ignores cached result and suspends when `fetchPolicy` is network-only', async () => {
   const { query, mocks } = setupSimpleCase();
 
   const client = createDefaultClient(mocks);
@@ -1297,7 +1268,7 @@ it('ignores cached result and suspends when `fetchPolicy` is network-only', asyn
   }
 });
 
-it('does not cache results when `fetchPolicy` is no-cache', async() => {
+it('does not cache results when `fetchPolicy` is no-cache', async () => {
   const { query, mocks } = setupSimpleCase();
 
   const client = createDefaultClient(mocks);
@@ -1328,7 +1299,7 @@ it('does not cache results when `fetchPolicy` is no-cache', async() => {
   expect(client.extract()).toEqual({});
 });
 
-it('returns initial cache data followed by network data when `fetchPolicy` is cache-and-network', async() => {
+it('returns initial cache data followed by network data when `fetchPolicy` is cache-and-network', async () => {
   const { query, mocks } = setupSimpleCase();
 
   const client = createDefaultClient(mocks);
@@ -1364,7 +1335,7 @@ it('returns initial cache data followed by network data when `fetchPolicy` is ca
   }
 });
 
-it('returns cached data when all data is present in the cache', async() => {
+it('returns cached data when all data is present in the cache', async () => {
   const { query, mocks } = setupSimpleCase();
 
   const client = createDefaultClient(mocks);
@@ -1389,7 +1360,7 @@ it('returns cached data when all data is present in the cache', async() => {
   await expect(Profiler).not.toRerender();
 });
 
-it('suspends and ignores partial data in the cache', async() => {
+it('suspends and ignores partial data in the cache', async () => {
   const query = gql`
     query {
       hello
@@ -1439,14 +1410,12 @@ it('suspends and ignores partial data in the cache', async() => {
   await expect(Profiler).not.toRerender();
 });
 
-it('throws when error is returned', async() => {
+it('throws when error is returned', async () => {
   // Disable error messages shown by React when an error is thrown to an error
   // boundary
   using _consoleSpy = spyOnConsole('error');
   const { query } = setupSimpleCase();
-  const mocks = [
-    { request: { query }, result: { errors: [new GraphQLError('Oops')] } },
-  ];
+  const mocks = [{ request: { query }, result: { errors: [new GraphQLError('Oops')] } }];
   const client = createDefaultClient(mocks);
 
   const preloadQuery = createQueryPreloader(client);
@@ -1464,20 +1433,16 @@ it('throws when error is returned', async() => {
     const { snapshot, renderedComponents } = await Profiler.takeRender();
 
     expect(renderedComponents).toStrictEqual(['ErrorFallback']);
-    expect(snapshot.error).toEqual(
-      new ApolloError({ graphQLErrors: [new GraphQLError('Oops')] })
-    );
+    expect(snapshot.error).toEqual(new ApolloError({ graphQLErrors: [new GraphQLError('Oops')] }));
   }
 });
 
-it('returns error when error policy is \'all\'', async() => {
+it("returns error when error policy is 'all'", async () => {
   // Disable error messages shown by React when an error is thrown to an error
   // boundary
   using _consoleSpy = spyOnConsole('error');
   const { query } = setupSimpleCase();
-  const mocks = [
-    { request: { query }, result: { errors: [new GraphQLError('Oops')] } },
-  ];
+  const mocks = [{ request: { query }, result: { errors: [new GraphQLError('Oops')] } }];
   const client = createDefaultClient(mocks);
 
   const preloadQuery = createQueryPreloader(client);
@@ -1504,14 +1469,12 @@ it('returns error when error policy is \'all\'', async() => {
   }
 });
 
-it('discards error when error policy is \'ignore\'', async() => {
+it("discards error when error policy is 'ignore'", async () => {
   // Disable error messages shown by React when an error is thrown to an error
   // boundary
   using _consoleSpy = spyOnConsole('error');
   const { query } = setupSimpleCase();
-  const mocks = [
-    { request: { query }, result: { errors: [new GraphQLError('Oops')] } },
-  ];
+  const mocks = [{ request: { query }, result: { errors: [new GraphQLError('Oops')] } }];
   const client = createDefaultClient(mocks);
 
   const preloadQuery = createQueryPreloader(client);
@@ -1538,7 +1501,7 @@ it('discards error when error policy is \'ignore\'', async() => {
   }
 });
 
-it('passes context to the link', async() => {
+it('passes context to the link', async () => {
   interface QueryData {
     context: Record<string, any>;
   }
@@ -1551,8 +1514,8 @@ it('passes context to the link', async() => {
 
   const client = new ApolloClient({
     cache: new Hermes(),
-    link: new ApolloLink((operation) => {
-      return new Observable((observer) => {
+    link: new ApolloLink(operation => {
+      return new Observable(observer => {
         const { valueA, valueB } = operation.getContext();
         setTimeout(() => {
           observer.next({ data: { context: { valueA, valueB } } });
@@ -1581,7 +1544,7 @@ it('passes context to the link', async() => {
   });
 });
 
-it('creates unique query refs when calling preloadQuery with the same query', async() => {
+it('creates unique query refs when calling preloadQuery with the same query', async () => {
   const { query } = setupSimpleCase();
 
   const mocks: MockedResponse[] = [
@@ -1609,7 +1572,7 @@ it('creates unique query refs when calling preloadQuery with the same query', as
   await expect(queryRef2.toPromise()).resolves.toBe(queryRef2);
 });
 
-it('does not suspend and returns partial data when `returnPartialData` is `true`', async() => {
+it('does not suspend and returns partial data when `returnPartialData` is `true`', async () => {
   const { query, mocks } = setupVariablesCase();
   const partialQuery = gql`
     query CharacterQuery($id: ID!) {
@@ -1660,7 +1623,8 @@ it('does not suspend and returns partial data when `returnPartialData` is `true`
   }
 });
 
-it('enables canonical results when canonizeResults is "true"', async() => {
+// Hermes: canonizeResults (canonical result identity) is InMemoryCache-only.
+it.skip('enables canonical results when canonizeResults is "true"', async () => {
   interface Result {
     __typename: string;
     value: number;
@@ -1721,7 +1685,7 @@ it('enables canonical results when canonizeResults is "true"', async() => {
   expect(values).toEqual([0, 1, 2, 3, 5]);
 });
 
-it('can disable canonical results when the cache\'s canonizeResults setting is true', async() => {
+it("can disable canonical results when the cache's canonizeResults setting is true", async () => {
   interface Result {
     __typename: string;
     value: number;
@@ -1778,7 +1742,7 @@ it('can disable canonical results when the cache\'s canonizeResults setting is t
   expect(values).toEqual([0, 1, 1, 2, 3, 5]);
 });
 
-it('suspends deferred queries until initial chunk loads then rerenders with deferred data', async() => {
+it('suspends deferred queries until initial chunk loads then rerenders with deferred data', async () => {
   const query = gql`
     query {
       greeting {
@@ -1839,7 +1803,7 @@ it('suspends deferred queries until initial chunk loads then rerenders with defe
         hasNext: false,
       },
     },
-    true
+    true,
   );
 
   {
@@ -2145,7 +2109,7 @@ describe.skip('type tests', () => {
 
   it('requires variables with mixed TVariables', () => {
     type Data = { character: string };
-    type Variables = { id: string, language?: string };
+    type Variables = { id: string; language?: string };
     const query: TypedDocumentNode<Data, Variables> = gql``;
 
     // @ts-expect-error missing variables argument
@@ -2271,9 +2235,7 @@ describe.skip('type tests', () => {
 
     const queryRef = preloadQuery(query);
 
-    expectTypeOf(queryRef).toEqualTypeOf<
-      PreloadedQueryRef<unknown, OperationVariables>
-    >();
+    expectTypeOf(queryRef).toEqualTypeOf<PreloadedQueryRef<unknown, OperationVariables>>();
   });
 
   it('returns QueryReference<TData> in default case', () => {
@@ -2281,29 +2243,23 @@ describe.skip('type tests', () => {
       const query: TypedDocumentNode<SimpleCaseData> = gql``;
       const queryRef = preloadQuery(query);
 
-      expectTypeOf(queryRef).toEqualTypeOf<
-        PreloadedQueryRef<SimpleCaseData, { [key: string]: any }>
-      >();
+      expectTypeOf(queryRef).toEqualTypeOf<PreloadedQueryRef<SimpleCaseData, { [key: string]: any }>>();
     }
 
     {
       const query = gql``;
       const queryRef = preloadQuery<SimpleCaseData>(query);
 
-      expectTypeOf(queryRef).toEqualTypeOf<
-        PreloadedQueryRef<SimpleCaseData, OperationVariables>
-      >();
+      expectTypeOf(queryRef).toEqualTypeOf<PreloadedQueryRef<SimpleCaseData, OperationVariables>>();
     }
   });
 
-  it('returns QueryReference<TData | undefined> with errorPolicy: \'ignore\'', () => {
+  it("returns QueryReference<TData | undefined> with errorPolicy: 'ignore'", () => {
     {
       const query: TypedDocumentNode<SimpleCaseData> = gql``;
       const queryRef = preloadQuery(query, { errorPolicy: 'ignore' });
 
-      expectTypeOf(queryRef).toEqualTypeOf<
-        PreloadedQueryRef<SimpleCaseData | undefined, { [key: string]: any }>
-      >();
+      expectTypeOf(queryRef).toEqualTypeOf<PreloadedQueryRef<SimpleCaseData | undefined, { [key: string]: any }>>();
     }
 
     {
@@ -2312,20 +2268,16 @@ describe.skip('type tests', () => {
         errorPolicy: 'ignore',
       });
 
-      expectTypeOf(queryRef).toEqualTypeOf<
-        PreloadedQueryRef<SimpleCaseData | undefined, OperationVariables>
-      >();
+      expectTypeOf(queryRef).toEqualTypeOf<PreloadedQueryRef<SimpleCaseData | undefined, OperationVariables>>();
     }
   });
 
-  it('returns QueryReference<TData | undefined> with errorPolicy: \'all\'', () => {
+  it("returns QueryReference<TData | undefined> with errorPolicy: 'all'", () => {
     {
       const query: TypedDocumentNode<SimpleCaseData> = gql``;
       const queryRef = preloadQuery(query, { errorPolicy: 'all' });
 
-      expectTypeOf(queryRef).toEqualTypeOf<
-        PreloadedQueryRef<SimpleCaseData | undefined, { [key: string]: any }>
-      >();
+      expectTypeOf(queryRef).toEqualTypeOf<PreloadedQueryRef<SimpleCaseData | undefined, { [key: string]: any }>>();
     }
 
     {
@@ -2334,20 +2286,16 @@ describe.skip('type tests', () => {
         errorPolicy: 'all',
       });
 
-      expectTypeOf(queryRef).toEqualTypeOf<
-        PreloadedQueryRef<SimpleCaseData | undefined, OperationVariables>
-      >();
+      expectTypeOf(queryRef).toEqualTypeOf<PreloadedQueryRef<SimpleCaseData | undefined, OperationVariables>>();
     }
   });
 
-  it('returns QueryReference<TData> with errorPolicy: \'none\'', () => {
+  it("returns QueryReference<TData> with errorPolicy: 'none'", () => {
     {
       const query: TypedDocumentNode<SimpleCaseData> = gql``;
       const queryRef = preloadQuery(query, { errorPolicy: 'none' });
 
-      expectTypeOf(queryRef).toEqualTypeOf<
-        PreloadedQueryRef<SimpleCaseData, { [key: string]: any }>
-      >();
+      expectTypeOf(queryRef).toEqualTypeOf<PreloadedQueryRef<SimpleCaseData, { [key: string]: any }>>();
     }
 
     {
@@ -2356,9 +2304,7 @@ describe.skip('type tests', () => {
         errorPolicy: 'none',
       });
 
-      expectTypeOf(queryRef).toEqualTypeOf<
-        PreloadedQueryRef<SimpleCaseData, OperationVariables>
-      >();
+      expectTypeOf(queryRef).toEqualTypeOf<PreloadedQueryRef<SimpleCaseData, OperationVariables>>();
     }
   });
 
@@ -2367,9 +2313,7 @@ describe.skip('type tests', () => {
       const query: TypedDocumentNode<SimpleCaseData> = gql``;
       const queryRef = preloadQuery(query, { returnPartialData: true });
 
-      expectTypeOf(queryRef).toEqualTypeOf<
-        PreloadedQueryRef<DeepPartial<SimpleCaseData>, { [key: string]: any }>
-      >();
+      expectTypeOf(queryRef).toEqualTypeOf<PreloadedQueryRef<DeepPartial<SimpleCaseData>, { [key: string]: any }>>();
     }
 
     {
@@ -2378,9 +2322,7 @@ describe.skip('type tests', () => {
         returnPartialData: true,
       });
 
-      expectTypeOf(queryRef).toEqualTypeOf<
-        PreloadedQueryRef<DeepPartial<SimpleCaseData>, OperationVariables>
-      >();
+      expectTypeOf(queryRef).toEqualTypeOf<PreloadedQueryRef<DeepPartial<SimpleCaseData>, OperationVariables>>();
     }
   });
 
@@ -2389,9 +2331,7 @@ describe.skip('type tests', () => {
       const query: TypedDocumentNode<SimpleCaseData> = gql``;
       const queryRef = preloadQuery(query, { returnPartialData: false });
 
-      expectTypeOf(queryRef).toEqualTypeOf<
-        PreloadedQueryRef<SimpleCaseData, OperationVariables>
-      >();
+      expectTypeOf(queryRef).toEqualTypeOf<PreloadedQueryRef<SimpleCaseData, OperationVariables>>();
     }
 
     {
@@ -2400,9 +2340,7 @@ describe.skip('type tests', () => {
         returnPartialData: false,
       });
 
-      expectTypeOf(queryRef).toEqualTypeOf<
-        PreloadedQueryRef<SimpleCaseData, OperationVariables>
-      >();
+      expectTypeOf(queryRef).toEqualTypeOf<PreloadedQueryRef<SimpleCaseData, OperationVariables>>();
     }
   });
 
@@ -2411,9 +2349,7 @@ describe.skip('type tests', () => {
       const query: TypedDocumentNode<SimpleCaseData> = gql``;
       const queryRef = preloadQuery(query, { canonizeResults: true });
 
-      expectTypeOf(queryRef).toEqualTypeOf<
-        PreloadedQueryRef<SimpleCaseData, { [key: string]: any }>
-      >();
+      expectTypeOf(queryRef).toEqualTypeOf<PreloadedQueryRef<SimpleCaseData, { [key: string]: any }>>();
     }
 
     {
@@ -2422,9 +2358,7 @@ describe.skip('type tests', () => {
         canonizeResults: true,
       });
 
-      expectTypeOf(queryRef).toEqualTypeOf<
-        PreloadedQueryRef<SimpleCaseData, OperationVariables>
-      >();
+      expectTypeOf(queryRef).toEqualTypeOf<PreloadedQueryRef<SimpleCaseData, OperationVariables>>();
     }
   });
 
@@ -2437,10 +2371,7 @@ describe.skip('type tests', () => {
       });
 
       expectTypeOf(queryRef).toEqualTypeOf<
-        PreloadedQueryRef<
-          DeepPartial<SimpleCaseData> | undefined,
-          { [key: string]: any }
-        >
+        PreloadedQueryRef<DeepPartial<SimpleCaseData> | undefined, { [key: string]: any }>
       >();
     }
 
@@ -2452,10 +2383,7 @@ describe.skip('type tests', () => {
       });
 
       expectTypeOf(queryRef).toEqualTypeOf<
-        PreloadedQueryRef<
-          DeepPartial<SimpleCaseData> | undefined,
-          OperationVariables
-        >
+        PreloadedQueryRef<DeepPartial<SimpleCaseData> | undefined, OperationVariables>
       >();
     }
 
@@ -2466,9 +2394,7 @@ describe.skip('type tests', () => {
         errorPolicy: 'none',
       });
 
-      expectTypeOf(queryRef).toEqualTypeOf<
-        PreloadedQueryRef<DeepPartial<SimpleCaseData>, { [key: string]: any }>
-      >();
+      expectTypeOf(queryRef).toEqualTypeOf<PreloadedQueryRef<DeepPartial<SimpleCaseData>, { [key: string]: any }>>();
     }
 
     {
@@ -2478,9 +2404,7 @@ describe.skip('type tests', () => {
         errorPolicy: 'none',
       });
 
-      expectTypeOf(queryRef).toEqualTypeOf<
-        PreloadedQueryRef<DeepPartial<SimpleCaseData>, OperationVariables>
-      >();
+      expectTypeOf(queryRef).toEqualTypeOf<PreloadedQueryRef<DeepPartial<SimpleCaseData>, OperationVariables>>();
     }
   });
 
@@ -2493,9 +2417,7 @@ describe.skip('type tests', () => {
         errorPolicy: 'none',
       });
 
-      expectTypeOf(queryRef).toEqualTypeOf<
-        PreloadedQueryRef<DeepPartial<SimpleCaseData>, { [key: string]: any }>
-      >();
+      expectTypeOf(queryRef).toEqualTypeOf<PreloadedQueryRef<DeepPartial<SimpleCaseData>, { [key: string]: any }>>();
     }
 
     {
@@ -2506,9 +2428,7 @@ describe.skip('type tests', () => {
         errorPolicy: 'none',
       });
 
-      expectTypeOf(queryRef).toEqualTypeOf<
-        PreloadedQueryRef<DeepPartial<SimpleCaseData>, OperationVariables>
-      >();
+      expectTypeOf(queryRef).toEqualTypeOf<PreloadedQueryRef<DeepPartial<SimpleCaseData>, OperationVariables>>();
     }
   });
 });

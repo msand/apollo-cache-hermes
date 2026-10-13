@@ -1,19 +1,16 @@
-import type {
-  ObservableSubscription,
-  Observable,
-} from '../../utilities/index';
+import type { ObservableSubscription, Observable } from '../../utilities/index';
 import { asyncMap } from '../../utilities/index';
 
 export default function subscribeAndCount<TResult>(
   reject: (reason: any) => any,
   observable: Observable<TResult>,
-  cb: (handleCount: number, result: TResult) => any
+  cb: (handleCount: number, result: TResult) => any,
 ): ObservableSubscription {
   // Use a Promise queue to prevent callbacks from being run out of order.
   let queue = Promise.resolve();
   let handleCount = 0;
 
-  const subscription = asyncMap(observable, (result) => {
+  const subscription = asyncMap(observable, result => {
     // All previous asynchronous callbacks must complete before cb can
     // be invoked with this result.
     return (queue = queue

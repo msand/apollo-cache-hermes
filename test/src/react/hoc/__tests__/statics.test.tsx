@@ -16,7 +16,7 @@ describe('statics', () => {
     const ApolloContainer = graphql(sampleOperation)(
       class extends React.Component<any, any> {
         static veryStatic = 'such global';
-      }
+      },
     );
 
     expect((ApolloContainer as any).veryStatic).toBe('such global');
@@ -26,16 +26,14 @@ describe('statics', () => {
     @graphql(sampleOperation)
     class ApolloContainer extends React.Component<any, any> {}
 
-    expect((ApolloContainer as any).displayName).toBe(
-      'Apollo(ApolloContainer)'
-    );
+    expect((ApolloContainer as any).displayName).toBe('Apollo(ApolloContainer)');
   });
 
   it('honors custom display names', () => {
     const ApolloContainer = graphql(sampleOperation)(
       class extends React.Component<any, any> {
         static displayName = 'Foo';
-      }
+      },
     );
 
     expect((ApolloContainer as any).displayName).toBe('Apollo(Foo)');

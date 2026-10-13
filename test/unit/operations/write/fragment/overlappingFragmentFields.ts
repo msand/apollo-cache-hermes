@@ -45,7 +45,7 @@ describe(`overlapping fragments`, () => {
           fizz: 'buzz',
         },
       },
-      cyclicRefQuery
+      cyclicRefQuery,
     );
 
     snapshot = result.snapshot;

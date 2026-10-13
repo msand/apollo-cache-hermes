@@ -33,7 +33,7 @@ describe('[queries] api', () => {
     const link = mockSingleLink(
       { request: { query, variables }, result: { data: data1 } },
       { request: { query, variables }, result: { data: data1 } },
-      { request: { query, variables: { first: 2 } }, result: { data: data1 } }
+      { request: { query, variables: { first: 2 } }, result: { data: data1 } },
     );
     const client = new ApolloClient({
       link,
@@ -89,66 +89,63 @@ describe('[queries] api', () => {
           expect(this.props.data!.refetch instanceof Function).toBeTruthy();
           return <div>{this.props.first}</div>;
         }
-      }
+      },
     );
 
     render(
       <ApolloProvider client={client}>
         <Container first={1} />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
 
     waitFor(() => expect(done).toBeTruthy()).then(resolve, reject);
   });
 
-  itAsync(
-    'exposes subscribeToMore as part of the props api',
-    (resolve, reject) => {
-      let done = false;
-      const query: DocumentNode = gql`
-        query people {
-          allPeople(first: 1) {
-            people {
-              name
-            }
+  itAsync('exposes subscribeToMore as part of the props api', (resolve, reject) => {
+    let done = false;
+    const query: DocumentNode = gql`
+      query people {
+        allPeople(first: 1) {
+          people {
+            name
           }
         }
-      `;
-      const link = mockSingleLink({
-        request: { query },
-        result: {
-          data: { allPeople: { people: [{ name: 'Luke Skywalker' }] } },
-        },
-      });
-      const client = new ApolloClient({
-        link,
-        cache: new Hermes({ addTypename: false }),
-      });
+      }
+    `;
+    const link = mockSingleLink({
+      request: { query },
+      result: {
+        data: { allPeople: { people: [{ name: 'Luke Skywalker' }] } },
+      },
+    });
+    const client = new ApolloClient({
+      link,
+      cache: new Hermes({ addTypename: false }),
+    });
 
-      // example of loose typing
-      const Container = graphql(query)(
-        class extends React.Component<ChildProps> {
-          render() {
-            const { data } = this.props;
-            if (data && !data.loading) {
-              expect(data!.subscribeToMore).toBeTruthy();
-              expect(data!.subscribeToMore instanceof Function).toBeTruthy();
-              done = true;
-            }
-            return null;
+    // example of loose typing
+    const Container = graphql(query)(
+      class extends React.Component<ChildProps> {
+        render() {
+          const { data } = this.props;
+          if (data && !data.loading) {
+            expect(data!.subscribeToMore).toBeTruthy();
+            expect(data!.subscribeToMore instanceof Function).toBeTruthy();
+            done = true;
           }
+          return null;
         }
-      );
+      },
+    );
 
-      render(
-        <ApolloProvider client={client}>
-          <Container />
-        </ApolloProvider>
-      );
+    render(
+      <ApolloProvider client={client}>
+        <Container />
+      </ApolloProvider>,
+    );
 
-      waitFor(() => expect(done).toBeTruthy()).then(resolve, reject);
-    }
-  );
+    waitFor(() => expect(done).toBeTruthy()).then(resolve, reject);
+  });
 
   itAsync('exposes fetchMore as part of the props api', (resolve, reject) => {
     const query: DocumentNode = gql`
@@ -172,7 +169,7 @@ describe('[queries] api', () => {
 
     const link = mockSingleLink(
       { request: { query, variables }, result: { data } },
-      { request: { query, variables: variables2 }, result: { data: data1 } }
+      { request: { query, variables: variables2 }, result: { data: data1 } },
     );
     const client = new ApolloClient({
       link,
@@ -194,24 +191,18 @@ describe('[queries] api', () => {
                 variables: { skip: 2 },
                 updateQuery: (prev: any, { fetchMoreResult }) => ({
                   allPeople: {
-                    people: prev.allPeople.people.concat(
-                      fetchMoreResult!.allPeople.people
-                    ),
+                    people: prev.allPeople.people.concat(fetchMoreResult!.allPeople.people),
                   },
                 }),
               })
               .then((result: any) => {
-                expect(result.data.allPeople.people).toEqual(
-                  data1.allPeople.people
-                );
+                expect(result.data.allPeople.people).toEqual(data1.allPeople.people);
               })
               .catch(reject);
           } else if (count === 1) {
             expect(props.data!.variables).toEqual(variables);
             expect(props.data!.loading).toBeFalsy();
-            expect(props.data!.allPeople!.people).toEqual(
-              data.allPeople.people.concat(data1.allPeople.people)
-            );
+            expect(props.data!.allPeople!.people).toEqual(data.allPeople.people.concat(data1.allPeople.people));
             // This ends the test (passing).
             setTimeout(() => resolve(), 20);
           } else {
@@ -225,111 +216,108 @@ describe('[queries] api', () => {
           expect(this.props.data!.fetchMore instanceof Function).toBeTruthy();
           return null;
         }
-      }
+      },
     );
 
     render(
       <ApolloProvider client={client}>
         <Container />
-      </ApolloProvider>
+      </ApolloProvider>,
     );
   });
 
-  itAsync(
-    'reruns props function after query results change via fetchMore',
-    (resolve, reject) => {
-      const query: DocumentNode = gql`
-        query people($cursor: Int) {
-          allPeople(cursor: $cursor) {
-            cursor
-            people {
-              name
-            }
+  itAsync('reruns props function after query results change via fetchMore', (resolve, reject) => {
+    const query: DocumentNode = gql`
+      query people($cursor: Int) {
+        allPeople(cursor: $cursor) {
+          cursor
+          people {
+            name
           }
         }
-      `;
-      const vars1 = { cursor: undefined };
-      const data1 = {
-        allPeople: { cursor: 1, people: [{ name: 'Luke Skywalker' }] },
-      };
-      const vars2 = { cursor: 1 };
-      const data2 = {
-        allPeople: { cursor: 2, people: [{ name: 'Leia Skywalker' }] },
-      };
+      }
+    `;
+    const vars1 = { cursor: undefined };
+    const data1 = {
+      allPeople: { cursor: 1, people: [{ name: 'Luke Skywalker' }] },
+    };
+    const vars2 = { cursor: 1 };
+    const data2 = {
+      allPeople: { cursor: 2, people: [{ name: 'Leia Skywalker' }] },
+    };
 
-      type Data = typeof data1;
-      type Variables = { cursor: number | undefined };
+    type Data = typeof data1;
+    type Variables = { cursor: number | undefined };
 
-      const link = mockSingleLink(
-        { request: { query, variables: vars1 }, result: { data: data1 } },
-        { request: { query, variables: vars2 }, result: { data: data2 } }
-      );
-      const client = new ApolloClient({
-        link,
-        cache: new Hermes({ addTypename: false }),
-      });
+    const link = mockSingleLink(
+      { request: { query, variables: vars1 }, result: { data: data1 } },
+      { request: { query, variables: vars2 }, result: { data: data2 } },
+    );
+    const client = new ApolloClient({
+      link,
+      cache: new Hermes({ addTypename: false }),
+    });
 
-      let isUpdated = false;
+    let isUpdated = false;
 
-      type FinalProps = {
-        loading: boolean,
-        people?: { name: string }[],
-        getMorePeople?: () => void,
-      };
+    type FinalProps = {
+      loading: boolean;
+      people?: { name: string }[];
+      getMorePeople?: () => void;
+    };
 
-      let done = false;
-      const Container = graphql<{}, Data, Variables, FinalProps>(query, {
-        props({ data }) {
-          const { loading, allPeople, fetchMore } = data!;
+    let done = false;
+    const Container = graphql<{}, Data, Variables, FinalProps>(query, {
+      props({ data }) {
+        const { loading, allPeople, fetchMore } = data!;
 
-          if (loading) return { loading };
-          const { cursor, people } = allPeople!;
-          return {
-            loading: false,
-            people,
-            getMorePeople: () =>
-              fetchMore({
-                variables: { cursor },
-                updateQuery(prev, { fetchMoreResult }) {
-                  const {
-                    allPeople: { cursor, people },
-                  } = fetchMoreResult!;
-                  return {
-                    allPeople: {
-                      cursor,
-                      people: [...people, ...prev.allPeople.people],
-                    },
-                  };
-                },
-              }),
-          };
-        },
-      })(
-        class extends React.Component<FinalProps> {
-          render() {
-            if (!this.props.loading) {
-              if (isUpdated) {
-                expect(this.props.people!.length).toBe(2);
-                done = true;
-              } else {
-                isUpdated = true;
-                expect(this.props.people).toEqual(data1.allPeople.people);
-                this.props.getMorePeople!();
-              }
+        if (loading) return { loading };
+        const { cursor, people } = allPeople!;
+        return {
+          loading: false,
+          people,
+          getMorePeople: () =>
+            fetchMore({
+              variables: { cursor },
+              updateQuery(prev, { fetchMoreResult }) {
+                const {
+                  allPeople: { cursor, people },
+                } = fetchMoreResult!;
+                return {
+                  allPeople: {
+                    cursor,
+                    people: [...people, ...prev.allPeople.people],
+                  },
+                };
+              },
+            }),
+        };
+      },
+    })(
+      class extends React.Component<FinalProps> {
+        render() {
+          if (!this.props.loading) {
+            if (isUpdated) {
+              expect(this.props.people!.length).toBe(2);
+              done = true;
+            } else {
+              isUpdated = true;
+              expect(this.props.people).toEqual(data1.allPeople.people);
+              this.props.getMorePeople!();
             }
-
-            return null;
           }
+
+          return null;
         }
-      );
+      },
+    );
 
-      render(
-        <ApolloProvider client={client}>
-          <Container />
-        </ApolloProvider>
-      );
+    render(
+      <ApolloProvider client={client}>
+        <Container />
+      </ApolloProvider>,
+    );
 
-      waitFor(() => expect(done).toBe(true)).then(resolve, reject);
-    }
-  );
+    waitFor(() => expect(done).toBe(true)).then(resolve, reject);
+  });
 });

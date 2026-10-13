@@ -11,7 +11,6 @@ const { QueryRoot: QueryRootId } = StaticNodeId;
 // It just isn't very fruitful to unit test the individual steps of the write
 // workflow in isolation, given the contextual state that must be passed around.
 describe(`operations.write`, () => {
-
   const context = new CacheContext(strictConfig);
   const empty = new GraphSnapshot();
   const entityQuery = query(`{
@@ -60,10 +59,12 @@ describe(`operations.write`, () => {
 
     it(`updates outbound references`, () => {
       const queryRoot = snapshot.getNodeSnapshot(QueryRootId)!;
-      jestExpect(mapToEntries2(queryRoot.outbound)).toEqual(jestExpect.arrayContaining([
-        { id: '2', path: ['foo'] },
-        { id: '1', path: ['bar'] },
-      ]));
+      jestExpect(mapToEntries2(queryRoot.outbound)).toEqual(
+        jestExpect.arrayContaining([
+          { id: '2', path: ['foo'] },
+          { id: '1', path: ['bar'] },
+        ]),
+      );
       jestExpect(mapToEntries2(queryRoot.inbound)).toBe(undefined);
     });
 

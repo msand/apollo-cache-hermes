@@ -9,8 +9,8 @@ if [[ "${#FILES[@]}" = "0" ]]; then
   FILES+=($(
     find . \
       -not -path "*/node_modules/*" \
-      \( -name "*.ts" -not -name "*.d.ts" \) \
-      -or -name "*.tsx"
+      -not -path "./.claude/*" \
+      \( \( -name "*.ts" -not -name "*.d.ts" \) -or -name "*.tsx" \)
   ))
 fi
 

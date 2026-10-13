@@ -76,7 +76,7 @@ const typeDefs = /* GraphQL */ `
 const schema = buildSchema(typeDefs);
 
 describe('addMocksToSchema', () => {
-  it('basic', async() => {
+  it('basic', async () => {
     const query = /* GraphQL */ `
       query {
         viewer {
@@ -112,7 +112,7 @@ describe('addMocksToSchema', () => {
     expect(viewerData2['id']).toEqual(viewerData['id']);
   });
 
-  it('handle _id key field', async() => {
+  it('handle _id key field', async () => {
     const query = /* GraphQL */ `
       query {
         author {
@@ -143,7 +143,7 @@ describe('addMocksToSchema', () => {
     expect(viewerData2['_id']).toEqual(viewerData['_id']);
   });
 
-  it('should handle union type', async() => {
+  it('should handle union type', async () => {
     const query = /* GraphQL */ `
       query {
         viewer {
@@ -172,7 +172,7 @@ describe('addMocksToSchema', () => {
     expect((data!['viewer'] as any)['image']['__typename']).toBeDefined();
   });
 
-  it('should handle interface type', async() => {
+  it('should handle interface type', async () => {
     const query = /* GraphQL */ `
       query {
         viewer {
@@ -202,7 +202,7 @@ describe('addMocksToSchema', () => {
     expect((data!['viewer'] as any)['book']['__typename']).toBeDefined();
   });
 
-  it('should handle custom scalars', async() => {
+  it('should handle custom scalars', async () => {
     const query = /* GraphQL */ `
       query {
         viewer {

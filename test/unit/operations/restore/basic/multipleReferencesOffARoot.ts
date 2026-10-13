@@ -61,7 +61,6 @@ function entityTransformer(node: JsonObject) {
 
 describe(`operations.restore`, () => {
   describe(`multiple references hanging off a root`, () => {
-
     let restoreGraphSnapshot: GraphSnapshot, originaGraphSnapshot: GraphSnapshot;
     beforeAll(() => {
       const cacheContext = new CacheContext({
@@ -90,39 +89,42 @@ describe(`operations.restore`, () => {
         }`,
         /* gqlVariables */ undefined,
         /* rootId */ undefined,
-        cacheContext
+        cacheContext,
       ).snapshot;
 
-      restoreGraphSnapshot = restore({
-        [QueryRootId]: {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          outbound: [
-            { id: '123', path: ['bar'] },
-            { id: '456', path: ['foo'] },
-          ],
-          data: {},
-        },
-        '123': {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          inbound: [{ id: QueryRootId, path: ['bar'] }],
-          data: {
-            __typename: 'Bar',
-            id: 123,
-            name: 'Gouda',
-            isBar: true,
+      restoreGraphSnapshot = restore(
+        {
+          [QueryRootId]: {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            outbound: [
+              { id: '123', path: ['bar'] },
+              { id: '456', path: ['foo'] },
+            ],
+            data: {},
+          },
+          '123': {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            inbound: [{ id: QueryRootId, path: ['bar'] }],
+            data: {
+              __typename: 'Bar',
+              id: 123,
+              name: 'Gouda',
+              isBar: true,
+            },
+          },
+          '456': {
+            type: Serializable.NodeSnapshotType.EntitySnapshot,
+            inbound: [{ id: QueryRootId, path: ['foo'] }],
+            data: {
+              __typename: 'Foo',
+              id: 456,
+              name: 'Brie',
+              isFoo: true,
+            },
           },
         },
-        '456': {
-          type: Serializable.NodeSnapshotType.EntitySnapshot,
-          inbound: [{ id: QueryRootId, path: ['foo'] }],
-          data: {
-            __typename: 'Foo',
-            id: 456,
-            name: 'Brie',
-            isFoo: true,
-          },
-        },
-      }, cacheContext).cacheSnapshot.baseline;
+        cacheContext,
+      ).cacheSnapshot.baseline;
     });
 
     it(`restores GraphSnapshot from JSON serializable object`, () => {
@@ -144,6 +146,5 @@ describe(`operations.restore`, () => {
       jestExpect(restoreGraphSnapshot.getNodeData(QueryRootId)).not.toBeInstanceOf(Bar);
       jestExpect(restoreGraphSnapshot.getNodeData(QueryRootId)).not.toBeInstanceOf(Foo);
     });
-
   });
 });

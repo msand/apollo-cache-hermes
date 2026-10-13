@@ -11,10 +11,7 @@ describe(`operations.prune`, () => {
     const snapshot = createGraphSnapshot(
       {
         one: {
-          two: [
-            { three: { id: 0, stuff: 'a' } },
-            { three: { id: 1, stuff: 'b' } },
-          ],
+          two: [{ three: { id: 0, stuff: 'a' } }, { three: { id: 1, stuff: 'b' } }],
         },
       },
       `{ 
@@ -24,7 +21,7 @@ describe(`operations.prune`, () => {
             }
           }
       }`,
-      cacheContext
+      cacheContext,
     );
 
     const pruneQuery = query(`{ 
@@ -64,5 +61,4 @@ describe(`operations.prune`, () => {
       },
     });
   });
-
 });
