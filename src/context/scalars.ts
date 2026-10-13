@@ -4,6 +4,7 @@ import { getOperationDefinition, isPlainObject, unwrapScalarType } from '@apollo
 import { invariant } from '@apollo/client/utilities/invariant';
 import type { DocumentNode, TypeNode } from 'graphql';
 
+import { isDev } from './helpers';
 import type { Policies } from './policies';
 import { fieldNameFromStoreName } from './storeFieldNames';
 
@@ -15,6 +16,16 @@ const toSerialized: Coerce = (scalar, value) => scalar.coerceToSerialized(value)
 
 /** Where a scalar field's read function remembers its last parsed value, in the field's storage. */
 const lastParsed = Symbol('lastParsed');
+
+/** The items of a list mapped, or the list itself if no item changed. */
+function mapChanged<T>(list: readonly T[], map: (item: T) => unknown): unknown[] {
+  let copy: unknown[] | undefined;
+  list.forEach((item, index) => {
+    const newItem = map(item);
+    if (newItem !== item) (copy ??= list.slice())[index] = newItem;
+  });
+  return copy ?? (list as unknown[]);
+}
 
 /** Matches list types, like `[Date]`, capturing the type of their items. */
 const listTypePattern = /^\[(.*)\]$/;
@@ -144,18 +155,32 @@ export class ScalarConfig {
     return changed ? Object.fromEntries(entries) : object;
   }
 
-  /** Like InMemoryCache's EntityStore#coerceValue. */
+  /**
+   * Like InMemoryCache's EntityStore#coerceValue: values of a registered
+   * scalar type are coerced (item by item, for list types), and otherwise
+   * the items of lists and the fields of typed objects are.
+   */
   private _coerceValue(value: unknown, coerce: Coerce, scalarType: string | undefined, coordinate: string): unknown {
     if (value == null) return value;
-    if (scalarType) return this.coerce(value, coerce, scalarType, coordinate);
+    if (scalarType) {
+      const match = scalarType.match(listTypePattern);
+      if (match) {
+        if (Array.isArray(value))
+          return mapChanged(value, item => this._coerceValue(item, coerce, match[1], coordinate));
+        if (isDev()) {
+          invariant.warn(
+            "The custom scalar configuration for '%s' uses list type '%s', but the value is not an array. The value was coerced as '%s' anyway.",
+            coordinate,
+            scalarType,
+            unwrapScalarType(scalarType),
+          );
+        }
+      }
+      const scalar = this.getScalar(unwrapScalarType(scalarType));
+      if (scalar) return coerce(scalar, value);
+    }
     if (Array.isArray(value)) {
-      let changed = false;
-      const items = value.map(item => {
-        const newItem = this._coerceValue(item, coerce, undefined, coordinate);
-        changed ||= newItem !== item;
-        return newItem;
-      });
-      return changed ? items : value;
+      return mapChanged(value, item => this._coerceValue(item, coerce, scalarType, coordinate));
     }
     if (isPlainObject(value) && '__typename' in value) {
       return this._coerceStoreObject(value, coerce, value.__typename);
@@ -172,25 +197,7 @@ export class ScalarConfig {
 
   /** Coerces a (list of) scalar value(s) of the given type, like InMemoryCache. */
   coerce(value: unknown, coerce: Coerce, scalarType: string, coordinate: string): unknown {
-    if (value == null) return value;
-    const match = scalarType.match(listTypePattern);
-    if (match) {
-      if (Array.isArray(value)) {
-        return value.map(item => this.coerce(item, coerce, match[1], coordinate));
-      }
-      invariant.warn(
-        "The custom scalar configuration for '%s' uses list type '%s', but the value is not an array. The value was coerced as '%s' anyway.",
-        coordinate,
-        scalarType,
-        unwrapScalarType(scalarType),
-      );
-    }
-    const scalar = this.getScalar(unwrapScalarType(scalarType));
-    if (scalar) return coerce(scalar, value);
-    if (Array.isArray(value)) {
-      return value.map(item => this.coerce(item, coerce, scalarType, coordinate));
-    }
-    return value;
+    return this._coerceValue(value, coerce, scalarType, coordinate);
   }
 
   /** Serializes the scalar values of an operation's variables (like InMemoryCache#serializeVariables). */
@@ -220,12 +227,13 @@ export class ScalarConfig {
       const match = scalarType.match(listTypePattern);
       if (match) {
         if (Array.isArray(value)) return this._serializeArray(value, variableTypes, match[1], coordinate);
-        invariant.warn(
-          "The variable '%s' has list type '%s', but the value is not an array. The value was coerced as '%s' anyway.",
-          coordinate,
-          scalarType,
-          unwrapScalarType(scalarType),
-        );
+        if (isDev())
+          invariant.warn(
+            "The variable '%s' has list type '%s', but the value is not an array. The value was coerced as '%s' anyway.",
+            coordinate,
+            scalarType,
+            unwrapScalarType(scalarType),
+          );
       }
       const scalar = this.getScalar(unwrapScalarType(scalarType));
       if (scalar) return scalar.coerceToSerialized(value);
