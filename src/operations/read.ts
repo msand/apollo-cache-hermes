@@ -454,6 +454,11 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
         // Like InMemoryCache, the root __typename is only read when the document
         // the caller passed in selects it (not when Hermes' addTypename adds it).
         value.__typename = typeName;
+      } else if (readFn) {
+        // Like InMemoryCache, a read function returning undefined makes the
+        // field missing, even when the cache holds a value for it.
+        delete value[key];
+        delete value[fieldName];
       }
     }
   }
