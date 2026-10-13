@@ -1,16 +1,17 @@
 // Runs one scenario against one implementation in this process, and prints a
 // single JSON line with the timing samples. bench/run.mjs starts one worker
 // process per (implementation, scenario, round), so JIT state and heap from
-// one implementation never leak into another's measurement.
+// one implementation never leak into another's measurement; the median of a
+// worker's samples is one independent observation.
 //
-//   node bench/worker.mjs <impl> <scenario> [--warmup-ms 500] [--samples 10] [--sample-ms 150]
+//   node bench/worker.mjs <impl> <scenario> [--warmup-ms 300] [--samples 5] [--sample-ms 100] [--check-only]
 
 // Measure production behavior everywhere: no dev-only freezing or checks.
 process.env.NODE_ENV = 'production';
 globalThis.__DEV__ = false;
 
 const [implName, scenarioName, ...rest] = process.argv.slice(2);
-const opts = { 'warmup-ms': 500, samples: 10, 'sample-ms': 150, 'check-only': false };
+const opts = { 'warmup-ms': 300, samples: 5, 'sample-ms': 100, 'check-only': false };
 for (let i = 0; i < rest.length; i++) {
   const key = rest[i].replace(/^--/, '');
   if (key === 'check-only') opts[key] = true;
@@ -72,10 +73,16 @@ while (ms(now() - start) < opts['warmup-ms'] || warmupOps < 5) {
 }
 
 // Samples: each runs whole operations for at least sample-ms (and at least
-// 3 ops), and records the mean time per op in that sample.
+// 3 ops), and records the mean time per op in that sample, and the share of
+// that wall time this process spent on a CPU (user + system time / wall
+// time). A share well below 1 means the process was descheduled: the sample
+// was taken under CPU contention. (It can exceed 1 when V8's background
+// threads, e.g. the garbage collector's, run in parallel.)
 const samples = [];
+const cpuShares = [];
 for (let s = 0; s < opts.samples; s++) {
   let ops = 0;
+  const cpuStart = process.cpuUsage();
   start = now();
   let elapsed;
   do {
@@ -83,7 +90,17 @@ for (let s = 0; s < opts.samples; s++) {
     ops++;
     elapsed = ms(now() - start);
   } while (elapsed < opts['sample-ms'] || ops < 3);
+  const cpu = process.cpuUsage(cpuStart);
   samples.push(elapsed / ops);
+  cpuShares.push((cpu.user + cpu.system) / 1000 / elapsed);
 }
 
-out({ status: 'ok', samples, warmupOps, check: firstCheck, checkAfter: check?.(), versions: impl.versions });
+out({
+  status: 'ok',
+  samples,
+  cpuShares,
+  warmupOps,
+  check: firstCheck,
+  checkAfter: check?.(),
+  versions: impl.versions,
+});
