@@ -230,11 +230,12 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     const result = this._withCacheSlot(() =>
       read(this._context, query, optimistic ? this._snapshot.optimistic : this._snapshot.baseline, tempStore),
     );
-    const newKeys = Object.keys(tempStore);
-    if (newKeys.length) {
+    // (Read functions may have added entities to the store.)
+    for (const _id in tempStore) {
       this.transaction(true, t => {
         t.merge(tempStore);
       });
+      break;
     }
     return result;
   }

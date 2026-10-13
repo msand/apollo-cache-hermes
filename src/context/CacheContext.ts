@@ -241,6 +241,12 @@ export class CacheContext<TSerialized = GraphSnapshot> {
   /** The parsed operations of each known document (by its cache key; see parseOperation). */
   private readonly _documentOperations = new Map<string, DocumentOperations<TSerialized>>();
 
+  /** The parsed operations of each document object (by fragment name), to skip computing its cache key. */
+  private readonly _operationsByDocument = new WeakMap<
+    DocumentNode,
+    Map<string | undefined, DocumentOperations<TSerialized>>
+  >();
+
   public readonly dirty = new Map<NodeId, Set<string>>();
 
   /** The type policies and possibleTypes (like InMemoryCache's policies). */
@@ -256,9 +262,6 @@ export class CacheContext<TSerialized = GraphSnapshot> {
 
   /** What reads found checking entity data against static selections (see CheckedSubtree). */
   public checkedSubtrees: CheckedSubtrees = new WeakMap();
-
-  /** The ids of the objects reads identified (null for those without), by object. */
-  public storedEntityIds = new WeakMap<object, NodeId | null>();
 
   /** What reads made of entities' data, with the values of read functions overlaid (see OverlaidEntity). */
   public overlaidEntities: OverlaidEntities = new WeakMap();
@@ -301,7 +304,7 @@ export class CacheContext<TSerialized = GraphSnapshot> {
     // Policies (e.g. keyFields and possibleTypes) decide what data satisfies a selection.
     this.onPoliciesChange(() => {
       this.checkedSubtrees = new WeakMap();
-      this.storedEntityIds = new WeakMap();
+      this._conditionMatches = new WeakMap();
       this.forgetOverlaidEntities();
     });
   }
@@ -339,11 +342,25 @@ export class CacheContext<TSerialized = GraphSnapshot> {
     hasValue?: boolean | (() => boolean),
   ) {
     if (!conditions || typeof typename !== 'string') return true;
-    return conditions.some(
+    // (Without fuzzy subtypes, which are inferred from values, the result only
+    // depends on the conditions and the typename.)
+    const memoize = !this.policies.hasFuzzySubtypes;
+    let byTypename = memoize ? this._conditionMatches.get(conditions) : undefined;
+    const known = byTypename?.get(typename);
+    if (known !== undefined) return known;
+    const matches = conditions.some(
       ({ typeConditions }) =>
         !typeConditions || typeConditions.every(supertype => this.fragmentMatches(supertype, typename, hasValue)),
     );
+    if (memoize) {
+      if (!byTypename) this._conditionMatches.set(conditions, (byTypename = new Map()));
+      byTypename.set(typename, matches);
+    }
+    return matches;
   }
+
+  /** What conditionsMatch found, by conditions and typename (forgotten when policies change). */
+  private _conditionMatches = new WeakMap<readonly SelectionCondition[], Map<string, boolean>>();
 
   /**
    * Whether a fragment with the type condition `supertype` applies to objects
@@ -393,11 +410,17 @@ export class CacheContext<TSerialized = GraphSnapshot> {
     // ApolloClient passes documents it already transformed with transformDocument.
     // Their __typename fields are part of the query as the client sees it.
     const pretransformed = this._transformedOutputs.has(raw.document);
-    const cacheKey = `${operationCacheKey(raw.document, raw.fragmentName)}${pretransformed ? '❖transformed' : ''}`;
-    let operations = this._documentOperations.get(cacheKey);
+    let byFragment = this._operationsByDocument.get(raw.document);
+    let operations = byFragment?.get(raw.fragmentName);
     if (!operations) {
-      operations = new DocumentOperations();
-      this._documentOperations.set(cacheKey, operations);
+      const cacheKey = `${operationCacheKey(raw.document, raw.fragmentName)}${pretransformed ? '❖transformed' : ''}`;
+      operations = this._documentOperations.get(cacheKey);
+      if (!operations) {
+        operations = new DocumentOperations();
+        this._documentOperations.set(cacheKey, operations);
+      }
+      if (!byFragment) this._operationsByDocument.set(raw.document, (byFragment = new Map()));
+      byFragment.set(raw.fragmentName, operations);
     }
 
     // Like InMemoryCache, custom scalar variables are serialized.

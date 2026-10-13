@@ -270,6 +270,8 @@ class OverlayWalkNode {
  * changed, like InMemoryCache's per-entity result caching.
  */
 export interface OverlaidEntity {
+  selection: ParsedQuery;
+  entityId: NodeId;
   result: JsonObject;
   /** (The entity's own data is the key the entity is remembered by.) */
   dependencies: Map<NodeId, unknown>;
@@ -285,7 +287,41 @@ export interface OverlaidEntity {
 }
 
 /** Overlaid entities, by entity data object and selection. */
-export type OverlaidEntities = WeakMap<object, WeakMap<ParsedQuery, OverlaidEntity>>;
+export type OverlaidEntities = BySelection<OverlaidEntity>;
+
+/**
+ * Values by object and selection: most objects are read with one selection,
+ * whose value is kept as is (it knows its selection); objects read with
+ * several have a map of them.
+ */
+export type BySelection<T extends { selection: ParsedQuery }> = WeakMap<object, T | WeakMap<ParsedQuery, T>>;
+
+function getBySelection<T extends { selection: ParsedQuery }>(
+  memo: BySelection<T>,
+  object: object,
+  selection: ParsedQuery,
+): T | undefined {
+  const known = memo.get(object);
+  if (known instanceof WeakMap) return known.get(selection);
+  return known?.selection === selection ? known : undefined;
+}
+
+function setBySelection<T extends { selection: ParsedQuery }>(memo: BySelection<T>, object: object, value: T) {
+  const known = memo.get(object);
+  if (known instanceof WeakMap) {
+    known.set(value.selection, value);
+  } else if (known && known.selection !== value.selection) {
+    memo.set(
+      object,
+      new WeakMap([
+        [known.selection, known],
+        [value.selection, value],
+      ]),
+    );
+  } else {
+    memo.set(object, value);
+  }
+}
 
 const MISSING_NODE = Symbol('missing node');
 
@@ -505,6 +541,8 @@ function _walkAndOverlayDynamicValues<TSerialized>(
     const ids = new Set(walked.dynamicNodeIds);
     for (const child of walked.children) for (const nodeId of child.dynamicNodeIds) ids.add(nodeId);
     const entity: OverlaidEntity = {
+      selection: walked.parsedMap,
+      entityId: walked.entityId,
       result: walked.value,
       dependencies: walked.dependencies,
       children,
@@ -512,9 +550,7 @@ function _walkAndOverlayDynamicValues<TSerialized>(
       dynamicNodeIds: Array.from(ids),
     };
     resultEntityIds.set(walked.value, walked.entityId);
-    let bySelection = memo.get(walked.data);
-    if (!bySelection) memo.set(walked.data, (bySelection = new WeakMap()));
-    bySelection.set(walked.parsedMap, entity);
+    setBySelection(memo, walked.data, entity);
     walked.parent?.children.push(entity);
   }
 
@@ -529,14 +565,21 @@ function _walkAndOverlayDynamicValues<TSerialized>(
       frame = walkNode.frame;
       // The object read from (e.g. a root object, which may have an id field) is
       // not identified by its data.
-      const valueId =
-        q === 0
-          ? undefined
-          : (resultEntityIds.get(value) ??
-            identifyStored(context, value, () => {
-              const reference = getSnapshot(containerId)?.outbound?.get(path.join('.'));
-              return reference && getSnapshot(reference.id) ? reference.id : undefined;
-            }));
+      let valueId: NodeId | undefined;
+      if (q !== 0) {
+        valueId = resultEntityIds.get(value);
+        if (valueId === undefined && !unnormalized) {
+          // An entity walked before needs no identifying while its data is still the entity's.
+          const known = getBySelection(memo, source, parsedMap);
+          if (known && (tempStore[known.entityId] ?? snapshot.getNodeSnapshot(known.entityId))?.data === source) {
+            valueId = known.entityId;
+          }
+        }
+        valueId ??= identifyStored(context, value, () => {
+          const reference = getSnapshot(containerId)?.outbound?.get(path.join('.'));
+          return reference && getSnapshot(reference.id) ? reference.id : undefined;
+        });
+      }
       if (valueId) {
         containerId = valueId;
         path = [];
@@ -544,7 +587,7 @@ function _walkAndOverlayDynamicValues<TSerialized>(
         // (The entity's data is a dependency of the entity that holds it, or within its data.)
         const stored = tempStore[valueId] ?? snapshot.getNodeSnapshot(valueId);
         if (!unnormalized && walkNode.holder && source === stored?.data) {
-          const known = memo.get(source)?.get(parsedMap);
+          const known = getBySelection(memo, source, parsedMap);
           if (known && isReusable(known)) {
             (walkNode.holder as Record<string | number, JsonValue>)[walkNode.holderKey!] = known.result;
             frame?.children.push(known);
@@ -910,10 +953,7 @@ function identifyStored<TSerialized>(
 ): NodeId | undefined {
   if (!isObject(value)) return undefined;
   if (context.policies.hasKeyFieldsFunction((value as JsonObject).__typename)) return fallback?.();
-  // (Values read are stored data or results, which don't change.)
-  let id = context.storedEntityIds.get(value);
-  if (id === undefined) context.storedEntityIds.set(value, (id = context.entityIdForValue(value) ?? null));
-  return id ?? undefined;
+  return context.entityIdForValue(value);
 }
 
 /**
@@ -1000,14 +1040,17 @@ function addMissingField(tree: MissingTree | undefined, path: PathPart[], messag
  * than the data, e.g. on whether referenced entities exist, are not kept.)
  */
 export interface CheckedSubtree {
+  selection: ParsedQuery;
   entityId: NodeId;
+  /** Whether the entity was identified by its data (so that it is again, while that is the same object). */
+  identifiedByData: boolean;
   children: CheckedSubtree[];
   /** The missing fields (frozen), if any. */
   missing?: MissingTree;
 }
 
 /** Checked subtrees, by entity data object and (static) selection. */
-export type CheckedSubtrees = WeakMap<object, WeakMap<ParsedQuery, CheckedSubtree>>;
+export type CheckedSubtrees = BySelection<CheckedSubtree>;
 
 const staticSelections = new WeakMap<ParsedQuery, boolean>();
 
@@ -1048,6 +1091,26 @@ interface VisitSelectionOptions {
  * the cache) are reported as missing, except in lists, where they are dropped
  * from the returned result.
  */
+/**
+ * A path as a linked list (from its last part), so that walks only make an
+ * array of a path when they need one (see toPathArray); undefined is the
+ * empty path.
+ */
+type LinkedPath = { readonly parent: LinkedPath; readonly key: PathPart } | undefined;
+
+function toPathArray(path: LinkedPath): PathPart[] {
+  const parts: PathPart[] = [];
+  for (let node = path; node !== undefined; node = node.parent) parts.push(node.key);
+  return parts.reverse();
+}
+
+/** The path to `key` within `path`, as an array. */
+function pathTo(path: LinkedPath, key: PathPart): PathPart[] {
+  const parts = toPathArray(path);
+  parts.push(key);
+  return parts;
+}
+
 function _visitSelection<TSerialized>(
   query: OperationInstance<TSerialized>,
   context: CacheContext<TSerialized>,
@@ -1095,13 +1158,13 @@ function _visitSelection<TSerialized>(
     value: JsonObject,
     parsed: ParsedQuery,
     containerId: NodeId,
-    containerPath: PathPart[],
-    resultPath: PathPart[],
+    containerPath: LinkedPath,
+    resultPath: LinkedPath,
   ) {
     const danglingFieldIds = danglingFields?.get(value);
     // Like the read walk, treat the query root as a Query.
     let typeName = value.__typename;
-    if (!typeName && containerPath.length === 0) {
+    if (!typeName && containerPath === undefined) {
       typeName = context.rootTypename(containerId) ?? typeName;
     }
     for (const key in parsed) {
@@ -1118,11 +1181,11 @@ function _visitSelection<TSerialized>(
       const fieldValue = value[key];
       const danglingId = danglingFieldIds?.get(key);
       // (Dangling references read as empty objects.)
-      if (fieldValue !== undefined && !resultPath.length) hasSelectedData = true;
+      if (fieldValue !== undefined && resultPath === undefined) hasSelectedData = true;
 
       if (danglingId !== undefined) {
         unmemoizable++;
-        addMissing([...resultPath, key], `Dangling reference to missing ${danglingId} object`);
+        addMissing(pathTo(resultPath, key), `Dangling reference to missing ${danglingId} object`);
         continue;
       }
       // Leaf fields that are present need no further work.
@@ -1140,7 +1203,7 @@ function _visitSelection<TSerialized>(
         // one added by addTypenameToDocument) can be missing; roots always have one.
         if (
           key === '__typename' &&
-          ((!containerPath.length && context.rootTypename(containerId)) || !selectsTypename(node))
+          ((containerPath === undefined && context.rootTypename(containerId)) || !selectsTypename(node))
         )
           continue;
         let target;
@@ -1156,27 +1219,35 @@ function _visitSelection<TSerialized>(
         let message;
         if (target !== undefined) {
           message = `Dangling reference to missing ${target} object`;
-          if (!resultPath.length) hasSelectedData = true;
+          if (resultPath === undefined) hasSelectedData = true;
           // Like InMemoryCache, a dangling reference reads as an empty object.
-          danglingObjects.push([...resultPath, key]);
+          danglingObjects.push(pathTo(resultPath, key));
           unmemoizable++;
         } else {
           const isEntity =
-            !containerPath.length && (isRootNodeId(containerId) || getNode(containerId) instanceof EntitySnapshot);
+            containerPath === undefined &&
+            (isRootNodeId(containerId) || getNode(containerId) instanceof EntitySnapshot);
           // Like InMemoryCache's store objects, __typename comes first.
           const shown = '__typename' in value ? { __typename: value.__typename, ...value } : value;
           const objOrNodeId = isEntity ? `${containerId} object` : `object ${safeStringify(shown)}`;
           message = `Can't find field '${fieldName}' on ${objOrNodeId}`;
         }
-        addMissing([...resultPath, key], message);
+        addMissing(pathTo(resultPath, key), message);
         continue;
       }
       // Only the child selections of fragments that match the type apply.
       const children = childrenForType(context, node, typeName);
       if (!children) continue;
 
-      const [fieldContainerId, fieldPath] = fieldLocation(typeName, fieldName, node, containerId, containerPath);
-      visitValue(fieldValue, children, fieldContainerId, fieldPath, [...resultPath, key]);
+      // (Like fieldLocation, without making arrays of the paths.)
+      const fieldPath: LinkedPath = { parent: containerPath, key: fieldName };
+      const storeKey = storeKeyOf(context, typeName, fieldName, node, query.variables);
+      if (storeKey === undefined) {
+        visitValue(fieldValue, children, containerId, fieldPath, { parent: resultPath, key });
+      } else {
+        const fieldContainerId = nodeIdForStoreKey(containerId, toPathArray(fieldPath), storeKey);
+        visitValue(fieldValue, children, fieldContainerId, undefined, { parent: resultPath, key });
+      }
     }
   }
 
@@ -1189,9 +1260,9 @@ function _visitSelection<TSerialized>(
     fieldName: string,
     node: ParsedQueryNode,
     containerId: NodeId,
-    containerPath: PathPart[],
+    containerPath: LinkedPath,
   ): [NodeId, PathPart[]] {
-    const fieldPath = [...containerPath, fieldName];
+    const fieldPath = pathTo(containerPath, fieldName);
     const storeKey = storeKeyOf(context, typeName, fieldName, node, query.variables);
     return storeKey !== undefined
       ? [nodeIdForStoreKey(containerId, fieldPath, storeKey), []]
@@ -1202,20 +1273,21 @@ function _visitSelection<TSerialized>(
     value: JsonValue,
     parsed: ParsedQuery,
     containerId: NodeId,
-    containerPath: PathPart[],
-    resultPath: PathPart[],
+    containerPath: LinkedPath,
+    resultPath: LinkedPath,
   ) {
     if (value === null || typeof value !== 'object') return;
 
     if (Array.isArray(value)) {
       for (let i = 0; i < value.length; i++) {
         const item = value[i];
-        const itemPath = [...containerPath, i];
+        const itemPath: LinkedPath = { parent: containerPath, key: i };
         if (item === undefined) {
-          if (snapshot && missingTarget(containerId, itemPath) !== undefined) {
-            const pathKey = JSON.stringify(resultPath);
+          if (snapshot && missingTarget(containerId, toPathArray(itemPath)) !== undefined) {
+            const listPath = toPathArray(resultPath);
+            const pathKey = JSON.stringify(listPath);
             let entry = danglingItems.get(pathKey);
-            if (!entry) danglingItems.set(pathKey, (entry = { path: resultPath, indexes: new Set() }));
+            if (!entry) danglingItems.set(pathKey, (entry = { path: listPath, indexes: new Set() }));
             entry.indexes.add(i);
           } else {
             complete = false;
@@ -1223,7 +1295,7 @@ function _visitSelection<TSerialized>(
           unmemoizable++;
           continue;
         }
-        visitValue(item, parsed, containerId, itemPath, [...resultPath, i]);
+        visitValue(item, parsed, containerId, itemPath, { parent: resultPath, key: i });
       }
       return;
     }
@@ -1231,21 +1303,42 @@ function _visitSelection<TSerialized>(
     // Entering an entity makes it the container of the fields below. Values
     // returned by read functions need not be at their stored path, so the
     // stored reference is only a fallback.
-    let entityId = resultEntityIds.get(value) ?? identifyStored(context, value);
+    let entityId = resultEntityIds.get(value);
+    const memoized = memo && isStaticSelection(parsed);
+    if (entityId === undefined && memoized) {
+      // Entities checked before need no identifying (nor checking) again.
+      const known = getBySelection(memo, value, parsed);
+      if (known?.identifiedByData) {
+        reuseChecked(known, resultPath);
+        return;
+      }
+    }
+    let identifiedByData = false;
+    if (entityId === undefined) {
+      entityId = identifyStored(context, value);
+      identifiedByData = entityId !== undefined;
+    }
     if (entityId === undefined && snapshot) {
-      const reference = getOutbound(containerId, containerPath);
+      const reference = getOutbound(containerId, toPathArray(containerPath));
       if (reference && getNode(reference.id)) entityId = reference.id;
     }
     if (entityId !== undefined) {
       nodeIds?.add(entityId);
-      if (memo && isStaticSelection(parsed)) {
-        visitEntity(value, parsed, entityId, resultPath, memo);
+      if (memoized) {
+        visitEntity(value, parsed, entityId, identifiedByData, resultPath, memo);
       } else {
-        visitObject(value, parsed, entityId, [], resultPath);
+        visitObject(value, parsed, entityId, undefined, resultPath);
       }
     } else {
       visitObject(value, parsed, containerId, containerPath, resultPath);
     }
+  }
+
+  /** Adds what a check of an entity found before to this one's. */
+  function reuseChecked(known: CheckedSubtree, resultPath: LinkedPath) {
+    subtrees?.push(known);
+    if (nodeIds) addSubtreeIds(known, nodeIds);
+    if (known.missing) addMissing(toPathArray(resultPath), known.missing);
   }
 
   /** Visits an entity's data for a static selection, unless it is known to be complete. */
@@ -1253,15 +1346,13 @@ function _visitSelection<TSerialized>(
     value: JsonObject,
     parsed: ParsedQuery,
     entityId: NodeId,
-    resultPath: PathPart[],
+    identifiedByData: boolean,
+    resultPath: LinkedPath,
     memo: CheckedSubtrees,
   ) {
-    let bySelection = memo.get(value);
-    const known = bySelection?.get(parsed);
+    const known = getBySelection(memo, value, parsed);
     if (known && known.entityId === entityId) {
-      subtrees?.push(known);
-      if (nodeIds) addSubtreeIds(known, nodeIds);
-      if (known.missing) addMissing(resultPath, known.missing);
+      reuseChecked(known, resultPath);
       return;
     }
 
@@ -1270,16 +1361,15 @@ function _visitSelection<TSerialized>(
     const unmemoizableBefore = unmemoizable;
     const children: CheckedSubtree[] = (subtrees = []);
     try {
-      visitObject(value, parsed, entityId, [], resultPath);
+      visitObject(value, parsed, entityId, undefined, resultPath);
     } finally {
       subtrees = outer;
     }
     if (unmemoizable !== unmemoizableBefore) return;
-    const subtree: CheckedSubtree = { entityId, children };
+    const subtree: CheckedSubtree = { selection: parsed, entityId, identifiedByData, children };
     if (missingCount !== missingBefore)
-      subtree.missing = util.deepFreeze(deepGet(missingTree, resultPath) as MissingTree);
-    if (!bySelection) memo.set(value, (bySelection = new WeakMap()));
-    bySelection.set(parsed, subtree);
+      subtree.missing = util.deepFreeze(deepGet(missingTree, toPathArray(resultPath)) as MissingTree);
+    setBySelection(memo, value, subtree);
     outer?.push(subtree);
   }
 
@@ -1292,7 +1382,7 @@ function _visitSelection<TSerialized>(
     key: string,
     typeName: unknown,
     containerId: NodeId,
-    containerPath: PathPart[],
+    containerPath: LinkedPath,
   ) {
     const fieldName = node.schemaName ?? key;
     const [fieldContainerId, path] = fieldLocation(typeName, fieldName, node, containerId, containerPath);
@@ -1307,7 +1397,7 @@ function _visitSelection<TSerialized>(
     }
   }
 
-  visitObject(result ?? {}, query.parsedQuery, query.rootId, [], []);
+  visitObject(result ?? {}, query.parsedQuery, query.rootId, undefined, undefined);
 
   let filteredResult = result;
   for (const path of danglingObjects) {
