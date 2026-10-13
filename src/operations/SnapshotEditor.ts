@@ -1743,24 +1743,16 @@ export class SnapshotEditor<TSerialized> {
    */
   _buildNewSnapshot() {
     const { entityTransformer } = this._context;
-    const snapshots = { ...this._parent._values };
-
-    for (const id in this._newNodes) {
-      const newSnapshot = this._newNodes[id];
-      // Drop snapshots that were garbage collected.
-      if (newSnapshot === undefined) {
-        delete snapshots[id];
-      } else {
+    if (entityTransformer) {
+      for (const id in this._newNodes) {
         // TODO: This should not be run for ParameterizedValueSnapshots
-        if (entityTransformer) {
-          const { data } = this._newNodes[id] as EntitySnapshotType;
-          if (data) entityTransformer(data);
-        }
-        snapshots[id] = newSnapshot;
+        const data = (this._newNodes[id] as EntitySnapshotType | undefined)?.data;
+        if (data) entityTransformer(data);
       }
     }
 
-    return new GraphSnapshot(snapshots);
+    // (Snapshots that were garbage collected are undefined, and dropped.)
+    return GraphSnapshot.withChanges(this._parent, this._newNodes);
   }
 
   /**
