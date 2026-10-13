@@ -270,7 +270,10 @@ export class FieldFunctions<TSerialized> {
     const args = (options.args as JsonObject | undefined) ?? null;
     const field = options.field ?? null;
     const existing = this.getFieldValue(objectOrRef, fieldName, args, typename, field);
-    const read = getReadFunction(this._context, typename, fieldName);
+    // (Like InMemoryCache, the scalar policies of fields with selection sets are ignored.)
+    const read = field?.selectionSet
+      ? this._context.policies.getReadFunction(typename, fieldName)
+      : getReadFunction(this._context, typename, fieldName);
     if (!read) return existing;
 
     const storeFieldName = this._context.storeFieldNames.storeFieldName(

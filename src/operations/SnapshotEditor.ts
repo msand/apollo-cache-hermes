@@ -1,5 +1,5 @@
 import * as equality from '@wry/equality';
-import { makeReference } from '@apollo/client/utilities/internal';
+import { isPlainObject, makeReference } from '@apollo/client/utilities/internal';
 import type { Reference } from '@apollo/client/cache';
 import type { StoreObject } from '@apollo/client/utilities';
 
@@ -846,6 +846,8 @@ export class SnapshotEditor<TSerialized> {
    * Shallowly merges `value` into the data of an entity (creating it if needed).
    */
   private _mergeIntoEntity(entityId: NodeId, value: StoreObject, valueIsOlder = false) {
+    // Custom scalar values are stored serialized.
+    value = this._context.scalars.serializeStoreObject(value);
     const data = isObject(this._getNodeData(entityId)) ? (this._getNodeData(entityId) as JsonObject) : {};
     this._setValue(entityId, [], valueIsOlder ? { ...value, ...data } : { ...data, ...value });
   }
@@ -1227,8 +1229,8 @@ export class SnapshotEditor<TSerialized> {
 
       // For fields with sub selections, we walk into them; only leaf fields are
       // directly written via _setValue.  This allows us to perform minimal
-      // edits to the graph.
-      if (typeof node === 'object') {
+      // edits to the graph.  (Values like Dates or Maps are leaf values.)
+      if (typeof node === 'object' && (node === null || Array.isArray(node) || isPlainObject(node))) {
         this._modifySubgraph(
           referenceEdits,
           warnings,

@@ -5,6 +5,7 @@ import { invariant } from '@apollo/client/utilities/invariant';
 import type { DocumentNode, TypeNode } from 'graphql';
 
 import type { Policies } from './policies';
+import { fieldNameFromStoreName } from './storeFieldNames';
 
 type AnyScalar = Scalar<any, any>;
 type Coerce = (scalar: AnyScalar, value: unknown) => unknown;
@@ -89,6 +90,77 @@ export class ScalarConfig {
       this._parseReads.set(coordinate, (entry = { scalarType, read }));
     }
     return entry.read;
+  }
+
+  /**
+   * The (stored) value of `typename.fieldName` with its scalar values parsed,
+   * including those of the fields of objects within it, as InMemoryCache
+   * stores it (and passes it to cache.modify modifiers).
+   */
+  parseStoreValue(typename: unknown, fieldName: string, value: unknown): unknown {
+    return this._coerceStoreValue(typename, fieldName, value, toParsed);
+  }
+
+  /**
+   * The value to store for `typename.fieldName` (e.g. as returned by a
+   * cache.modify modifier): with its scalar values serialized, including those
+   * of the fields of objects within it.
+   */
+  serializeStoreValue(typename: unknown, fieldName: string, value: unknown): unknown {
+    return this._coerceStoreValue(typename, fieldName, value, toSerialized);
+  }
+
+  /** An object to store, with the scalar values of its fields serialized (like serializeStoreValue). */
+  serializeStoreObject<T>(object: T, typename?: unknown): T {
+    if (!this._scalars || !isPlainObject(object)) return object;
+    return this._coerceStoreObject(object, toSerialized, typename ?? object.__typename) as T;
+  }
+
+  private _coerceStoreValue(typename: unknown, fieldName: string, value: unknown, coerce: Coerce): unknown {
+    if (!this._scalars || value == null || typeof typename !== 'string') return value;
+    return this._coerceValue(
+      value,
+      coerce,
+      this.getScalarTypeForField(typename, fieldName),
+      `${typename}.${fieldName}`,
+    );
+  }
+
+  /** Like InMemoryCache's EntityStore#coerceStoreObject. */
+  private _coerceStoreObject(object: Record<string, unknown>, coerce: Coerce, typename: unknown) {
+    if (typeof typename !== 'string' || !typename) return object;
+    let changed = false;
+    const entries = Object.entries(object).map(([storeFieldName, value]) => {
+      const fieldName = fieldNameFromStoreName(storeFieldName);
+      const newValue = this._coerceValue(
+        value,
+        coerce,
+        this.getScalarTypeForField(typename, fieldName),
+        `${typename}.${fieldName}`,
+      );
+      changed ||= newValue !== value;
+      return [storeFieldName, newValue];
+    });
+    return changed ? Object.fromEntries(entries) : object;
+  }
+
+  /** Like InMemoryCache's EntityStore#coerceValue. */
+  private _coerceValue(value: unknown, coerce: Coerce, scalarType: string | undefined, coordinate: string): unknown {
+    if (value == null) return value;
+    if (scalarType) return this.coerce(value, coerce, scalarType, coordinate);
+    if (Array.isArray(value)) {
+      let changed = false;
+      const items = value.map(item => {
+        const newItem = this._coerceValue(item, coerce, undefined, coordinate);
+        changed ||= newItem !== item;
+        return newItem;
+      });
+      return changed ? items : value;
+    }
+    if (isPlainObject(value) && '__typename' in value) {
+      return this._coerceStoreObject(value, coerce, value.__typename);
+    }
+    return value;
   }
 
   /** The value to store for `typename.fieldName`: serialized, if it is a scalar field. */

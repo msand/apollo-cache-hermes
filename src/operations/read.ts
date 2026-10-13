@@ -1,6 +1,7 @@
 import { MissingFieldError } from '@apollo/client/cache';
 import type { Cache, FieldReadFunction, MissingTree, Reference, StoreValue } from '@apollo/client/cache';
 import { makeReference } from '@apollo/client/utilities/internal';
+import { invariant } from '@apollo/client/utilities/invariant';
 import type { StoreObject } from '@apollo/client/utilities';
 import { addTypenameToDocument } from '@apollo/client/utilities';
 import type { DocumentNode, SelectionSetNode } from 'graphql';
@@ -272,6 +273,8 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
   };
 
   const mergeIntoEntity = (entityId: NodeId, value: StoreObject, valueIsOlder = false) => {
+    // Custom scalar values are stored serialized.
+    value = context.scalars.serializeStoreObject(value);
     const nodeSnapshot = ensureNewSnapshot(entityId);
     const data = nodeSnapshot.data as {};
     nodeSnapshot.data = (valueIsOlder ? { ...value, ...data } : { ...data, ...value }) as JsonObject;
@@ -366,7 +369,11 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
 
       // This is an alias if we have a schemaName declared.
       const fieldName = node.schemaName ? node.schemaName : key;
-      const readFn = getReadFunction(context, typeName, fieldName);
+      // Like InMemoryCache, the scalar policies of fields with selection sets
+      // are ignored.
+      const readFn = node.children
+        ? context.policies.getReadFunction(typeName, fieldName)
+        : getReadFunction(context, typeName, fieldName);
 
       let nextContainerId = containerId;
       let nextPath = path;
@@ -445,6 +452,17 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
         if (reference && !getSnapshot(reference.id) && !isRootId(reference.id)) {
           markDangling(value, key, reference.id);
           continue;
+        }
+      }
+
+      if (node.children && !readFn && child != null && isDev()) {
+        const scalar = context.policies.getScalarTypeForField(typeName, fieldName);
+        if (scalar) {
+          invariant.warn(
+            "The field policy for '%s' is configured with the '%s' scalar, but the field is not a scalar field because it contains a selection set. The field value remains unchanged.",
+            `${typeName}.${fieldName}`,
+            scalar,
+          );
         }
       }
 
@@ -562,6 +580,10 @@ function _wrapValue<T extends JsonValue, TSerialized>(value: T | undefined, cont
     return newValue;
   }
   return value;
+}
+
+function isDev() {
+  return (globalThis as { __DEV__?: boolean }).__DEV__ !== false;
 }
 
 /**

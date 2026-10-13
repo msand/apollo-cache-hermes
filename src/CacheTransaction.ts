@@ -676,12 +676,45 @@ export class CacheTransaction<TSerialized> implements Queryable {
         const entityId = this._context.entityIdForValue(value);
         if (entityId && mergeIntoStore && !isReference(value) && typeof value !== 'string') {
           const nodeSnapshot = ensureNewSnapshot(entityId);
-          nodeSnapshot.data = { ...(nodeSnapshot.data as {}), ...value };
+          nodeSnapshot.data = { ...(nodeSnapshot.data as {}), ...this._context.scalars.serializeStoreObject(value) };
           modified = true;
         }
         return entityId ? makeRef(entityId) : undefined;
       },
     };
+
+    // Like InMemoryCache (which stores them parsed), modifiers get the values
+    // of custom scalar fields parsed, and the values they return are stored
+    // serialized.
+    const { scalars } = this._context;
+    const typename = entityTypename(this._context, id, node);
+    const valueForModifier = (key: string, d: any, k: string | null): [current: any, parsed: boolean] => {
+      const current = Array.isArray(d)
+        ? copyList(d)
+        : k?.includes('❖')
+          ? parameterizedFieldValue(k, d)
+          : typeof d === 'object'
+            ? { ...d }
+            : d;
+      if (isReference(current)) return [current, false];
+      const parsedValue = scalars.parseStoreValue(typename, key, d);
+      return parsedValue !== d ? [parsedValue, true] : [current, false];
+    };
+    const isModified = (
+      key: string,
+      value: unknown,
+      current: unknown,
+      d: unknown,
+      useRef: boolean | undefined,
+      parsed: boolean,
+    ) =>
+      parsed
+        ? !isEqual(scalars.serializeStoreValue(typename, key, value), d)
+        : value !== current || (!useRef && !isEqual(value, d));
+    const toStoredValue = (key: string, value: unknown) =>
+      isReference(value)
+        ? (getSnapshot(value.__ref)?.data ?? value)
+        : scalars.serializeStoreValue(typename, key, value);
 
     const fieldStorage = this._context.fieldStorage;
     Object.defineProperty(details, 'storage', {
@@ -732,13 +765,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
         for (const { d, k } of readFromSnapshot(node, key)) {
           const storeFieldName = k ?? key;
           const useRef = k?.includes('❖');
-          const copyOrCurrent = Array.isArray(d)
-            ? copyList(d)
-            : useRef
-              ? parameterizedFieldValue(k!, d)
-              : typeof d === 'object'
-                ? { ...d }
-                : d;
+          const [copyOrCurrent, parsed] = valueForModifier(key, d, k);
           details.fieldName = key;
           details.storeFieldName = modifierStoreFieldName(storeFieldName);
           const value = field(copyOrCurrent, details);
@@ -754,9 +781,9 @@ export class CacheTransaction<TSerialized> implements Queryable {
             dirty.add(key);
             dirty.add(storeFieldName);
             invalidated = true;
-          } else if (value !== copyOrCurrent || (!useRef && !isEqual(value, d))) {
+          } else if (isModified(key, value, copyOrCurrent, d, useRef, parsed)) {
             warnAboutModifiedValue(value);
-            payload[key] = (isReference(value) ? (getSnapshot(value.__ref)?.data ?? value) : value) as JsonValue;
+            payload[key] = toStoredValue(key, value) as JsonValue;
             modified = true;
           }
         }
@@ -780,13 +807,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
         for (const { d, k } of variants) {
           const storeFieldName = k ?? key;
           const useRef = k?.includes('❖');
-          const copyOrCurrent = Array.isArray(d)
-            ? copyList(d)
-            : useRef
-              ? parameterizedFieldValue(k!, d)
-              : typeof d === 'object'
-                ? { ...d }
-                : d;
+          const [copyOrCurrent, parsed] = valueForModifier(key, d, k);
           details.fieldName = key;
           details.storeFieldName = modifierStoreFieldName(storeFieldName);
           const value = field(copyOrCurrent, details);
@@ -802,10 +823,10 @@ export class CacheTransaction<TSerialized> implements Queryable {
             dirty.add(key);
             dirty.add(storeFieldName);
             invalidated = true;
-          } else if (value !== copyOrCurrent || (!useRef && !isEqual(value, d))) {
+          } else if (isModified(key, value, copyOrCurrent, d, useRef, parsed)) {
             warnAboutModifiedValue(value);
             // A reference to a missing entity is written as such (and dangles).
-            const nextValue = isReference(value) ? (getSnapshot(value.__ref)?.data ?? value) : value;
+            const nextValue = toStoredValue(key, value);
             if (nextValue !== undefined) {
               payload[key] = nextValue as JsonValue;
             }
