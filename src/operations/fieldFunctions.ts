@@ -320,7 +320,8 @@ export class FieldFunctions<TSerialized> {
 
   /**
    * Builds the options for a merge function call; like InMemoryCache, they
-   * include the write's extensions and the existing value.
+   * include the write's extensions, the existing value and (for the chunks of
+   * `@stream` fields) the chunk's streamFieldInfo.
    */
   mergeOptions(
     fieldName: string,
@@ -330,11 +331,14 @@ export class FieldFunctions<TSerialized> {
     extensions: Record<string, unknown> | undefined,
     existingData: unknown,
     field?: FieldNode | null,
+    streamFieldInfo?: FieldMergeFunctionOptions['streamFieldInfo'],
   ): FieldMergeFunctionOptions {
-    return {
+    const options: FieldMergeFunctionOptions = {
       ...this.options(undefined, fieldName, storeFieldName, args, storageKeys, field),
       extensions,
       existingData,
     };
+    if (streamFieldInfo) options.streamFieldInfo = streamFieldInfo;
+    return options;
   }
 }

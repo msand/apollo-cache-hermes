@@ -19,6 +19,8 @@ import * as util from '../util';
 import type { FragmentMap } from '../util';
 
 import { FieldFunctions, withReferences } from './fieldFunctions';
+import type { StreamInfoRef } from './streamFields';
+import { defaultStreamFieldMergeFn, runStreamAwareMerge, streamInfoOf, usesDefaultStreamMerge } from './streamFields';
 
 // Ensure typescript doesn't emit (0, fn)(...args)
 const isEqual = equality.equal;
@@ -192,6 +194,8 @@ export class SnapshotEditor<TSerialized> {
   private _variables: JsonObject | undefined;
   /** The extensions of the write being merged, for merge functions. */
   private _extensions: Record<string, unknown> | undefined;
+  /** Apollo's `@stream` info for the write being merged (incremental results). */
+  private _streamInfo: StreamInfoRef | undefined;
   /** Whether the write being merged overwrites existing values (for merge functions). */
   private _overwrite = false;
   private _fieldFunctionsInstance: FieldFunctions<TSerialized> | undefined;
@@ -220,6 +224,7 @@ export class SnapshotEditor<TSerialized> {
     // Apollo's internal @stream info (kept under a symbol key).
     const extensions = query.extensions && Object.entries(query.extensions);
     this._extensions = extensions?.length ? Object.fromEntries(extensions) : undefined;
+    this._streamInfo = streamInfoOf(query.extensions);
     this._overwrite = !!query.overwrite;
     this._fieldFunctionsInstance = undefined;
     this._fragmentMap = parsed.info.fragmentMap;
@@ -602,41 +607,45 @@ export class SnapshotEditor<TSerialized> {
       writtenFields?.add(schemaName);
 
       // Like InMemoryCache, fall back to the merge policy of the child's type.
-      const merge = this._context.policies.getMergeFunction(
+      let merge = this._context.policies.getMergeFunction(
         typename,
         schemaName,
         node.children && isObject(fieldValue) ? fieldValue.__typename : undefined,
       );
+      // Like InMemoryCache, the chunks of `@stream` lists without a merge
+      // policy are merged into the cached list by its default stream merge.
+      if (merge === undefined && usesDefaultStreamMerge(this._streamInfo, field, fieldValue, this._variables)) {
+        merge = defaultStreamFieldMergeFn;
+      }
       let fieldMode: MergeMode | undefined = merge === true ? 'merge' : merge === false ? 'replace' : undefined;
       if (typeof merge === 'function') {
         // Like InMemoryCache, merge functions see References in place of
         // entities (which are written first), and their result replaces the
         // existing value.
         const existing = withReferences(this._getNodeSnapshot(containerIdForField), fieldPath, previousFieldValue);
+        // The field-name path (with list indices) from the root of the write,
+        // which locates the field's `@stream` chunk info (like InMemoryCache's).
+        const writePath = [...prefixPath, ...path, schemaName];
         const incoming = node.children
-          ? this._normalizeIncoming(
-              referenceEdits,
-              warnings,
-              fieldPrefixPath,
-              node.children,
-              fieldValue,
-              prune,
-              node.propMap,
-            )
+          ? this._normalizeIncoming(referenceEdits, warnings, writePath, node.children, fieldValue, prune, node.propMap)
           : fieldValue;
         const storageKeys = [containerId, ...path, storeFieldName];
-        fieldValue = merge(
-          // Like InMemoryCache, overwriting writes call merge functions without existing data.
-          this._overwrite ? undefined : existing,
-          incoming,
-          this._fieldFunctions().mergeOptions(
-            schemaName,
-            storeFieldName,
-            args,
-            storageKeys,
-            this._extensions,
-            existing,
-            field,
+        const fieldMerge = merge;
+        fieldValue = runStreamAwareMerge(this._streamInfo, writePath, incoming, streamFieldInfo =>
+          fieldMerge(
+            // Like InMemoryCache, overwriting writes call merge functions without existing data.
+            this._overwrite ? undefined : existing,
+            incoming,
+            this._fieldFunctions().mergeOptions(
+              schemaName,
+              storeFieldName,
+              args,
+              storageKeys,
+              this._extensions,
+              existing,
+              field,
+              streamFieldInfo,
+            ),
           ),
         ) as JsonValue | undefined;
         fieldMode = 'replace';
@@ -715,38 +724,40 @@ export class SnapshotEditor<TSerialized> {
   /**
    * Like InMemoryCache, writes the entities within an incoming field value
    * (for a merge function), returning the value with References in their place.
+   * `path` is the value's field-name path (with list indices) from the root of
+   * the write.
    */
   private _normalizeIncoming(
     referenceEdits: ReferenceEdit[],
     warnings: string[],
-    prefixPath: PathPart[],
+    path: PathPart[],
     parsed: ParsedQuery,
     value: JsonValue | undefined,
     prune: boolean,
     propMap: { [prop: string]: string } | undefined,
   ): any {
     if (Array.isArray(value)) {
-      return value.map(item =>
-        this._normalizeIncoming(referenceEdits, warnings, prefixPath, parsed, item, prune, propMap),
+      return value.map((item, i) =>
+        this._normalizeIncoming(referenceEdits, warnings, [...path, i], parsed, item, prune, propMap),
       );
     }
     if (!isObject(value) || isReference(value)) return value;
 
     const entityId = this._identifyPayload(value, parsed, propMap);
     if (entityId) {
-      this._mergeSubgraph(referenceEdits, warnings, entityId, prefixPath, [], parsed, value, prune, propMap);
+      this._mergeSubgraph(referenceEdits, warnings, entityId, path, [], parsed, value, prune, propMap);
       return makeRef(entityId);
     }
 
     let normalized = value;
     for (const payloadName in parsed) {
-      const { children, propMap: childPropMap } = parsed[payloadName];
+      const { children, propMap: childPropMap, schemaName } = parsed[payloadName];
       const child = value[payloadName];
       if (!children || child === undefined) continue;
       const normalizedChild = this._normalizeIncoming(
         referenceEdits,
         warnings,
-        prefixPath,
+        [...path, schemaName ?? payloadName],
         children,
         child,
         prune,
