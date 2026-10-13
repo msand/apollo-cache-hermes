@@ -32,6 +32,22 @@ const TOP_SIZE = 32;
  *   new base);
  * - then merged into a new base.
  */
+/** The nodes of a snapshot (see GraphSnapshot). */
+interface SnapshotState {
+  /** The nodes (shared with other snapshots: never modified). */
+  readonly base: NodeSnapshotMap;
+  /** The number of nodes in base. */
+  readonly baseSize: number;
+  /** Earlier changes on top of base. */
+  readonly mid: NodeChanges | undefined;
+  /** The latest changes, on top of mid. */
+  readonly top: NodeChanges | undefined;
+  /** The nodes added or changed by this snapshot (those that freeze() freezes); all of them if undefined. */
+  fresh: NodeSnapshot[] | undefined;
+  /** All of the nodes (built on demand when there are changes). */
+  flat: NodeSnapshotMap | undefined;
+}
+
 export class GraphSnapshot {
   /**
    * Returns a snapshot of `parent` with `changes` (new snapshots by id, or
@@ -40,7 +56,8 @@ export class GraphSnapshot {
    * @internal
    */
   static withChanges(parent: GraphSnapshot, changes: { [Key in NodeId]: NodeSnapshot | undefined }): GraphSnapshot {
-    let top: NodeChanges | undefined = parent._top ? new Map(parent._top) : new Map();
+    const state = parent._state;
+    let top: NodeChanges | undefined = state.top ? new Map(state.top) : new Map();
     const fresh: NodeSnapshot[] = [];
     for (const id in changes) {
       const node = changes[id];
@@ -48,7 +65,7 @@ export class GraphSnapshot {
       if (node) fresh.push(node);
     }
 
-    let { _base: base, _mid: mid, _baseSize: baseSize } = parent;
+    let { base, mid, baseSize } = state;
     if (top.size > TOP_SIZE) {
       const merged = mergeChanges(mid, top);
       if (merged.size * merged.size > 2 * baseSize * top.size) {
@@ -61,34 +78,19 @@ export class GraphSnapshot {
       top = undefined;
     }
     const snapshot = new GraphSnapshot(base, mid, top, baseSize);
-    snapshot._fresh = fresh;
+    snapshot._state.fresh = fresh;
     return snapshot;
   }
 
   /** Cached results for queries. */
   public readonly readCache = new Map<OperationInstance<GraphSnapshot>, QueryResult | QueryResultWithNodeIds>();
 
-  // (The fields below are not enumerable, and _values is an enumerable getter,
-  // so that snapshots holding the same nodes are deeply equal however they
-  // share them.)
-
-  /** The nodes (shared with other snapshots: never modified). */
-  declare private readonly _base: NodeSnapshotMap;
-
-  /** Earlier changes on top of _base. */
-  declare private readonly _mid: NodeChanges | undefined;
-
-  /** The latest changes, on top of _mid. */
-  declare private readonly _top: NodeChanges | undefined;
-
-  /** The number of nodes in _base. */
-  declare private readonly _baseSize: number;
-
-  /** The nodes added or changed by this snapshot (those that freeze() freezes); all of them if undefined. */
-  declare private _fresh: NodeSnapshot[] | undefined;
-
-  /** All of the nodes (built on demand when there are changes). */
-  declare private _flat: NodeSnapshotMap | undefined;
+  /**
+   * The nodes. (Not enumerable, while _values is an enumerable getter, so
+   * that snapshots holding the same nodes are deeply equal however they share
+   * them.)
+   */
+  declare private readonly _state: SnapshotState;
 
   /**
    * All of the nodes, by id (an object with a null prototype; do not modify).
@@ -107,15 +109,9 @@ export class GraphSnapshot {
     top?: NodeChanges,
     baseSize: number = countKeys(base),
   ) {
-    Object.defineProperties(this, {
-      _base: { value: base },
-      _mid: { value: mid },
-      _top: { value: top },
-      _baseSize: { value: baseSize },
-      _fresh: { value: undefined, writable: true },
-      _flat: { value: undefined, writable: true },
-      _values: { get: allValues, enumerable: true },
-    });
+    const state: SnapshotState = { base, baseSize, mid, top, fresh: undefined, flat: undefined };
+    Object.defineProperty(this, '_state', { value: state });
+    Object.defineProperty(this, '_values', { get: allValues, enumerable: true });
   }
 
   /**
@@ -124,11 +120,10 @@ export class GraphSnapshot {
    * @internal
    */
   _allValues(): NodeSnapshotMap {
-    if (!this._mid && !this._top) return this._base;
-    if (!this._flat) {
-      this._flat = flatten(this._base, this._top ? mergeChanges(this._mid, this._top) : this._mid!);
-    }
-    return this._flat;
+    const state = this._state;
+    if (!state.mid && !state.top) return state.base;
+    state.flat ??= flatten(state.base, state.top ? mergeChanges(state.mid, state.top) : state.mid!);
+    return state.flat;
   }
 
   /**
@@ -155,10 +150,11 @@ export class GraphSnapshot {
     // (Like the keys of an object, ids that are not strings, e.g. numbers that
     // resolver redirects return, are converted to strings.)
     if (typeof id !== 'string') id = String(id);
+    const { top, mid, base } = this._state;
     let node;
-    if (this._top !== undefined && (node = this._top.get(id)) !== undefined) return node ?? undefined;
-    if (this._mid !== undefined && (node = this._mid.get(id)) !== undefined) return node ?? undefined;
-    return this._base[id];
+    if (top !== undefined && (node = top.get(id)) !== undefined) return node ?? undefined;
+    if (mid !== undefined && (node = mid.get(id)) !== undefined) return node ?? undefined;
+    return base[id];
   }
 
   /**
@@ -176,15 +172,16 @@ export class GraphSnapshot {
    * @internal
    */
   freeze(): void {
+    const state = this._state;
     // Node snapshots are class instances, so freeze them and their (plain) data
     // explicitly. (Nodes this snapshot shares with the one it was made from
     // were frozen with that one.)
-    for (const node of this._fresh ?? Object.values(this._base)) {
+    for (const node of state.fresh ?? Object.values(state.base)) {
       if (!node || Object.isFrozen(node)) continue;
       Object.freeze(node);
       for (const value of Object.values(node)) deepFreeze(value);
     }
-    if (!this._mid && !this._top) Object.freeze(this._base);
+    if (!state.mid && !state.top) Object.freeze(state.base);
   }
 }
 

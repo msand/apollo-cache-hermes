@@ -22,6 +22,8 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hermes-bench-prof-'));
 const child = spawnSync(
   process.execPath,
   [
+    // E.g. PROFILE_NODE_FLAGS=--no-turbo-inlining, to attribute time to functions that are usually inlined.
+    ...(process.env.PROFILE_NODE_FLAGS?.split(' ').filter(Boolean) ?? []),
     '--cpu-prof',
     '--cpu-prof-dir',
     dir,
