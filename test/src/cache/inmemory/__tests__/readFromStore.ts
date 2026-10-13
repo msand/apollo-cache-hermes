@@ -18,10 +18,7 @@ import { defaultNormalizedCacheFactory, HermesReader, readQueryFromStore, withEr
 describe('reading from the store', () => {
   const reader = new HermesReader();
 
-  // Hermes: a field selected under several type conditions has its selection
-  // sets merged, so innerArray's otherField (only selected `... on DummyQuery`)
-  // is required on the untyped innerArray items.
-  it.skip('runs a nested query with proper fragment fields in arrays', () => {
+  it('runs a nested query with proper fragment fields in arrays', () => {
     withError(() => {
       const store = defaultNormalizedCacheFactory({
         ROOT_QUERY: {
