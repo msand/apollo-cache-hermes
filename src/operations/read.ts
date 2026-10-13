@@ -10,7 +10,7 @@ import type { CacheContext, QueryInfo } from '../context';
 import { storeFieldNameOf } from '../context/storeFieldNames';
 import type { StoreKey } from '../context/storeFieldNames';
 import type { GraphSnapshot, NodeSnapshotMap } from '../GraphSnapshot';
-import { fieldNodeOf } from '../ParsedQueryNode';
+import { childrenForType, fieldNodeOf } from '../ParsedQueryNode';
 import type { ParsedQuery, ParsedQueryNode } from '../ParsedQueryNode';
 import type { JsonObject, JsonValue, PathPart } from '../primitive';
 import type { NodeId, OperationInstance, RawOperation } from '../schema';
@@ -491,10 +491,12 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
       if (hasPolicy || isRef || _shouldWalkChildren(child, node)) {
         child = _recursivelyWrapValue(child, context);
         const allChildValues = _flattenGraphQLObject(child, nextPath);
+        // Only the child selections of fragments that match the type apply.
+        const children = childrenForType(context, node, typeName) ?? {};
 
         for (let i = 0; i < allChildValues.length; i++) {
           const item = allChildValues[i];
-          queue.push(new OverlayWalkNode(item.value, nextContainerId, node.children ?? {}, item.path));
+          queue.push(new OverlayWalkNode(item.value, nextContainerId, children, item.path));
         }
       }
 
@@ -826,13 +828,15 @@ export function _visitSelection<TSerialized>(
         addMissing([...resultPath, key], message);
         continue;
       }
-      if (!node.children) continue;
+      // Only the child selections of fragments that match the type apply.
+      const children = childrenForType(context, node, typeName);
+      if (!children) continue;
 
       if (storeKey !== undefined) {
         const fieldId = nodeIdForStoreKey(containerId, fieldPath, storeKey);
-        visitValue(fieldValue, node.children, fieldId, [], [...resultPath, key]);
+        visitValue(fieldValue, children, fieldId, [], [...resultPath, key]);
       } else {
-        visitValue(fieldValue, node.children, containerId, fieldPath, [...resultPath, key]);
+        visitValue(fieldValue, children, containerId, fieldPath, [...resultPath, key]);
       }
     }
   }

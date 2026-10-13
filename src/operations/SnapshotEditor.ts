@@ -7,7 +7,7 @@ import type { CacheContext } from '../context';
 import { argsStoreKey, storeFieldNameOf } from '../context/storeFieldNames';
 import type { GraphSnapshot as GraphSnapshotType } from '../GraphSnapshot';
 import type { NodeReference, EntitySnapshot as EntitySnapshotType, NodeSnapshot } from '../nodes';
-import { fieldNodeOf, selectionSetOf } from '../ParsedQueryNode';
+import { childrenForType, fieldNodeOf, selectionSetOf } from '../ParsedQueryNode';
 import type { ParsedQuery } from '../ParsedQueryNode';
 import type { JsonArray, JsonObject, JsonScalar, JsonValue, NestedObject, Nil, PathPart } from '../primitive';
 import type { NodeId, OperationInstance, RawOperation } from '../schema';
@@ -546,6 +546,8 @@ export class SnapshotEditor<TSerialized> {
       }
 
       let containerIdForField = containerId;
+      // Only the child selections of fragments that match the type apply.
+      const children = node.variants ? childrenForType(this._context, node, fragmentTypename) : node.children;
 
       // For static fields, we append the current cacheKey to create a new path
       // to the field.
@@ -642,8 +644,8 @@ export class SnapshotEditor<TSerialized> {
         // The field-name path (with list indices) from the root of the write,
         // which locates the field's `@stream` chunk info (like InMemoryCache's).
         const writePath = [...prefixPath, ...path, schemaName];
-        const incoming = node.children
-          ? this._normalizeIncoming(referenceEdits, warnings, writePath, node.children, fieldValue, prune, node.propMap)
+        const incoming = children
+          ? this._normalizeIncoming(referenceEdits, warnings, writePath, children, fieldValue, prune, node.propMap)
           : fieldValue;
         const storageKeys = [containerId, ...path, storeFieldName];
         const fieldMerge = merge;
@@ -695,7 +697,7 @@ export class SnapshotEditor<TSerialized> {
           containerIdForField,
           fieldPrefixPath,
           fieldPath,
-          node.children,
+          children ?? {},
           fieldValue,
           prune,
           node.propMap,
