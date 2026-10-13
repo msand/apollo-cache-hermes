@@ -14,6 +14,8 @@ export const config: Config = {
   // Only crawl the project sources, not nested checkouts such as .claude/worktrees.
   roots: ['<rootDir>/src', '<rootDir>/test'],
   setupFilesAfterEnv: ['./test/env/unit.js'],
+  // Loads @apollo/client from its ES modules; see test/env/resolver.ts.
+  resolver: '<rootDir>/test/env/resolver.js',
   snapshotResolver: '<rootDir>/test/env/snapshotResolver.js',
   // The vendored Apollo Client snapshots use the pre-Jest 29 format.
   snapshotFormat: { escapeString: true, printBasicPrototype: true },

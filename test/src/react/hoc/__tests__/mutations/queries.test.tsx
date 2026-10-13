@@ -4,8 +4,8 @@ import gql from 'graphql-tag';
 import { DocumentNode } from 'graphql';
 import { ApolloClient, ApolloProvider, ApolloCache, MutationUpdaterFunction } from '@apollo/client';
 import { graphql, ChildProps } from '@apollo/client/react/hoc';
+import { itAsync, mockSingleLink, createMockClient } from '@apollo/client/testing';
 
-import { itAsync, createMockClient, mockSingleLink } from '../../../../testing';
 import { Hermes } from '../../../../../../src';
 
 describe('graphql(mutation) query integration', () => {
@@ -55,6 +55,7 @@ describe('graphql(mutation) query integration', () => {
           });
 
           const dataInStore = client.cache.extract(true);
+          // Hermes: extract() returns serialized nodes; the entity's fields are under `data`.
           expect(dataInStore['Todo:99']?.data).toEqual(optimisticResponse.createTodo);
         }
 

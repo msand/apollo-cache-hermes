@@ -2,12 +2,20 @@ import { from, ObservableInput } from 'rxjs';
 import { take, toArray, map } from 'rxjs/operators';
 import { assign, cloneDeep } from 'lodash';
 import gql from 'graphql-tag';
-import { ApolloClient, ApolloLink, ApolloCache, MutationQueryReducersMap } from '@apollo/client';
+import {
+  ApolloClient,
+  ApolloLink,
+  ApolloCache,
+  MutationQueryReducersMap,
+  TypedDocumentNode,
+  ApolloError,
+} from '@apollo/client/core';
+import { QueryManager } from '@apollo/client/core/QueryManager';
+import { Cache } from '@apollo/client/cache';
+import { Observable, addTypenameToDocument } from '@apollo/client/utilities';
+import { MockedResponse, mockSingleLink } from '@apollo/client/testing';
+import { ObservableStream } from '@apollo/client/testing/internal';
 
-import { QueryManager } from '../core/QueryManager';
-import { Cache } from '../cache';
-import { Observable, ObservableSubscription as Subscription, addTypenameToDocument } from '../utilities';
-import { itAsync, mockSingleLink } from '../testing';
 import { Hermes } from '../../../src';
 
 describe('optimistic mutation results', () => {
@@ -94,7 +102,7 @@ describe('optimistic mutation results', () => {
     },
   };
 
-  async function setup(reject: (reason: any) => any, ...mockedResponses: any[]) {
+  async function setup(...mockedResponses: MockedResponse[]) {
     const link = mockSingleLink(
       {
         request: { query },
@@ -196,40 +204,36 @@ describe('optimistic mutation results', () => {
         },
       };
 
-      itAsync('handles a single error for a single mutation', async (resolve, reject) => {
-        expect.assertions(6);
-        const client = await setup(reject, {
+      it('handles a single error for a single mutation', async () => {
+        expect.assertions(5);
+        const client = await setup({
           request: { query: mutation },
           error: new Error('forbidden (test error)'),
         });
-        try {
-          const promise = client.mutate({
-            mutation,
-            optimisticResponse,
-            updateQueries,
-          });
+        const promise = client.mutate({
+          mutation,
+          optimisticResponse,
+          updateQueries,
+        });
 
+        {
           const dataInStore = (client.cache as Hermes).extract(true);
           expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(4);
           expect((dataInStore['Todo99'] as any).data.text).toBe('Optimistically generated');
-          await promise;
-        } catch (err) {
-          expect(err).toBeInstanceOf(Error);
-          expect((err as Error).message).toBe('forbidden (test error)');
+        }
 
+        await expect(promise).rejects.toThrow(new ApolloError({ networkError: new Error('forbidden (test error)') }));
+
+        {
           const dataInStore = (client.cache as Hermes).extract(true);
           expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(3);
           expect(dataInStore).not.toHaveProperty('Todo99');
         }
-
-        resolve();
       });
 
-      itAsync('handles errors produced by one mutation in a series', async (resolve, reject) => {
-        expect.assertions(10);
-        let subscriptionHandle: Subscription;
+      it('handles errors produced by one mutation in a series', async () => {
+        expect.assertions(11);
         const client = await setup(
-          reject,
           {
             request: { query: mutation },
             error: new Error('forbidden (test error)'),
@@ -240,15 +244,9 @@ describe('optimistic mutation results', () => {
           },
         );
 
-        // we have to actually subscribe to the query to be able to update it
-        await new Promise(resolve => {
-          const handle = client.watchQuery({ query });
-          subscriptionHandle = handle.subscribe({
-            next(res: any) {
-              resolve(res);
-            },
-          });
-        });
+        const stream = new ObservableStream(client.watchQuery({ query }));
+
+        await expect(stream).toEmitNext();
 
         const promise = client
           .mutate({
@@ -276,7 +274,8 @@ describe('optimistic mutation results', () => {
 
         await Promise.all([promise, promise2]);
 
-        subscriptionHandle!.unsubscribe();
+        stream.unsubscribe();
+
         {
           const dataInStore = (client.cache as Hermes).extract(true);
           expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(4);
@@ -290,12 +289,11 @@ describe('optimistic mutation results', () => {
             id: 'Todo99',
             path: ['todos', expect.any(Number)],
           });
-          resolve();
         }
       });
 
-      itAsync('can run 2 mutations concurrently and handles all intermediate states well', async (resolve, reject) => {
-        expect.assertions(34);
+      it('can run 2 mutations concurrently and handles all intermediate states well', async () => {
+        expect.assertions(35);
         function checkBothMutationsAreApplied(expectedText1: any, expectedText2: any) {
           const dataInStore = (client.cache as Hermes).extract(true);
           expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(5);
@@ -313,9 +311,7 @@ describe('optimistic mutation results', () => {
           expect((dataInStore['Todo99'] as any).data.text).toBe(expectedText1);
           expect((dataInStore['Todo66'] as any).data.text).toBe(expectedText2);
         }
-        let subscriptionHandle: Subscription;
         const client = await setup(
-          reject,
           {
             request: { query: mutation },
             result: mutationResult,
@@ -327,15 +323,9 @@ describe('optimistic mutation results', () => {
             delay: 100,
           },
         );
-        // we have to actually subscribe to the query to be able to update it
-        await new Promise(resolve => {
-          const handle = client.watchQuery({ query });
-          subscriptionHandle = handle.subscribe({
-            next(res: any) {
-              resolve(res);
-            },
-          });
-        });
+        const stream = new ObservableStream(client.watchQuery({ query }));
+
+        await expect(stream).toEmitNext();
 
         const queryManager: QueryManager<any> = (client as any).queryManager;
 
@@ -348,6 +338,7 @@ describe('optimistic mutation results', () => {
           .then((res: any) => {
             checkBothMutationsAreApplied('This one was created with a mutation.', 'Optimistically generated 2');
 
+            // @ts-ignore
             const latestState = queryManager.mutationStore!;
             expect(latestState[1].loading).toBe(false);
             expect(latestState[2].loading).toBe(true);
@@ -364,6 +355,7 @@ describe('optimistic mutation results', () => {
           .then((res: any) => {
             checkBothMutationsAreApplied('This one was created with a mutation.', 'Second mutation.');
 
+            // @ts-ignore
             const latestState = queryManager.mutationStore!;
             expect(latestState[1].loading).toBe(false);
             expect(latestState[2].loading).toBe(false);
@@ -371,6 +363,7 @@ describe('optimistic mutation results', () => {
             return res;
           });
 
+        // @ts-ignore
         const mutationsState = queryManager.mutationStore!;
         expect(mutationsState[1].loading).toBe(true);
         expect(mutationsState[2].loading).toBe(true);
@@ -379,10 +372,8 @@ describe('optimistic mutation results', () => {
 
         await Promise.all([promise, promise2]);
 
-        subscriptionHandle!.unsubscribe();
+        stream.unsubscribe();
         checkBothMutationsAreApplied('This one was created with a mutation.', 'Second mutation.');
-
-        resolve();
       });
     });
 
@@ -418,43 +409,38 @@ describe('optimistic mutation results', () => {
         });
       };
 
-      itAsync('handles a single error for a single mutation', async (resolve, reject) => {
-        expect.assertions(6);
+      it('handles a single error for a single mutation', async () => {
+        expect.assertions(5);
 
-        const client = await setup(reject, {
+        const client = await setup({
           request: { query: mutation },
           error: new Error('forbidden (test error)'),
         });
 
-        try {
-          const promise = client.mutate({
-            mutation,
-            optimisticResponse,
-            update,
-          });
+        const promise = client.mutate({
+          mutation,
+          optimisticResponse,
+          update,
+        });
 
+        {
           const dataInStore = (client.cache as Hermes).extract(true);
           expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(4);
           expect((dataInStore['Todo99'] as any).data.text).toBe('Optimistically generated');
+        }
 
-          await promise;
-        } catch (err) {
-          expect(err).toBeInstanceOf(Error);
-          expect((err as Error).message).toBe('forbidden (test error)');
+        await expect(promise).rejects.toThrow(new ApolloError({ networkError: new Error('forbidden (test error)') }));
 
+        {
           const dataInStore = (client.cache as Hermes).extract(true);
           expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(3);
           expect(dataInStore).not.toHaveProperty('Todo99');
         }
-
-        resolve();
       });
 
-      itAsync('handles errors produced by one mutation in a series', async (resolve, reject) => {
-        expect.assertions(10);
-        let subscriptionHandle: Subscription;
+      it('handles errors produced by one mutation in a series', async () => {
+        expect.assertions(11);
         const client = await setup(
-          reject,
           {
             request: { query: mutation },
             error: new Error('forbidden (test error)'),
@@ -465,15 +451,9 @@ describe('optimistic mutation results', () => {
           },
         );
 
-        // we have to actually subscribe to the query to be able to update it
-        await new Promise(resolve => {
-          const handle = client.watchQuery({ query });
-          subscriptionHandle = handle.subscribe({
-            next(res: any) {
-              resolve(res);
-            },
-          });
-        });
+        const stream = new ObservableStream(client.watchQuery({ query }));
+
+        await expect(stream).toEmitNext();
 
         const promise = client
           .mutate({
@@ -501,7 +481,7 @@ describe('optimistic mutation results', () => {
 
         await Promise.all([promise, promise2]);
 
-        subscriptionHandle!.unsubscribe();
+        stream.unsubscribe();
         {
           const dataInStore = (client.cache as Hermes).extract(true);
           expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(4);
@@ -515,12 +495,11 @@ describe('optimistic mutation results', () => {
             id: 'Todo99',
             path: ['todos', expect.any(Number)],
           });
-          resolve();
         }
       });
 
-      itAsync('can run 2 mutations concurrently and handles all intermediate states well', async (resolve, reject) => {
-        expect.assertions(34);
+      it('can run 2 mutations concurrently and handles all intermediate states well', async () => {
+        expect.assertions(35);
         function checkBothMutationsAreApplied(expectedText1: any, expectedText2: any) {
           const dataInStore = (client.cache as Hermes).extract(true);
           expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(5);
@@ -537,10 +516,8 @@ describe('optimistic mutation results', () => {
           expect((dataInStore['Todo99'] as any).data.text).toBe(expectedText1);
           expect((dataInStore['Todo66'] as any).data.text).toBe(expectedText2);
         }
-        let subscriptionHandle: Subscription;
 
         const client = await setup(
-          reject,
           {
             request: { query: mutation },
             result: mutationResult,
@@ -552,16 +529,9 @@ describe('optimistic mutation results', () => {
             delay: 100,
           },
         );
+        const stream = new ObservableStream(client.watchQuery({ query }));
 
-        // we have to actually subscribe to the query to be able to update it
-        await new Promise(resolve => {
-          const handle = client.watchQuery({ query });
-          subscriptionHandle = handle.subscribe({
-            next(res: any) {
-              resolve(res);
-            },
-          });
-        });
+        await expect(stream).toEmitNext();
 
         const promise = client
           .mutate({
@@ -606,10 +576,8 @@ describe('optimistic mutation results', () => {
 
         await Promise.all([promise, promise2]);
 
-        subscriptionHandle!.unsubscribe();
+        stream.unsubscribe();
         checkBothMutationsAreApplied('This one was created with a mutation.', 'Second mutation.');
-
-        resolve();
       });
     });
   });
@@ -680,38 +648,33 @@ describe('optimistic mutation results', () => {
       }
     `;
 
-    itAsync(
-      'client.readQuery should read the optimistic response of a mutation ' +
-        'only when update function is called optimistically',
-      (resolve, reject) => {
-        return setup(reject, {
-          request: { query: todoListMutation },
-          result: todoListMutationResult,
-        })
-          .then(client => {
-            let updateCount = 0;
-            return client.mutate({
-              mutation: todoListMutation,
-              optimisticResponse: todoListOptimisticResponse,
-              update: (proxy: any, mResult: any) => {
-                ++updateCount;
-                const data = proxy.readQuery({ query: todoListQuery });
-                const readText = data.todoList.todos[0].text;
-                if (updateCount === 1) {
-                  const optimisticText = todoListOptimisticResponse.createTodo.todos[0].text;
-                  expect(readText).toEqual(optimisticText);
-                } else if (updateCount === 2) {
-                  const incomingText = mResult.data.createTodo.todos[0].text;
-                  expect(readText).toEqual(incomingText);
-                } else {
-                  reject('too many update calls');
-                }
-              },
-            });
-          })
-          .then(resolve, reject);
-      },
-    );
+    it('client.readQuery should read the optimistic response of a mutation only when update function is called optimistically', async () => {
+      expect.assertions(2);
+      const client = await setup({
+        request: { query: todoListMutation },
+        result: todoListMutationResult,
+      });
+
+      let updateCount = 0;
+      await client.mutate({
+        mutation: todoListMutation,
+        optimisticResponse: todoListOptimisticResponse,
+        update: (proxy: any, mResult: any) => {
+          ++updateCount;
+          const data = proxy.readQuery({ query: todoListQuery });
+          const readText = data.todoList.todos[0].text;
+          if (updateCount === 1) {
+            const optimisticText = todoListOptimisticResponse.createTodo.todos[0].text;
+            expect(readText).toEqual(optimisticText);
+          } else if (updateCount === 2) {
+            const incomingText = mResult.data.createTodo.todos[0].text;
+            expect(readText).toEqual(incomingText);
+          } else {
+            throw new Error('too many update calls');
+          }
+        },
+      });
+    });
 
     const todoListFragment = gql`
       fragment todoList on TodoList {
@@ -724,73 +687,61 @@ describe('optimistic mutation results', () => {
       }
     `;
 
-    itAsync(
-      'should read the optimistic response of a mutation when making an ' +
-        'ApolloClient.readFragment() call, if the `optimistic` param is set ' +
-        'to true',
-      (resolve, reject) => {
-        return setup(reject, {
-          request: { query: todoListMutation },
-          result: todoListMutationResult,
-        })
-          .then(client => {
-            let updateCount = 0;
-            return client.mutate({
-              mutation: todoListMutation,
-              optimisticResponse: todoListOptimisticResponse,
-              update: (proxy: any, mResult: any) => {
-                ++updateCount;
-                const data: any = proxy.readFragment(
-                  {
-                    id: 'TodoList5',
-                    fragment: todoListFragment,
-                  },
-                  true,
-                );
-                if (updateCount === 1) {
-                  expect(data.todos[0].text).toEqual(todoListOptimisticResponse.createTodo.todos[0].text);
-                } else if (updateCount === 2) {
-                  expect(data.todos[0].text).toEqual(mResult.data.createTodo.todos[0].text);
-                  expect(data.todos[0].text).toEqual(todoListMutationResult.data.createTodo.todos[0].text);
-                } else {
-                  reject('too many update calls');
-                }
-              },
-            });
-          })
-          .then(resolve, reject);
-      },
-    );
+    it('should read the optimistic response of a mutation when making an ApolloClient.readFragment() call, if the `optimistic` param is set to true', async () => {
+      expect.assertions(3);
+      const client = await setup({
+        request: { query: todoListMutation },
+        result: todoListMutationResult,
+      });
 
-    itAsync(
-      'should not read the optimistic response of a mutation when making ' +
-        'an ApolloClient.readFragment() call, if the `optimistic` param is ' +
-        'set to false',
-      (resolve, reject) => {
-        return setup(reject, {
-          request: { query: todoListMutation },
-          result: todoListMutationResult,
-        })
-          .then(client => {
-            return client.mutate({
-              mutation: todoListMutation,
-              optimisticResponse: todoListOptimisticResponse,
-              update: (proxy: any, mResult: any) => {
-                const incomingText = mResult.data.createTodo.todos[0].text;
-                const data: any = proxy.readFragment(
-                  {
-                    id: 'TodoList5',
-                    fragment: todoListFragment,
-                  },
-                  false,
-                );
-                expect(data.todos[0].text).toEqual(incomingText);
-              },
-            });
-          })
-          .then(resolve, reject);
-      },
-    );
+      let updateCount = 0;
+      await client.mutate({
+        mutation: todoListMutation,
+        optimisticResponse: todoListOptimisticResponse,
+        update: (proxy: any, mResult: any) => {
+          ++updateCount;
+          const data: any = proxy.readFragment(
+            {
+              id: 'TodoList5',
+              fragment: todoListFragment,
+            },
+            true,
+          );
+          if (updateCount === 1) {
+            expect(data.todos[0].text).toEqual(todoListOptimisticResponse.createTodo.todos[0].text);
+          } else if (updateCount === 2) {
+            expect(data.todos[0].text).toEqual(mResult.data.createTodo.todos[0].text);
+            expect(data.todos[0].text).toEqual(todoListMutationResult.data.createTodo.todos[0].text);
+          } else {
+            throw new Error('too many update calls');
+          }
+        },
+      });
+    });
+
+    it('should not read the optimistic response of a mutation when making an ApolloClient.readFragment() call, if the `optimistic` param is set to false', async () => {
+      expect.assertions(2);
+      const client = await setup({
+        request: { query: todoListMutation },
+        result: todoListMutationResult,
+      });
+
+      await client.mutate({
+        mutation: todoListMutation,
+        optimisticResponse: todoListOptimisticResponse,
+        update: (proxy: any, mResult: any) => {
+          const incomingText = mResult.data.createTodo.todos[0].text;
+          const data: any = proxy.readFragment(
+            {
+              id: 'TodoList5',
+              fragment: todoListFragment,
+            },
+            false,
+          );
+          expect(data.todos[0].text).toEqual(incomingText);
+        },
+      });
+    });
   });
 
   describe('passing a function to optimisticResponse', () => {
@@ -830,23 +781,15 @@ describe('optimistic mutation results', () => {
       },
     });
 
-    itAsync('will use a passed variable in optimisticResponse', async (resolve, reject) => {
-      expect.assertions(6);
-      let subscriptionHandle: Subscription;
-      const client = await setup(reject, {
+    it('will use a passed variable in optimisticResponse', async () => {
+      expect.assertions(7);
+      const client = await setup({
         request: { query: mutation, variables },
         result: mutationResult,
       });
+      const stream = new ObservableStream(client.watchQuery({ query }));
 
-      // we have to actually subscribe to the query to be able to update it
-      await new Promise(resolve => {
-        const handle = client.watchQuery({ query });
-        subscriptionHandle = handle.subscribe({
-          next(res: any) {
-            resolve(res);
-          },
-        });
-      });
+      await expect(stream).toEmitNext();
 
       const promise = client.mutate({
         mutation,
@@ -888,118 +831,118 @@ describe('optimistic mutation results', () => {
 
       const newResult: any = await client.query({ query });
 
-      subscriptionHandle!.unsubscribe();
+      stream.unsubscribe();
       // There should be one more todo item than before
       expect(newResult.data.todoList.todos.length).toEqual(4);
 
       // Since we used `prepend` it should be at the front
       expect(newResult.data.todoList.todos[0].text).toEqual('This one was created with a mutation.');
-
-      resolve();
     });
 
-    itAsync(
-      'will not update optimistically if optimisticResponse returns IGNORE sentinel object',
-      async (resolve, reject) => {
-        expect.assertions(5);
+    it('will not update optimistically if optimisticResponse returns IGNORE sentinel object', async () => {
+      expect.assertions(6);
 
-        let subscriptionHandle: Subscription;
+      const client = await setup({
+        request: { query: mutation, variables },
+        result: mutationResult,
+      });
+      const stream = new ObservableStream(client.watchQuery({ query }));
 
-        const client = await setup(reject, {
-          request: { query: mutation, variables },
-          result: mutationResult,
-        });
+      await expect(stream).toEmitNext();
 
-        // we have to actually subscribe to the query to be able to update it
-        await new Promise(resolve => {
-          const handle = client.watchQuery({ query });
-          subscriptionHandle = handle.subscribe({
-            next(res: any) {
-              resolve(res);
-            },
-          });
-        });
+      const id = 'TodoList5';
+      const isTodoList = (list: unknown): list is { todos: { text: string }[] } =>
+        typeof initialList === 'object' &&
+        initialList !== null &&
+        'todos' in initialList &&
+        Array.isArray(initialList.todos);
 
-        const id = 'TodoList5';
-        const isTodoList = (list: unknown): list is { todos: { text: string }[] } =>
-          typeof initialList === 'object' &&
-          initialList !== null &&
-          'todos' in initialList &&
-          Array.isArray(initialList.todos);
+      const initialList = client.cache.extract(true)[id]?.data;
 
-        const initialList = client.cache.extract(true)[id]?.data;
+      if (!isTodoList(initialList)) {
+        throw new Error('Expected TodoList');
+      }
 
-        if (!isTodoList(initialList)) {
-          reject(new Error('Expected TodoList'));
-          return;
-        }
+      expect(initialList.todos.length).toEqual(3);
 
-        expect(initialList.todos.length).toEqual(3);
+      const promise = client.mutate({
+        mutation,
+        variables,
+        optimisticResponse: (vars, { IGNORE }) => {
+          return IGNORE;
+        },
+        update: (proxy: any, mResult: any) => {
+          expect(mResult.data.createTodo.id).toBe('99');
 
-        const promise = client.mutate({
-          mutation,
-          variables,
-          optimisticResponse: (vars, { IGNORE }) => {
-            return IGNORE;
-          },
-          update: (proxy: any, mResult: any) => {
-            expect(mResult.data.createTodo.id).toBe('99');
-
-            const fragment = gql`
-              fragment todoList on TodoList {
-                todos {
-                  id
-                  text
-                  completed
-                  __typename
-                }
+          const fragment = gql`
+            fragment todoList on TodoList {
+              todos {
+                id
+                text
+                completed
+                __typename
               }
-            `;
+            }
+          `;
 
-            const data: any = proxy.readFragment({ id, fragment });
+          const data: any = proxy.readFragment({ id, fragment });
 
-            proxy.writeFragment({
-              data: {
-                ...data,
-                todos: [mResult.data.createTodo, ...data.todos],
-              },
-              id,
-              fragment,
-            });
-          },
-        });
+          proxy.writeFragment({
+            data: {
+              ...data,
+              todos: [mResult.data.createTodo, ...data.todos],
+            },
+            id,
+            fragment,
+          });
+        },
+      });
 
-        const list = client.cache.extract(true)[id]?.data;
+      const list = client.cache.extract(true)[id]?.data;
 
-        if (!isTodoList(list)) {
-          reject(new Error('Expected TodoList'));
-          return;
+      if (!isTodoList(list)) {
+        throw new Error('Expected TodoList');
+      }
+
+      expect(list.todos.length).toEqual(3);
+
+      await promise;
+
+      const result = await client.query({ query });
+
+      stream.unsubscribe();
+
+      const newList = result.data.todoList;
+
+      if (!isTodoList(newList)) {
+        throw new Error('Expected TodoList');
+      }
+
+      // There should be one more todo item than before
+      expect(newList.todos.length).toEqual(4);
+
+      // Since we used `prepend` it should be at the front
+      expect(newList.todos[0].text).toBe('This one was created with a mutation.');
+    });
+
+    it('allows IgnoreModifier as return value when inferring from a TypedDocumentNode mutation', () => {
+      const mutation: TypedDocumentNode<{ bar: string }> = gql`
+        mutation foo {
+          foo {
+            bar
+          }
         }
+      `;
 
-        expect(list.todos.length).toEqual(3);
+      const client = new ApolloClient({
+        cache: new Hermes(),
+      });
 
-        await promise;
-
-        const result = await client.query({ query });
-
-        subscriptionHandle!.unsubscribe();
-
-        const newList = result.data.todoList;
-
-        if (!isTodoList(newList)) {
-          reject(new Error('Expected TodoList'));
-          return;
-        }
-
-        // There should be one more todo item than before
-        expect(newList.todos.length).toEqual(4);
-
-        // Since we used `prepend` it should be at the front
-        expect(newList.todos[0].text).toBe('This one was created with a mutation.');
-
-        resolve();
-      },
-    );
+      client.mutate({
+        mutation,
+        optimisticResponse: (vars, { IGNORE }) => IGNORE,
+      });
+    });
   });
 
   describe('optimistic updates using `updateQueries`', () => {
@@ -1067,23 +1010,15 @@ describe('optimistic mutation results', () => {
       },
     };
 
-    itAsync('will insert a single itemAsync to the beginning', async (resolve, reject) => {
-      expect.assertions(7);
-      let subscriptionHandle: Subscription;
-      const client = await setup(reject, {
+    it('will insert a single itemAsync to the beginning', async () => {
+      expect.assertions(8);
+      const client = await setup({
         request: { query: mutation },
         result: mutationResult,
       });
+      const stream = new ObservableStream(client.watchQuery({ query }));
 
-      // we have to actually subscribe to the query to be able to update it
-      await new Promise(resolve => {
-        const handle = client.watchQuery({ query });
-        subscriptionHandle = handle.subscribe({
-          next(res: any) {
-            resolve(res);
-          },
-        });
-      });
+      await expect(stream).toEmitNext();
 
       const promise = client.mutate({
         mutation,
@@ -1111,21 +1046,17 @@ describe('optimistic mutation results', () => {
 
       const newResult: any = await client.query({ query });
 
-      subscriptionHandle!.unsubscribe();
+      stream.unsubscribe();
       // There should be one more todo item than before
       expect(newResult.data.todoList.todos.length).toEqual(4);
 
       // Since we used `prepend` it should be at the front
       expect(newResult.data.todoList.todos[0].text).toEqual('This one was created with a mutation.');
-
-      resolve();
     });
 
-    itAsync('two array insert like mutations', async (resolve, reject) => {
-      expect.assertions(9);
-      let subscriptionHandle: Subscription;
+    it('two array insert like mutations', async () => {
+      expect.assertions(10);
       const client = await setup(
-        reject,
         {
           request: { query: mutation },
           result: mutationResult,
@@ -1136,16 +1067,9 @@ describe('optimistic mutation results', () => {
           delay: 50,
         },
       );
+      const stream = new ObservableStream(client.watchQuery({ query }));
 
-      // we have to actually subscribe to the query to be able to update it
-      await new Promise(resolve => {
-        const handle = client.watchQuery({ query });
-        subscriptionHandle = handle.subscribe({
-          next(res: any) {
-            resolve(res);
-          },
-        });
-      });
+      await expect(stream).toEmitNext();
 
       const updateQueries = {
         todoList: (prev, options) => {
@@ -1189,22 +1113,18 @@ describe('optimistic mutation results', () => {
 
       const newResult: any = await client.query({ query });
 
-      subscriptionHandle!.unsubscribe();
+      stream.unsubscribe();
       // There should be one more todo item than before
       expect(newResult.data.todoList.todos.length).toEqual(5);
 
       // Since we used `prepend` it should be at the front
       expect(newResult.data.todoList.todos[0].text).toEqual('Second mutation.');
       expect(newResult.data.todoList.todos[1].text).toEqual('This one was created with a mutation.');
-
-      resolve();
     });
 
-    itAsync('two mutations, one fails', async (resolve, reject) => {
-      expect.assertions(10);
-      let subscriptionHandle: Subscription;
+    it('two mutations, one fails', async () => {
+      expect.assertions(11);
       const client = await setup(
-        reject,
         {
           request: { query: mutation },
           error: new Error('forbidden (test error)'),
@@ -1221,16 +1141,9 @@ describe('optimistic mutation results', () => {
           // delay: 50,
         },
       );
+      const stream = new ObservableStream(client.watchQuery({ query }));
 
-      // we have to actually subscribe to the query to be able to update it
-      await new Promise(resolve => {
-        const handle = client.watchQuery({ query });
-        subscriptionHandle = handle.subscribe({
-          next(res: any) {
-            resolve(res);
-          },
-        });
-      });
+      await expect(stream).toEmitNext();
 
       const updateQueries = {
         todoList: (prev, options) => {
@@ -1271,7 +1184,7 @@ describe('optimistic mutation results', () => {
 
       await Promise.all([promise, promise2]);
 
-      subscriptionHandle!.unsubscribe();
+      stream.unsubscribe();
       {
         const dataInStore = (client.cache as Hermes).extract(true);
         expect((dataInStore['TodoList5'] as any).data.todos.length).toEqual(4);
@@ -1285,11 +1198,10 @@ describe('optimistic mutation results', () => {
           id: 'Todo99',
           path: ['todos', expect.any(Number)],
         });
-        resolve();
       }
     });
 
-    itAsync('will handle dependent updates', async (resolve, reject) => {
+    it('will handle dependent updates', async () => {
       expect.assertions(1);
       const link = mockSingleLink(
         {
@@ -1306,7 +1218,7 @@ describe('optimistic mutation results', () => {
           result: mutationResult2,
           delay: 20,
         },
-      ).setOnError(reject);
+      );
 
       const customOptimisticResponse1 = {
         __typename: 'Mutation',
@@ -1368,13 +1280,13 @@ describe('optimistic mutation results', () => {
       // https://github.com/apollographql/apollo-client/issues/3723
       await new Promise(resolve => setTimeout(resolve));
 
-      client.mutate({
+      void client.mutate({
         mutation,
         optimisticResponse: customOptimisticResponse1,
         updateQueries,
       });
 
-      client.mutate({
+      void client.mutate({
         mutation,
         optimisticResponse: customOptimisticResponse2,
         updateQueries,
@@ -1390,8 +1302,6 @@ describe('optimistic mutation results', () => {
         [customOptimisticResponse2.createTodo, mutationResult.data.createTodo, ...defaultTodos],
         [mutationResult2.data.createTodo, mutationResult.data.createTodo, ...defaultTodos],
       ]);
-
-      resolve();
     });
   });
 
@@ -1450,24 +1360,16 @@ describe('optimistic mutation results', () => {
       },
     };
 
-    itAsync('will insert a single itemAsync to the beginning', async (resolve, reject) => {
-      expect.assertions(6);
-      let subscriptionHandle: Subscription;
-      const client = await setup(reject, {
+    it('will insert a single itemAsync to the beginning', async () => {
+      expect.assertions(7);
+      const client = await setup({
         request: { query: mutation },
         delay: 300,
         result: mutationResult,
       });
+      const stream = new ObservableStream(client.watchQuery({ query }));
 
-      // we have to actually subscribe to the query to be able to update it
-      await new Promise(resolve => {
-        const handle = client.watchQuery({ query });
-        subscriptionHandle = handle.subscribe({
-          next(res: any) {
-            resolve(res);
-          },
-        });
-      });
+      await expect(stream).toEmitNext();
 
       let firstTime = true;
       const before = Date.now();
@@ -1502,23 +1404,19 @@ describe('optimistic mutation results', () => {
       expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(4);
       expect((dataInStore['Todo99'] as any).data.text).toBe('Optimistically generated');
       await promise;
-      await client.query({ query }).then((newResult: any) => {
-        subscriptionHandle!.unsubscribe();
-        // There should be one more todo item than before
-        expect(newResult.data.todoList.todos.length).toBe(4);
+      const newResult = await client.query({ query });
 
-        // Since we used `prepend` it should be at the front
-        expect(newResult.data.todoList.todos[0].text).toBe('This one was created with a mutation.');
-      });
+      stream.unsubscribe();
+      // There should be one more todo item than before
+      expect(newResult.data.todoList.todos.length).toBe(4);
 
-      resolve();
+      // Since we used `prepend` it should be at the front
+      expect(newResult.data.todoList.todos[0].text).toBe('This one was created with a mutation.');
     });
 
-    itAsync('two array insert like mutations', async (resolve, reject) => {
-      expect.assertions(9);
-      let subscriptionHandle: Subscription;
+    it('two array insert like mutations', async () => {
+      expect.assertions(10);
       const client = await setup(
-        reject,
         {
           request: { query: mutation },
           result: mutationResult,
@@ -1529,16 +1427,9 @@ describe('optimistic mutation results', () => {
           delay: 50,
         },
       );
+      const stream = new ObservableStream(client.watchQuery({ query }));
 
-      // we have to actually subscribe to the query to be able to update it
-      await new Promise(resolve => {
-        const handle = client.watchQuery({ query });
-        subscriptionHandle = handle.subscribe({
-          next(res: any) {
-            resolve(res);
-          },
-        });
-      });
+      await expect(stream).toEmitNext();
 
       const update = (proxy: any, mResult: any) => {
         const data: any = proxy.readFragment({
@@ -1602,22 +1493,18 @@ describe('optimistic mutation results', () => {
 
       const newResult: any = await client.query({ query });
 
-      subscriptionHandle!.unsubscribe();
+      stream.unsubscribe();
       // There should be one more todo item than before
       expect(newResult.data.todoList.todos.length).toBe(5);
 
       // Since we used `prepend` it should be at the front
       expect(newResult.data.todoList.todos[0].text).toBe('Second mutation.');
       expect(newResult.data.todoList.todos[1].text).toBe('This one was created with a mutation.');
-
-      resolve();
     });
 
-    itAsync('two mutations, one fails', async (resolve, reject) => {
-      expect.assertions(10);
-      let subscriptionHandle: Subscription;
+    it('two mutations, one fails', async () => {
+      expect.assertions(11);
       const client = await setup(
-        reject,
         {
           request: { query: mutation },
           error: new Error('forbidden (test error)'),
@@ -1634,16 +1521,9 @@ describe('optimistic mutation results', () => {
           // delay: 50,
         },
       );
+      const stream = new ObservableStream(client.watchQuery({ query }));
 
-      // we have to actually subscribe to the query to be able to update it
-      await new Promise(resolve => {
-        const handle = client.watchQuery({ query });
-        subscriptionHandle = handle.subscribe({
-          next(res: any) {
-            resolve(res);
-          },
-        });
-      });
+      await expect(stream).toEmitNext();
 
       const update = (proxy: any, mResult: any) => {
         const data: any = proxy.readFragment({
@@ -1704,7 +1584,7 @@ describe('optimistic mutation results', () => {
 
       await Promise.all([promise, promise2]);
 
-      subscriptionHandle!.unsubscribe();
+      stream.unsubscribe();
       {
         const dataInStore = (client.cache as Hermes).extract(true);
         expect((dataInStore['TodoList5'] as any).data.todos.length).toBe(4);
@@ -1718,11 +1598,10 @@ describe('optimistic mutation results', () => {
           id: 'Todo99',
           path: ['todos', expect.any(Number)],
         });
-        resolve();
       }
     });
 
-    itAsync('will handle dependent updates', async (resolve, reject) => {
+    it('will handle dependent updates', async () => {
       expect.assertions(1);
       const link = mockSingleLink(
         {
@@ -1739,7 +1618,7 @@ describe('optimistic mutation results', () => {
           result: mutationResult2,
           delay: 20,
         },
-      ).setOnError(reject);
+      );
 
       const customOptimisticResponse1 = {
         __typename: 'Mutation',
@@ -1814,13 +1693,13 @@ describe('optimistic mutation results', () => {
 
       await new Promise(resolve => setTimeout(resolve));
 
-      client.mutate({
+      void client.mutate({
         mutation,
         optimisticResponse: customOptimisticResponse1,
         update,
       });
 
-      client.mutate({
+      void client.mutate({
         mutation,
         optimisticResponse: customOptimisticResponse2,
         update,
@@ -1835,11 +1714,9 @@ describe('optimistic mutation results', () => {
         [customOptimisticResponse2.createTodo, mutationResult.data.createTodo, ...defaultTodos],
         [mutationResult2.data.createTodo, mutationResult.data.createTodo, ...defaultTodos],
       ]);
-
-      resolve();
     });
 
-    itAsync('final update ignores optimistic data', (resolve, reject) => {
+    it('final update ignores optimistic data', async () => {
       const cache = new Hermes();
       const client = new ApolloClient({
         cache,
@@ -1875,6 +1752,17 @@ describe('optimistic mutation results', () => {
       type Item = ReturnType<typeof makeItem>;
       type Data = { items: Item[] };
 
+      function append(cache: ApolloCache<any>, item: Item) {
+        const data = cache.readQuery<Data>({ query });
+        cache.writeQuery({
+          query,
+          data: {
+            ...data,
+            items: [...((data && data.items) || []), item],
+          },
+        });
+        return item;
+      }
       // Hermes: extract() wraps node data, does not store the root nodes'
       // __typename (so ROOT_MUTATION goes away with its last field), and stores
       // the addItem(item) field as a parameterized node. Diffs also carry
@@ -1890,17 +1778,6 @@ describe('optimistic mutation results', () => {
         },
       });
 
-      function append(cache: ApolloCache<any>, item: Item) {
-        const data = cache.readQuery<Data>({ query });
-        cache.writeQuery({
-          query,
-          data: {
-            ...data,
-            items: [...((data && data.items) || []), item],
-          },
-        });
-        return item;
-      }
       const cancelFns: (() => any)[] = [];
       const optimisticDiffs: Cache.DiffResult<Data>[] = [];
       const realisticDiffs: Cache.DiffResult<Data>[] = [];
@@ -1976,175 +1853,160 @@ describe('optimistic mutation results', () => {
       const optimisticItem = makeItem('optimistic');
       const mutationItem = makeItem('mutation');
 
-      const wrapReject = <TArgs extends any[], TResult>(fn: (...args: TArgs) => TResult): typeof fn => {
-        return function (this: unknown, ...args: TArgs) {
-          try {
-            return fn.apply(this, args);
-          } catch (e) {
-            reject(e);
-            throw e;
+      const result = await client.mutate({
+        mutation,
+        optimisticResponse: {
+          addItem: optimisticItem,
+        },
+        variables: {
+          item: mutationItem,
+        },
+        update: (cache, mutationResult) => {
+          ++updateCount;
+          if (updateCount === 1) {
+            expect(mutationResult).toEqual({
+              data: {
+                addItem: optimisticItem,
+              },
+            });
+
+            append(cache, optimisticItem);
+
+            const expected = {
+              ROOT_QUERY: rootQuery([manualItem1, manualItem2, optimisticItem]),
+              // Although ROOT_MUTATION field data gets removed immediately
+              // after the mutation finishes, it is still temporarily visible
+              // to the update function.
+              ...rootMutation('optimistic 3'),
+            };
+
+            // Since we're in an optimistic update function, reading
+            // non-optimistically still returns optimistic data.
+            expect(cache.extract(false)).toEqual(expected);
+            expect(cache.extract(true)).toEqual(expected);
+          } else if (updateCount === 2) {
+            expect(mutationResult).toEqual({
+              data: {
+                addItem: mutationItem,
+              },
+            });
+
+            append(cache, mutationItem);
+
+            const expected = {
+              ROOT_QUERY: rootQuery([mutationItem]),
+              ...rootMutation('mutation 4'),
+            };
+
+            // Since we're in the final (non-optimistic) update function,
+            // optimistic data is invisible, even if we try to read
+            // optimistically.
+            expect(cache.extract(false)).toEqual(expected);
+            expect(cache.extract(true)).toEqual(expected);
+          } else {
+            throw new Error('too many updates');
           }
-        };
-      };
+        },
+      });
 
-      return client
-        .mutate({
-          mutation,
-          optimisticResponse: {
-            addItem: optimisticItem,
+      expect(result).toEqual({
+        data: {
+          addItem: mutationItem,
+        },
+      });
+
+      // Only the final update function ever touched non-optimistic
+      // cache data.
+      expect(cache.extract(false)).toEqual({
+        ROOT_QUERY: rootQuery([mutationItem]),
+      });
+
+      // Now that the mutation is finished, reading optimistically from
+      // the cache should return the manually added items again.
+      expect(cache.extract(true)).toEqual({
+        ROOT_QUERY: rootQuery([
+          // If we wanted to keep optimistic data as up-to-date as
+          // possible, we could rerun all optimistic transactions
+          // after writing to the root (non-optimistic) layer of the
+          // cache, which would result in mutationItem appearing in
+          // this list along with manualItem1 and manualItem2
+          // (presumably in that order). However, rerunning those
+          // optimistic transactions would trigger additional
+          // broadcasts for optimistic query watches, with
+          // intermediate results that (re)combine optimistic and
+          // non-optimistic data. Since rerendering the UI tends to be
+          // expensive, we should prioritize broadcasting states that
+          // matter most, and in this case that means broadcasting the
+          // initial optimistic state (for perceived performance),
+          // followed by the final, authoritative, non-optimistic
+          // state. Other intermediate states are a distraction, as
+          // they will probably soon be superseded by another (more
+          // authoritative) update. This particular state is visible
+          // only because we haven't rolled back this manual Layer
+          // just yet (see cache.removeOptimistic below).
+          manualItem1,
+          manualItem2,
+        ]),
+      });
+
+      cache.removeOptimistic('manual');
+
+      // After removing the manual optimistic layer, only the
+      // non-optimistic data remains.
+      expect(cache.extract(true)).toEqual({
+        ROOT_QUERY: rootQuery([mutationItem]),
+      });
+
+      cancelFns.forEach(cancel => cancel());
+
+      expect(optimisticDiffs).toEqual([
+        {
+          complete: true,
+          entityIds: expect.any(Set),
+          fromOptimisticTransaction: true,
+          result: {
+            items: manualItems,
           },
-          variables: {
-            item: mutationItem,
+        },
+        {
+          complete: true,
+          entityIds: expect.any(Set),
+          fromOptimisticTransaction: true,
+          result: {
+            items: [...manualItems, optimisticItem],
           },
-          update: wrapReject((cache, mutationResult) => {
-            ++updateCount;
-            if (updateCount === 1) {
-              expect(mutationResult).toEqual({
-                data: {
-                  addItem: optimisticItem,
-                },
-              });
+        },
+        {
+          complete: true,
+          entityIds: expect.any(Set),
+          result: {
+            items: manualItems,
+          },
+        },
+        {
+          complete: true,
+          entityIds: expect.any(Set),
+          result: {
+            items: [mutationItem],
+          },
+        },
+      ]);
 
-              append(cache, optimisticItem);
-
-              const expected = {
-                ROOT_QUERY: rootQuery([manualItem1, manualItem2, optimisticItem]),
-                // Although ROOT_MUTATION field data gets removed immediately
-                // after the mutation finishes, it is still temporarily visible
-                // to the update function.
-                ...rootMutation('optimistic 3'),
-              };
-
-              // Since we're in an optimistic update function, reading
-              // non-optimistically still returns optimistic data.
-              expect(cache.extract(false)).toEqual(expected);
-              expect(cache.extract(true)).toEqual(expected);
-            } else if (updateCount === 2) {
-              expect(mutationResult).toEqual({
-                data: {
-                  addItem: mutationItem,
-                },
-              });
-
-              append(cache, mutationItem);
-
-              const expected = {
-                ROOT_QUERY: rootQuery([mutationItem]),
-                ...rootMutation('mutation 4'),
-              };
-
-              // Since we're in the final (non-optimistic) update function,
-              // optimistic data is invisible, even if we try to read
-              // optimistically.
-              expect(cache.extract(false)).toEqual(expected);
-              expect(cache.extract(true)).toEqual(expected);
-            } else {
-              throw new Error('too many updates');
-            }
-          }),
-        })
-        .then(result => {
-          expect(result).toEqual({
-            data: {
-              addItem: mutationItem,
-            },
-          });
-
-          // Only the final update function ever touched non-optimistic
-          // cache data.
-          expect(cache.extract(false)).toEqual({
-            ROOT_QUERY: rootQuery([mutationItem]),
-          });
-
-          // Now that the mutation is finished, reading optimistically from
-          // the cache should return the manually added items again.
-          expect(cache.extract(true)).toEqual({
-            ROOT_QUERY: rootQuery([
-              // If we wanted to keep optimistic data as up-to-date as
-              // possible, we could rerun all optimistic transactions
-              // after writing to the root (non-optimistic) layer of the
-              // cache, which would result in mutationItem appearing in
-              // this list along with manualItem1 and manualItem2
-              // (presumably in that order). However, rerunning those
-              // optimistic transactions would trigger additional
-              // broadcasts for optimistic query watches, with
-              // intermediate results that (re)combine optimistic and
-              // non-optimistic data. Since rerendering the UI tends to be
-              // expensive, we should prioritize broadcasting states that
-              // matter most, and in this case that means broadcasting the
-              // initial optimistic state (for perceived performance),
-              // followed by the final, authoritative, non-optimistic
-              // state. Other intermediate states are a distraction, as
-              // they will probably soon be superseded by another (more
-              // authoritative) update. This particular state is visible
-              // only because we haven't rolled back this manual Layer
-              // just yet (see cache.removeOptimistic below).
-              manualItem1,
-              manualItem2,
-            ]),
-          });
-
-          cache.removeOptimistic('manual');
-
-          // After removing the manual optimistic layer, only the
-          // non-optimistic data remains.
-          expect(cache.extract(true)).toEqual({
-            ROOT_QUERY: rootQuery([mutationItem]),
-          });
-        })
-        .then(() => {
-          cancelFns.forEach(cancel => cancel());
-
-          expect(optimisticDiffs).toEqual([
-            {
-              complete: true,
-              entityIds: expect.any(Set),
-              fromOptimisticTransaction: true,
-              result: {
-                items: manualItems,
-              },
-            },
-            {
-              complete: true,
-              entityIds: expect.any(Set),
-              fromOptimisticTransaction: true,
-              result: {
-                items: [...manualItems, optimisticItem],
-              },
-            },
-            {
-              complete: true,
-              entityIds: expect.any(Set),
-              result: {
-                items: manualItems,
-              },
-            },
-            {
-              complete: true,
-              entityIds: expect.any(Set),
-              result: {
-                items: [mutationItem],
-              },
-            },
-          ]);
-
-          expect(realisticDiffs).toEqual([
-            {
-              complete: false,
-              entityIds: expect.any(Set),
-              missing: [expect.anything()],
-              result: {},
-            },
-            {
-              complete: true,
-              entityIds: expect.any(Set),
-              result: {
-                items: [mutationItem],
-              },
-            },
-          ]);
-        })
-        .then(resolve, reject);
+      expect(realisticDiffs).toEqual([
+        {
+          complete: false,
+          entityIds: expect.any(Set),
+          missing: [expect.anything()],
+          result: {},
+        },
+        {
+          complete: true,
+          entityIds: expect.any(Set),
+          result: {
+            items: [mutationItem],
+          },
+        },
+      ]);
     });
   });
 });
@@ -2202,7 +2064,7 @@ describe('optimistic mutation - githunt comments', () => {
     },
   };
 
-  async function setup(reject: (reason: any) => any, ...mockedResponses: any[]) {
+  async function setup(...mockedResponses: MockedResponse[]) {
     const link = mockSingleLink(
       {
         request: {
@@ -2219,7 +2081,7 @@ describe('optimistic mutation - githunt comments', () => {
         result,
       },
       ...mockedResponses,
-    ).setOnError(reject);
+    );
 
     const client = new ApolloClient({
       link,
@@ -2294,31 +2156,23 @@ describe('optimistic mutation - githunt comments', () => {
     },
   };
 
-  itAsync('can post a new comment', async (resolve, reject) => {
-    expect.assertions(1);
+  it('can post a new comment', async () => {
+    expect.assertions(2);
     const mutationVariables = {
       repoFullName: 'org/repo',
       commentContent: 'New Comment',
     };
 
-    let subscriptionHandle: Subscription;
-    const client = await setup(reject, {
+    const client = await setup({
       request: {
         query: addTypenameToDocument(mutation),
         variables: mutationVariables,
       },
       result: mutationResult,
     });
+    const stream = new ObservableStream(client.watchQuery({ query, variables }));
 
-    // we have to actually subscribe to the query to be able to update it
-    await new Promise(resolve => {
-      const handle = client.watchQuery({ query, variables });
-      subscriptionHandle = handle.subscribe({
-        next(res: any) {
-          resolve(res);
-        },
-      });
-    });
+    await expect(stream).toEmitNext();
 
     await client.mutate({
       mutation,
@@ -2329,9 +2183,7 @@ describe('optimistic mutation - githunt comments', () => {
 
     const newResult: any = await client.query({ query, variables });
 
-    subscriptionHandle!.unsubscribe();
+    stream.unsubscribe();
     expect(newResult.data.entry.comments.length).toBe(2);
-
-    resolve();
   });
 });

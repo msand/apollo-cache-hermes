@@ -31,21 +31,73 @@ export const mapToEntries2 = (map: Map<string, NodeReference> | undefined): Node
  * into InMemoryCache's normalized shape (`{ ...data, field: { __ref } }`), so
  * vendored Apollo Client expectations can be checked as written.
  *
- * Only entity references are supported; parameterized fields throw.
+ * Fields with arguments (Hermes' parameterized value nodes) are stored in
+ * their container under InMemoryCache's store field name, `field({"arg":1})`.
  */
 export function toNormalizedCacheObject(serialized: Record<string, any>): Record<string, any> {
+  const build = (id: string): any => {
+    const node = serialized[id];
+    const root = { value: JSON.parse(JSON.stringify(node.data ?? (node.type === 0 ? {} : null))) };
+    for (const { id: target, path } of node.outbound ?? []) setAt(root, path, { __ref: target });
+    for (const { id: target, path } of node.parameterized ?? []) {
+      const args = JSON.parse(target.slice(target.lastIndexOf('❖') + 1));
+      const fieldName = path[path.length - 1];
+      const container = objectAt(root, path.slice(0, -1));
+      delete container[fieldName];
+      container[`${fieldName}(${stableStringify(args)})`] = build(target);
+    }
+    return root.value;
+  };
+
   const normalized: Record<string, any> = {};
   for (const [id, node] of Object.entries(serialized)) {
-    if (node.type !== 0) throw new Error(`Unsupported node type ${node.type} for ${id}`);
-    if (node.parameterized?.length) throw new Error(`Parameterized fields are not supported (${id})`);
-    const entity: Record<string, any> = JSON.parse(JSON.stringify(node.data ?? {}));
-    for (const { id: target, path } of node.outbound ?? []) {
-      let container = entity;
-      for (const key of path.slice(0, -1)) container = container[key];
-      container[path[path.length - 1]] = { __ref: target };
-    }
-    if (id === 'ROOT_QUERY' && !('__typename' in entity)) entity.__typename = 'Query';
+    // Parameterized values are stored in their containers.
+    if (node.type !== 0) continue;
+    const entity = build(id);
+    const rootTypename = rootTypenames[id];
+    if (rootTypename && !('__typename' in entity)) entity.__typename = rootTypename;
     normalized[id] = entity;
   }
   return normalized;
+}
+
+const rootTypenames: Record<string, string> = {
+  ROOT_QUERY: 'Query',
+  ROOT_MUTATION: 'Mutation',
+  ROOT_SUBSCRIPTION: 'Subscription',
+};
+
+function setAt(root: { value: any }, path: (string | number)[], value: any) {
+  if (!path.length) {
+    root.value = value;
+  } else {
+    objectAt(root, path.slice(0, -1))[path[path.length - 1]] = value;
+  }
+}
+
+/** The object (or array) at path, created where missing. */
+function objectAt(root: { value: any }, path: (string | number)[]): any {
+  if (root.value === null || typeof root.value !== 'object') root.value = typeof path[0] === 'number' ? [] : {};
+  let container = root.value;
+  path.forEach((key, index) => {
+    if (container[key] === null || typeof container[key] !== 'object') {
+      container[key] = typeof path[index + 1] === 'number' ? [] : {};
+    }
+    container = container[key];
+  });
+  return container;
+}
+
+/** JSON with sorted object keys, like InMemoryCache's store field names. */
+function stableStringify(value: unknown): string {
+  return JSON.stringify(value, (_key, nested) =>
+    nested && typeof nested === 'object' && !Array.isArray(nested)
+      ? Object.keys(nested)
+          .sort()
+          .reduce<Record<string, unknown>>((sorted, key) => {
+            sorted[key] = nested[key];
+            return sorted;
+          }, {})
+      : nested,
+  );
 }

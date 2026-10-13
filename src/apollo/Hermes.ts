@@ -1,4 +1,5 @@
 import { Transaction, Cache as CacheInterface, makeVar } from '@apollo/client';
+import type { FragmentDefinitionNode, InlineFragmentNode } from 'graphql';
 import { isReference, Reference, StoreObject } from '@apollo/client/utilities';
 
 import { CacheContext } from '../context';
@@ -33,6 +34,14 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable<TSerial
     if (isReference(object)) return object.__ref;
     if (object?.__typename === 'Query') return StaticNodeId.QueryRoot;
     return this._queryable.identify(object);
+  }
+
+  fragmentMatches(fragment: InlineFragmentNode | FragmentDefinitionNode, typename: string): boolean {
+    return this._queryable.fragmentMatches(fragment, typename);
+  }
+
+  lookupFragment(fragmentName: string): FragmentDefinitionNode | null {
+    return this._queryable.lookupFragment(fragmentName);
   }
 
   // TODO (yuisu): data can be typed better with update of ApolloCache API

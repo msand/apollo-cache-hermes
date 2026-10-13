@@ -1,6 +1,5 @@
 import { renderHook } from '@testing-library/react';
-
-import { useDeepMemo } from '../useDeepMemo';
+import { useDeepMemo } from '@apollo/client/react/hooks/internal/useDeepMemo';
 
 const expect = jestExpect;
 

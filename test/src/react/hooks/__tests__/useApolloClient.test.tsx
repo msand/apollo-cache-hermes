@@ -2,8 +2,8 @@ import * as React from 'react';
 import { render } from '@testing-library/react';
 import { InvariantError } from 'ts-invariant';
 import { ApolloClient, ApolloLink, ApolloProvider } from '@apollo/client';
+import { useApolloClient } from '@apollo/client/react/hooks/useApolloClient';
 
-import { useApolloClient } from '../useApolloClient';
 import { Hermes } from '../../../../../src';
 
 describe('useApolloClient Hook', () => {

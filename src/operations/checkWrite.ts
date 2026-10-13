@@ -15,7 +15,8 @@ import {
   stringifyForDisplay,
 } from '@apollo/client/utilities';
 import type { FragmentMap } from '@apollo/client/utilities';
-import type { FieldNode, SelectionNode, SelectionSetNode } from 'graphql';
+import type { FieldNode, FragmentDefinitionNode, InlineFragmentNode, SelectionNode, SelectionSetNode } from 'graphql';
+import { selectionSetMatchesResult } from '@apollo/client/cache/inmemory/helpers';
 
 import type { CacheContext } from '../context';
 import type { JsonObject, JsonValue } from '../primitive';
@@ -85,15 +86,31 @@ export function checkWrite<TSerialized>(
   rootTypename: string | undefined,
 ): void {
   const dev = (globalThis as { __DEV__?: boolean }).__DEV__ !== false;
-  // In production, there is only something to check with keyFields policies.
-  if (!dev && !Object.values(context.typePolicies ?? {}).some(policy => Array.isArray(policy.keyFields))) return;
+  // In production, there is only something to check with keyFields policies (or
+  // fuzzy possibleTypes subtypes to infer).
+  if (
+    !dev &&
+    !context.hasFuzzySubtypes &&
+    !Object.values(context.typePolicies ?? {}).some(policy => Array.isArray(policy.keyFields))
+  ) {
+    return;
+  }
   const allVariables = { ...getDefaultValues(getOperationDefinition(document)), ...variables };
   const fragmentMap: FragmentMap = createFragmentMap(getFragmentDefinitions(document));
   const lookupFragment = (name: string) => fragmentMap[name];
 
-  // Like InMemoryCache's policies.fragmentMatches (with possibleTypes).
-  const fragmentMatches = (typeCondition: string | undefined, typename: string | undefined) =>
-    !typeCondition || (!!typename && context.fragmentMatches(typeCondition, typename, true));
+  // Like InMemoryCache's policies.fragmentMatches (with possibleTypes): a fuzzy
+  // subtype is only inferred for a result that has all the fragment's fields.
+  const fragmentMatches = (
+    fragment: FragmentDefinitionNode | InlineFragmentNode,
+    typename: string | undefined,
+    object: JsonObject,
+  ) =>
+    !fragment.typeCondition ||
+    (!!typename &&
+      context.fragmentMatches(fragment.typeCondition.name.value, typename, () =>
+        selectionSetMatchesResult(fragment.selectionSet, object, allVariables),
+      ));
 
   const hasReadFunction = (typename: string | undefined, fieldName: string) => {
     const policy = typename ? context.typePolicies?.[typename]?.fields?.[fieldName] : undefined;
@@ -112,15 +129,16 @@ export function checkWrite<TSerialized>(
   // The fields of each selection set, by the __typename they are flattened for.
   const flattened = new Map<SelectionSetNode, Map<string | undefined, Map<FieldNode, FieldContext>>>();
 
-  function flattenFields(selectionSet: SelectionSetNode, typename: string | undefined) {
+  // Like InMemoryCache's StoreWriter, the first object decides any fuzzy subtypes.
+  function flattenFields(selectionSet: SelectionSetNode, typename: string | undefined, object: JsonObject) {
     let byTypename = flattened.get(selectionSet);
     if (!byTypename) flattened.set(selectionSet, (byTypename = new Map()));
     let fieldMap = byTypename.get(typename);
-    if (!fieldMap) byTypename.set(typename, (fieldMap = flattenFieldsOnce(selectionSet, typename)));
+    if (!fieldMap) byTypename.set(typename, (fieldMap = flattenFieldsOnce(selectionSet, typename, object)));
     return fieldMap;
   }
 
-  function flattenFieldsOnce(selectionSet: SelectionSetNode, typename: string | undefined) {
+  function flattenFieldsOnce(selectionSet: SelectionSetNode, typename: string | undefined, object: JsonObject) {
     const fieldMap = new Map<FieldNode, FieldContext>();
     // Like InMemoryCache, each selection set is flattened once per inherited context.
     const visited = new Map<SelectionSetNode, Set<string>>();
@@ -150,7 +168,13 @@ export function checkWrite<TSerialized>(
           fieldMap.set(selection, { clientOnly, deferred });
         } else {
           const fragment = getFragmentFromSelection(selection, lookupFragment);
-          if (fragment && fragmentMatches(fragment.typeCondition?.name.value, typename)) {
+          if (!fragment && selection.kind === 'FragmentSpread') {
+            // Like InMemoryCache, writing with an undefined fragment fails.
+            const error = new InvariantError(`No fragment named ${selection.name.value}`);
+            uncaughtErrors.add(error);
+            throw error;
+          }
+          if (fragment && fragmentMatches(fragment, typename, object)) {
             flatten(fragment.selectionSet, { clientOnly, deferred });
           }
         }
@@ -176,7 +200,7 @@ export function checkWrite<TSerialized>(
     if (typeof object.__typename === 'string') typename = object.__typename;
     // The fields of the object by their schema names (rather than aliases).
     const storeObject: JsonObject = {};
-    flattenFields(selectionSet, typename).forEach(({ clientOnly, deferred }, field) => {
+    flattenFields(selectionSet, typename, object).forEach(({ clientOnly, deferred }, field) => {
       const value = object[resultKeyNameFromField(field)];
       if (value !== undefined) {
         storeObject[field.name.value] = value;

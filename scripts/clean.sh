@@ -8,6 +8,7 @@ FILES_TO_REMOVE=($(
     -not -path "./scripts/*" \
     -not -path "./coverage/*" \
     -not -path "./node_modules/*" \
+    -not -path "./apollo-client/*" \
     -not -path "./.claude/*" \
     -not -path "./typings/*"
 ))

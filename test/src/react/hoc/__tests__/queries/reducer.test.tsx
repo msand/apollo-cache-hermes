@@ -4,10 +4,10 @@ import gql from 'graphql-tag';
 import { DocumentNode } from 'graphql';
 import { ApolloClient, ApolloProvider } from '@apollo/client';
 import { graphql } from '@apollo/client/react/hoc';
+import { itAsync, mockSingleLink } from '@apollo/client/testing';
+import { DataValue } from '@apollo/client/react/hoc/types';
 
 import { Hermes } from '../../../../../../src';
-import { itAsync, mockSingleLink } from '../../../../testing';
-import { DataValue } from '../../types';
 
 describe('[queries] reducer', () => {
   // props reducer

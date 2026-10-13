@@ -1,7 +1,7 @@
 import { DocumentNode } from 'graphql';
 import gql from 'graphql-tag';
+import { spyOnConsole } from '@apollo/client/testing/internal';
 
-import { spyOnConsole } from '../../../testing/internal';
 import { Hermes } from '../../../../../src';
 
 import { withError } from './helpers';

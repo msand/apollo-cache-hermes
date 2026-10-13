@@ -4,11 +4,11 @@ import { DocumentNode } from 'graphql';
 import gql from 'graphql-tag';
 import type { Trie } from '@wry/trie';
 import { ApolloClient, ApolloProvider } from '@apollo/client';
+import { MockedResponse, mockSingleLink, MockedProvider } from '@apollo/client/testing';
+import { getApolloContext } from '@apollo/client/react/context';
+import { useApolloClient, useQuery } from '@apollo/client/react/hooks';
+import { renderToStringWithData } from '@apollo/client/react/ssr';
 
-import { MockedProvider, MockedResponse, mockSingleLink } from '../../../testing';
-import { getApolloContext } from '../../context';
-import { useApolloClient, useQuery } from '../../hooks';
-import { renderToStringWithData } from '..';
 import { Hermes } from '../../../../../src';
 
 describe('useQuery Hook SSR', () => {

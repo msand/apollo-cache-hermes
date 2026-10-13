@@ -11,10 +11,10 @@ import {
 } from 'graphql';
 import gql from 'graphql-tag';
 import { ApolloClient, ApolloProvider, ApolloLink } from '@apollo/client';
+import { Observable } from '@apollo/client/utilities';
+import { renderToStringWithData } from '@apollo/client/react/ssr';
+import { Query } from '@apollo/client/react/components/Query';
 
-import { Observable } from '../../../../utilities';
-import { renderToStringWithData } from '../../../ssr';
-import { Query } from '../../Query';
 import { Hermes } from '../../../../../../src';
 
 const planetMap = new Map([['Planet:1', { id: 'Planet:1', name: 'Tatooine' }]]);

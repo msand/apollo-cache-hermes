@@ -1,7 +1,6 @@
 import gql from 'graphql-tag';
-
-import { createOperation } from '../../utils/createOperation';
-import { selectHttpOptionsAndBody, fallbackHttpConfig } from '../selectHttpOptionsAndBody';
+import { createOperation } from '@apollo/client/link/utils/createOperation';
+import { selectHttpOptionsAndBody, fallbackHttpConfig } from '@apollo/client/link/http/selectHttpOptionsAndBody';
 
 const query = gql`
   query SampleQuery {

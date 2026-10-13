@@ -1,5 +1,5 @@
-import { fromPromise } from '../fromPromise';
-import { toPromise } from '../toPromise';
+import { fromPromise } from '@apollo/client/link/utils/fromPromise';
+import { toPromise } from '@apollo/client/link/utils/toPromise';
 
 describe('fromPromise', () => {
   const data = {

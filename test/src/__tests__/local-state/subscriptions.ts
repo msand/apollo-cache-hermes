@@ -1,11 +1,11 @@
 import gql from 'graphql-tag';
 import { ApolloClient, ApolloLink, Observable } from '@apollo/client';
+import { ObservableStream } from '@apollo/client/testing/internal';
 
-import { itAsync } from '../../testing';
 import { Hermes } from '../../../../src';
 
 describe('Basic functionality', () => {
-  itAsync('should not break subscriptions', (resolve, reject) => {
+  it('should not break subscriptions', async () => {
     const query = gql`
       subscription {
         field
@@ -24,17 +24,14 @@ describe('Basic functionality', () => {
       },
     });
 
-    let counter = 0;
-    expect.assertions(2);
-    client.subscribe({ query }).forEach(item => {
-      expect(item).toMatchObject({ data: { field: ++counter } });
-      if (counter === 2) {
-        resolve();
-      }
-    });
+    const stream = new ObservableStream(client.subscribe({ query }));
+
+    await expect(stream).toEmitValue({ data: { field: 1 } });
+    await expect(stream).toEmitValue({ data: { field: 2 } });
+    await expect(stream).toComplete();
   });
 
-  itAsync('should be able to mix @client fields with subscription results', (resolve, reject) => {
+  it('should be able to mix @client fields with subscription results', async () => {
     const query = gql`
       subscription {
         field
@@ -58,26 +55,10 @@ describe('Basic functionality', () => {
       },
     });
 
-    expect.assertions(2);
-    const obs = client.subscribe({ query });
-    let resultCounter = 1;
-    obs.subscribe({
-      next(result) {
-        try {
-          expect(result).toMatchObject({
-            data: {
-              field: resultCounter,
-              count: resultCounter,
-            },
-          });
-        } catch (error) {
-          reject(error);
-        }
-        resultCounter += 1;
-      },
-      complete() {
-        resolve();
-      },
-    });
+    const stream = new ObservableStream(client.subscribe({ query }));
+
+    await expect(stream).toEmitValue({ data: { field: 1, count: 1 } });
+    await expect(stream).toEmitValue({ data: { field: 2, count: 2 } });
+    await expect(stream).toComplete();
   });
 });

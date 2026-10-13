@@ -4,11 +4,11 @@ import gql from 'graphql-tag';
 import { DocumentNode } from 'graphql';
 import { ApolloClient, ApolloProvider, ApolloLink } from '@apollo/client';
 import { ChildProps } from '@apollo/client/react/hoc';
+import { itAsync, mockSingleLink } from '@apollo/client/testing';
+import { graphql } from '@apollo/client/react/hoc/graphql';
+import { DataValue } from '@apollo/client/react/hoc/types';
+import { withApollo } from '@apollo/client/react/hoc/withApollo';
 
-import { itAsync, mockSingleLink } from '../../../testing';
-import { graphql } from '../graphql';
-import { DataValue } from '../types';
-import { withApollo } from '../withApollo';
 import { Hermes } from '../../../../../src';
 
 function compose(...funcs: Function[]) {

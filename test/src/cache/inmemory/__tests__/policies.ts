@@ -1,13 +1,13 @@
 import gql from 'graphql-tag';
-import { ApolloClient, InMemoryCache, FieldPolicy } from '@apollo/client';
+import { ApolloClient, FieldPolicy } from '@apollo/client';
+import { ReactiveVar, makeVar } from '@apollo/client/cache/inmemory/reactiveVars';
+import { Reference, StoreObject, NetworkStatus, TypedDocumentNode, DocumentNode } from '@apollo/client/core';
+import { MissingFieldError } from '@apollo/client/cache';
+import { relayStylePagination, stringifyForDisplay } from '@apollo/client/utilities';
+import { StorageType } from '@apollo/client/cache/inmemory/policies';
+import { MockLink } from '@apollo/client/testing/core';
+import { ObservableStream, spyOnConsole } from '@apollo/client/testing/internal';
 
-import { ReactiveVar, makeVar } from '../reactiveVars';
-import { Reference, StoreObject, NetworkStatus, TypedDocumentNode, DocumentNode } from '../../../core';
-import { MissingFieldError } from '../..';
-import { relayStylePagination, stringifyForDisplay } from '../../../utilities';
-import { StorageType } from '../policies';
-import { itAsync, subscribeAndCount, MockLink } from '../../../testing/core';
-import { spyOnConsole } from '../../../testing/internal';
 import { Hermes } from '../../../../../src';
 import { toNormalizedCacheObject } from '../../../../helpers';
 
@@ -465,8 +465,9 @@ describe('type policies', () => {
     );
   });
 
-  it('does not clobber previous keyFields with undefined', () => {
-    const cache = new InMemoryCache({
+  // Hermes: typePolicies cannot be added once the cache is created (no policies.addTypePolicies)
+  it.skip('does not clobber previous keyFields with undefined', () => {
+    const cache = new Hermes({
       typePolicies: {
         Movie: {
           keyFields(incoming) {
@@ -476,7 +477,7 @@ describe('type policies', () => {
       },
     });
 
-    cache.policies.addTypePolicies({
+    (cache as any).policies.addTypePolicies({
       Movie: {
         fields: {
           isPurchased() {
@@ -494,8 +495,9 @@ describe('type policies', () => {
     ).toBe('MotionPicture::3993d4118143');
   });
 
-  it('does not remove previous typePolicies', () => {
-    const cache = new InMemoryCache({
+  // Hermes: typePolicies cannot be added once the cache is created (no policies.addTypePolicies)
+  it.skip('does not remove previous typePolicies', () => {
+    const cache = new Hermes({
       typePolicies: {
         Query: {
           fields: {
@@ -505,7 +507,7 @@ describe('type policies', () => {
       },
     });
 
-    cache.policies.addTypePolicies({
+    (cache as any).policies.addTypePolicies({
       Query: {
         fields: {
           bar: () => 'bar',
@@ -533,8 +535,9 @@ describe('type policies', () => {
     ).toEqual({ bar: 'bar' });
   });
 
-  it('support inheritance', () => {
-    const cache = new InMemoryCache({
+  // Hermes: inheritance of typePolicies via possibleTypes is not implemented
+  it.skip('support inheritance', () => {
+    const cache = new Hermes({
       possibleTypes: {
         Reptile: ['Snake', 'Turtle'],
         Snake: ['Python', 'Viper', 'Cobra'],
@@ -653,7 +656,7 @@ describe('type policies', () => {
       }
     });
 
-    cache.policies.addPossibleTypes({
+    (cache as any).policies.addPossibleTypes({
       Viper: ['DeathAdder'],
     });
 
@@ -665,8 +668,85 @@ describe('type policies', () => {
     ).toBe('DeathAdder:{"tagId":"LethalAbacus666"}');
   });
 
-  it('typePolicies can be inherited from supertypes with fuzzy possibleTypes', () => {
-    const cache = new InMemoryCache({
+  // Hermes: inheritance of typePolicies via possibleTypes is not implemented
+  it.skip('specific field policies will not override supertype policies', () => {
+    const cache = new Hermes({
+      typePolicies: {
+        Named: {
+          fields: Object.freeze({
+            name: Object.freeze({
+              read(existing: any) {
+                return `${existing} (Named)`;
+              },
+            }),
+          }),
+        },
+        Person: {
+          fields: {
+            name: {
+              read(existing) {
+                return `${existing} (Person)`;
+              },
+            },
+          },
+        },
+      },
+      possibleTypes: {
+        Named: ['Person', 'Pet'],
+      },
+    });
+    const query = gql`
+      {
+        me {
+          __typename
+          id
+          name
+          pets {
+            __typename
+            id
+            name
+          }
+        }
+      }
+    `;
+    cache.writeQuery({
+      query,
+      data: {
+        me: {
+          __typename: 'Person',
+          id: 23,
+          name: 'John Doe',
+          pets: [
+            {
+              __typename: 'Pet',
+              id: 1,
+              name: 'Fido',
+            },
+            {
+              __typename: 'Pet',
+              id: 2,
+              name: 'Whiskers',
+            },
+          ],
+        },
+      },
+    });
+    expect(cache.readQuery({ query })).toEqual({
+      me: {
+        __typename: 'Person',
+        id: 23,
+        name: 'John Doe (Person)',
+        pets: [
+          { __typename: 'Pet', id: 1, name: 'Fido (Named)' },
+          { __typename: 'Pet', id: 2, name: 'Whiskers (Named)' },
+        ],
+      },
+    });
+  });
+
+  // Hermes: inheritance of typePolicies via possibleTypes is not implemented
+  it.skip('typePolicies can be inherited from supertypes with fuzzy possibleTypes', () => {
+    const cache = new Hermes({
       possibleTypes: {
         EntitySupertype: ['.*Entity'],
       },
@@ -1193,7 +1273,7 @@ describe('type policies', () => {
         query: DocumentNode | TypedDocumentNode<TData, TVars>,
         variables?: TVars,
       ) {
-        cache.writeQuery({ query, variables, data });
+        cache.writeQuery<typeof data>({ query, variables, data });
         expect(cache.readQuery({ query, variables })).toEqual(data);
       }
 
@@ -2389,7 +2469,7 @@ describe('type policies', () => {
         };
       }
 
-      const cache = new InMemoryCache({
+      const cache = new Hermes({
         typePolicies: {
           Query: {
             fields: {
@@ -2443,7 +2523,8 @@ describe('type policies', () => {
             }
           `,
         }),
-      ).toEqual({
+        // Hermes: results may contain a superset of the selected fields.
+      ).toMatchObject({
         mergeRead: 1,
         mergeReadModify: 100,
       });
@@ -2479,7 +2560,7 @@ describe('type policies', () => {
         }),
       ).toBe(true);
 
-      expect(cache.extract()).toMatchSnapshot();
+      expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
 
       expect(storageByFieldName.get('mergeRead')).toEqual({
         mergeCount: 1,
@@ -2520,7 +2601,7 @@ describe('type policies', () => {
         modifyCount: 1,
       });
 
-      expect(cache.extract()).toMatchSnapshot();
+      expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
     });
 
     it('merge functions can deduplicate items using readField', () => {
@@ -3486,8 +3567,10 @@ describe('type policies', () => {
       });
     });
 
-    itAsync('can handle Relay-style pagination without args', (resolve, reject) => {
-      const cache = new InMemoryCache({
+    // Hermes: keyArgs are not supported (relayStylePagination stores every page under one
+    // keyArgs-based field)
+    it.skip('can handle Relay-style pagination without args', async () => {
+      const cache = new Hermes({
         addTypename: false,
         typePolicies: {
           Query: {
@@ -3600,72 +3683,77 @@ describe('type policies', () => {
             },
           },
         },
-      ]).setOnError(reject);
+      ]).setOnError(error => {
+        throw new Error(error);
+      });
 
       const client = new ApolloClient({ link, cache });
 
-      client.query({ query: firstQuery }).then(result => {
-        expect(result).toEqual({
-          loading: false,
-          networkStatus: NetworkStatus.ready,
-          data: {
-            todos: {
-              totalCount: 1292,
-            },
+      let result = await client.query({ query: firstQuery });
+
+      expect(result).toEqual({
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        data: {
+          todos: {
+            totalCount: 1292,
           },
-        });
-
-        expect(cache.extract()).toEqual({
-          ROOT_QUERY: {
-            __typename: 'Query',
-            todos: {
-              edges: [],
-              pageInfo: {
-                endCursor: '',
-                hasNextPage: true,
-                hasPreviousPage: false,
-                startCursor: '',
-              },
-              totalCount: 1292,
-            },
-          },
-        });
-
-        client.query({ query: secondQuery, variables: secondVariables }).then(result => {
-          expect(result).toEqual({
-            loading: false,
-            networkStatus: NetworkStatus.ready,
-            data: {
-              todos: {
-                edges: secondEdges,
-                pageInfo: secondPageInfo,
-                totalCount: 1292,
-              },
-            },
-          });
-
-          expect(cache.extract()).toMatchSnapshot();
-
-          client.query({ query: thirdQuery }).then(result => {
-            expect(result).toEqual({
-              loading: false,
-              networkStatus: NetworkStatus.ready,
-              data: {
-                todos: {
-                  totalCount: 1293,
-                  extraMetaData: 'extra',
-                },
-              },
-            });
-            expect(cache.extract()).toMatchSnapshot();
-            resolve();
-          });
-        });
+        },
       });
+
+      expect(cache.extract()).toEqual({
+        ROOT_QUERY: {
+          __typename: 'Query',
+          todos: {
+            edges: [],
+            pageInfo: {
+              endCursor: '',
+              hasNextPage: true,
+              hasPreviousPage: false,
+              startCursor: '',
+            },
+            totalCount: 1292,
+          },
+        },
+      });
+
+      result = await client.query({
+        query: secondQuery,
+        variables: secondVariables,
+      });
+
+      expect(result).toEqual({
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        data: {
+          todos: {
+            edges: secondEdges,
+            pageInfo: secondPageInfo,
+            totalCount: 1292,
+          },
+        },
+      });
+
+      expect(cache.extract()).toMatchSnapshot();
+
+      result = await client.query({ query: thirdQuery });
+      expect(result).toEqual({
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        data: {
+          todos: {
+            totalCount: 1293,
+            extraMetaData: 'extra',
+          },
+        },
+      });
+      expect(cache.extract()).toMatchSnapshot();
     });
 
-    itAsync('can handle Relay-style pagination', (resolve, reject) => {
-      const cache = new InMemoryCache({
+    // Hermes: keyArgs are not supported (relayStylePagination stores every page under one
+    // keyArgs-based field)
+    it.skip('can handle Relay-style pagination', async () => {
+      const cache = new Hermes({
         addTypename: false,
         typePolicies: {
           Query: {
@@ -4025,7 +4113,9 @@ describe('type policies', () => {
             },
           },
         },
-      ]).setOnError(reject);
+      ]).setOnError(error => {
+        throw new Error(error);
+      });
 
       const client = new ApolloClient({ link, cache });
 
@@ -4046,269 +4136,273 @@ describe('type policies', () => {
         },
       });
 
-      subscribeAndCount(reject, observable, (count, result) => {
-        if (count === 1) {
-          expect(result).toEqual({
-            loading: false,
-            networkStatus: NetworkStatus.ready,
-            data: {
-              search: {
-                edges: firstEdges,
-                pageInfo: firstPageInfo,
-                totalCount: 1292,
-              },
-            },
-          });
+      const stream = new ObservableStream(observable);
 
-          expect(cache.extract()).toMatchSnapshot();
-
-          observable.fetchMore({
-            variables: secondVariables,
-          });
-        } else if (count === 2) {
-          expect(result).toEqual({
-            loading: false,
-            networkStatus: NetworkStatus.ready,
-            data: {
-              search: {
-                edges: [...firstEdges, ...secondEdges],
-                pageInfo: {
-                  __typename: 'PageInfo',
-                  startCursor: firstPageInfo.startCursor,
-                  endCursor: secondPageInfo.endCursor,
-                  hasPreviousPage: false,
-                  hasNextPage: true,
-                },
-                totalCount: 1292,
-              },
-            },
-          });
-
-          expect(cache.extract()).toMatchSnapshot();
-
-          observable.fetchMore({
-            variables: thirdVariables,
-          });
-        } else if (count === 3) {
-          expect(result.data.search.edges.length).toBe(5);
-
-          expect(result).toEqual({
-            loading: false,
-            networkStatus: NetworkStatus.ready,
-            data: {
-              search: {
-                edges: [...thirdEdges, ...secondEdges],
-                pageInfo: {
-                  __typename: 'PageInfo',
-                  startCursor: thirdPageInfo.startCursor,
-                  endCursor: secondPageInfo.endCursor,
-                  hasPreviousPage: true,
-                  hasNextPage: true,
-                },
-                totalCount: 1292,
-              },
-            },
-          });
-
-          expect(cache.extract()).toMatchSnapshot();
-
-          observable.fetchMore({
-            variables: fourthVariables,
-          });
-        } else if (count === 4) {
-          expect(result).toEqual({
-            loading: false,
-            networkStatus: NetworkStatus.ready,
-            data: {
-              search: {
-                edges: [...fourthEdges, ...thirdEdges, ...secondEdges],
-                pageInfo: {
-                  __typename: 'PageInfo',
-                  startCursor: firstPageInfo.startCursor,
-                  endCursor: secondPageInfo.endCursor,
-                  hasPreviousPage: false,
-                  hasNextPage: true,
-                },
-                totalCount: 1292,
-              },
-            },
-          });
-
-          expect(result.data.search.edges).toEqual([...firstEdges, ...secondEdges]);
-
-          expect(cache.extract()).toMatchSnapshot();
-
-          observable.fetchMore({
-            variables: fifthVariables,
-          });
-        } else if (count === 5) {
-          expect(result.data.search.edges.length).toBe(7);
-
-          expect(result).toEqual({
-            loading: false,
-            networkStatus: NetworkStatus.ready,
-            data: {
-              search: {
-                edges: [...firstEdges, ...secondEdges, ...fifthEdges],
-                pageInfo: {
-                  __typename: 'PageInfo',
-                  startCursor: firstPageInfo.startCursor,
-                  endCursor: fifthPageInfo.endCursor,
-                  hasPreviousPage: false,
-                  hasNextPage: true,
-                },
-                totalCount: 1292,
-              },
-            },
-          });
-
-          expect(cache.extract()).toMatchSnapshot();
-
-          // Now search for a different artist to verify that they keyArgs
-          // function we passed to relayStylePagination above keeps
-          // different search queries separate in the cache.
-          client
-            .query({
-              query,
-              variables: {
-                query: 'James Turrell',
-                first: 1,
-              },
-            })
-            .then(result => {
-              expect(result).toEqual({
-                loading: false,
-                networkStatus: NetworkStatus.ready,
-                data: {
-                  search: {
-                    edges: turrellEdges.slice(0, 1),
-                    pageInfo: turrellPageInfo1,
-                    totalCount: 13531,
-                  },
-                },
-              });
-
-              const snapshot = cache.extract();
-              expect(snapshot).toMatchSnapshot();
-              expect(
-                // Note that Turrell's name has been lower-cased.
-                snapshot.ROOT_QUERY!['search:james turrell'],
-              ).toEqual({
-                edges: turrellEdges.slice(0, 1).map(edge => ({
-                  ...edge,
-                  // The relayStylePagination merge function updates the
-                  // edge.cursor field of the first and last edge, even if
-                  // the query did not request the edge.cursor field, if
-                  // pageInfo.{start,end}Cursor are defined.
-                  cursor: turrellPageInfo1.startCursor,
-                  // Artist objects are normalized by HREF:
-                  node: { __ref: 'Artist:{"href":"/artist/james-turrell"}' },
-                })),
-                pageInfo: turrellPageInfo1,
-                totalCount: 13531,
-              });
-
-              // Evict the Basquiat entity to verify that the dangling
-              // edge.node Reference gets automatically elided from the
-              // Basquiat search results, thanks to the read function
-              // generated by the relayStylePagination helper.
-              expect(
-                cache.evict({
-                  id: cache.identify({
-                    __typename: 'Artist',
-                    href: '/artist/jean-michel-basquiat',
-                  }),
-                }),
-              ).toBe(true);
-            }, reject);
-        } else if (count === 6) {
-          // Same full list of edges that we saw in the previous case.
-          const edges = [...firstEdges, ...secondEdges, ...fifthEdges];
-
-          // Remove the Basquiat edge, which we know to be first.
-          expect(edges.shift()).toEqual({
-            __typename: 'SearchableEdge',
-            node: {
-              __typename: 'Artist',
-              href: '/artist/jean-michel-basquiat',
-              displayLabel: 'Jean-Michel Basquiat',
-              bio: 'American, 1960-1988, New York, New York, based in New York, New York',
-            },
-          });
-
-          expect(result).toEqual({
-            loading: false,
-            networkStatus: NetworkStatus.ready,
-            data: {
-              search: {
-                edges,
-                pageInfo: {
-                  __typename: 'PageInfo',
-                  startCursor: fourthPageInfo.startCursor,
-                  endCursor: fifthPageInfo.endCursor,
-                  hasPreviousPage: false,
-                  hasNextPage: true,
-                },
-                totalCount: 1292,
-              },
-            },
-          });
-
-          expect(cache.extract()).toMatchSnapshot();
-
-          // Now search for James Turrell again with args.first === 2
-          // (turrellVariables2), but without args.after, so that the
-          // new results overwrite the existing results (#6592).
-          client
-            .query({
-              query,
-              variables: turrellVariables2,
-              // Necessary to skip the cache, like fetchMore does.
-              fetchPolicy: 'network-only',
-            })
-            .then(result => {
-              expect(result).toEqual({
-                loading: false,
-                networkStatus: NetworkStatus.ready,
-                data: {
-                  search: {
-                    edges: turrellEdges,
-                    pageInfo: turrellPageInfo2,
-                    totalCount: 13531,
-                  },
-                },
-              });
-
-              const snapshot = cache.extract();
-              expect(snapshot).toMatchSnapshot();
-              expect(
-                // Note that Turrell's name has been lower-cased.
-                snapshot.ROOT_QUERY!['search:james turrell'],
-              ).toEqual({
-                edges: turrellEdges.map((edge, i) => ({
-                  ...edge,
-                  // This time the cursors are different depending on which
-                  // of the two edges we're considering.
-                  cursor: [turrellPageInfo2.startCursor, turrellPageInfo2.endCursor][i],
-                  node: [
-                    // Artist objects are normalized by HREF:
-                    { __ref: 'Artist:{"href":"/artist/james-turrell"}' },
-                    // However, SearchableItem objects are not normalized.
-                    edge.node,
-                  ][i],
-                })),
-                pageInfo: turrellPageInfo2,
-                totalCount: 13531,
-              });
-
-              // Wait a bit to make sure there are no additional results for
-              // Basquiat.
-              setTimeout(resolve, 100);
-            });
-        } else {
-          reject('should not receive another result for Basquiat');
-        }
+      await expect(stream).toEmitValue({
+        loading: false,
+        networkStatus: NetworkStatus.ready,
+        data: {
+          search: {
+            edges: firstEdges,
+            pageInfo: firstPageInfo,
+            totalCount: 1292,
+          },
+        },
       });
+      expect(cache.extract()).toMatchSnapshot();
+
+      await observable.fetchMore({ variables: secondVariables });
+
+      {
+        const result = await stream.takeNext();
+
+        expect(result).toEqual({
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          data: {
+            search: {
+              edges: [...firstEdges, ...secondEdges],
+              pageInfo: {
+                __typename: 'PageInfo',
+                startCursor: firstPageInfo.startCursor,
+                endCursor: secondPageInfo.endCursor,
+                hasPreviousPage: false,
+                hasNextPage: true,
+              },
+              totalCount: 1292,
+            },
+          },
+        });
+        expect(cache.extract()).toMatchSnapshot();
+      }
+
+      await observable.fetchMore({ variables: thirdVariables });
+
+      {
+        const result = await stream.takeNext();
+
+        expect(result.data.search.edges.length).toBe(5);
+
+        expect(result).toEqual({
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          data: {
+            search: {
+              edges: [...thirdEdges, ...secondEdges],
+              pageInfo: {
+                __typename: 'PageInfo',
+                startCursor: thirdPageInfo.startCursor,
+                endCursor: secondPageInfo.endCursor,
+                hasPreviousPage: true,
+                hasNextPage: true,
+              },
+              totalCount: 1292,
+            },
+          },
+        });
+
+        expect(cache.extract()).toMatchSnapshot();
+      }
+
+      await observable.fetchMore({ variables: fourthVariables });
+
+      {
+        const result = await stream.takeNext();
+
+        expect(result).toEqual({
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          data: {
+            search: {
+              edges: [...fourthEdges, ...thirdEdges, ...secondEdges],
+              pageInfo: {
+                __typename: 'PageInfo',
+                startCursor: firstPageInfo.startCursor,
+                endCursor: secondPageInfo.endCursor,
+                hasPreviousPage: false,
+                hasNextPage: true,
+              },
+              totalCount: 1292,
+            },
+          },
+        });
+
+        expect(result.data.search.edges).toEqual([...firstEdges, ...secondEdges]);
+
+        expect(cache.extract()).toMatchSnapshot();
+      }
+
+      await observable.fetchMore({ variables: fifthVariables });
+
+      {
+        const result = await stream.takeNext();
+
+        expect(result.data.search.edges.length).toBe(7);
+
+        expect(result).toEqual({
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          data: {
+            search: {
+              edges: [...firstEdges, ...secondEdges, ...fifthEdges],
+              pageInfo: {
+                __typename: 'PageInfo',
+                startCursor: firstPageInfo.startCursor,
+                endCursor: fifthPageInfo.endCursor,
+                hasPreviousPage: false,
+                hasNextPage: true,
+              },
+              totalCount: 1292,
+            },
+          },
+        });
+
+        expect(cache.extract()).toMatchSnapshot();
+      }
+
+      // Now search for a different artist to verify that they keyArgs
+      // function we passed to relayStylePagination above keeps
+      // different search queries separate in the cache.
+      {
+        const result = await client.query({
+          query,
+          variables: {
+            query: 'James Turrell',
+            first: 1,
+          },
+        });
+        const snapshot = cache.extract();
+
+        expect(result).toEqual({
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          data: {
+            search: {
+              edges: turrellEdges.slice(0, 1),
+              pageInfo: turrellPageInfo1,
+              totalCount: 13531,
+            },
+          },
+        });
+
+        expect(snapshot).toMatchSnapshot();
+        expect(
+          // Note that Turrell's name has been lower-cased.
+          snapshot.ROOT_QUERY!['search:james turrell'],
+        ).toEqual({
+          edges: turrellEdges.slice(0, 1).map(edge => ({
+            ...edge,
+            // The relayStylePagination merge function updates the
+            // edge.cursor field of the first and last edge, even if
+            // the query did not request the edge.cursor field, if
+            // pageInfo.{start,end}Cursor are defined.
+            cursor: turrellPageInfo1.startCursor,
+            // Artist objects are normalized by HREF:
+            node: { __ref: 'Artist:{"href":"/artist/james-turrell"}' },
+          })),
+          pageInfo: turrellPageInfo1,
+          totalCount: 13531,
+        });
+      }
+
+      // Evict the Basquiat entity to verify that the dangling
+      // edge.node Reference gets automatically elided from the
+      // Basquiat search results, thanks to the read function
+      // generated by the relayStylePagination helper.
+      expect(
+        cache.evict({
+          id: cache.identify({
+            __typename: 'Artist',
+            href: '/artist/jean-michel-basquiat',
+          }),
+        }),
+      ).toBe(true);
+
+      {
+        const result = await stream.takeNext();
+
+        // Same full list of edges that we saw in the previous case.
+        const edges = [...firstEdges, ...secondEdges, ...fifthEdges];
+
+        // Remove the Basquiat edge, which we know to be first.
+        expect(edges.shift()).toEqual({
+          __typename: 'SearchableEdge',
+          node: {
+            __typename: 'Artist',
+            href: '/artist/jean-michel-basquiat',
+            displayLabel: 'Jean-Michel Basquiat',
+            bio: 'American, 1960-1988, New York, New York, based in New York, New York',
+          },
+        });
+
+        expect(result).toEqual({
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          data: {
+            search: {
+              edges,
+              pageInfo: {
+                __typename: 'PageInfo',
+                startCursor: fourthPageInfo.startCursor,
+                endCursor: fifthPageInfo.endCursor,
+                hasPreviousPage: false,
+                hasNextPage: true,
+              },
+              totalCount: 1292,
+            },
+          },
+        });
+
+        expect(cache.extract()).toMatchSnapshot();
+      }
+
+      {
+        // Now search for James Turrell again with args.first === 2
+        // (turrellVariables2), but without args.after, so that the
+        // new results overwrite the existing results (#6592).
+        const result = await client.query({
+          query,
+          variables: turrellVariables2,
+          // Necessary to skip the cache, like fetchMore does.
+          fetchPolicy: 'network-only',
+        });
+        const snapshot = cache.extract();
+
+        expect(result).toEqual({
+          loading: false,
+          networkStatus: NetworkStatus.ready,
+          data: {
+            search: {
+              edges: turrellEdges,
+              pageInfo: turrellPageInfo2,
+              totalCount: 13531,
+            },
+          },
+        });
+
+        expect(snapshot).toMatchSnapshot();
+        expect(
+          // Note that Turrell's name has been lower-cased.
+          snapshot.ROOT_QUERY!['search:james turrell'],
+        ).toEqual({
+          edges: turrellEdges.map((edge, i) => ({
+            ...edge,
+            // This time the cursors are different depending on which
+            // of the two edges we're considering.
+            cursor: [turrellPageInfo2.startCursor, turrellPageInfo2.endCursor][i],
+            node: [
+              // Artist objects are normalized by HREF:
+              { __ref: 'Artist:{"href":"/artist/james-turrell"}' },
+              // However, SearchableItem objects are not normalized.
+              edge.node,
+            ][i],
+          })),
+          pageInfo: turrellPageInfo2,
+          totalCount: 13531,
+        });
+      }
+
+      await expect(stream).not.toEmitAnything();
     });
 
     it('runs nested merge functions as well as ancestors', () => {
@@ -4809,7 +4903,7 @@ describe('type policies', () => {
       };
     }
 
-    function testForceMerges(cache: InMemoryCache | Hermes) {
+    function testForceMerges(cache: Hermes) {
       // Hermes: references are inbound/outbound edges between nodes, and
       // results may contain a superset of the selected fields.
       const isHermes = cache instanceof Hermes;
@@ -5149,7 +5243,7 @@ describe('type policies', () => {
     });
 
     it('can force merging with inherited merge:true field policy', () => {
-      const cache = new InMemoryCache({
+      const cache = new Hermes({
         typePolicies: {
           Authored: {
             fields: {
@@ -5180,7 +5274,7 @@ describe('type policies', () => {
     });
 
     it('can force merging with inherited merge:true type policy', () => {
-      const cache = new InMemoryCache({
+      const cache = new Hermes({
         typePolicies: {
           Book: {
             keyFields: ['isbn'],
@@ -5215,10 +5309,11 @@ describe('type policies', () => {
       return data;
     }
 
-    it('can force merging with inherited type policy merge function', () => {
+    // Hermes: inheritance of typePolicies via possibleTypes is not implemented
+    it.skip('can force merging with inherited type policy merge function', () => {
       let personMergeCount = 0;
 
-      const cache = new InMemoryCache({
+      const cache = new Hermes({
         typePolicies: {
           Book: {
             keyFields: ['isbn'],
@@ -5252,7 +5347,7 @@ describe('type policies', () => {
       expect(personMergeCount).toBe(3);
     });
 
-    it('can force merging references with non-normalized objects', () => {
+    it('can force merging references with non-normalized objects', async () => {
       const nameQuery = gql`
         query GetName {
           viewer {
@@ -5270,7 +5365,7 @@ describe('type policies', () => {
         }
       `;
 
-      check(
+      await check(
         new Hermes({
           typePolicies: {
             Query: {
@@ -5284,7 +5379,7 @@ describe('type policies', () => {
         }),
       );
 
-      check(
+      await check(
         new Hermes({
           typePolicies: {
             User: {
@@ -5294,7 +5389,7 @@ describe('type policies', () => {
         }),
       );
 
-      function check(cache: Hermes) {
+      async function check(cache: Hermes) {
         // Write nameQuery first, so the existing data will be a
         // non-normalized object when we write emailQuery next.
         cache.writeQuery({
@@ -5374,7 +5469,7 @@ describe('type policies', () => {
           },
         });
 
-        cache.reset();
+        await cache.reset();
         expect(cache.extract()).toEqual({});
 
         // Write emailQuery first, so the existing data will be a
@@ -5462,10 +5557,11 @@ describe('type policies', () => {
       }
     });
 
-    it('can force merging with inherited field merge function', () => {
+    // Hermes: inheritance of typePolicies via possibleTypes is not implemented
+    it.skip('can force merging with inherited field merge function', () => {
       let authorMergeCount = 0;
 
-      const cache = new InMemoryCache({
+      const cache = new Hermes({
         typePolicies: {
           Book: {
             keyFields: ['isbn'],

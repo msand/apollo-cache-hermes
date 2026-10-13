@@ -36,7 +36,7 @@
     "test-format": "prettier --check ."
   },
   "devDependencies": {
-    "@apollo/client": "^3.10.8",
+    "@apollo/client": "^3.14.1",
     "@babel/core": "^8.0.7",
     "@babel/preset-env": "^8.0.7",
     "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
@@ -48,6 +48,7 @@
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
+    "@testing-library/react-render-stream": "^2.0.2",
     "@testing-library/user-event": "^14.6.7",
     "@types/chai": "^5.2.3",
     "@types/jest": "^30.0.0",
@@ -101,7 +102,7 @@
     "tslib": "^2.8.1"
   },
   "peerDependencies": {
-    "@apollo/client": "^3.10.8"
+    "@apollo/client": "^3.14.1"
   },
   "overrides": {
     "js-yaml": "^4.1.0"

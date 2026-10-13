@@ -48,9 +48,16 @@ export class QueryInfo<TSerialized = GraphSnapshot> {
    * Variables not present in this map are considered required.
    */
   public readonly variableDefaults: { [Key: string]: JsonValue };
+  /**
+   * Whether the caller transformed the document itself (as ApolloClient does),
+   * so that the __typename fields added by addTypename were part of the
+   * document the caller passed in.
+   */
+  public readonly pretransformed: boolean;
 
-  constructor(context: CacheContext<TSerialized>, raw: RawOperation) {
+  constructor(context: CacheContext<TSerialized>, raw: RawOperation, pretransformed = false) {
     this.document = raw.document;
+    this.pretransformed = pretransformed;
     this.operation = getOperationOrDie(raw.document);
     this.operationType = this.operation.operation;
     this.operationName = this.operation.name && this.operation.name.value;

@@ -1,5 +1,6 @@
-import { ApolloCache, Cache, Reference, makeReference } from '@apollo/client';
-import { removeDirectivesFromDocument } from '@apollo/client/utilities';
+import { ApolloCache, Cache, Reference, Unmasked, makeReference } from '@apollo/client';
+import { removeDirectivesFromDocument, stringifyForDisplay } from '@apollo/client/utilities';
+import { InvariantError } from '@apollo/client/utilities/globals';
 
 import { UnsatisfiedCacheError } from '../errors';
 import { JsonObject } from '../primitive';
@@ -35,7 +36,7 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
     return { result: (empty ? EMPTY_RESULT : result) as unknown as T, complete, missing, fromOptimisticTransaction };
   }
 
-  read<TData = any, TVariables = any>(query: Cache.ReadOptions<TVariables, TData>): TData | null {
+  read<TData = any, TVariables = any>(query: Cache.ReadOptions<TVariables, TData>): Unmasked<TData> | null {
     const rawOperation = buildRawOperationFromQuery(
       query.query,
       query.variables as unknown as JsonObject,
@@ -43,7 +44,7 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
     );
     const { result, complete } = this._queryable.read(rawOperation, query.optimistic);
     if (complete || query.returnPartialData) {
-      return (result ?? (null as unknown)) as TData | null;
+      return (result ?? (null as unknown)) as Unmasked<TData> | null;
     }
     return null;
   }
@@ -52,7 +53,7 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
     options: Cache.ReadQueryOptions<QueryType, TVariables>,
     // Like ApolloCache, options.optimistic is the default.
     optimistic = !!options.optimistic,
-  ): QueryType | null {
+  ): Unmasked<QueryType> | null {
     return this.read({
       query: options.query,
       variables: options.variables,
@@ -65,7 +66,7 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
   readFragment<FragmentType, TVariables = any>(
     options: Cache.ReadFragmentOptions<FragmentType, TVariables>,
     optimistic = !!options.optimistic,
-  ): FragmentType | null {
+  ): Unmasked<FragmentType> | null {
     // TODO: Support nested fragments.
     const rawOperation = buildRawOperationFromFragment(
       options.fragment,
@@ -101,10 +102,15 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
   writeFragment<TData = any, TVariables = any>(
     options: Cache.WriteFragmentOptions<TData, TVariables>,
   ): Reference | undefined {
+    const id = options.id ?? this.identify(options.data as any);
+    // Like InMemoryCache.
+    if (typeof id !== 'string') {
+      throw new InvariantError(`Could not identify object ${stringifyForDisplay(options.data, 2)}`);
+    }
     // TODO: Support nested fragments.
     const rawOperation = buildRawOperationFromFragment(
       options.fragment,
-      options.id ?? this.identify(options.data as any)!,
+      id,
       options.variables as any,
       options.fragmentName,
     );

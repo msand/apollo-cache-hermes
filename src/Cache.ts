@@ -1,5 +1,6 @@
 import { Cache as CacheInterface } from '@apollo/client';
 import { cacheSlot } from '@apollo/client/cache';
+import type { FragmentDefinitionNode, InlineFragmentNode } from 'graphql';
 import { Reference, StoreObject } from '@apollo/client/utilities';
 import { invariant } from '@apollo/client/utilities/globals';
 
@@ -139,6 +140,22 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
 
   transformDocument(document: DocumentNode): DocumentNode {
     return this._context.transformDocument(document);
+  }
+
+  /**
+   * Whether a fragment (or inline fragment) applies to objects of the given
+   * __typename, considering possibleTypes (like InMemoryCache#fragmentMatches).
+   */
+  fragmentMatches(fragment: InlineFragmentNode | FragmentDefinitionNode, typename: string): boolean {
+    if (!fragment.typeCondition) return true;
+    // A fragment with a type condition cannot match an object without __typename.
+    if (!typename) return false;
+    return this._context.fragmentMatches(fragment.typeCondition.name.value, typename);
+  }
+
+  /** The fragment registered under `fragmentName` (like InMemoryCache#lookupFragment). */
+  lookupFragment(fragmentName: string): FragmentDefinitionNode | null {
+    return this._context.fragments?.lookup(fragmentName) ?? null;
   }
 
   restore(data: Serializable.GraphSnapshot, migrationMap?: MigrationMap, verifyQuery?: RawOperation) {

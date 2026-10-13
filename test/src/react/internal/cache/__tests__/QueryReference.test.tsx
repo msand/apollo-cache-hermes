@@ -1,9 +1,14 @@
 import * as React from 'react';
 import { ApolloClient, ApolloLink } from '@apollo/client';
+import { Observable } from '@apollo/client/core';
+import { setupSimpleCase } from '@apollo/client/testing/internal';
+import {
+  InternalQueryReference,
+  PreloadedQueryRef,
+  QueryRef,
+  QueryReference,
+} from '@apollo/client/react/internal/cache/QueryReference';
 
-import { Observable } from '../../../../core';
-import { setupSimpleCase } from '../../../../testing/internal';
-import { InternalQueryReference, PreloadedQueryRef, QueryRef, QueryReference } from '../QueryReference';
 import { Hermes } from '../../../../../../src';
 
 it('kicks off request immediately when created', async () => {

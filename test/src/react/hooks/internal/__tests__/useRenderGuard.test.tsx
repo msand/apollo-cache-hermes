@@ -1,7 +1,6 @@
-import React, { useEffect } from 'rehackt';
+import * as React from 'rehackt';
 import { render, waitFor } from '@testing-library/react';
-
-import { useRenderGuard } from '../useRenderGuard';
+import { useRenderGuard } from '@apollo/client/react/hooks/internal/useRenderGuard';
 
 const UNDEF = {};
 const IS_REACT_19 = React.version.startsWith('19');
@@ -23,7 +22,7 @@ it('returns a function that returns `false` if called after render', async () =>
   let result: boolean | typeof UNDEF = UNDEF;
   function TestComponent() {
     const calledDuringRender = useRenderGuard();
-    useEffect(() => {
+    React.useEffect(() => {
       result = calledDuringRender();
     });
     return <>Test</>;

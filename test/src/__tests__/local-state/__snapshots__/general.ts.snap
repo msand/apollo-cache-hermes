@@ -1,8 +1,14 @@
 // Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
-exports[`Combining client and server state/operations should correctly propagate an error from a client resolver 1`] = `"Illegal Query Operation Occurred"`;
+exports[`Combining client and server state/operations should correctly propagate an error from a client resolver 1`] = `
+"Illegal Query Operation Occurred
+Cause: Illegal Query Operation Occurred"
+`;
 
-exports[`Combining client and server state/operations should correctly propagate an error from a client resolver 2`] = `"Illegal Mutation Operation Occurred"`;
+exports[`Combining client and server state/operations should correctly propagate an error from a client resolver 2`] = `
+"Illegal Mutation Operation Occurred
+Cause: Illegal Mutation Operation Occurred"
+`;
 
 exports[`Combining client and server state/operations should handle a simple query with both server and client fields 1`] = `
 [MockFunction] {

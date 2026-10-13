@@ -1,6 +1,9 @@
+import { loadErrorMessages } from '@apollo/client/dev';
 import gql from 'graphql-tag';
+import { parser, DocumentType } from '@apollo/client/react/parser';
 
-import { parser, DocumentType } from '..';
+// These tests assert the @apollo/client error text rather than its production placeholder.
+loadErrorMessages();
 
 type OperationDefinition = any;
 

@@ -16,6 +16,9 @@
 # TypeScript
 !/typings/**/*.d.ts
 
+# Apollo Client checkout the vendored tests are copied from
+/apollo-client/
+
 # Claude Code worktrees
 /.claude/worktrees/
 

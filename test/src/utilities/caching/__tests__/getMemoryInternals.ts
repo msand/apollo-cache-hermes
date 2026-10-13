@@ -1,13 +1,13 @@
 import * as crypto from 'crypto';
 import { ApolloClient, ApolloLink, DocumentTransform, InMemoryCache } from '@apollo/client';
-
-import { createFragmentRegistry } from '../../../cache';
-import { gql } from '../../../core';
-import { createPersistedQueryLink } from '../../../link/persisted-queries';
-import { removeTypenameFromVariables } from '../../../link/remove-typename';
+import { createFragmentRegistry } from '@apollo/client/cache';
+import { gql } from '@apollo/client/core';
+import { createPersistedQueryLink } from '@apollo/client/link/persisted-queries';
+import { removeTypenameFromVariables } from '@apollo/client/link/remove-typename';
 // importing react so the `parser` cache initializes
-import '../../../react';
-import { cacheSizes, defaultCacheSizes } from '../sizes';
+import '@apollo/client/react';
+import { cacheSizes, defaultCacheSizes } from '@apollo/client/utilities/caching/sizes';
+
 import { Hermes } from '../../../../../src';
 
 function sha256(data: string) {
@@ -34,8 +34,7 @@ const defaultCacheSizesAsObject = {
   'inMemoryCache.executeSubSelectedArray': defaultCacheSizes['inMemoryCache.executeSubSelectedArray'],
 };
 
-// Hermes: InMemoryCache getMemoryInternals; @apollo/client CJS bundles each keep their own globalCaches
-it.skip('returns information about cache usage (empty caches)', () => {
+it('returns information about cache usage (empty caches)', () => {
   const client = new ApolloClient({
     documentTransform: new DocumentTransform(x => x, {
       cache: true,
@@ -44,7 +43,7 @@ it.skip('returns information about cache usage (empty caches)', () => {
         cache: true,
       }),
     ),
-    cache: new InMemoryCache({
+    cache: new Hermes({
       fragments: createFragmentRegistry(),
     }),
     link: createPersistedQueryLink({
@@ -59,11 +58,9 @@ it.skip('returns information about cache usage (empty caches)', () => {
       parser: 0,
       canonicalStringify: 0,
       print: 0,
-      addTypenameDocumentTransform: [
-        {
-          cache: 0,
-        },
-      ],
+      // Hermes: Hermes reports only ApolloCache's memory internals; InMemoryCache's
+      // addTypenameDocumentTransform, fragmentRegistry and inMemoryCache (StoreReader)
+      // caches do not exist.
       queryManager: {
         getDocumentInfo: 0,
         documentTransforms: [
@@ -75,18 +72,8 @@ it.skip('returns information about cache usage (empty caches)', () => {
           },
         ],
       },
-      fragmentRegistry: {
-        findFragmentSpreads: 0,
-        lookup: 0,
-        transform: 0,
-      },
       cache: {
         fragmentQueryDocuments: 0,
-      },
-      inMemoryCache: {
-        executeSelectionSet: 0,
-        executeSubSelectedArray: 0,
-        maybeBroadcastWatch: 0,
       },
       links: [
         {
@@ -104,8 +91,7 @@ it.skip('returns information about cache usage (empty caches)', () => {
   });
 });
 
-// Hermes: InMemoryCache getMemoryInternals; @apollo/client CJS bundles each keep their own globalCaches
-it.skip('returns information about cache usage (some query triggered)', () => {
+it('returns information about cache usage (some query triggered)', () => {
   const client = new ApolloClient({
     documentTransform: new DocumentTransform(x => x, {
       cache: true,
@@ -114,7 +100,7 @@ it.skip('returns information about cache usage (some query triggered)', () => {
         cache: true,
       }),
     ),
-    cache: new InMemoryCache({
+    cache: new Hermes({
       fragments: createFragmentRegistry(),
     }),
     link: createPersistedQueryLink({
@@ -137,11 +123,9 @@ it.skip('returns information about cache usage (some query triggered)', () => {
       parser: 0,
       canonicalStringify: 0,
       print: 1,
-      addTypenameDocumentTransform: [
-        {
-          cache: 1,
-        },
-      ],
+      // Hermes: Hermes reports only ApolloCache's memory internals; InMemoryCache's
+      // addTypenameDocumentTransform, fragmentRegistry and inMemoryCache (StoreReader)
+      // caches do not exist.
       queryManager: {
         getDocumentInfo: 1,
         documentTransforms: [
@@ -153,18 +137,8 @@ it.skip('returns information about cache usage (some query triggered)', () => {
           },
         ],
       },
-      fragmentRegistry: {
-        findFragmentSpreads: 1,
-        lookup: 0,
-        transform: 1,
-      },
       cache: {
         fragmentQueryDocuments: 0,
-      },
-      inMemoryCache: {
-        executeSelectionSet: 1,
-        executeSubSelectedArray: 0,
-        maybeBroadcastWatch: 0,
       },
       links: [
         {
@@ -182,8 +156,7 @@ it.skip('returns information about cache usage (some query triggered)', () => {
   });
 });
 
-// Hermes: getMemoryInternals; the @apollo/client CJS core bundle keeps a private copy of cacheSizes
-it.skip('reports user-declared cacheSizes', () => {
+it('reports user-declared cacheSizes', () => {
   const client = new ApolloClient({
     cache: new Hermes({}),
   });

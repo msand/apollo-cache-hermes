@@ -1,4 +1,4 @@
-import { ObjectCanon } from '../object-canon';
+import { ObjectCanon } from '@apollo/client/cache/inmemory/object-canon';
 
 describe('ObjectCanon', () => {
   it('can canonicalize objects and arrays', () => {

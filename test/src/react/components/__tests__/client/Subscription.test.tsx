@@ -2,11 +2,13 @@ import * as React from 'react';
 import gql from 'graphql-tag';
 import { render, waitFor } from '@testing-library/react';
 import { ApolloClient, ApolloProvider, ApolloLink } from '@apollo/client';
+import { ApolloError } from '@apollo/client/core';
+import { DocumentNode, Operation } from '@apollo/client/link/core';
+import { itAsync, MockSubscriptionLink } from '@apollo/client/testing';
+import { Subscription } from '@apollo/client/react/components/Subscription';
+import { spyOnConsole } from '@apollo/client/testing/internal';
+import { disableActEnvironment, createRenderStream } from '@testing-library/react-render-stream';
 
-import { Operation } from '../../../../link/core';
-import { itAsync, MockSubscriptionLink } from '../../../../testing';
-import { Subscription } from '../../Subscription';
-import { spyOnConsole } from '../../../../testing/internal';
 import { Hermes } from '../../../../../../src';
 
 const results = ['Luke Skywalker', 'Han Solo', 'Darth Vader', 'Leia Skywalker'].map(name => ({
@@ -133,8 +135,9 @@ it('calls onSubscriptionData with deprecation warning if given', async () => {
     </ApolloProvider>,
   );
 
-  expect(consoleSpy.warn).toHaveBeenCalledTimes(1);
-  expect(consoleSpy.warn).toHaveBeenCalledWith(expect.stringContaining("'onSubscriptionData' is deprecated"));
+  // The 1st warning is the deprecation on the Subscription component
+  expect(consoleSpy.warn).toHaveBeenCalledTimes(2);
+  expect(consoleSpy.warn).toHaveBeenCalledWith(expect.stringContaining('`onSubscriptionData` is deprecated'));
 
   const interval = setInterval(() => {
     link.simulateResult(results[count]);
@@ -197,8 +200,9 @@ it('should call onSubscriptionComplete with deprecation warning if specified', a
     </ApolloProvider>,
   );
 
-  expect(consoleSpy.warn).toHaveBeenCalledTimes(1);
-  expect(consoleSpy.warn).toHaveBeenCalledWith(expect.stringContaining("'onSubscriptionComplete' is deprecated"));
+  // The 1st warning is the deprecation on the Subscription component
+  expect(consoleSpy.warn).toHaveBeenCalledTimes(2);
+  expect(consoleSpy.warn).toHaveBeenLastCalledWith(expect.stringContaining('`onSubscriptionComplete` is deprecated'));
 
   const interval = setInterval(() => {
     link.simulateResult(results[count], count === 3);
@@ -367,7 +371,7 @@ itAsync('renders an error', (resolve, reject) => {
             expect(error).toBeUndefined();
           } else if (count === 1) {
             expect(loading).toBe(false);
-            expect(error).toEqual(new Error('error occurred'));
+            expect(error).toEqual(new ApolloError({ protocolErrors: [new Error('error occurred')] }));
             expect(data).toBeUndefined();
           }
         } catch (error) {
@@ -399,77 +403,71 @@ describe('should update', () => {
       cache: new Hermes({ addTypename: false }),
     });
 
-    let count = 0;
-    const testFailures: any[] = [];
-
-    class Component extends React.Component {
-      state = {
-        client,
-      };
-
-      render() {
-        return (
-          <ApolloProvider client={this.state.client}>
-            <Subscription subscription={subscription}>
-              {(result: any) => {
-                const { loading, data } = result;
-                try {
-                  switch (count++) {
-                    case 0:
-                      expect(loading).toBeTruthy();
-                      expect(data).toBeUndefined();
-                      break;
-                    case 1:
-                      setTimeout(() => {
-                        this.setState(
-                          {
-                            client: client2,
-                          },
-                          () => {
-                            link2.simulateResult(results[1]);
-                          },
-                        );
-                      });
-                    // fallthrough
-                    case 2:
-                      expect(loading).toBeFalsy();
-                      expect(data).toEqual(results[0].result.data);
-                      break;
-                    case 3:
-                      expect(loading).toBeTruthy();
-                      expect(data).toBeUndefined();
-                      break;
-                    case 4:
-                      expect(loading).toBeFalsy();
-                      expect(data).toEqual(results[1].result.data);
-                      break;
-                    default:
-                      throw new Error('too many rerenders');
-                  }
-                } catch (error) {
-                  testFailures.push(error);
-                }
-                return null;
-              }}
-            </Subscription>
-          </ApolloProvider>
-        );
-      }
+    function Container() {
+      return (
+        <Subscription subscription={subscription}>
+          {(r: any) => {
+            replaceSnapshot(r);
+            return null;
+          }}
+        </Subscription>
+      );
     }
-
-    render(<Component />);
+    using _disabledAct = disableActEnvironment();
+    const { takeRender, replaceSnapshot, render } = createRenderStream<any>();
+    const { rerender } = await render(
+      <ApolloProvider client={client}>
+        <Container />
+      </ApolloProvider>,
+    );
+    {
+      const {
+        snapshot: { loading, data },
+      } = await takeRender();
+      expect(loading).toBeTruthy();
+      expect(data).toBeUndefined();
+    }
 
     link.simulateResult(results[0]);
 
-    await waitFor(() => {
-      if (testFailures.length > 0) {
-        throw testFailures[0];
-      }
-      expect(count).toBe(5);
-    });
+    {
+      const {
+        snapshot: { loading, data },
+      } = await takeRender();
+      expect(loading).toBeFalsy();
+      expect(data).toEqual(results[0].result.data);
+    }
+
+    await expect(takeRender).not.toRerender({ timeout: 50 });
+
+    await rerender(
+      <ApolloProvider client={client2}>
+        <Container />
+      </ApolloProvider>,
+    );
+
+    {
+      const {
+        snapshot: { loading, data },
+      } = await takeRender();
+      expect(loading).toBeTruthy();
+      expect(data).toBeUndefined();
+    }
+
+    link2.simulateResult(results[1]);
+
+    {
+      const {
+        snapshot: { loading, data },
+      } = await takeRender();
+      expect(loading).toBeFalsy();
+      expect(data).toEqual(results[1].result.data);
+    }
+
+    await expect(takeRender).not.toRerender({ timeout: 50 });
   });
 
-  itAsync('if the query changes', (resolve, reject) => {
+  it('if the query changes', async () => {
     const subscriptionHero = gql`
       subscription HeroInfo {
         hero {
@@ -501,72 +499,65 @@ describe('should update', () => {
       cache: new Hermes({ addTypename: false }),
     });
 
-    let count = 0;
-
-    class Component extends React.Component {
-      state = {
-        subscription,
-      };
-
-      render() {
-        return (
-          <Subscription subscription={this.state.subscription}>
-            {(result: any) => {
-              const { loading, data } = result;
-              try {
-                switch (count) {
-                  case 0:
-                    expect(loading).toBeTruthy();
-                    expect(data).toBeUndefined();
-                    break;
-                  case 1:
-                    setTimeout(() => {
-                      this.setState(
-                        {
-                          subscription: subscriptionHero,
-                        },
-                        () => {
-                          heroLink.simulateResult(heroResult);
-                        },
-                      );
-                    });
-                  // fallthrough
-                  case 2:
-                    expect(loading).toBeFalsy();
-                    expect(data).toEqual(results[0].result.data);
-                    break;
-                  case 3:
-                    expect(loading).toBeTruthy();
-                    expect(data).toBeUndefined();
-                    break;
-                  case 4:
-                    expect(loading).toBeFalsy();
-                    expect(data).toEqual(heroResult.result.data);
-                    break;
-                }
-              } catch (error) {
-                reject(error);
-              }
-              count++;
-              return null;
-            }}
-          </Subscription>
-        );
-      }
+    function Container({ subscription }: { subscription: DocumentNode }) {
+      return (
+        <Subscription subscription={subscription}>
+          {(r: any) => {
+            replaceSnapshot(r);
+            return null;
+          }}
+        </Subscription>
+      );
     }
 
-    render(
-      <ApolloProvider client={mockClient}>
-        <Component />
-      </ApolloProvider>,
-    );
+    using _disabledAct = disableActEnvironment();
+    const { takeRender, replaceSnapshot, render } = createRenderStream<any>();
+    const { rerender } = await render(<Container subscription={subscription} />, {
+      wrapper: ({ children }) => <ApolloProvider client={mockClient}>{children}</ApolloProvider>,
+    });
 
+    {
+      const {
+        snapshot: { loading, data },
+      } = await takeRender();
+      expect(loading).toBeTruthy();
+      expect(data).toBeUndefined();
+    }
     userLink.simulateResult(results[0]);
 
-    waitFor(() => expect(count).toBe(5)).then(resolve, reject);
+    {
+      const {
+        snapshot: { loading, data },
+      } = await takeRender();
+      expect(loading).toBeFalsy();
+      expect(data).toEqual(results[0].result.data);
+    }
+
+    await expect(takeRender).not.toRerender({ timeout: 50 });
+
+    await rerender(<Container subscription={subscriptionHero} />);
+    {
+      const {
+        snapshot: { loading, data },
+      } = await takeRender();
+      expect(loading).toBeTruthy();
+      expect(data).toBeUndefined();
+    }
+
+    heroLink.simulateResult(heroResult);
+
+    {
+      const {
+        snapshot: { loading, data },
+      } = await takeRender();
+      expect(loading).toBeFalsy();
+      expect(data).toEqual(heroResult.result.data);
+    }
+
+    await expect(takeRender).not.toRerender({ timeout: 50 });
   });
 
-  itAsync('if the variables change', (resolve, reject) => {
+  it('if the variables change', async () => {
     const subscriptionWithVariables = gql`
       subscription UserInfo($name: String) {
         user(name: $name) {
@@ -597,72 +588,62 @@ describe('should update', () => {
       cache,
     });
 
-    let count = 0;
-
-    class Component extends React.Component {
-      state = {
-        variables: variablesLuke,
-      };
-
-      render() {
-        return (
-          <Subscription subscription={subscriptionWithVariables} variables={this.state.variables}>
-            {(result: any) => {
-              const { loading, data } = result;
-              try {
-                switch (count) {
-                  case 0:
-                    expect(loading).toBeTruthy();
-                    expect(data).toBeUndefined();
-                    break;
-                  case 1:
-                    setTimeout(() => {
-                      this.setState(
-                        {
-                          variables: variablesHan,
-                        },
-                        () => {
-                          mockLink.simulateResult({
-                            result: { data: dataHan },
-                          });
-                        },
-                      );
-                    });
-                  // fallthrough
-                  case 2:
-                    expect(loading).toBeFalsy();
-                    expect(data).toEqual(dataLuke);
-                    break;
-                  case 3:
-                    expect(loading).toBeTruthy();
-                    expect(data).toBeUndefined();
-                    break;
-                  case 4:
-                    expect(loading).toBeFalsy();
-                    expect(data).toEqual(dataHan);
-                    break;
-                }
-              } catch (error) {
-                reject(error);
-              }
-
-              count++;
-              return null;
-            }}
-          </Subscription>
-        );
-      }
+    function Container({ variables }: { variables: any }) {
+      return (
+        <Subscription subscription={subscriptionWithVariables} variables={variables}>
+          {(r: any) => {
+            replaceSnapshot(r);
+            return null;
+          }}
+        </Subscription>
+      );
     }
+    using _disabledAct = disableActEnvironment();
+    const { takeRender, render, replaceSnapshot } = createRenderStream<any>();
+    const { rerender } = await render(<Container variables={variablesLuke} />, {
+      wrapper: ({ children }) => <ApolloProvider client={mockClient}>{children}</ApolloProvider>,
+    });
 
-    render(
-      <ApolloProvider client={mockClient}>
-        <Component />
-      </ApolloProvider>,
-    );
-
+    {
+      const {
+        snapshot: { loading, data },
+      } = await takeRender();
+      expect(loading).toBeTruthy();
+      expect(data).toBeUndefined();
+    }
     mockLink.simulateResult({ result: { data: dataLuke } });
 
-    waitFor(() => expect(count).toBe(5)).then(resolve, reject);
+    {
+      const {
+        snapshot: { loading, data },
+      } = await takeRender();
+      expect(loading).toBeFalsy();
+      expect(data).toEqual(dataLuke);
+    }
+
+    await expect(takeRender).not.toRerender({ timeout: 50 });
+
+    await rerender(<Container variables={variablesHan} />);
+
+    {
+      const {
+        snapshot: { loading, data },
+      } = await takeRender();
+      expect(loading).toBeTruthy();
+      expect(data).toBeUndefined();
+    }
+    mockLink.simulateResult({
+      result: { data: dataHan },
+    });
+    {
+      const {
+        snapshot: { loading, data },
+      } = await takeRender();
+      expect(loading).toBeFalsy();
+      expect(data).toEqual(dataHan);
+    }
+
+    await expect(takeRender).not.toRerender({ timeout: 50 });
   });
 });
 

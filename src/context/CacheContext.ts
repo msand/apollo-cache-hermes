@@ -1,4 +1,5 @@
-import { addTypenameToDocument } from '@apollo/client/utilities';
+import { addTypenameToDocument, print } from '@apollo/client/utilities';
+import { invariant } from '@apollo/client/utilities/globals';
 import isEqual from '@wry/equality';
 import { TypePolicies } from '@apollo/client';
 import type { FragmentRegistryAPI, PossibleTypesMap } from '@apollo/client/cache';
@@ -15,17 +16,6 @@ import { FieldStorage } from '../operations/fieldFunctions';
 import { ConsoleTracer } from './ConsoleTracer';
 import { QueryInfo } from './QueryInfo';
 import { Tracer } from './Tracer';
-
-// Augment DocumentNode type with Hermes's properties
-// Because react-apollo can call us without doing transformDocument
-// to be safe, we will always call transformDocument then flag that
-// we have already done so to not repeating the process.
-declare module 'graphql/language/ast' {
-  export interface DocumentNode {
-    /** Indicating that query has already ran transformDocument */
-    hasBeenTransformed?: boolean;
-  }
-}
 
 export namespace CacheContext {
   export type EntityIdForNode = (node: JsonObject) => EntityId | undefined;
@@ -201,6 +191,15 @@ export class CacheContext<TSerialized = GraphSnapshot> {
   /** All currently known & processed GraphQL documents. */
   /** Transformed documents by input; @apollo/client matches documents by identity (e.g. refetchQueries). */
   private readonly _transformedDocuments = new WeakMap<DocumentNode, DocumentNode>();
+  /**
+   * Documents this context produced, which need no further transformation.
+   * Because react-apollo can call us without doing transformDocument, we always
+   * transform, and skip documents we already transformed. (Tracked by identity
+   * rather than a flag on the document, which copies made by e.g. graphql's
+   * visit() in a custom DocumentTransform would inherit while still needing
+   * fragments from the registry.)
+   */
+  private readonly _transformedOutputs = new WeakSet<DocumentNode>();
 
   private readonly _queryInfoMap = new Map<string, QueryInfo<TSerialized>>();
   /** All currently known & parsed queries, for identity mapping. */
@@ -217,6 +216,11 @@ export class CacheContext<TSerialized = GraphSnapshot> {
 
   /** possibleTypes subtypes that are regular expressions, by their source. */
   private readonly _fuzzySubtypes = new Map<string, RegExp>();
+
+  /** Whether possibleTypes has (fuzzy) regular expression subtypes. */
+  get hasFuzzySubtypes(): boolean {
+    return this._fuzzySubtypes.size > 0;
+  }
 
   /** The options.storage objects of read and merge functions. */
   public readonly fieldStorage = new FieldStorage();
@@ -271,7 +275,11 @@ export class CacheContext<TSerialized = GraphSnapshot> {
    * apply to objects of unknown type.  When writing, pass `hasValue` (whether
    * the payload has a value for the field) to also consider fuzzy subtypes.
    */
-  conditionsMatch(conditions: readonly SelectionCondition[] | undefined, typename: unknown, hasValue?: boolean) {
+  conditionsMatch(
+    conditions: readonly SelectionCondition[] | undefined,
+    typename: unknown,
+    hasValue?: boolean | (() => boolean),
+  ) {
     if (!conditions || typeof typename !== 'string') return true;
     return conditions.some(
       ({ typeConditions }) =>
@@ -284,9 +292,11 @@ export class CacheContext<TSerialized = GraphSnapshot> {
    * of type `typename` (mirroring InMemoryCache's policies.fragmentMatches).
    *
    * Fuzzy (regular expression) subtypes are only considered when
-   * `checkFuzzySubtypes` is set; positive matches are remembered.
+   * `checkFuzzySubtypes` is set (or, as a function, returns true, like
+   * InMemoryCache's check that the result has the fragment's fields); positive
+   * matches are remembered.
    */
-  fragmentMatches(supertype: string, typename: string, checkFuzzySubtypes?: boolean): boolean {
+  fragmentMatches(supertype: string, typename: string, checkFuzzySubtypes?: boolean | (() => boolean)): boolean {
     // Common case: the type condition and __typename are the same.
     if (typename === supertype) return true;
     if (!this._supertypeMap.has(supertype)) return false;
@@ -301,10 +311,13 @@ export class CacheContext<TSerialized = GraphSnapshot> {
     };
 
     let needToCheckFuzzySubtypes = !!checkFuzzySubtypes && this._fuzzySubtypes.size > 0;
+    let checkingFuzzySubtypes = false;
     // Note that workQueue can grow while we're iterating over it.
     for (let i = 0; i < workQueue.length; ++i) {
       const supertypeSet = workQueue[i];
       if (supertypeSet.has(supertype)) {
+        // Like InMemoryCache, report subtypes inferred from fuzzy possibleTypes.
+        if (checkingFuzzySubtypes) invariant.warn('Inferring subtype %s of supertype %s', typename, supertype);
         // Record positive results for faster future lookup.
         typenameSupertypeSet.add(supertype);
         return true;
@@ -312,8 +325,13 @@ export class CacheContext<TSerialized = GraphSnapshot> {
       supertypeSet.forEach(maybeEnqueue);
 
       // Check fuzzy subtypes only after exhausting all non-fuzzy subtypes.
-      if (needToCheckFuzzySubtypes && i === workQueue.length - 1) {
+      if (
+        needToCheckFuzzySubtypes &&
+        i === workQueue.length - 1 &&
+        (typeof checkFuzzySubtypes !== 'function' || checkFuzzySubtypes())
+      ) {
         needToCheckFuzzySubtypes = false;
+        checkingFuzzySubtypes = true;
         this._fuzzySubtypes.forEach((regExp, fuzzyString) => {
           const match = typename.match(regExp);
           if (match && match[0] === typename) {
@@ -341,13 +359,14 @@ export class CacheContext<TSerialized = GraphSnapshot> {
    * any other method in the cache.
    */
   transformDocument(document: DocumentNode): DocumentNode {
-    if (document.hasBeenTransformed || (!this.addTypename && !this.fragments)) return document;
+    if (this._transformedOutputs.has(document) || (!this.addTypename && !this.fragments)) return document;
 
     let transformedDocument = this._transformedDocuments.get(document);
     if (!transformedDocument) {
       transformedDocument = this.fragments ? this.fragments.transform(document) : document;
       if (this.addTypename) transformedDocument = addTypenameToDocument(transformedDocument);
-      if (transformedDocument !== document) transformedDocument.hasBeenTransformed = true;
+      // A document the transforms left unchanged is still the caller's own document.
+      if (transformedDocument !== document) this._transformedOutputs.add(transformedDocument);
       this._transformedDocuments.set(document, transformedDocument);
     }
     return transformedDocument;
@@ -363,7 +382,10 @@ export class CacheContext<TSerialized = GraphSnapshot> {
     // It appears like Apollo or someone upstream is cloning or otherwise
     // modifying the queries that are passed down.  Thus, the operation source
     // is a more reliable cache key…
-    const cacheKey = operationCacheKey(raw.document, raw.fragmentName);
+    // ApolloClient passes documents it already transformed with transformDocument.
+    // Their __typename fields are part of the query as the client sees it.
+    const pretransformed = this._transformedOutputs.has(raw.document);
+    const cacheKey = `${operationCacheKey(raw.document, raw.fragmentName)}${pretransformed ? '❖transformed' : ''}`;
     let operationInstances = this._operationMap.get(cacheKey);
     if (!operationInstances) {
       operationInstances = [];
@@ -386,7 +408,7 @@ export class CacheContext<TSerialized = GraphSnapshot> {
       policy => Object.keys(policy?.fields ?? {}).length > 0,
     );
 
-    const info = this._queryInfo(cacheKey, updateRaw);
+    const info = this._queryInfo(cacheKey, updateRaw, pretransformed);
     const fullVariables = { ...info.variableDefaults, ...updateRaw.variables } as JsonObject;
     // Like InMemoryCache, treat variables without a value as undefined (e.g. @export variables before they are resolved).
     for (const name of info.variables) {
@@ -408,9 +430,9 @@ export class CacheContext<TSerialized = GraphSnapshot> {
   /**
    * Retrieves a memoized QueryInfo for a given GraphQL document.
    */
-  private _queryInfo(cacheKey: string, raw: RawOperation): QueryInfo<TSerialized> {
+  private _queryInfo(cacheKey: string, raw: RawOperation, pretransformed: boolean): QueryInfo<TSerialized> {
     if (!this._queryInfoMap.has(cacheKey)) {
-      this._queryInfoMap.set(cacheKey, new QueryInfo(this, raw));
+      this._queryInfoMap.set(cacheKey, new QueryInfo(this, raw, pretransformed));
     }
     return this._queryInfoMap.get(cacheKey)!;
   }
@@ -483,7 +505,16 @@ const TypeOrFieldNameRegExp = /^[_a-z][_0-9a-z]*/i;
 
 export function operationCacheKey(document: DocumentNode, fragmentName?: string) {
   if (fragmentName) {
-    return `${fragmentName}❖${document.loc!.source.body}`;
+    return `${fragmentName}❖${documentSource(document)}`;
   }
-  return document.loc!.source.body;
+  return documentSource(document);
+}
+
+// Documents built without a parser (e.g. by hand) have no location.
+const printedDocuments = new WeakMap<DocumentNode, string>();
+function documentSource(document: DocumentNode): string {
+  if (document.loc) return document.loc.source.body;
+  let printed = printedDocuments.get(document);
+  if (printed === undefined) printedDocuments.set(document, (printed = print(document)));
+  return printed;
 }
