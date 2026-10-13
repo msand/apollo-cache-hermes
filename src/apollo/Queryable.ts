@@ -1,7 +1,6 @@
 import type { OperationVariables, TypedDocumentNode } from '@apollo/client';
 import { ApolloCache } from '@apollo/client/cache';
 import type { Cache, DiffIncrementalInfo, Reference, ScalarType, StoreObject } from '@apollo/client/cache';
-import { isReference } from '@apollo/client/utilities';
 import type { FragmentDefinitionNode, InlineFragmentNode, OperationTypeNode } from 'graphql';
 import type { Unmasked } from '@apollo/client/masking';
 import {
@@ -186,11 +185,6 @@ export abstract class ApolloQueryable extends ApolloCache {
   }
 
   identify(object: StoreObject | Reference): string | undefined {
-    if (isReference(object)) return object.__ref;
-    // Like InMemoryCache, objects of the root query type identify ROOT_QUERY.
-    if (object?.__typename && object.__typename === this._queryable.policies.rootTypenamesById.ROOT_QUERY) {
-      return StaticNodeId.QueryRoot;
-    }
     return this._queryable.identify(object);
   }
 

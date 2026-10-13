@@ -1594,7 +1594,8 @@ export class SnapshotEditor<TSerialized> {
           removeOutboundReference(container, path);
         }
         removeInboundReference(prevTarget, containerId, path);
-        if (!prevTarget.inbound) {
+        // (Root objects, which objects of the root query type reference, are never orphaned.)
+        if (!prevTarget.inbound && !isRootNodeId(prevNodeId)) {
           orphanedNodeIds.add(prevNodeId);
         } else {
           unreachableCandidates?.add(prevNodeId);
@@ -1736,7 +1737,7 @@ export class SnapshotEditor<TSerialized> {
       const reference = this._ensureNewSnapshot(id);
       removeInboundReference(reference, nodeId, path);
       if (reference.inbound === undefined) {
-        queue.push(id);
+        if (!isRootNodeId(id)) queue.push(id);
       } else {
         unreachableCandidates.add(id);
       }

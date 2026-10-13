@@ -111,15 +111,15 @@ export class Policies {
   }
 
   /**
-   * The id of an object (like InMemoryCache's Policies#identify): per its
-   * type's keyFields (or the dataIdFromObject option, or the default of
-   * __typename and id).
+   * The id of an object (like InMemoryCache's Policies#identify): ROOT_QUERY
+   * for objects of the root query type, or else per its type's keyFields (or
+   * the dataIdFromObject option, or the default of __typename and id).
    *
    * Returns the id, and the path of the key field the object is missing (if
    * that is why it could not be identified).
    *
    * `getStoreObject` lazily provides the object's fields by their schema names
-   * (the context's storeObject), for keyFields policies.
+   * (the context's storeObject), for keyFields policies and dataIdFromObject.
    */
   identify(
     object: JsonObject,
@@ -127,13 +127,16 @@ export class Policies {
     getStoreObject?: () => JsonObject,
   ): [string?, string?] {
     const typename = partialContext?.typename || partialContext?.storeObject?.__typename || object.__typename;
-    const keyFn = typeof typename === 'string' ? this.getTypePolicy(typename).keyFn : undefined;
 
-    if (!keyFn) {
-      const id = this._dataIdFromObject ? this._dataIdFromObject(object) : defaultDataIdFromObject(object);
-      // Unlike InMemoryCache, ids may be numbers (made strings).
-      return [typeof id === 'string' ? id : typeof id === 'number' ? String(id) : undefined];
-    }
+    // Like InMemoryCache, root query fields can be written through objects of
+    // the root query type (e.g. a mutation result's `query` field), but not
+    // those of the other root types.
+    if (typename === this.rootTypenamesById.ROOT_QUERY) return ['ROOT_QUERY'];
+
+    const keyFn = typeof typename === 'string' ? this.getTypePolicy(typename).keyFn : undefined;
+    const dataIdFromObject = this._dataIdFromObject;
+
+    if (!keyFn && !dataIdFromObject) return [defaultDataIdFromObject(object)];
 
     const storeObject = (partialContext?.storeObject ?? getStoreObject?.() ?? object) as JsonObject;
     const context: KeyFieldsContextWithMissing = {
@@ -155,9 +158,18 @@ export class Policies {
         }) as KeyFieldsContext['readField']),
     };
 
+    const merged = storeObject === object ? object : { ...object, ...storeObject };
+
+    if (!keyFn) {
+      // Like InMemoryCache, dataIdFromObject gets the object (with its fields
+      // by their schema names) and the context; unlike InMemoryCache, its ids
+      // may be numbers (made strings).
+      const id = dataIdFromObject!(merged, context);
+      return [typeof id === 'string' ? id : typeof id === 'number' ? String(id) : undefined];
+    }
+
     let id: unknown;
     let fn: KeyFieldsFunction | undefined = keyFn;
-    const merged = storeObject === object ? object : { ...object, ...storeObject };
     while (fn) {
       const specifierOrId = fn(merged, context);
       if (Array.isArray(specifierOrId)) {

@@ -32,7 +32,8 @@ export namespace CacheContext {
     partialContext?: Partial<KeyFieldsContext>,
     getStoreObject?: () => JsonObject,
   ) => EntityId | undefined;
-  export type EntityIdMapper = (node: JsonObject) => string | number | undefined;
+  /** Like InMemoryCache's dataIdFromObject, which is also passed the KeyFieldsContext. */
+  export type EntityIdMapper = (node: JsonObject, context?: KeyFieldsContext) => string | number | undefined;
   export type EntityTransformer = (node: JsonObject) => void;
   export type OnChangeCallback = (newCacheShapshot: CacheSnapshot, editedNodeIds: Set<String>) => void;
 
