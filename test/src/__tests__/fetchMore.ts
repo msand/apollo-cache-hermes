@@ -376,8 +376,7 @@ describe('fetchMore on an observable query', () => {
       await expect(stream).not.toEmitAnything();
     });
 
-    // Hermes: no keyArgs support, so pages fetched with other arguments are not merged by concatPagination
-    it.skip('field policy', async () => {
+    it('field policy', async () => {
       const observable = setupWithCacheConfig(
         {
           typePolicies: {
@@ -523,8 +522,7 @@ describe('fetchMore on an observable query', () => {
       await expect(stream).not.toEmitAnything();
     });
 
-    // Hermes: no keyArgs support, so pages fetched with other arguments are not merged by concatPagination
-    it.skip('field policy', async () => {
+    it('field policy', async () => {
       const observable = setupWithCacheConfig(
         {
           typePolicies: {
@@ -1145,8 +1143,7 @@ describe('fetchMore on an observable query', () => {
     });
   });
 
-  // Hermes: no keyArgs support, so pages fetched with other arguments are not merged by offsetLimitPagination
-  it.skip('fetchMore passes new args to field merge function', async () => {
+  it('fetchMore passes new args to field merge function', async () => {
     const mergeArgsHistory: (Record<string, any> | null)[] = [];
     const groceriesFieldPolicy = offsetLimitPagination();
     const { merge } = groceriesFieldPolicy;
@@ -2041,8 +2038,7 @@ describe('fetchMore on an observable query with connection', () => {
       await expect(stream).not.toEmitAnything();
     });
 
-    // Hermes: no @connection support, so each page of entry is stored under its own start/limit arguments
-    it.skip('field policy', async () => {
+    it('field policy', async () => {
       const observable = setupWithCacheConfig(
         {
           typePolicies: {
@@ -2197,8 +2193,7 @@ describe('fetchMore on an observable query with connection', () => {
       await expect(stream).not.toEmitAnything();
     });
 
-    // Hermes: no @connection support, so each page of entry is stored under its own start/limit arguments
-    it.skip('field policy', async () => {
+    it('field policy', async () => {
       const link = new MockLink([
         {
           request: { query: transformedQuery, variables },
@@ -2633,8 +2628,7 @@ it('does not allow fetchMore on a cache-only query', async () => {
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no keyArgs support (keyArgs: false), so the page fetched with other arguments is not merged
-it.skip('provides extensions in merge functions', async () => {
+it('provides extensions in merge functions', async () => {
   const query = gql`
     query Comment($repoName: String!, $start: Int!, $limit: Int!) {
       entry(repoFullName: $repoName) {

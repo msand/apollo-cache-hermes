@@ -5143,8 +5143,7 @@ it('applies `context` for each fetch', async () => {
   await expect(takeSnapshot).not.toRerender();
 });
 
-// Hermes: keyArgs is not implemented, so refetches with new variables are stored separately instead of under one field
-it.skip('applies `refetchWritePolicy` on next fetch when it changes between renders', async () => {
+it('applies `refetchWritePolicy` on next fetch when it changes between renders', async () => {
   const query: TypedDocumentNode<{ primes: number[] }, { min: number; max: number }> = gql`
     query GetPrimes($min: number, $max: number) {
       primes(min: $min, max: $max)

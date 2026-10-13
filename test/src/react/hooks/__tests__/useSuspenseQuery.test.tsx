@@ -5218,8 +5218,7 @@ describe('useSuspenseQuery', () => {
     ]);
   });
 
-  // Hermes: keyArgs is not implemented, so paginated/refetched pages are stored per argument set and never merged
-  it.skip('honors refetchWritePolicy set to "merge"', async () => {
+  it('honors refetchWritePolicy set to "merge"', async () => {
     const query: TypedDocumentNode<{ primes: number[] }, { min: number; max: number }> = gql`
       query GetPrimes($min: number, $max: number) {
         primes(min: $min, max: $max)
@@ -6286,8 +6285,7 @@ describe('useSuspenseQuery', () => {
     ]);
   });
 
-  // Hermes: keyArgs is not implemented, so paginated/refetched pages are stored per argument set and never merged
-  it.skip('applies changed `refetchWritePolicy` to next fetch when changing between renders', async () => {
+  it('applies changed `refetchWritePolicy` to next fetch when changing between renders', async () => {
     const query: TypedDocumentNode<{ primes: number[] }, { min: number; max: number }> = gql`
       query GetPrimes($min: number, $max: number) {
         primes(min: $min, max: $max)
@@ -7339,8 +7337,7 @@ describe('useSuspenseQuery', () => {
     });
   });
 
-  // Hermes: keyArgs is not implemented, so paginated/refetched pages are stored per argument set and never merged
-  it.skip('`fetchMore` works with startTransition to allow React to show stale UI until finished suspending', async () => {
+  it('`fetchMore` works with startTransition to allow React to show stale UI until finished suspending', async () => {
     type Variables = {
       offset: number;
     };
@@ -7548,8 +7545,7 @@ describe('useSuspenseQuery', () => {
   });
 
   // https://github.com/apollographql/apollo-client/issues/11315
-  // Hermes: keyArgs is not implemented, so paginated/refetched pages are stored per argument set and never merged
-  it.skip('fetchMore does not cause extra render', async () => {
+  it('fetchMore does not cause extra render', async () => {
     const { query, link } = setupPaginatedCase();
 
     const user = userEvent.setup();
@@ -7669,8 +7665,7 @@ describe('useSuspenseQuery', () => {
   });
 
   // https://github.com/apollographql/apollo-client/issues/11708
-  // Hermes: keyArgs is not implemented, so paginated/refetched pages are stored per argument set and never merged
-  it.skip('`fetchMore` works with startTransition when setting errorPolicy as default option in ApolloClient constructor', async () => {
+  it('`fetchMore` works with startTransition when setting errorPolicy as default option in ApolloClient constructor', async () => {
     type Variables = {
       offset: number;
     };
@@ -7884,8 +7879,7 @@ describe('useSuspenseQuery', () => {
   });
 
   // https://github.com/apollographql/apollo-client/issues/11642
-  // Hermes: keyArgs is not implemented, so paginated/refetched pages are stored per argument set and never merged
-  it.skip('returns merged array when `fetchMore` returns empty array of results', async () => {
+  it('returns merged array when `fetchMore` returns empty array of results', async () => {
     const query: TypedDocumentNode<PaginatedCaseData, PaginatedCaseVariables> = gql`
       query LettersQuery($limit: Int, $offset: Int) {
         letters(limit: $limit, offset: $offset) {

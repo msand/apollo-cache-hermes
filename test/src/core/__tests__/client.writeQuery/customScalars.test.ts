@@ -38,8 +38,7 @@ it('serializes scalar variables used in field arguments', () => {
   });
 });
 
-// Hermes: keyArgs (and so directive arguments in store field names) are not supported; the field is stored without them.
-it.skip('serializes scalar variables used in directive arguments', () => {
+it('serializes scalar variables used in directive arguments', () => {
   const client = new ApolloClient({
     cache: new Hermes({
       scalars: { Date: dateScalar },

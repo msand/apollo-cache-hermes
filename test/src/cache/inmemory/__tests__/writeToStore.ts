@@ -1784,8 +1784,7 @@ describe('writing to the store', () => {
         __typename: 'Country',
         id: 123,
         biggestCity: { __ref: 'City:234' },
-        // Hermes: keyArgs are not supported, so the field is stored under all its arguments.
-        'cities({"size":"SMALL"})': [{ __ref: 'City:345' }],
+        'cities:{"size":"SMALL"}': [{ __ref: 'City:345' }],
       },
       ROOT_QUERY: {
         __typename: 'Query',
@@ -2303,8 +2302,7 @@ describe('writing to the store', () => {
     });
   });
 
-  // Hermes: keyArgs (and @connection keys) are not supported
-  it.skip('properly handles the @connection directive', () => {
+  it('properly handles the @connection directive', () => {
     const store = defaultNormalizedCacheFactory();
 
     writeQueryToStore({
@@ -2357,9 +2355,7 @@ describe('writing to the store', () => {
     });
   });
 
-  // Hermes: keyArgs are not supported
-  it.skip('can use keyArgs function instead of @connection directive', () => {
-    const store = defaultNormalizedCacheFactory();
+  it('can use keyArgs function instead of @connection directive', () => {
     const writer = new HermesWriter({
       typePolicies: {
         Query: {
@@ -2371,6 +2367,8 @@ describe('writing to the store', () => {
         },
       },
     });
+    // Hermes: the store is a cache, configured with the writer's typePolicies.
+    const store = defaultNormalizedCacheFactory(undefined, writer.config);
 
     writeQueryToStore({
       writer,

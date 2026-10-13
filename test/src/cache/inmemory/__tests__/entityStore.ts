@@ -810,9 +810,13 @@ describe('EntityStore', () => {
       },
     });
 
-    // Hermes: parameterized fields are separate nodes linked to ROOT_QUERY,
+    // Hermes: parameterized fields are separate nodes linked to ROOT_QUERY
+    // (identified by their keyArgs store field names, when they have keyArgs),
     // and references are inbound/outbound edges.
-    const fieldId = (fieldName: string, isbn: string) => `ROOT_QUERY❖["${fieldName}"]❖{"isbn":"${isbn}"}`;
+    const fieldId = (fieldName: string, isbn: string) =>
+      fieldName === 'authorOfBook'
+        ? `ROOT_QUERY❖["authorOfBook"]❖authorOfBook:{"isbn":"${isbn}"}`
+        : `ROOT_QUERY❖["${fieldName}"]❖{"isbn":"${isbn}"}`;
     const fieldRef = (fieldName: string, isbn: string) => ({ id: fieldId(fieldName, isbn), path: [fieldName] });
     const fieldNode = (fieldName: string, entityId: string) => ({
       data: null,
@@ -2184,7 +2188,10 @@ describe('EntityStore', () => {
     });
   });
 
-  // Hermes: keyArgs-based result-cache invalidation; adapted copy in test/unit/vendor/entityStore.ts
+  // Hermes: the final non-optimistic read reuses the result cached for the
+  // optimistic read (the optimistic and baseline snapshots are the same), so
+  // the read function does not run again; adapted copy in
+  // test/unit/vendor/entityStore.ts
   it.skip('should not over-invalidate fields with keyArgs', () => {
     const isbnsWeHaveRead: string[] = [];
 

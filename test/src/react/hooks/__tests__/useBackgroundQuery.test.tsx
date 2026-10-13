@@ -2449,8 +2449,7 @@ it('applies `context` on next fetch when it changes between renders', async () =
   }
 });
 
-// Hermes: keyArgs (merging a field across arguments) is not implemented.
-it.skip('applies changed `refetchWritePolicy` to next fetch when changing between renders', async () => {
+it('applies changed `refetchWritePolicy` to next fetch when changing between renders', async () => {
   interface Data {
     primes: number[];
   }
@@ -5629,8 +5628,7 @@ describe('refetch', () => {
     }
   });
 
-  // Hermes: keyArgs (merging a field across arguments) is not implemented.
-  it.skip('honors refetchWritePolicy set to "merge"', async () => {
+  it('honors refetchWritePolicy set to "merge"', async () => {
     const user = userEvent.setup();
 
     const query: TypedDocumentNode<QueryData, { min: number; max: number }> = gql`
@@ -5864,8 +5862,7 @@ describe('refetch', () => {
 });
 
 describe('fetchMore', () => {
-  // Hermes: keyArgs (merging a field across arguments) is not implemented.
-  it.skip('re-suspends when calling `fetchMore` with different variables', async () => {
+  it('re-suspends when calling `fetchMore` with different variables', async () => {
     const { query, link } = setupPaginatedCase();
     const cache = new Hermes({
       typePolicies: {
@@ -6032,8 +6029,7 @@ describe('fetchMore', () => {
     await expect(renderStream).not.toRerender({ timeout: 50 });
   });
 
-  // Hermes: concatPagination relies on keyArgs: false, which is not implemented.
-  it.skip('properly uses cache field policies when calling `fetchMore` without `updateQuery`', async () => {
+  it('properly uses cache field policies when calling `fetchMore` without `updateQuery`', async () => {
     const { query, link } = setupPaginatedCase();
     const user = userEvent.setup();
     const renderStream = createDefaultProfiler<PaginatedCaseData>();
@@ -6121,8 +6117,7 @@ describe('fetchMore', () => {
     await expect(renderStream).not.toRerender({ timeout: 50 });
   });
 
-  // Hermes: offsetLimitPagination relies on keyArgs: false, which is not implemented.
-  it.skip('`fetchMore` works with startTransition to allow React to show stale UI until finished suspending', async () => {
+  it('`fetchMore` works with startTransition to allow React to show stale UI until finished suspending', async () => {
     type Variables = {
       offset: number;
     };
@@ -6336,8 +6331,7 @@ describe('fetchMore', () => {
   });
 
   // https://github.com/apollographql/apollo-client/issues/11708
-  // Hermes: offsetLimitPagination relies on keyArgs: false, which is not implemented.
-  it.skip('`fetchMore` works with startTransition when setting errorPolicy as default option in ApolloClient constructor', async () => {
+  it('`fetchMore` works with startTransition when setting errorPolicy as default option in ApolloClient constructor', async () => {
     type Variables = {
       offset: number;
     };

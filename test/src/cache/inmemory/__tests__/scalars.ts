@@ -4184,7 +4184,8 @@ it.skip('ignores the merge: true shorthand and warns when the field is configure
   expect(console.warn).toHaveBeenCalledTimes(1);
   expect(console.warn).toHaveBeenCalledWith(WARNINGS.SCALAR_FIELD_CONFIG, 'Product.metadata', 'JSONObject', 'merge');
 });
-// Hermes: a field's read and merge functions still run alongside its scalar policy (InMemoryCache ignores them, with a warning).
+// Hermes: Hermes stores scalar values serialized (and parses them when read); this asserts InMemoryCache's parsed
+// storage (the field is stored under all its arguments, as expected).
 it.skip('does not apply the implicit keyArgs: false when read and merge functions are ignored for a scalar field', () => {
   using _ = spyOnConsole('warn');
 

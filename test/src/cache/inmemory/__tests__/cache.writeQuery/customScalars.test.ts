@@ -44,8 +44,7 @@ it('serializes scalar variables used in field arguments', () => {
     },
   });
 });
-// Hermes: keyArgs are not supported (the field is not stored under its @on directive key).
-it.skip('serializes scalar variables used in directive arguments', () => {
+it('serializes scalar variables used in directive arguments', () => {
   const cache = new Hermes({
     scalars: {
       Date: dateScalar,

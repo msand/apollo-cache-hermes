@@ -1062,9 +1062,7 @@ describe('reading from the store', () => {
     });
   });
 
-  // Hermes: @connection is not implemented (and the store is seeded with
-  // InMemoryCache's 'books:abc' storeFieldName).
-  it.skip('properly handles the @connection directive', () => {
+  it('properly handles the @connection directive', () => {
     const store = defaultNormalizedCacheFactory({
       ROOT_QUERY: {
         'books:abc': [
@@ -1085,8 +1083,7 @@ describe('reading from the store', () => {
         }
       `,
     });
-    // Hermes: reads return a superset of the selected fields.
-    expect(queryResult).toMatchObject({
+    expect(queryResult).toEqual({
       books: [
         {
           name: 'efgh',
@@ -1095,8 +1092,7 @@ describe('reading from the store', () => {
     });
   });
 
-  // Hermes: keyArgs is not implemented.
-  it.skip('can use keyArgs function instead of @connection directive', () => {
+  it('can use keyArgs function instead of @connection directive', () => {
     const store = defaultNormalizedCacheFactory(
       {
         ROOT_QUERY: {
@@ -1133,8 +1129,7 @@ describe('reading from the store', () => {
         }
       `,
     });
-    // Hermes: reads return a superset of the selected fields.
-    expect(queryResult).toMatchObject({
+    expect(queryResult).toEqual({
       books: [
         {
           name: 'efgh',

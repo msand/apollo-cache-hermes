@@ -208,8 +208,7 @@ it('refetches and resuspends when calling refetch', async () => {
   }
 });
 
-// Hermes: keyArgs (merging a field across arguments) is not implemented.
-it.skip('honors refetchWritePolicy set to "merge"', async () => {
+it('honors refetchWritePolicy set to "merge"', async () => {
   const query: TypedDocumentNode<{ primes: number[] }, { min: number; max: number }> = gql`
     query GetPrimes($min: number, $max: number) {
       primes(min: $min, max: $max)
@@ -1095,8 +1094,7 @@ it('refetches from queryRefs produced by useLoadableQuery', async () => {
   }
 });
 
-// Hermes: keyArgs (merging a field across arguments) is not implemented.
-it.skip('resuspends when calling `fetchMore`', async () => {
+it('resuspends when calling `fetchMore`', async () => {
   const { query, link } = setupPaginatedCase();
 
   const user = userEvent.setup();
@@ -1302,8 +1300,7 @@ it('properly uses `updateQuery` when calling `fetchMore`', async () => {
   }
 });
 
-// Hermes: concatPagination relies on keyArgs: false, which is not implemented.
-it.skip('properly uses cache field policies when calling `fetchMore` without `updateQuery`', async () => {
+it('properly uses cache field policies when calling `fetchMore` without `updateQuery`', async () => {
   const { query, link } = setupPaginatedCase();
 
   const user = userEvent.setup();
@@ -1407,8 +1404,7 @@ it.skip('properly uses cache field policies when calling `fetchMore` without `up
   }
 });
 
-// Hermes: keyArgs (merging a field across arguments) is not implemented.
-it.skip('paginates from queryRefs produced by useBackgroundQuery', async () => {
+it('paginates from queryRefs produced by useBackgroundQuery', async () => {
   const { query, link } = setupPaginatedCase();
 
   const user = userEvent.setup();
@@ -1506,8 +1502,7 @@ it.skip('paginates from queryRefs produced by useBackgroundQuery', async () => {
   }
 });
 
-// Hermes: keyArgs (merging a field across arguments) is not implemented.
-it.skip('paginates from queryRefs produced by useLoadableQuery', async () => {
+it('paginates from queryRefs produced by useLoadableQuery', async () => {
   const { query, link } = setupPaginatedCase();
 
   const user = userEvent.setup();
@@ -1611,8 +1606,7 @@ it.skip('paginates from queryRefs produced by useLoadableQuery', async () => {
   }
 });
 
-// Hermes: keyArgs (merging a field across arguments) is not implemented.
-it.skip('`fetchMore` works with startTransition', async () => {
+it('`fetchMore` works with startTransition', async () => {
   const { query, link } = setupPaginatedCase();
 
   const user = userEvent.setup();
@@ -1746,8 +1740,7 @@ it.skip('`fetchMore` works with startTransition', async () => {
   await expect(renderStream).not.toRerender();
 });
 
-// Hermes: keyArgs (merging a field across arguments) is not implemented.
-it.skip('`fetchMore` works with startTransition from useBackgroundQuery and useQueryRefHandlers', async () => {
+it('`fetchMore` works with startTransition from useBackgroundQuery and useQueryRefHandlers', async () => {
   const { query, link } = setupPaginatedCase();
 
   const user = userEvent.setup();

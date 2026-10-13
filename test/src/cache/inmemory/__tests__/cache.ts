@@ -2976,8 +2976,7 @@ describe('Hermes#modify', () => {
     expect(cache.extract()).toEqual({});
   });
 
-  // Hermes: no keyArgs support (InMemoryCache stores a field with read/merge but no keyArgs under one storeFieldName)
-  it.skip('can remove specific items from paginated lists', () => {
+  it('can remove specific items from paginated lists', () => {
     const cache = new Hermes({
       typePolicies: {
         Thread: {
@@ -3053,7 +3052,8 @@ describe('Hermes#modify', () => {
       },
     });
 
-    expect(cache.extract()).toEqual({
+    // Hermes: compare in InMemoryCache's normalized shape.
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
         __typename: 'Query',
         thread: {
@@ -3107,7 +3107,8 @@ describe('Hermes#modify', () => {
 
     expect(cache.gc()).toEqual(['Comment:{"id":"c1"}']);
 
-    expect(cache.extract()).toEqual({
+    // Hermes: compare in InMemoryCache's normalized shape.
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
         __typename: 'Query',
         thread: {
@@ -3346,8 +3347,7 @@ describe('Hermes#modify', () => {
     expect(bResults).toMatchObject([b321, b322]);
   });
 
-  // Hermes: no keyArgs support (asserts InMemoryCache storeFieldName format 'book:{"isbn":...}')
-  it.skip('should handle argument-determined field identities', () => {
+  it('should handle argument-determined field identities', () => {
     const cache = new Hermes({
       typePolicies: {
         Query: {
@@ -3420,7 +3420,8 @@ describe('Hermes#modify', () => {
       },
     };
 
-    expect(cache.extract()).toEqual(fullSnapshot);
+    // Hermes: compare in InMemoryCache's normalized shape.
+    expect(toNormalizedCacheObject(cache.extract())).toEqual(fullSnapshot);
 
     function check(isbnToDelete?: string) {
       let bookCount = 0;
@@ -3472,7 +3473,8 @@ describe('Hermes#modify', () => {
     expect(check('0735211280')).toBe(1);
     expect(check('147670032X')).toBe(1);
 
-    expect(cache.extract()).toEqual({
+    // Hermes: compare in InMemoryCache's normalized shape.
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
         __typename: 'Query',
         'book:{"isbn":"1760641790"}': {
@@ -3498,7 +3500,8 @@ describe('Hermes#modify', () => {
 
     expect(cache.gc().sort()).toEqual(['Book:{"isbn":"0735211280"}', 'Book:{"isbn":"147670032X"}']);
 
-    expect(cache.extract()).toEqual({
+    // Hermes: compare in InMemoryCache's normalized shape.
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
         __typename: 'Query',
         'book:{"isbn":"1760641790"}': {
@@ -3514,7 +3517,8 @@ describe('Hermes#modify', () => {
 
     expect(check('1760641790')).toBe(0);
 
-    expect(cache.extract()).toEqual({
+    // Hermes: compare in InMemoryCache's normalized shape.
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
         __typename: 'Query',
       },
@@ -3527,7 +3531,8 @@ describe('Hermes#modify', () => {
 
     expect(cache.gc()).toEqual(['Book:{"isbn":"1760641790"}']);
 
-    expect(cache.extract()).toEqual({
+    // Hermes: compare in InMemoryCache's normalized shape.
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
         __typename: 'Query',
       },

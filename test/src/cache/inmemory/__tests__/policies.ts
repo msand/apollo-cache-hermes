@@ -924,8 +924,7 @@ describe('type policies', () => {
   });
 
   describe('field policies', () => {
-    // Hermes: keyArgs are not supported
-    it.skip(`can filter arguments using keyArgs`, () => {
+    it(`can filter arguments using keyArgs`, () => {
       const cache = new Hermes({
         typePolicies: {
           Query: {
@@ -955,19 +954,21 @@ describe('type policies', () => {
         },
       });
 
-      expect(cache.extract(true)).toEqual({
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract(true))).toEqual({
         ROOT_QUERY: {
           __typename: 'Query',
           'book:{"isbn":"0465030793"}': {
             __typename: 'Book',
+            // Hermes: unselected fields are stored too.
+            isbn: '0465030793',
             title: 'I Am a Strange Loop',
           },
         },
       });
     });
 
-    // Hermes: keyArgs are not supported
-    it.skip(`can filter arguments using keyArgs in non-Query fields`, () => {
+    it(`can filter arguments using keyArgs in non-Query fields`, () => {
       const cache = new Hermes({
         typePolicies: {
           Book: {
@@ -1010,7 +1011,8 @@ describe('type policies', () => {
 
       cache.writeQuery({ query, data });
 
-      expect(cache.extract(true)).toEqual({
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract(true))).toEqual({
         ROOT_QUERY: {
           __typename: 'Query',
           book: {
@@ -1035,8 +1037,7 @@ describe('type policies', () => {
       expect(result).toEqual(data);
     });
 
-    // Hermes: keyArgs are not supported
-    it.skip('assumes keyArgs:false when read and merge function present', () => {
+    it('assumes keyArgs:false when read and merge function present', () => {
       const cache = new Hermes({
         typePolicies: {
           TypeA: {
@@ -1180,7 +1181,8 @@ describe('type policies', () => {
         },
       });
 
-      expect(cache.extract()).toEqual({
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract())).toEqual({
         ROOT_QUERY: {
           __typename: 'Query',
           'types({"from":"A","to":"F"})': [
@@ -1242,8 +1244,7 @@ describe('type policies', () => {
       });
     });
 
-    // Hermes: keyArgs are not supported
-    it.skip(`can include optional arguments in field keyArgs policy`, () => {
+    it(`can include optional arguments in field keyArgs policy`, () => {
       const cache = new Hermes({
         typePolicies: {
           Author: {
@@ -1292,7 +1293,8 @@ describe('type policies', () => {
           }
         }
       `);
-      expect(cache.extract()).toMatchSnapshot();
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
 
       check(gql`
         query {
@@ -1307,7 +1309,8 @@ describe('type policies', () => {
           }
         }
       `);
-      expect(cache.extract()).toMatchSnapshot();
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
 
       check(gql`
         query {
@@ -1322,7 +1325,8 @@ describe('type policies', () => {
           }
         }
       `);
-      expect(cache.extract()).toMatchSnapshot();
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
 
       check(gql`
         query {
@@ -1337,7 +1341,8 @@ describe('type policies', () => {
           }
         }
       `);
-      expect(cache.extract()).toMatchSnapshot();
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
 
       check(gql`
         query {
@@ -1352,7 +1357,8 @@ describe('type policies', () => {
           }
         }
       `);
-      expect(cache.extract()).toMatchSnapshot();
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
 
       check(gql`
         query {
@@ -1367,7 +1373,8 @@ describe('type policies', () => {
           }
         }
       `);
-      expect(cache.extract()).toMatchSnapshot();
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
 
       check(
         gql`
@@ -1385,7 +1392,8 @@ describe('type policies', () => {
         `,
         { type: void 0 as any },
       );
-      expect(cache.extract()).toMatchSnapshot();
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
 
       check(gql`
         query {
@@ -1400,7 +1408,8 @@ describe('type policies', () => {
           }
         }
       `);
-      expect(cache.extract()).toMatchSnapshot();
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
 
       const storeFieldNames: string[] = [];
 
@@ -1431,7 +1440,7 @@ describe('type policies', () => {
       ]);
     });
 
-    // Hermes: keyArgs are not supported
+    // Hermes: nested keyFields (Comment: ['author', ['name']]) are not supported.
     it.skip(`can return KeySpecifier arrays from keyArgs functions`, () => {
       const cache = new Hermes({
         typePolicies: {
@@ -1519,7 +1528,8 @@ describe('type policies', () => {
         },
       });
 
-      expect(cache.extract()).toEqual({
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract())).toEqual({
         ROOT_QUERY: {
           __typename: 'Query',
           thread: {
@@ -1568,8 +1578,7 @@ describe('type policies', () => {
     // Use several different directives to prove we're not hard-coding support
     // for the @connection directive.
     ['connection', 'directive', 'misdirective'].forEach(directiveName =>
-      // Hermes: keyArgs are not supported
-      it.skip(`can refer to directive @${directiveName} in field key shorthand array`, () => {
+      it(`can refer to directive @${directiveName} in field key shorthand array`, () => {
         const cache = new Hermes({
           typePolicies: {
             Query: {
@@ -1604,7 +1613,8 @@ describe('type policies', () => {
           },
         });
 
-        expect(cache.extract()).toEqual({
+        // Hermes: compare in InMemoryCache's normalized shape.
+        expect(toNormalizedCacheObject(cache.extract())).toEqual({
           ROOT_QUERY: {
             __typename: 'Query',
             [`feed:{"@${directiveName}":{"key":"asdf"},"arg":1234}`]: helloTokens,
@@ -1633,7 +1643,8 @@ describe('type policies', () => {
           },
         });
 
-        expect(cache.extract()).toEqual({
+        // Hermes: compare in InMemoryCache's normalized shape.
+        expect(toNormalizedCacheObject(cache.extract())).toEqual({
           ROOT_QUERY: {
             __typename: 'Query',
             [`feed:{"@${directiveName}":{"key":"asdf"},"arg":1234}`]: helloTokens,
@@ -1663,7 +1674,8 @@ describe('type policies', () => {
           },
         });
 
-        expect(cache.extract()).toEqual({
+        // Hermes: compare in InMemoryCache's normalized shape.
+        expect(toNormalizedCacheObject(cache.extract())).toEqual({
           ROOT_QUERY: {
             __typename: 'Query',
             [`feed:{"@${directiveName}":{"key":"asdf"},"arg":1234}`]: helloTokens,
@@ -1674,8 +1686,7 @@ describe('type policies', () => {
       }),
     );
 
-    // Hermes: keyArgs are not supported
-    it.skip('can refer to variables in field key shorthand array', () => {
+    it('can refer to variables in field key shorthand array', () => {
       const cache = new Hermes({
         typePolicies: {
           Query: {
@@ -1707,7 +1718,8 @@ describe('type policies', () => {
         },
       });
 
-      expect(cache.extract()).toEqual({
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract())).toEqual({
         ROOT_QUERY: {
           __typename: 'Query',
           'defaultToNumVariable:{"input":1234,"$num":1234}': 'forced with input and $num',
@@ -1730,7 +1742,8 @@ describe('type policies', () => {
         },
       });
 
-      expect(cache.extract()).toEqual({
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract())).toEqual({
         ROOT_QUERY: {
           __typename: 'Query',
           'defaultToNumVariable:{"input":1234,"$num":1234}': 'forced with input and $num',
@@ -3354,8 +3367,7 @@ describe('type policies', () => {
       expect(secretReadAttempted).toBe(true);
     });
 
-    // Hermes: keyArgs are not supported
-    it.skip(`can define custom merge functions and keyArgs simultaneously`, () => {
+    it(`can define custom merge functions and keyArgs simultaneously`, () => {
       const cache = new Hermes({
         typePolicies: {
           Person: {
@@ -3427,11 +3439,14 @@ describe('type policies', () => {
         },
       });
 
-      expect(cache.extract(true)).toEqual({
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract(true))).toEqual({
         ROOT_QUERY: {
           __typename: 'Query',
           me: {
             __typename: 'Person',
+            // Hermes: unselected fields are stored too.
+            id: 'ignored',
             'todos:{}': [{ __ref: 'Todo:{"id":1}' }, { __ref: 'Todo:{"id":2}' }],
           },
         },
@@ -3464,16 +3479,20 @@ describe('type policies', () => {
         },
       });
 
-      expect(cache.extract(true)).toEqual({
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract(true))).toEqual({
         ROOT_QUERY: {
           __typename: 'Query',
           me: {
             __typename: 'Person',
+            // Hermes: unselected fields are stored too.
+            id: 'ignored',
             'todos:{}': [
               { __ref: 'Todo:{"id":1}' },
               { __ref: 'Todo:{"id":2}' },
-              void 0,
-              void 0,
+              // Hermes: missing list items are stored as null.
+              null,
+              null,
               { __ref: 'Todo:{"id":5}' },
               { __ref: 'Todo:{"id":6}' },
             ],
@@ -3518,11 +3537,14 @@ describe('type policies', () => {
         },
       });
 
-      expect(cache.extract(true)).toEqual({
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract(true))).toEqual({
         ROOT_QUERY: {
           __typename: 'Query',
           me: {
             __typename: 'Person',
+            // Hermes: unselected fields are stored too.
+            id: 'ignored',
             'todos:{}': [
               { __ref: 'Todo:{"id":1}' },
               { __ref: 'Todo:{"id":2}' },
@@ -3576,7 +3598,8 @@ describe('type policies', () => {
             limit: 4,
           },
         }),
-      ).toEqual({
+        // Hermes: results may contain a superset of the selected fields.
+      ).toMatchObject({
         me: {
           __typename: 'Person',
           todos: [
@@ -3589,8 +3612,8 @@ describe('type policies', () => {
       });
     });
 
-    // Hermes: keyArgs are not supported (relayStylePagination stores every page under one
-    // keyArgs-based field)
+    // Hermes: the second query uses $after without declaring it or passing a value for it, which Hermes
+    // rejects ("Variable $after is used, but not declared").
     it.skip('can handle Relay-style pagination without args', async () => {
       const cache = new Hermes({
         typePolicies: {
@@ -3713,7 +3736,8 @@ describe('type policies', () => {
 
       let result = await client.query({ query: firstQuery });
 
-      expect(result).toStrictEqualTyped({
+      // Hermes: results may contain a superset of the selected fields.
+      expect(result).toMatchObject({
         data: {
           todos: {
             __typename: 'TodosConnection',
@@ -3722,7 +3746,8 @@ describe('type policies', () => {
         },
       });
 
-      expect(cache.extract()).toEqual({
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract())).toEqual({
         ROOT_QUERY: {
           __typename: 'Query',
           todos: {
@@ -3744,7 +3769,8 @@ describe('type policies', () => {
         variables: secondVariables,
       });
 
-      expect(result).toStrictEqualTyped({
+      // Hermes: results may contain a superset of the selected fields.
+      expect(result).toMatchObject({
         data: {
           todos: {
             __typename: 'TodosConnection',
@@ -3755,10 +3781,12 @@ describe('type policies', () => {
         },
       });
 
-      expect(cache.extract()).toMatchSnapshot();
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
 
       result = await client.query({ query: thirdQuery });
-      expect(result).toStrictEqualTyped({
+      // Hermes: results may contain a superset of the selected fields.
+      expect(result).toMatchObject({
         data: {
           todos: {
             __typename: 'TodosConnection',
@@ -3767,12 +3795,11 @@ describe('type policies', () => {
           },
         },
       });
-      expect(cache.extract()).toMatchSnapshot();
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
     });
 
-    // Hermes: keyArgs are not supported (relayStylePagination stores every page under one
-    // keyArgs-based field)
-    it.skip('can handle Relay-style pagination', async () => {
+    it('can handle Relay-style pagination', async () => {
       const cache = new Hermes({
         typePolicies: {
           Query: {
@@ -4156,7 +4183,8 @@ describe('type policies', () => {
 
       const stream = new ObservableStream(observable);
 
-      await expect(stream).toEmitTypedValue({
+      // Hermes: results may contain a superset of the selected fields.
+      expect(await stream.takeNext()).toMatchObject({
         loading: false,
         networkStatus: NetworkStatus.ready,
         data: {
@@ -4169,14 +4197,16 @@ describe('type policies', () => {
         dataState: 'complete',
         partial: false,
       });
-      expect(cache.extract()).toMatchSnapshot();
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
 
       await observable.fetchMore({ variables: secondVariables });
 
       {
         const result = await stream.takeNext();
 
-        expect(result).toStrictEqualTyped({
+        // Hermes: results may contain a superset of the selected fields.
+        expect(result).toMatchObject({
           loading: false,
           networkStatus: NetworkStatus.ready,
           data: {
@@ -4195,7 +4225,8 @@ describe('type policies', () => {
           dataState: 'complete',
           partial: false,
         });
-        expect(cache.extract()).toMatchSnapshot();
+        // Hermes: compare in InMemoryCache's normalized shape.
+        expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
       }
 
       await observable.fetchMore({ variables: thirdVariables });
@@ -4205,7 +4236,8 @@ describe('type policies', () => {
 
         expect(result.data.search.edges.length).toBe(5);
 
-        expect(result).toStrictEqualTyped({
+        // Hermes: results may contain a superset of the selected fields.
+        expect(result).toMatchObject({
           loading: false,
           networkStatus: NetworkStatus.ready,
           data: {
@@ -4225,7 +4257,13 @@ describe('type policies', () => {
           partial: false,
         });
 
-        expect(cache.extract()).toMatchSnapshot();
+        // Hermes: compare in InMemoryCache's normalized shape. The Basquiat
+        // Artist, which no edge refers to any more, is deleted right away
+        // (rather than kept until gc()), so it is added back to compare.
+        const basquiatId = 'Artist:{"href":"/artist/jean-michel-basquiat"}';
+        const normalized = toNormalizedCacheObject(cache.extract());
+        expect(normalized[basquiatId]).toBeUndefined();
+        expect({ [basquiatId]: firstEdges[0].node, ...normalized }).toMatchSnapshot();
       }
 
       await observable.fetchMore({ variables: fourthVariables });
@@ -4233,7 +4271,8 @@ describe('type policies', () => {
       {
         const result = await stream.takeNext();
 
-        expect(result).toStrictEqualTyped({
+        // Hermes: results may contain a superset of the selected fields.
+        expect(result).toMatchObject({
           loading: false,
           networkStatus: NetworkStatus.ready,
           data: {
@@ -4253,9 +4292,11 @@ describe('type policies', () => {
           partial: false,
         });
 
-        expect(result.data.search.edges).toEqual([...firstEdges, ...secondEdges]);
+        // Hermes: results may contain a superset of the selected fields.
+        expect(result.data.search.edges).toMatchObject([...firstEdges, ...secondEdges]);
 
-        expect(cache.extract()).toMatchSnapshot();
+        // Hermes: compare in InMemoryCache's normalized shape.
+        expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
       }
 
       await observable.fetchMore({ variables: fifthVariables });
@@ -4265,7 +4306,8 @@ describe('type policies', () => {
 
         expect(result.data.search.edges.length).toBe(7);
 
-        expect(result).toStrictEqualTyped({
+        // Hermes: results may contain a superset of the selected fields.
+        expect(result).toMatchObject({
           loading: false,
           networkStatus: NetworkStatus.ready,
           data: {
@@ -4285,7 +4327,8 @@ describe('type policies', () => {
           partial: false,
         });
 
-        expect(cache.extract()).toMatchSnapshot();
+        // Hermes: compare in InMemoryCache's normalized shape.
+        expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
       }
 
       // Now search for a different artist to verify that they keyArgs
@@ -4299,9 +4342,11 @@ describe('type policies', () => {
             first: 1,
           },
         });
-        const snapshot = cache.extract();
+        // Hermes: compare in InMemoryCache's normalized shape.
+        const snapshot = toNormalizedCacheObject(cache.extract());
 
-        expect(result).toStrictEqualTyped({
+        // Hermes: results may contain a superset of the selected fields.
+        expect(result).toMatchObject({
           data: {
             search: {
               edges: turrellEdges.slice(0, 1),
@@ -4361,7 +4406,8 @@ describe('type policies', () => {
           },
         });
 
-        expect(result).toStrictEqualTyped({
+        // Hermes: results may contain a superset of the selected fields.
+        expect(result).toMatchObject({
           loading: false,
           networkStatus: NetworkStatus.ready,
           data: {
@@ -4381,7 +4427,8 @@ describe('type policies', () => {
           partial: false,
         });
 
-        expect(cache.extract()).toMatchSnapshot();
+        // Hermes: compare in InMemoryCache's normalized shape.
+        expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
       }
 
       {
@@ -4394,9 +4441,11 @@ describe('type policies', () => {
           // Necessary to skip the cache, like fetchMore does.
           fetchPolicy: 'network-only',
         });
-        const snapshot = cache.extract();
+        // Hermes: compare in InMemoryCache's normalized shape.
+        const snapshot = toNormalizedCacheObject(cache.extract());
 
-        expect(result).toStrictEqualTyped({
+        // Hermes: results may contain a superset of the selected fields.
+        expect(result).toMatchObject({
           data: {
             search: {
               edges: turrellEdges,
@@ -4774,10 +4823,11 @@ describe('type policies', () => {
         },
       });
 
-      // Hermes: parameterized fields are separate nodes linked to ROOT_QUERY,
-      // references are inbound/outbound edges, and extract() has no
-      // __META.extraRootIds (Hermes does not serialize retained ids).
-      const fieldId = (isbn: string) => `ROOT_QUERY❖["book"]❖{"isbn":"${isbn}"}`;
+      // Hermes: parameterized fields are separate nodes linked to ROOT_QUERY
+      // (with ids ending in their keyArgs store field names), references are
+      // inbound/outbound edges, and extract() has no __META.extraRootIds
+      // (Hermes does not serialize retained ids).
+      const fieldId = (isbn: string) => `ROOT_QUERY❖["book"]❖book:{"isbn":"${isbn}"}`;
       const bookId = (isbn: string) => `Book:{"isbn":"${isbn}"}`;
       const fieldNode = (isbn: string) => ({
         type: 1,
@@ -5819,7 +5869,7 @@ describe('type policies', () => {
     });
   });
 
-  // Hermes: keyFields/keyArgs functions are not supported
+  // Hermes: keyFields functions are not supported (keyArgs functions are).
   it.skip(`allows keyFields and keyArgs functions to return false`, () => {
     const cache = new Hermes({
       typePolicies: {
@@ -5880,7 +5930,8 @@ describe('type policies', () => {
       },
     });
 
-    expect(cache.extract()).toEqual({
+    // Hermes: compare in InMemoryCache's normalized shape.
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
         __typename: 'Query',
         // An array of non-normalized objects, not Reference objects.

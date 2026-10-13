@@ -20,6 +20,7 @@ import { InvariantError } from '@apollo/client/utilities/invariant';
 import { ObservableStream, spyOnConsole, wait } from '@apollo/client/testing/internal';
 
 import { Hermes } from '../../../src';
+import { toNormalizedCacheObject } from '../../helpers';
 
 describe('client', () => {
   it('can allow passing in a link', () => {
@@ -3312,8 +3313,7 @@ describe('client', () => {
 });
 
 describe('@connection', () => {
-  // Hermes: @connection is not supported; the field is stored under its arguments, not the connection key.
-  it.skip('should run a query with the @connection directive and write the result to the store key defined in the directive', async () => {
+  it('should run a query with the @connection directive and write the result to the store key defined in the directive', async () => {
     const query = gql`
       {
         books(skip: 0, limit: 2) @connection(key: "abc") {
@@ -3355,11 +3355,11 @@ describe('@connection', () => {
     const actualResult = await client.query({ query });
 
     expect(actualResult.data).toEqual(result);
-    expect((client.cache as Hermes).extract()).toMatchSnapshot();
+    // Hermes: compare in InMemoryCache's normalized shape.
+    expect(toNormalizedCacheObject((client.cache as Hermes).extract())).toMatchSnapshot();
   });
 
-  // Hermes: @connection is not supported; the field is stored under its arguments, not the connection key.
-  it.skip('should run a query with the connection directive and filter arguments and write the result to the correct store key', async () => {
+  it('should run a query with the connection directive and filter arguments and write the result to the correct store key', async () => {
     const query = gql`
       query books($order: string) {
         books(skip: 0, limit: 2, order: $order) @connection(key: "abc", filter: ["order"]) {
@@ -3402,11 +3402,11 @@ describe('@connection', () => {
     const actualResult = await client.query({ query, variables });
 
     expect(actualResult.data).toEqual(result);
-    expect((client.cache as Hermes).extract()).toMatchSnapshot();
+    // Hermes: compare in InMemoryCache's normalized shape.
+    expect(toNormalizedCacheObject((client.cache as Hermes).extract())).toMatchSnapshot();
   });
 
-  // Hermes: keyArgs field policies are not supported; the field is stored under all of its arguments.
-  it.skip('should support cache field policies that filter key arguments', async () => {
+  it('should support cache field policies that filter key arguments', async () => {
     const query = gql`
       query books($order: string) {
         books(skip: 0, limit: 2, order: $order) {
@@ -3459,7 +3459,8 @@ describe('@connection', () => {
     const actualResult = await client.query({ query, variables });
 
     expect(actualResult.data).toEqual(result);
-    expect((client.cache as Hermes).extract()).toMatchSnapshot();
+    // Hermes: compare in InMemoryCache's normalized shape.
+    expect(toNormalizedCacheObject((client.cache as Hermes).extract())).toMatchSnapshot();
   });
 
   it('should broadcast changes for reactive variables', async () => {
@@ -5488,8 +5489,7 @@ describe('custom document transforms', () => {
     });
   });
 
-  // Hermes: relies on keyArgs: false to merge paginated pages into one field; keyArgs is not supported.
-  it.skip('re-runs custom document transforms when calling `fetchMore`', async () => {
+  it('re-runs custom document transforms when calling `fetchMore`', async () => {
     const query = gql`
       query TestQuery($offset: Int) {
         products(offset: $offset) {
@@ -5607,7 +5607,8 @@ describe('custom document transforms', () => {
 
     await expect(stream).toEmitTypedValue({
       data: {
-        products: [{ __typename: 'Product', id: 1 }],
+        // Hermes: reads return a superset of the selected fields (the cached metrics).
+        products: [{ __typename: 'Product', id: 1, metrics: '1000/vpm' }],
       },
       dataState: 'complete',
       loading: true,
@@ -5618,7 +5619,8 @@ describe('custom document transforms', () => {
     await expect(stream).toEmitTypedValue({
       data: {
         products: [
-          { __typename: 'Product', id: 1 },
+          // Hermes: reads return a superset of the selected fields (the cached metrics).
+          { __typename: 'Product', id: 1, metrics: '1000/vpm' },
           { __typename: 'Product', id: 2 },
         ],
       },
@@ -5631,8 +5633,7 @@ describe('custom document transforms', () => {
     await expect(stream).not.toEmitAnything();
   });
 
-  // Hermes: relies on keyArgs: false to merge paginated pages into one field; keyArgs is not supported.
-  it.skip('runs custom document transforms on the passed query and original query when calling `fetchMore` with a different query', async () => {
+  it('runs custom document transforms on the passed query and original query when calling `fetchMore` with a different query', async () => {
     const initialQuery = gql`
       query TestQuery($offset: Int) {
         currentUser {
@@ -5800,7 +5801,8 @@ describe('custom document transforms', () => {
     await expect(stream).toEmitTypedValue({
       data: {
         currentUser: { id: 1 },
-        products: [{ __typename: 'Product', id: 1 }],
+        // Hermes: reads return a superset of the selected fields (the cached metrics).
+        products: [{ __typename: 'Product', id: 1, metrics: '1000/vpm' }],
       },
       dataState: 'complete',
       loading: true,
@@ -5812,7 +5814,8 @@ describe('custom document transforms', () => {
       data: {
         currentUser: { id: 1 },
         products: [
-          { __typename: 'Product', id: 1 },
+          // Hermes: reads return a superset of the selected fields (the cached metrics).
+          { __typename: 'Product', id: 1, metrics: '1000/vpm' },
           { __typename: 'Product', id: 2 },
         ],
       },

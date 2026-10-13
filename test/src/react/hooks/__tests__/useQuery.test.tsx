@@ -7073,8 +7073,7 @@ describe('useQuery Hook', () => {
         },
       ];
 
-      // Hermes: keyArgs is not implemented, so refetches with new variables are stored separately instead of under one field
-      it.skip('should support explicit "overwrite"', async () => {
+      it('should support explicit "overwrite"', async () => {
         const mergeParams: [any, any][] = [];
         const cache = new Hermes({
           typePolicies: {
@@ -7178,8 +7177,7 @@ describe('useQuery Hook', () => {
         ]);
       });
 
-      // Hermes: keyArgs is not implemented, so refetches with new variables are stored separately instead of under one field
-      it.skip('should support explicit "merge"', async () => {
+      it('should support explicit "merge"', async () => {
         const mergeParams: [any, any][] = [];
         const cache = new Hermes({
           typePolicies: {
@@ -7285,8 +7283,7 @@ describe('useQuery Hook', () => {
         ]);
       });
 
-      // Hermes: keyArgs is not implemented, so refetches with new variables are stored separately instead of under one field
-      it.skip('should assume default refetchWritePolicy value is "overwrite"', async () => {
+      it('should assume default refetchWritePolicy value is "overwrite"', async () => {
         const mergeParams: [any, any][] = [];
         const cache = new Hermes({
           typePolicies: {
@@ -12203,8 +12200,7 @@ it('applies `context` on next fetch when it changes between renders', async () =
   await expect(takeSnapshot).not.toRerender();
 });
 
-// Hermes: keyArgs is not implemented, so refetches with new variables are stored separately instead of under one field
-it.skip('applies `refetchWritePolicy` on next fetch when it changes between renders', async () => {
+it('applies `refetchWritePolicy` on next fetch when it changes between renders', async () => {
   const query: TypedDocumentNode<{ primes: number[] }, { min: number; max: number }> = gql`
     query GetPrimes($min: number, $max: number) {
       primes(min: $min, max: $max)

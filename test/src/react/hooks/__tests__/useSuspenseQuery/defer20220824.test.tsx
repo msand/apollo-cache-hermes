@@ -1110,8 +1110,7 @@ it('incrementally renders data returned after skipping a deferred query', async 
 });
 
 // https://github.com/apollographql/apollo-client/issues/11034
-// Hermes: offsetLimitPagination relies on keyArgs: false, which is not implemented.
-it.skip('incrementally rerenders data returned by a `fetchMore` for a deferred query', async () => {
+it('incrementally rerenders data returned by a `fetchMore` for a deferred query', async () => {
   const query = gql`
     query ($offset: Int) {
       greetings(offset: $offset) {
