@@ -16,6 +16,7 @@ import { DocumentNode, isObject } from '../util';
 import type { SelectionSetNode } from '../util';
 import { GraphSnapshot } from '../GraphSnapshot';
 import { FieldStorage } from '../operations/fieldFunctions';
+import type { CheckedSubtrees } from '../operations/read';
 
 import { ConsoleTracer } from './ConsoleTracer';
 import { QueryInfo } from './QueryInfo';
@@ -253,6 +254,9 @@ export class CacheContext<TSerialized = GraphSnapshot> {
   /** Called when type policies or possibleTypes are added to the cache. */
   private readonly _policiesListeners = new Set<() => void>();
 
+  /** What reads found checking entity data against static selections (see CheckedSubtree). */
+  public checkedSubtrees: CheckedSubtrees = new WeakMap();
+
   /** The options.storage objects of read and merge functions. */
   public readonly fieldStorage = new FieldStorage();
 
@@ -288,6 +292,10 @@ export class CacheContext<TSerialized = GraphSnapshot> {
       this.policies.getKeyArgsFunction(typename, fieldName),
     );
     this.fragments = config.fragments;
+    // Policies (e.g. keyFields and possibleTypes) decide what data satisfies a selection.
+    this.onPoliciesChange(() => {
+      this.checkedSubtrees = new WeakMap();
+    });
   }
 
   /** Calls `listener` whenever type policies or possibleTypes are added to the cache. */

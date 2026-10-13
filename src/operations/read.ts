@@ -9,7 +9,7 @@ import { hasOwn, isDev } from '../context/helpers';
 import { storeFieldNameOf } from '../context/storeFieldNames';
 import type { StoreKey } from '../context/storeFieldNames';
 import type { GraphSnapshot, NodeSnapshotMap } from '../GraphSnapshot';
-import { alternativeForType, childrenForType, fieldNodeOf } from '../ParsedQueryNode';
+import { alternativeForType, areChildrenDynamic, childrenForType, fieldNodeOf } from '../ParsedQueryNode';
 import type { ParsedQuery, ParsedQueryNode } from '../ParsedQueryNode';
 import type { JsonObject, JsonValue, PathPart } from '../primitive';
 import type { NodeId, OperationInstance, RawOperation } from '../schema';
@@ -757,20 +757,71 @@ function firstMissing(tree: MissingTree): string {
   return '';
 }
 
-function addMissingField(tree: MissingTree | undefined, path: PathPart[], message: string): MissingTree {
+/**
+ * Adds `message` (or the missing fields of a memoized subtree, which are
+ * frozen, and copied before anything is added to them) at `path`.
+ */
+function addMissingField(tree: MissingTree | undefined, path: PathPart[], message: MissingTree): MissingTree {
   if (!path.length) return message;
-  const root = (tree && typeof tree === 'object' ? tree : {}) as { [key: string]: MissingTree };
+  let root = (tree && typeof tree === 'object' ? tree : {}) as { [key: string]: MissingTree };
+  if (Object.isFrozen(root)) root = { ...root };
   let node = root;
   for (let i = 0; i < path.length - 1; i++) {
     const key = path[i];
     let child = node[key];
     if (!child || typeof child !== 'object') {
       child = node[key] = {};
+    } else if (Object.isFrozen(child)) {
+      child = node[key] = { ...child };
     }
     node = child as { [key: string]: MissingTree };
   }
   node[path[path.length - 1]] = message;
   return root;
+}
+
+/**
+ * What a read found checking an entity's data against a static selection:
+ * the fields missing from it (relative to the entity), and the entities its
+ * data holds for the selection.
+ *
+ * Snapshots are immutable, and an entity's data object holds the data of the
+ * entities it references, so the result holds for as long as the data is the
+ * same object: reads after a write only check the entities whose data the
+ * write replaced (those it changed, and the entities that reference them),
+ * like InMemoryCache's per-entity result caching. (Checks that depend on more
+ * than the data, e.g. on whether referenced entities exist, are not kept.)
+ */
+export interface CheckedSubtree {
+  entityId: NodeId;
+  children: CheckedSubtree[];
+  /** The missing fields (frozen), if any. */
+  missing?: MissingTree;
+}
+
+/** Checked subtrees, by entity data object and (static) selection. */
+export type CheckedSubtrees = WeakMap<object, WeakMap<ParsedQuery, CheckedSubtree>>;
+
+const staticSelections = new WeakMap<ParsedQuery, boolean>();
+
+/** Whether a selection (transitively) has no arguments, aliases, directives or alternatives. */
+function isStaticSelection(parsed: ParsedQuery): boolean {
+  let isStatic = staticSelections.get(parsed);
+  if (isStatic === undefined) staticSelections.set(parsed, (isStatic = !areChildrenDynamic(parsed)));
+  return isStatic;
+}
+
+/** Adds the ids of the entities of a complete subtree to `nodeIds`. */
+function addSubtreeIds(subtree: CheckedSubtree, nodeIds: Set<NodeId>) {
+  const seen = new Set<CheckedSubtree>();
+  const stack = [subtree];
+  while (stack.length) {
+    const next = stack.pop()!;
+    if (seen.has(next)) continue;
+    seen.add(next);
+    nodeIds.add(next.entityId);
+    for (const child of next.children) stack.push(child);
+  }
 }
 
 interface VisitSelectionOptions {
@@ -798,6 +849,15 @@ function _visitSelection<TSerialized>(
   options: VisitSelectionOptions = {},
 ): { complete: boolean; missing?: MissingTree; hasSelectedData: boolean; result?: JsonObject } {
   const { snapshot, tempStore, danglingFields } = options;
+  // Without field policies that affect reads, the completeness of static
+  // selections only depends on the data (see CheckedSubtree).
+  const memo = context.policies.hasFieldPolicies ? undefined : context.checkedSubtrees;
+  // The checked subtrees found within the entity being visited (if memoized).
+  let subtrees: CheckedSubtree[] | undefined;
+  // Counts the missing fields, and the findings that depend on more than the
+  // data (which keep a subtree from being memoized).
+  let missingCount = 0;
+  let unmemoizable = 0;
   let complete = true;
   let missingTree: MissingTree | undefined;
   // Whether the result has a value for any field selected at its root.
@@ -816,7 +876,8 @@ function _visitSelection<TSerialized>(
     const reference = getOutbound(containerId, path);
     return reference && !getNode(reference.id) && !isRootNodeId(reference.id) ? reference.id : undefined;
   };
-  const addMissing = (path: PathPart[], message: string) => {
+  const addMissing = (path: PathPart[], message: MissingTree) => {
+    missingCount++;
     complete = false;
     missingTree = addMissingField(missingTree, path, message);
   };
@@ -875,7 +936,12 @@ function _visitSelection<TSerialized>(
         let target;
         if (snapshot) {
           const [fieldContainerId, fieldPath] = fieldLocation(typeName, fieldName, node, containerId, containerPath);
-          target = missingTarget(fieldContainerId, fieldPath);
+          const reference = getOutbound(fieldContainerId, fieldPath);
+          if (reference) {
+            target = missingTarget(fieldContainerId, fieldPath);
+            // (Whether the field is dangling depends on the referenced entity.)
+            unmemoizable++;
+          }
         }
         let message;
         if (target !== undefined) {
@@ -883,6 +949,7 @@ function _visitSelection<TSerialized>(
           if (!resultPath.length) hasSelectedData = true;
           // Like InMemoryCache, a dangling reference reads as an empty object.
           danglingObjects.push([...resultPath, key]);
+          unmemoizable++;
         } else {
           const isEntity =
             !containerPath.length && (isRootNodeId(containerId) || getNode(containerId) instanceof EntitySnapshot);
@@ -943,6 +1010,7 @@ function _visitSelection<TSerialized>(
           } else {
             complete = false;
           }
+          unmemoizable++;
           continue;
         }
         visitValue(item, parsed, containerId, itemPath, [...resultPath, i]);
@@ -960,10 +1028,49 @@ function _visitSelection<TSerialized>(
     }
     if (entityId !== undefined) {
       nodeIds?.add(entityId);
-      visitObject(value, parsed, entityId, [], resultPath);
+      if (memo && isStaticSelection(parsed)) {
+        visitEntity(value, parsed, entityId, resultPath, memo);
+      } else {
+        visitObject(value, parsed, entityId, [], resultPath);
+      }
     } else {
       visitObject(value, parsed, containerId, containerPath, resultPath);
     }
+  }
+
+  /** Visits an entity's data for a static selection, unless it is known to be complete. */
+  function visitEntity(
+    value: JsonObject,
+    parsed: ParsedQuery,
+    entityId: NodeId,
+    resultPath: PathPart[],
+    memo: CheckedSubtrees,
+  ) {
+    let bySelection = memo.get(value);
+    const known = bySelection?.get(parsed);
+    if (known && known.entityId === entityId) {
+      subtrees?.push(known);
+      if (nodeIds) addSubtreeIds(known, nodeIds);
+      if (known.missing) addMissing(resultPath, known.missing);
+      return;
+    }
+
+    const outer = subtrees;
+    const missingBefore = missingCount;
+    const unmemoizableBefore = unmemoizable;
+    const children: CheckedSubtree[] = (subtrees = []);
+    try {
+      visitObject(value, parsed, entityId, [], resultPath);
+    } finally {
+      subtrees = outer;
+    }
+    if (unmemoizable !== unmemoizableBefore) return;
+    const subtree: CheckedSubtree = { entityId, children };
+    if (missingCount !== missingBefore)
+      subtree.missing = util.deepFreeze(deepGet(missingTree, resultPath) as MissingTree);
+    if (!bySelection) memo.set(value, (bySelection = new WeakMap()));
+    bySelection.set(parsed, subtree);
+    outer?.push(subtree);
   }
 
   /**
