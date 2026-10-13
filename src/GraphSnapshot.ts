@@ -8,6 +8,9 @@ export type NodeSnapshotMap = { [Key in NodeId]: NodeSnapshot };
 /** Changed nodes, by id: their new snapshot, or null if removed. */
 type NodeChanges = Map<NodeId, NodeSnapshot | null>;
 
+/** The changes of a write: new snapshots by id, or undefined for removed nodes. */
+type NodeChangeSet = { [Key in NodeId]: NodeSnapshot | undefined };
+
 /** The most changes a snapshot keeps in its own (latest) level. */
 const TOP_SIZE = 32;
 
@@ -43,7 +46,7 @@ interface SnapshotState {
   /** The latest changes, on top of mid. */
   readonly top: NodeChanges | undefined;
   /** The nodes added or changed by this snapshot (those that freeze() freezes); all of them if undefined. */
-  fresh: NodeSnapshot[] | undefined;
+  fresh: NodeChangeSet | undefined;
   /** All of the nodes (built on demand when there are changes). */
   flat: NodeSnapshotMap | undefined;
 }
@@ -55,15 +58,23 @@ export class GraphSnapshot {
    *
    * @internal
    */
-  static withChanges(parent: GraphSnapshot, changes: { [Key in NodeId]: NodeSnapshot | undefined }): GraphSnapshot {
+  static withChanges(parent: GraphSnapshot, changes: NodeChangeSet): GraphSnapshot {
     const state = parent._state;
-    let top: NodeChanges | undefined = state.top ? new Map(state.top) : new Map();
-    const fresh: NodeSnapshot[] = [];
-    for (const id in changes) {
-      const node = changes[id];
-      top.set(id, node ?? null);
-      if (node) fresh.push(node);
+    let count = 0;
+    for (const _id in changes) count++;
+
+    // Changes that would be merged into a new base anyway (e.g. those of the
+    // first write to an empty cache) go straight into one.
+    const pending = (state.top?.size ?? 0) + (state.mid?.size ?? 0) + count;
+    if (count > TOP_SIZE && pending * pending > 2 * state.baseSize * count) {
+      const { values, size } = flattenAll(state, changes);
+      const snapshot = new GraphSnapshot(values, undefined, undefined, size);
+      snapshot._state.fresh = changes;
+      return snapshot;
     }
+
+    let top: NodeChanges | undefined = state.top ? new Map(state.top) : new Map();
+    for (const id in changes) top.set(id, changes[id] ?? null);
 
     let { base, mid, baseSize } = state;
     if (top.size > TOP_SIZE) {
@@ -78,7 +89,7 @@ export class GraphSnapshot {
       top = undefined;
     }
     const snapshot = new GraphSnapshot(base, mid, top, baseSize);
-    snapshot._state.fresh = fresh;
+    snapshot._state.fresh = changes;
     return snapshot;
   }
 
@@ -176,7 +187,7 @@ export class GraphSnapshot {
     // Node snapshots are class instances, so freeze them and their (plain) data
     // explicitly. (Nodes this snapshot shares with the one it was made from
     // were frozen with that one.)
-    for (const node of state.fresh ?? Object.values(state.base)) {
+    for (const node of Object.values(state.fresh ?? state.base)) {
       if (!node || Object.isFrozen(node)) continue;
       Object.freeze(node);
       for (const value of Object.values(node)) deepFreeze(value);
@@ -217,4 +228,37 @@ function countKeys(values: NodeSnapshotMap): number {
   let count = 0;
   for (const _id in values) count++;
   return count;
+}
+
+/**
+ * All of the nodes of a snapshot (`state`) with `changes` applied, in the
+ * order of an object updated in place (see flatten), and how many there are.
+ */
+function flattenAll(state: SnapshotState, changes: NodeChangeSet): { values: NodeSnapshotMap; size: number } {
+  const { base, mid, top } = state;
+  const current = (id: NodeId): NodeSnapshot | undefined => {
+    if (id in changes) return changes[id];
+    let node;
+    if (top !== undefined && (node = top.get(id)) !== undefined) return node ?? undefined;
+    if (mid !== undefined && (node = mid.get(id)) !== undefined) return node ?? undefined;
+    return base[id];
+  };
+  const values = Object.create(null) as NodeSnapshotMap;
+  let size = 0;
+  const add = (id: NodeId) => {
+    const node = current(id);
+    if (node) {
+      values[id] = node;
+      size++;
+    }
+  };
+  for (const id in base) add(id);
+  // (New nodes come last, in the order they were added.)
+  const addNew = (id: NodeId) => {
+    if (!(id in base) && !(id in values)) add(id);
+  };
+  mid?.forEach((_node, id) => addNew(id));
+  top?.forEach((_node, id) => addNew(id));
+  for (const id in changes) addNew(id);
+  return { values, size };
 }

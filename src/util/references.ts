@@ -189,7 +189,8 @@ export function toInKey(id: NodeId, path: PathPart[]) {
   return `${id}.${path.join('.')}`;
 }
 export function toOutKey(path: PathPart[]) {
-  return path.join('.');
+  // (The common case: a field of an entity.)
+  return path.length === 1 ? String(path[0]) : path.join('.');
 }
 export function toParamKey(path: PathPart[]) {
   return path[0].toString();

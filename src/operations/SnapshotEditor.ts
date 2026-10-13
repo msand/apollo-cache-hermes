@@ -230,6 +230,12 @@ export class SnapshotEditor<TSerialized> {
   private _newNodes: NodeSnapshotMap = Object.create(null);
 
   /**
+   * The data objects of new node snapshots that this edit made (by node id),
+   * which it can therefore change in place (see _setValue).
+   */
+  private _ownedData: { [id: string]: object } = Object.create(null);
+
+  /**
    * Tracks the nodes that have new _values_ vs the parent snapshot.
    *
    * This is a subset of the keys in `_newValues`.  The difference is all nodes
@@ -499,15 +505,11 @@ export class SnapshotEditor<TSerialized> {
           this._pathToId[containerId] = Object.create(null);
         }
         lazyImmutableDeepSet(this._pathToId[containerId], undefined, path, payloadId);
-        referenceEdits.push({
-          containerId,
-          path,
-          prevNodeId: previousId,
-          nextNodeId: payloadId,
-          // An unidentified value replacing the entity is written below.
-          ...(replacesEntity && { noWrite: true as const }),
-          ...(ref ? { reference: true } : undefined),
-        });
+        const edit: ReferenceEdit = { containerId, path, prevNodeId: previousId, nextNodeId: payloadId };
+        // An unidentified value replacing the entity is written below.
+        if (replacesEntity) edit.noWrite = true;
+        if (ref) edit.reference = true;
+        referenceEdits.push(edit);
       }
       if (replacesEntity) {
         this._setValue(containerId, path, {});
@@ -654,7 +656,9 @@ export class SnapshotEditor<TSerialized> {
       // Fields are stored under their arguments, or as their keyArgs policies
       // (or @connection directives) say, like InMemoryCache's store field names.
       const args = (node.args as JsonObject | undefined) ?? null;
-      const field = fieldNodeOf(node);
+      // (Only store keys, merge functions and @stream need the field's node.)
+      const field =
+        args || policies.hasKeyArgs || policies.hasMergePolicies || this._streamInfo ? fieldNodeOf(node) : undefined;
       // (Without arguments or keyArgs policies, fields are stored under their names.)
       const storeKey =
         args || policies.hasKeyArgs
@@ -1505,7 +1509,8 @@ export class SnapshotEditor<TSerialized> {
     const node = this._getNodeSnapshot(containerId);
     const value = deepGet(node?.data, path);
     if (value === undefined) {
-      if (node) {
+      // (A value that isn't in the data can only be a reference's.)
+      if (node && (node.outbound || node.parameterized)) {
         const out = node.outbound?.get(toOutKey(path));
         if (out !== undefined) {
           return this._getNodeData(out.id);
@@ -1983,9 +1988,19 @@ export class SnapshotEditor<TSerialized> {
       this._editedNodeIds.add(id);
     }
 
+    // Fields of data this edit made are set in place.
+    const existing = this._newNodes[id];
+    const data = existing?.data;
+    if (path.length === 1 && !isDelete && data !== undefined && this._ownedData[id] === data) {
+      (data as Record<string, unknown>)[path[0]] = newValue;
+      return;
+    }
+
     const parent = this._parent.getNodeSnapshot(id);
-    const current = this._ensureNewSnapshot(id);
+    const current = existing ?? this._ensureNewSnapshot(id);
     current.data = lazyImmutableDeepSet(current.data, parent && parent.data, path, newValue, isDelete);
+    // (Setting a value at a path copies the data, unless this edit made it.)
+    if (path.length && isObject(current.data)) this._ownedData[id] = current.data;
   }
 
   /**
