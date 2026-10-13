@@ -1,4 +1,4 @@
-import { ApolloCache, Cache, Reference, makeReference } from '@apollo/client';
+import { ApolloCache, Cache, Reference, Unmasked, makeReference } from '@apollo/client';
 import { removeDirectivesFromDocument } from '@apollo/client/utilities';
 
 import { UnsatisfiedCacheError } from '../errors';
@@ -35,7 +35,7 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
     return { result: (empty ? EMPTY_RESULT : result) as unknown as T, complete, missing, fromOptimisticTransaction };
   }
 
-  read<TData = any, TVariables = any>(query: Cache.ReadOptions<TVariables, TData>): TData | null {
+  read<TData = any, TVariables = any>(query: Cache.ReadOptions<TVariables, TData>): Unmasked<TData> | null {
     const rawOperation = buildRawOperationFromQuery(
       query.query,
       query.variables as unknown as JsonObject,
@@ -43,7 +43,7 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
     );
     const { result, complete } = this._queryable.read(rawOperation, query.optimistic);
     if (complete || query.returnPartialData) {
-      return (result ?? (null as unknown)) as TData | null;
+      return (result ?? (null as unknown)) as Unmasked<TData> | null;
     }
     return null;
   }
@@ -52,7 +52,7 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
     options: Cache.ReadQueryOptions<QueryType, TVariables>,
     // Like ApolloCache, options.optimistic is the default.
     optimistic = !!options.optimistic,
-  ): QueryType | null {
+  ): Unmasked<QueryType> | null {
     return this.read({
       query: options.query,
       variables: options.variables,
@@ -65,7 +65,7 @@ export abstract class ApolloQueryable<TSerialized> extends ApolloCache<TSerializ
   readFragment<FragmentType, TVariables = any>(
     options: Cache.ReadFragmentOptions<FragmentType, TVariables>,
     optimistic = !!options.optimistic,
-  ): FragmentType | null {
+  ): Unmasked<FragmentType> | null {
     // TODO: Support nested fragments.
     const rawOperation = buildRawOperationFromFragment(
       options.fragment,
