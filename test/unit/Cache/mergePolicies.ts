@@ -143,4 +143,72 @@ describe(`merge policies`, () => {
       });
     }
   });
+  describe(`type merge functions`, () => {
+    const query = gql`
+      query ($k: Int) {
+        settings {
+          a
+          b
+        }
+        list {
+          a
+          b
+        }
+        p: param(k: $k) {
+          a
+          b
+        }
+      }
+    `;
+    const variables = { k: 1 };
+
+    /** Writes twice (nulling `settings` the second time), recording the type's merge calls. */
+    function run(Cache: typeof Hermes | typeof InMemoryCache) {
+      const calls: unknown[] = [];
+      const cache = new Cache({
+        typePolicies: {
+          Settings: {
+            merge(existing, incoming, { fieldName, storeFieldName, args }) {
+              calls.push({ fieldName, storeFieldName, args, existing: !!existing, incoming });
+              return { ...existing, ...incoming };
+            },
+          },
+        },
+      });
+      cache.writeQuery({
+        query,
+        variables,
+        data: {
+          settings: { __typename: 'Settings', a: 1, b: 2 },
+          list: [{ __typename: 'Settings', a: 1, b: 2 }],
+          p: { __typename: 'Settings', a: 1, b: 2 },
+        },
+      });
+      cache.writeQuery({
+        query,
+        variables,
+        data: {
+          settings: null,
+          list: [{ __typename: 'Settings', a: 3, b: 4 }],
+          p: { __typename: 'Settings', a: 5, b: 6 },
+        },
+      });
+      return { calls, result: cache.readQuery({ query, variables }) };
+    }
+
+    it(`stores a null written over an object of the type`, () => {
+      expect(run(Hermes).result).to.deep.eq({
+        settings: null,
+        list: [{ __typename: 'Settings', a: 3, b: 4 }],
+        p: { __typename: 'Settings', a: 5, b: 6 },
+      });
+    });
+
+    it(`is called like InMemoryCache calls it (not for list items, nor for null)`, () => {
+      const hermes = run(Hermes);
+      const imc = run(InMemoryCache);
+      expect(hermes.calls).to.deep.eq(imc.calls);
+      expect(hermes.result).to.deep.eq(imc.result);
+    });
+  });
 });

@@ -337,29 +337,6 @@ export class SnapshotEditor<TSerialized> {
     // (values nested within the root are not of the Query type).
     const fragmentTypename = payloadTypename || storedTypename || rootTypename;
 
-    const typeMerge =
-      typeof typename === 'string' && typename ? this._context.policies.getTypePolicy(typename).merge : undefined;
-    // Values of fields with merge functions (which also apply their type's merge
-    // function) have been merged already; like InMemoryCache, writing an entity
-    // itself does not apply its type's merge function.
-    if (typeof typeMerge === 'function' && mode !== 'replace' && path.length) {
-      const fieldName = String([...prefixPath, ...path].filter(part => typeof part === 'string').pop() ?? '');
-      const existing = withReferences(this._getNodeSnapshot(containerId), path, previousValue);
-      payload = typeMerge(
-        // Like InMemoryCache, overwriting writes call merge functions without existing data.
-        this._overwrite ? undefined : existing,
-        payload,
-        this._fieldFunctions().mergeOptions(
-          fieldName,
-          fieldName,
-          null,
-          [containerId, ...path, fieldName],
-          this._extensions,
-          existing,
-        ),
-      ) as JsonObject;
-    }
-
     // Recurse into arrays.
     if (Array.isArray(payload) || Array.isArray(previousValue)) {
       if (!isNil(previousValue) && !Array.isArray(previousValue)) {
