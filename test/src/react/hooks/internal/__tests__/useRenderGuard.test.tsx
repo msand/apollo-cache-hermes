@@ -1,5 +1,7 @@
-import * as React from 'rehackt';
 import { render, waitFor } from '@testing-library/react';
+import * as React from 'react';
+// not exported; Hermes: imported from the published package's file (see test/env/resolver.ts)
+// eslint-disable-next-line import/no-unresolved
 import { useRenderGuard } from '@apollo/client/react/hooks/internal/useRenderGuard';
 
 const UNDEF = {};

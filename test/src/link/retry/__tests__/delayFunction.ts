@@ -1,3 +1,5 @@
+// not exported
+// eslint-disable-next-line import/no-unresolved -- Hermes: a module internal to the published package
 import { buildDelayFunction } from '@apollo/client/link/retry/delayFunction';
 
 describe('buildDelayFunction', () => {

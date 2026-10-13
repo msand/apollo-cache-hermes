@@ -1,14 +1,13 @@
-import { gql } from '@apollo/client/core';
+import { gql } from '@apollo/client';
+import { maskFragment } from '@apollo/client/masking';
+import { InvariantError } from '@apollo/client/utilities/invariant';
+// not exported
+// eslint-disable-next-line import/no-unresolved -- not exported; Jest resolves it (test/env/resolver.ts).
+import { deepFreeze } from '@apollo/client/utilities/internal/deepFreeze';
+
 import { spyOnConsole } from '@apollo/client/testing/internal';
-import { deepFreeze } from '@apollo/client/utilities/common/maybeDeepFreeze';
-import { InvariantError } from '@apollo/client/utilities/globals';
-import { maskFragment } from '@apollo/client/masking/maskFragment';
-import { loadErrorMessages } from '@apollo/client/dev';
 
 import { Hermes } from '../../../../src';
-
-// Hermes: these tests assert @apollo/client's readable error messages, which the shared env leaves unloaded.
-loadErrorMessages();
 
 it('returns null when data is null', () => {
   const fragment = gql`

@@ -1,14 +1,14 @@
-import { gql } from '@apollo/client/core';
+import { gql } from '@apollo/client';
+import { maskOperation } from '@apollo/client/masking';
+import { __DEV__ } from '@apollo/client/utilities/environment';
+import { InvariantError } from '@apollo/client/utilities/invariant';
+// not exported
+// eslint-disable-next-line import/no-unresolved -- not exported; Jest resolves it (test/env/resolver.ts).
+import { deepFreeze } from '@apollo/client/utilities/internal/deepFreeze';
+
 import { spyOnConsole, withProdMode } from '@apollo/client/testing/internal';
-import { deepFreeze } from '@apollo/client/utilities/common/maybeDeepFreeze';
-import { InvariantError } from '@apollo/client/utilities/globals';
-import { maskOperation } from '@apollo/client/masking/maskOperation';
-import { loadErrorMessages } from '@apollo/client/dev';
 
 import { Hermes } from '../../../../src';
-
-// Hermes: these tests assert @apollo/client's readable error messages, which the shared env leaves unloaded.
-loadErrorMessages();
 
 it('throws when passing document with no operation to maskOperation', () => {
   const document = gql`
@@ -210,7 +210,7 @@ it('masks fragments from nested objects when query gets fields from same object'
   });
 });
 
-// eslint-disable-next-line jest/no-identical-title -- Apollo Client 3.14.1 has two tests with this title.
+// eslint-disable-next-line jest/no-identical-title -- Apollo Client has two tests with this title.
 it('masks fragments from nested objects when query gets fields from same object', () => {
   const query = gql`
     query {

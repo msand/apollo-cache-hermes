@@ -1,16 +1,18 @@
-import gql from 'graphql-tag';
 import { expectTypeOf } from 'expect-type';
-import { ApolloCache } from '@apollo/client/cache/core/cache';
-import { Cache, DataProxy } from '@apollo/client/cache';
-import { Reference } from '@apollo/client/utilities/graphql/storeUtils';
+import type { FragmentDefinitionNode, InlineFragmentNode } from 'graphql';
+import { gql } from 'graphql-tag';
+import type { OperationVariables, Unmasked } from '@apollo/client';
+import type { Cache } from '@apollo/client/cache';
+import { ApolloCache, Scalar } from '@apollo/client/cache';
+import type { Reference } from '@apollo/client/utilities';
 
-class TestCache extends ApolloCache<unknown> {
+class TestCache extends ApolloCache {
   constructor() {
     super();
   }
 
-  public diff<T>(query: Cache.DiffOptions): DataProxy.DiffResult<T> {
-    return {};
+  public diff<T>(query: Cache.DiffOptions<T>): Cache.DiffResult<T> {
+    return { result: null, complete: false };
   }
 
   public evict(): boolean {
@@ -21,18 +23,21 @@ class TestCache extends ApolloCache<unknown> {
     return undefined;
   }
 
-  public performTransaction(transaction: <TSerialized>(c: ApolloCache<TSerialized>) => void): void {
+  public fragmentMatches(fragment: InlineFragmentNode | FragmentDefinitionNode, typename: string): boolean {
+    return true;
+  }
+
+  public performTransaction(transaction: (c: ApolloCache) => void): void {
     transaction(this);
   }
 
-  public read<T, TVariables = any>(query: Cache.ReadOptions<TVariables>): T | null {
+  public read<TData = unknown, TVariables extends OperationVariables = OperationVariables>(
+    query: Cache.ReadOptions<TData, TVariables>,
+  ): Unmasked<TData> | null {
     return null;
   }
 
-  public recordOptimisticTransaction(
-    transaction: <TSerialized>(c: ApolloCache<TSerialized>) => void,
-    id: string,
-  ): void {}
+  public recordOptimisticTransaction(transaction: (c: ApolloCache) => void, id: string): void {}
 
   public removeOptimistic(id: string): void {}
 
@@ -40,15 +45,19 @@ class TestCache extends ApolloCache<unknown> {
     return new Promise<void>(() => null);
   }
 
-  public restore(serializedState: unknown): ApolloCache<unknown> {
+  public restore(serializedState: unknown) {
     return this;
   }
 
-  public watch(watch: Cache.WatchOptions): () => void {
+  public watch<T = unknown, TVariables extends OperationVariables = OperationVariables>(
+    watch: Cache.WatchOptions<T, TVariables>,
+  ): () => void {
     return function () {};
   }
 
-  public write<TResult = any, TVariables = any>(_: Cache.WriteOptions<TResult, TVariables>): Reference | undefined {
+  public write<TResult = unknown, TVariables extends OperationVariables = OperationVariables>(
+    _: Cache.WriteOptions<TResult, TVariables>,
+  ): Reference | undefined {
     return undefined;
   }
 }
@@ -316,6 +325,30 @@ describe('abstract cache', () => {
       });
     });
   });
+
+  describe('getScalar', () => {
+    it('returns undefined by default', () => {
+      const cache = new TestCache();
+
+      expect(cache.getScalar('DateTime')).toBeUndefined();
+    });
+
+    it('returns the scalar from a cache that overrides getScalar', () => {
+      const dateTime = new Scalar<string, Date>({
+        serialize: value => value.toISOString(),
+        parse: value => new Date(value),
+        is: value => value instanceof Date,
+      });
+
+      class ScalarCache extends TestCache {
+        getScalar<TKey extends keyof ApolloCache.Scalars>(key: TKey): ApolloCache.GetScalarType<TKey> | undefined {
+          return dateTime as ApolloCache.GetScalarType<TKey>;
+        }
+      }
+
+      expect(new ScalarCache().getScalar('DateTime')).toBe(dateTime);
+    });
+  });
 });
 
 describe.skip('Cache type tests', () => {
@@ -369,7 +402,8 @@ describe.skip('Cache type tests', () => {
           p2() {
             return 1;
           },
-          // @ts-expect-error needs return statement
+          // Hermes: upstream expects an error here ("needs return statement"), but the
+          // TypeScript used here accepts a method without a return when `undefined` is allowed.
           p3() {},
           p4(_, { DELETE }) {
             return DELETE;
@@ -500,7 +534,7 @@ describe.skip('Cache type tests', () => {
     it('Allows partial return data', () => {
       const cache = new TestCache();
       cache.modify<{
-        union: Array<
+        union: ReadonlyArray<
           | { __typename: 'Type1'; a: string; c: { foo: string } }
           | { __typename: 'Type2'; b: string; d: { bar: number } }
         >;

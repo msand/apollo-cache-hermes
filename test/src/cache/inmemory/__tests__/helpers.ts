@@ -1,4 +1,5 @@
-import { Cache, NormalizedCacheObject, isReference } from '@apollo/client';
+import type { Cache, NormalizedCacheObject } from '@apollo/client/cache';
+import { isReference } from '@apollo/client/utilities';
 
 import { Hermes } from '../../../../../src';
 import { CacheContext } from '../../../../../src/context';

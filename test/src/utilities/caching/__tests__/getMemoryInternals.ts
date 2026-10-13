@@ -1,13 +1,14 @@
-import * as crypto from 'crypto';
-import { ApolloClient, ApolloLink, DocumentTransform, InMemoryCache } from '@apollo/client';
+import crypto from 'crypto';
+import { ApolloClient, ApolloLink, DocumentTransform, gql, InMemoryCache } from '@apollo/client';
 import { createFragmentRegistry } from '@apollo/client/cache';
-import { gql } from '@apollo/client/core';
-import { createPersistedQueryLink } from '@apollo/client/link/persisted-queries';
-import { removeTypenameFromVariables } from '@apollo/client/link/remove-typename';
-// importing react so the `parser` cache initializes
-import '@apollo/client/react';
-import { cacheSizes, defaultCacheSizes } from '@apollo/client/utilities/caching/sizes';
+import { PersistedQueryLink } from '@apollo/client/link/persisted-queries';
+import { RemoveTypenameFromVariablesLink } from '@apollo/client/link/remove-typename';
+import { cacheSizes } from '@apollo/client/utilities';
 
+// this is compiled away so we need to import it from sources
+// Hermes: `defaultCacheSizes` is a `const enum`, so tsc must see its declaration to inline it.
+// The package's `exports` map hides this module from TypeScript, so import it by file path.
+import { defaultCacheSizes } from '../../../../../node_modules/@apollo/client/utilities/caching/sizes';
 import { Hermes } from '../../../../../src';
 
 function sha256(data: string) {
@@ -17,8 +18,10 @@ function sha256(data: string) {
 }
 
 const defaultCacheSizesAsObject = {
-  parser: defaultCacheSizes['parser'],
   canonicalStringify: defaultCacheSizes['canonicalStringify'],
+  checkDocument: defaultCacheSizes['checkDocument'],
+  isDeferredFragment: defaultCacheSizes['isDeferredFragment'],
+  isStreamField: defaultCacheSizes['isStreamField'],
   print: defaultCacheSizes['print'],
   'documentTransform.cache': defaultCacheSizes['documentTransform.cache'],
   'queryManager.getDocumentInfo': defaultCacheSizes['queryManager.getDocumentInfo'],
@@ -32,6 +35,8 @@ const defaultCacheSizesAsObject = {
   'inMemoryCache.maybeBroadcastWatch': defaultCacheSizes['inMemoryCache.maybeBroadcastWatch'],
   'inMemoryCache.executeSelectionSet': defaultCacheSizes['inMemoryCache.executeSelectionSet'],
   'inMemoryCache.executeSubSelectedArray': defaultCacheSizes['inMemoryCache.executeSubSelectedArray'],
+  'inMemoryCache.prunePartialBoundaries': defaultCacheSizes['inMemoryCache.prunePartialBoundaries'],
+  'inMemoryCache.prunePartialStreamArray': defaultCacheSizes['inMemoryCache.prunePartialStreamArray'],
 };
 
 it('returns information about cache usage (empty caches)', () => {
@@ -46,16 +51,15 @@ it('returns information about cache usage (empty caches)', () => {
     cache: new Hermes({
       fragments: createFragmentRegistry(),
     }),
-    link: createPersistedQueryLink({
+    link: new PersistedQueryLink({
       sha256,
     })
-      .concat(removeTypenameFromVariables())
+      .concat(new RemoveTypenameFromVariablesLink())
       .concat(ApolloLink.empty()),
   });
-  expect(client.getMemoryInternals?.()).toEqual({
+  expect(client.getMemoryInternals?.()).toStrictEqualTyped({
     limits: defaultCacheSizesAsObject,
     sizes: {
-      parser: 0,
       canonicalStringify: 0,
       print: 0,
       // Hermes: Hermes reports only ApolloCache's memory internals; InMemoryCache's
@@ -103,24 +107,25 @@ it('returns information about cache usage (some query triggered)', () => {
     cache: new Hermes({
       fragments: createFragmentRegistry(),
     }),
-    link: createPersistedQueryLink({
+    link: new PersistedQueryLink({
       sha256,
     })
-      .concat(removeTypenameFromVariables())
+      .concat(new RemoveTypenameFromVariablesLink())
       .concat(ApolloLink.empty()),
   });
 
-  client.query({
-    query: gql`
-      query {
-        hello
-      }
-    `,
-  });
-  expect(client.getMemoryInternals?.()).toStrictEqual({
+  client
+    .query({
+      query: gql`
+        query {
+          hello
+        }
+      `,
+    })
+    .catch(() => {});
+  expect(client.getMemoryInternals?.()).toStrictEqualTyped({
     limits: defaultCacheSizesAsObject,
     sizes: {
-      parser: 0,
       canonicalStringify: 0,
       print: 1,
       // Hermes: Hermes reports only ApolloCache's memory internals; InMemoryCache's
@@ -159,6 +164,7 @@ it('returns information about cache usage (some query triggered)', () => {
 it('reports user-declared cacheSizes', () => {
   const client = new ApolloClient({
     cache: new Hermes({}),
+    link: ApolloLink.empty(),
   });
 
   cacheSizes['inMemoryCache.executeSubSelectedArray'] = 90;

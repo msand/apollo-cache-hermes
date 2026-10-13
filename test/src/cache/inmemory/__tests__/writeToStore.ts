@@ -1,30 +1,30 @@
-import { loadErrorMessages } from '@apollo/client/dev';
+import type { ASTNode, DefinitionNode, DocumentNode, FieldNode, OperationDefinitionNode, SelectionNode } from 'graphql';
+import { gql } from 'graphql-tag';
 import { assign, omit } from 'lodash';
-import { SelectionNode, FieldNode, DefinitionNode, OperationDefinitionNode, ASTNode, DocumentNode } from 'graphql';
-import gql from 'graphql-tag';
+import type { TypedDocumentNode } from '@apollo/client';
+import type { Reference, StoreObject } from '@apollo/client/utilities';
+import { addTypenameToDocument, isReference } from '@apollo/client/utilities';
+import type { ExtensionsWithStreamInfo } from '@apollo/client/utilities/internal';
 import {
-  storeKeyNameFromField,
-  makeReference,
-  isReference,
-  Reference,
-  StoreObject,
-  addTypenameToDocument,
   cloneDeep,
   getMainDefinition,
-} from '@apollo/client/utilities';
-import type { StoreWriter } from '@apollo/client/cache/inmemory/writeToStore';
-import { TypedDocumentNode } from '@apollo/client/core';
+  makeReference,
+  makeStreamInfoTrie,
+  storeKeyNameFromField,
+  streamInfoSymbol,
+} from '@apollo/client/utilities/internal';
+import { invariant, InvariantError } from '@apollo/client/utilities/invariant';
+// not exported
+// eslint-disable-next-line import/no-unresolved
 import { extractFragmentContext } from '@apollo/client/cache/inmemory/helpers';
+
 import { spyOnConsole } from '@apollo/client/testing/internal';
 
 import { Hermes } from '../../../../../src';
-import { CacheContext } from '../../../../../src/context';
+import type { CacheContext } from '../../../../../src/context';
 import { toNormalizedCacheObject } from '../../../../helpers';
 
 import { defaultNormalizedCacheFactory, HermesWriter, writeQueryToStore } from './helpers';
-
-// These tests assert the @apollo/client error text rather than its production placeholder.
-loadErrorMessages();
 
 // Hermes: dataIdFromObject is also called for the written root object, whose id
 // (if any) need not be a string, so this does not assert that id is a string.
@@ -2273,9 +2273,9 @@ describe('writing to the store', () => {
       });
     });
 
-    it('should not warn if a field is defered', () => {
+    it('should not warn if a field is deferred', () => {
       using _consoleSpy = spyOnConsole.takeSnapshots('error');
-      const defered = gql`
+      const deferred = gql`
         query LazyLoad {
           id
           expensive @defer
@@ -2291,7 +2291,7 @@ describe('writing to the store', () => {
 
       const newStore = writeQueryToStore({
         writer,
-        query: defered,
+        query: deferred,
         result,
       });
 
@@ -2809,7 +2809,7 @@ describe('writing to the store', () => {
       },
     });
 
-    const mergeCounts: Record<string, number> = Object.create(null);
+    const mergeCounts: Record<string, number> = {};
 
     const query = gql`
       query {
@@ -2884,7 +2884,14 @@ describe('writing to the store', () => {
       },
     });
 
-    const query = gql`
+    type Data = {
+      counter: {
+        __typename: 'Counter';
+        count: number;
+      };
+    };
+
+    const query: TypedDocumentNode<Data> = gql`
       query {
         counter {
           count
@@ -2892,14 +2899,14 @@ describe('writing to the store', () => {
       }
     `;
 
-    const results: number[] = [];
+    const results: Data[] = [];
 
     const promise = new Promise<void>(resolve => {
       cache.watch({
         query,
         optimistic: true,
         callback(diff) {
-          results.push(diff.result);
+          results.push(diff.result as Data);
           expect(diff.result).toEqual({
             counter: {
               __typename: 'Counter',
@@ -3174,7 +3181,8 @@ describe('writing to the store', () => {
 
   // Hermes: tests InMemoryCache's StoreWriter internals (flattenFields)
   describe.skip('StoreWriter', () => {
-    const writer = {} as StoreWriter;
+    // Hermes: there is no StoreWriter to construct.
+    const writer = {} as any;
 
     function check(
       query: TypedDocumentNode<{
@@ -3934,7 +3942,6 @@ describe('writing to the store', () => {
       );
     });
   });
-
   it('prevent that a crafted query can overwrite Post:1 with what should be User:5', () => {
     const postFragment = gql`
       fragment PostFragment on Post {
@@ -3972,20 +3979,26 @@ describe('writing to the store', () => {
         }
       }
     `;
-    cache.write({
-      query: injectingQuery,
-      variables: { id: 5 },
-      dataId: 'ROOT_QUERY',
-      result: {
-        user: {
-          __typename: 'Post',
-          id: '1',
-          title: 'Incorrect!',
-          ignore: 'User',
-          ignore2: '5',
+    expect(() =>
+      cache.write({
+        query: injectingQuery,
+        variables: { id: 5 },
+        dataId: 'ROOT_QUERY',
+        result: {
+          user: {
+            __typename: 'Post',
+            id: '1',
+            title: 'Incorrect!',
+            ignore: 'User',
+            ignore2: '5',
+          },
         },
-      },
-    });
+      }),
+    ).toThrow(
+      new InvariantError(
+        '`__typename` is a forbidden field alias name in the selection set for field `user.firstName` in query "(anonymous)".',
+      ),
+    );
 
     expect(toNormalizedCacheObject(cache.extract())['Post:1']).toMatchInlineSnapshot(`
       Object {
@@ -3995,14 +4008,51 @@ describe('writing to the store', () => {
       }
     `);
 
-    expect(toNormalizedCacheObject(cache.extract())['User:5']).toMatchInlineSnapshot(`
-      Object {
-        "__typename": "User",
-        "firstName": "Post",
-        "id": "5",
-        "lastName": "1",
-        "title": "Incorrect!",
-      }
-    `);
+    expect(toNormalizedCacheObject(cache.extract())['User:5']).toBeUndefined();
+  });
+
+  describe('@stream', () => {
+    it('applies the default stream merge strategy only to fields with @stream on the field itself', () => {
+      using _ = spyOnConsole('warn');
+      const cache = new Hermes();
+      const query = gql`
+        query {
+          list {
+            id
+            nested @stream {
+              id
+            }
+          }
+        }
+      `;
+
+      const extensions: ExtensionsWithStreamInfo = {
+        [streamInfoSymbol]: new WeakRef(makeStreamInfoTrie()),
+      };
+
+      const item = (id: string) => ({
+        __typename: 'Item',
+        id,
+        nested: [],
+      });
+
+      cache.writeQuery({
+        query,
+        data: { list: [item('1'), item('2'), item('3')] },
+        extensions,
+      });
+
+      cache.writeQuery({
+        query,
+        data: { list: [item('1'), item('2')] },
+        extensions,
+      });
+
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract()).ROOT_QUERY).toEqual({
+        __typename: 'Query',
+        list: [{ __ref: 'Item:1' }, { __ref: 'Item:2' }],
+      });
+    });
   });
 });

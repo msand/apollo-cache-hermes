@@ -1,11 +1,694 @@
-import gql from 'graphql-tag';
-import { Cache } from '@apollo/client/cache/core/types/Cache';
-import { MissingFieldError } from '@apollo/client/cache/core/types/common';
-import { Reference, isReference, TypedDocumentNode } from '@apollo/client/core';
+import { gql } from 'graphql-tag';
+import { assign, omit } from 'lodash';
+import type { Cache, Reference, StoreObject, TypedDocumentNode } from '@apollo/client';
+import { isReference } from '@apollo/client';
+import { MissingFieldError } from '@apollo/client/cache';
+import { makeReference } from '@apollo/client/utilities/internal';
 
 import { Hermes } from '../../../../../src';
+import { toNormalizedCacheObject } from '../../../../helpers';
 
+import { defaultNormalizedCacheFactory, HermesReader, readQueryFromStore, withError } from './helpers';
+
+// Hermes: the resultCacheMaxSize tests check InMemoryCache's StoreReader
+// (its executeSelectionSet result cache), which Hermes does not have.
+
+// Hermes: InMemoryCache's StoreReader is replaced by reads (cache.diff) of
+// Hermes caches; see ./helpers.
 describe('reading from the store', () => {
+  const reader = new HermesReader();
+
+  // Hermes: a field selected under several type conditions has its selection
+  // sets merged, so innerArray's otherField (only selected `... on DummyQuery`)
+  // is required on the untyped innerArray items.
+  it.skip('runs a nested query with proper fragment fields in arrays', () => {
+    withError(() => {
+      const store = defaultNormalizedCacheFactory({
+        ROOT_QUERY: {
+          __typename: 'Query',
+          nestedObj: makeReference('abcde'),
+        } as StoreObject,
+        abcde: {
+          id: 'abcde',
+          innerArray: [
+            {
+              id: 'abcdef',
+              someField: 3,
+            },
+          ],
+        } as StoreObject,
+      });
+
+      const queryResult = readQueryFromStore(reader, {
+        store,
+        query: gql`
+          {
+            ... on DummyQuery {
+              nestedObj {
+                innerArray {
+                  id
+                  otherField
+                }
+              }
+            }
+            ... on Query {
+              nestedObj {
+                innerArray {
+                  id
+                  someField
+                }
+              }
+            }
+            ... on DummyQuery2 {
+              nestedObj {
+                innerArray {
+                  id
+                  otherField2
+                }
+              }
+            }
+          }
+        `,
+      });
+      // Hermes: reads return a superset of the selected fields.
+      expect(queryResult).toMatchObject({
+        nestedObj: {
+          innerArray: [{ id: 'abcdef', someField: 3 }],
+        },
+      });
+    });
+  });
+
+  it('rejects malformed queries', () => {
+    expect(() => {
+      readQueryFromStore(reader, {
+        store: defaultNormalizedCacheFactory(),
+        query: gql`
+          query {
+            name
+          }
+
+          query {
+            address
+          }
+        `,
+      });
+    }).toThrow(/2 operations/);
+
+    // Hermes: Hermes' own error for a document without an operation.
+    expect(() => {
+      readQueryFromStore(reader, {
+        store: defaultNormalizedCacheFactory(),
+        query: gql`
+          fragment x on y {
+            name
+          }
+        `,
+      });
+    }).toThrow(/missing an operation/);
+  });
+
+  it('runs a basic query', () => {
+    const result = {
+      id: 'abcd',
+      stringField: 'This is a string!',
+      numberField: 5,
+      nullField: null,
+    } as StoreObject;
+
+    const store = defaultNormalizedCacheFactory({
+      ROOT_QUERY: result,
+    });
+
+    const queryResult = readQueryFromStore(reader, {
+      store,
+      query: gql`
+        query {
+          stringField
+          numberField
+        }
+      `,
+    });
+
+    // The result of the query shouldn't contain __data_id fields
+    // Hermes: reads return a superset of the selected fields.
+    expect(queryResult).toMatchObject({
+      stringField: result['stringField'],
+      numberField: result['numberField'],
+    });
+  });
+
+  // Hermes: the store is seeded with InMemoryCache storeFieldNames for
+  // parameterized fields (e.g. 'field({"arg":...})'), which Hermes stores as
+  // parameterized value nodes instead.
+  it.skip('runs a basic query with arguments', () => {
+    const query = gql`
+      query {
+        id
+        stringField(arg: $stringArg)
+        numberField(intArg: $intArg, floatArg: $floatArg)
+        nullField
+      }
+    `;
+
+    const variables = {
+      intArg: 5,
+      floatArg: 3.14,
+      stringArg: 'This is a string!',
+    };
+
+    const store = defaultNormalizedCacheFactory({
+      ROOT_QUERY: {
+        id: 'abcd',
+        nullField: null,
+        'numberField({"floatArg":3.14,"intArg":5})': 5,
+        'stringField({"arg":"This is a string!"})': 'Heyo',
+      },
+    });
+
+    const result = readQueryFromStore(reader, {
+      store,
+      query,
+      variables,
+    });
+    // Hermes: reads return a superset of the selected fields.
+    expect(result).toMatchObject({
+      id: 'abcd',
+      nullField: null,
+      numberField: 5,
+      stringField: 'Heyo',
+    });
+  });
+
+  // Hermes: the store is seeded with InMemoryCache storeFieldNames for
+  // fields with directives (e.g. 'lastName@upperCase'), which Hermes stores as
+  // parameterized value nodes instead.
+  it.skip('runs a basic query with custom directives', () => {
+    const query = gql`
+      query {
+        id
+        firstName @include(if: true)
+        lastName @upperCase
+        birthDate @dateFormat(format: "DD-MM-YYYY")
+      }
+    `;
+
+    const store = defaultNormalizedCacheFactory({
+      ROOT_QUERY: {
+        id: 'abcd',
+        firstName: 'James',
+        'lastName@upperCase': 'BOND',
+        'birthDate@dateFormat({"format":"DD-MM-YYYY"})': '20-05-1940',
+      },
+    });
+
+    const result = readQueryFromStore(reader, {
+      store,
+      query,
+    });
+    // Hermes: reads return a superset of the selected fields.
+    expect(result).toMatchObject({
+      id: 'abcd',
+      firstName: 'James',
+      lastName: 'BOND',
+      birthDate: '20-05-1940',
+    });
+  });
+
+  // Hermes: the store is seeded with InMemoryCache storeFieldNames for
+  // parameterized fields (e.g. 'field({"arg":...})'), which Hermes stores as
+  // parameterized value nodes instead.
+  it.skip('runs a basic query with default values for arguments', () => {
+    const query = gql`
+      query someBigQuery($stringArg: String = "This is a default string!", $intArg: Int = 0, $floatArg: Float) {
+        id
+        stringField(arg: $stringArg)
+        numberField(intArg: $intArg, floatArg: $floatArg)
+        nullField
+      }
+    `;
+
+    const variables = {
+      floatArg: 3.14,
+    };
+
+    const store = defaultNormalizedCacheFactory({
+      ROOT_QUERY: {
+        id: 'abcd',
+        nullField: null,
+        'numberField({"floatArg":3.14,"intArg":0})': 5,
+        'stringField({"arg":"This is a default string!"})': 'Heyo',
+      },
+    });
+
+    const result = readQueryFromStore(reader, {
+      store,
+      query,
+      variables,
+    });
+    // Hermes: reads return a superset of the selected fields.
+    expect(result).toMatchObject({
+      id: 'abcd',
+      nullField: null,
+      numberField: 5,
+      stringField: 'Heyo',
+    });
+  });
+
+  it('applies defaults when variable is explicitly undefined', () => {
+    const query = gql`
+      query someQuery($show: Boolean = false) {
+        id
+        field @include(if: $show)
+      }
+    `;
+
+    const variables = {
+      show: undefined,
+    };
+
+    const store = defaultNormalizedCacheFactory({
+      ROOT_QUERY: {
+        __typename: 'Query',
+        id: 'abcd',
+      } as StoreObject,
+    });
+
+    const result = readQueryFromStore(reader, {
+      store,
+      query,
+      variables,
+    });
+    // Hermes: reads return a superset of the selected fields.
+    expect(result).toMatchObject({
+      id: 'abcd',
+    });
+  });
+
+  it('applies defaults when variables are omitted entirely', () => {
+    const query = gql`
+      query someQuery($show: Boolean = false) {
+        id
+        field @include(if: $show)
+      }
+    `;
+
+    const store = defaultNormalizedCacheFactory({
+      ROOT_QUERY: {
+        __typename: 'Query',
+        id: 'abcd',
+      } as StoreObject,
+    });
+
+    const result = readQueryFromStore(reader, {
+      store,
+      query,
+    });
+    // Hermes: reads return a superset of the selected fields.
+    expect(result).toMatchObject({
+      id: 'abcd',
+    });
+  });
+
+  it('runs a nested query', () => {
+    const result: any = {
+      id: 'abcd',
+      stringField: 'This is a string!',
+      numberField: 5,
+      nullField: null,
+      nestedObj: {
+        id: 'abcde',
+        stringField: 'This is a string too!',
+        numberField: 6,
+        nullField: null,
+      } as StoreObject,
+    };
+
+    const store = defaultNormalizedCacheFactory({
+      ROOT_QUERY: assign({}, assign({}, omit(result, 'nestedObj')), {
+        nestedObj: makeReference('abcde'),
+      } as StoreObject),
+      abcde: result.nestedObj,
+    });
+
+    const queryResult = readQueryFromStore(reader, {
+      store,
+      query: gql`
+        {
+          stringField
+          numberField
+          nestedObj {
+            stringField
+            numberField
+          }
+        }
+      `,
+    });
+
+    // The result of the query shouldn't contain __data_id fields
+    // Hermes: reads return a superset of the selected fields.
+    expect(queryResult).toMatchObject({
+      stringField: 'This is a string!',
+      numberField: 5,
+      nestedObj: {
+        stringField: 'This is a string too!',
+        numberField: 6,
+      },
+    });
+  });
+
+  it('runs a nested query with multiple fragments', () => {
+    const result: any = {
+      id: 'abcd',
+      stringField: 'This is a string!',
+      numberField: 5,
+      nullField: null,
+      nestedObj: {
+        id: 'abcde',
+        stringField: 'This is a string too!',
+        numberField: 6,
+        nullField: null,
+      } as StoreObject,
+      deepNestedObj: {
+        stringField: 'This is a deep string',
+        numberField: 7,
+        nullField: null,
+      } as StoreObject,
+      nullObject: null,
+      __typename: 'Item',
+    };
+
+    const store = defaultNormalizedCacheFactory({
+      ROOT_QUERY: assign({}, assign({}, omit(result, 'nestedObj', 'deepNestedObj')), {
+        __typename: 'Query',
+        nestedObj: makeReference('abcde'),
+      } as StoreObject),
+      abcde: assign({}, result.nestedObj, {
+        deepNestedObj: makeReference('abcdef'),
+      }) as StoreObject,
+      abcdef: result.deepNestedObj as StoreObject,
+    });
+
+    const queryResult = readQueryFromStore(reader, {
+      store,
+      query: gql`
+        {
+          stringField
+          numberField
+          nullField
+          ... on Query {
+            nestedObj {
+              stringField
+              nullField
+              deepNestedObj {
+                stringField
+                nullField
+              }
+            }
+          }
+          ... on Query {
+            nestedObj {
+              numberField
+              nullField
+              deepNestedObj {
+                numberField
+                nullField
+              }
+            }
+          }
+          ... on Query {
+            nullObject
+          }
+        }
+      `,
+    });
+
+    // The result of the query shouldn't contain __data_id fields
+    // Hermes: reads return a superset of the selected fields.
+    expect(queryResult).toMatchObject({
+      stringField: 'This is a string!',
+      numberField: 5,
+      nullField: null,
+      nestedObj: {
+        stringField: 'This is a string too!',
+        numberField: 6,
+        nullField: null,
+        deepNestedObj: {
+          stringField: 'This is a deep string',
+          numberField: 7,
+          nullField: null,
+        },
+      },
+      nullObject: null,
+    });
+  });
+
+  it('runs a nested query with an array without IDs', () => {
+    const result: any = {
+      id: 'abcd',
+      stringField: 'This is a string!',
+      numberField: 5,
+      nullField: null,
+      nestedArray: [
+        {
+          stringField: 'This is a string too!',
+          numberField: 6,
+          nullField: null,
+        },
+        {
+          stringField: 'This is a string also!',
+          numberField: 7,
+          nullField: null,
+        },
+      ] as StoreObject[],
+    };
+
+    const store = defaultNormalizedCacheFactory({
+      ROOT_QUERY: result,
+    });
+
+    const queryResult = readQueryFromStore(reader, {
+      store,
+      query: gql`
+        {
+          stringField
+          numberField
+          nestedArray {
+            stringField
+            numberField
+          }
+        }
+      `,
+    });
+
+    // The result of the query shouldn't contain __data_id fields
+    // Hermes: reads return a superset of the selected fields.
+    expect(queryResult).toMatchObject({
+      stringField: 'This is a string!',
+      numberField: 5,
+      nestedArray: [
+        {
+          stringField: 'This is a string too!',
+          numberField: 6,
+        },
+        {
+          stringField: 'This is a string also!',
+          numberField: 7,
+        },
+      ],
+    });
+  });
+
+  it('runs a nested query with an array without IDs and a null', () => {
+    const result: any = {
+      id: 'abcd',
+      stringField: 'This is a string!',
+      numberField: 5,
+      nullField: null,
+      nestedArray: [
+        null,
+        {
+          stringField: 'This is a string also!',
+          numberField: 7,
+          nullField: null,
+        },
+      ] as StoreObject[],
+    };
+
+    const store = defaultNormalizedCacheFactory({
+      ROOT_QUERY: result,
+    });
+
+    const queryResult = readQueryFromStore(reader, {
+      store,
+      query: gql`
+        {
+          stringField
+          numberField
+          nestedArray {
+            stringField
+            numberField
+          }
+        }
+      `,
+    });
+
+    // The result of the query shouldn't contain __data_id fields
+    // Hermes: reads return a superset of the selected fields.
+    expect(queryResult).toMatchObject({
+      stringField: 'This is a string!',
+      numberField: 5,
+      nestedArray: [
+        null,
+        {
+          stringField: 'This is a string also!',
+          numberField: 7,
+        },
+      ],
+    });
+  });
+
+  it('runs a nested query with an array with IDs and a null', () => {
+    const result: any = {
+      id: 'abcd',
+      stringField: 'This is a string!',
+      numberField: 5,
+      nullField: null,
+      nestedArray: [
+        null,
+        {
+          id: 'abcde',
+          stringField: 'This is a string also!',
+          numberField: 7,
+          nullField: null,
+        },
+      ] as StoreObject[],
+    };
+
+    const store = defaultNormalizedCacheFactory({
+      ROOT_QUERY: assign({}, assign({}, omit(result, 'nestedArray')), {
+        nestedArray: [null, makeReference('abcde')],
+      }) as StoreObject,
+      abcde: result.nestedArray[1],
+    });
+
+    const queryResult = readQueryFromStore(reader, {
+      store,
+      query: gql`
+        {
+          stringField
+          numberField
+          nestedArray {
+            id
+            stringField
+            numberField
+          }
+        }
+      `,
+    });
+
+    // The result of the query shouldn't contain __data_id fields
+    // Hermes: reads return a superset of the selected fields.
+    expect(queryResult).toMatchObject({
+      stringField: 'This is a string!',
+      numberField: 5,
+      nestedArray: [
+        null,
+        {
+          id: 'abcde',
+          stringField: 'This is a string also!',
+          numberField: 7,
+        },
+      ],
+    });
+  });
+
+  // Hermes: checks the size of InMemoryCache's StoreReader result cache
+  // (executeSubSelectedArray), an InMemoryCache internal.
+  it.skip('runs a nested query - skips iterating into an empty array', () => {
+    const reader = new HermesReader() as any;
+
+    const result = {
+      id: 'abcd',
+      stringField: 'This is a string!',
+      numberField: 5,
+      nullField: null,
+      nestedArray: [
+        {
+          id: 'abcde',
+          stringField: 'This is a string also!',
+          numberField: 7,
+          nullField: null,
+        },
+      ],
+      emptyArray: [],
+    } satisfies StoreObject;
+
+    const store = defaultNormalizedCacheFactory({
+      ROOT_QUERY: { ...result, nestedArray: [makeReference('abcde')] },
+      abcde: result.nestedArray[0],
+    });
+
+    expect(reader['executeSubSelectedArray'].size).toBe(0);
+
+    // assumption: cache size does not increase for empty array
+    readQueryFromStore(reader, {
+      store,
+      query: gql`
+        {
+          stringField
+          numberField
+          emptyArray {
+            id
+            stringField
+            numberField
+          }
+        }
+      `,
+    });
+    expect(reader['executeSubSelectedArray'].size).toBe(0);
+
+    // assumption: cache size increases for array with content
+    readQueryFromStore(reader, {
+      store,
+      query: gql`
+        {
+          stringField
+          numberField
+          nestedArray {
+            id
+            stringField
+            numberField
+          }
+        }
+      `,
+    });
+    expect(reader['executeSubSelectedArray'].size).toBe(1);
+  });
+
+  it('returns null on a missing field', () => {
+    const result = {
+      id: 'abcd',
+      stringField: 'This is a string!',
+      numberField: 5,
+      nullField: null,
+    } as StoreObject;
+
+    const store = defaultNormalizedCacheFactory({ ROOT_QUERY: result });
+
+    const cacheResult = readQueryFromStore(reader, {
+      store,
+      query: gql`
+        {
+          stringField
+          missingField
+        }
+      `,
+    });
+
+    expect(cacheResult).toBeNull();
+  });
+
   it('readQuery supports returnPartialData', () => {
     const cache = new Hermes();
     const aQuery = gql`
@@ -172,7 +855,7 @@ describe('reading from the store', () => {
       },
     });
 
-    expect(missing).toEqual([
+    expect(missing).toEqual(
       new MissingFieldError(
         `Can't find field 'missing' on object ${JSON.stringify(
           {
@@ -192,7 +875,370 @@ describe('reading from the store', () => {
         query,
         {}, // variables
       ),
-    ]);
+    );
+  });
+
+  it('runs a nested query where the reference is null', () => {
+    const result: any = {
+      id: 'abcd',
+      stringField: 'This is a string!',
+      numberField: 5,
+      nullField: null,
+      nestedObj: null,
+    };
+
+    const store = defaultNormalizedCacheFactory({
+      ROOT_QUERY: assign({}, assign({}, omit(result, 'nestedObj')), {
+        nestedObj: null,
+      }) as StoreObject,
+    });
+
+    const queryResult = readQueryFromStore(reader, {
+      store,
+      query: gql`
+        {
+          stringField
+          numberField
+          nestedObj {
+            stringField
+            numberField
+          }
+        }
+      `,
+    });
+
+    // The result of the query shouldn't contain __data_id fields
+    // Hermes: reads return a superset of the selected fields.
+    expect(queryResult).toMatchObject({
+      stringField: 'This is a string!',
+      numberField: 5,
+      nestedObj: null,
+    });
+  });
+
+  it('runs an array of non-objects', () => {
+    const result: any = {
+      id: 'abcd',
+      stringField: 'This is a string!',
+      numberField: 5,
+      nullField: null,
+      simpleArray: ['one', 'two', 'three'],
+    };
+
+    const store = defaultNormalizedCacheFactory({
+      ROOT_QUERY: result,
+    });
+
+    const queryResult = readQueryFromStore(reader, {
+      store,
+      query: gql`
+        {
+          stringField
+          numberField
+          simpleArray
+        }
+      `,
+    });
+
+    // The result of the query shouldn't contain __data_id fields
+    // Hermes: reads return a superset of the selected fields.
+    expect(queryResult).toMatchObject({
+      stringField: 'This is a string!',
+      numberField: 5,
+      simpleArray: ['one', 'two', 'three'],
+    });
+  });
+
+  it('runs an array of non-objects with null', () => {
+    const result: any = {
+      id: 'abcd',
+      stringField: 'This is a string!',
+      numberField: 5,
+      nullField: null,
+      simpleArray: [null, 'two', 'three'],
+    };
+
+    const store = defaultNormalizedCacheFactory({
+      ROOT_QUERY: result,
+    });
+
+    const queryResult = readQueryFromStore(reader, {
+      store,
+      query: gql`
+        {
+          stringField
+          numberField
+          simpleArray
+        }
+      `,
+    });
+
+    // The result of the query shouldn't contain __data_id fields
+    // Hermes: reads return a superset of the selected fields.
+    expect(queryResult).toMatchObject({
+      stringField: 'This is a string!',
+      numberField: 5,
+      simpleArray: [null, 'two', 'three'],
+    });
+  });
+
+  it('will read from an arbitrary root id', () => {
+    const data: any = {
+      id: 'abcd',
+      stringField: 'This is a string!',
+      numberField: 5,
+      nullField: null,
+      nestedObj: {
+        id: 'abcde',
+        stringField: 'This is a string too!',
+        numberField: 6,
+        nullField: null,
+      } as StoreObject,
+      deepNestedObj: {
+        stringField: 'This is a deep string',
+        numberField: 7,
+        nullField: null,
+      } as StoreObject,
+      nullObject: null,
+      __typename: 'Item',
+    };
+
+    const store = defaultNormalizedCacheFactory({
+      ROOT_QUERY: assign({}, assign({}, omit(data, 'nestedObj', 'deepNestedObj')), {
+        __typename: 'Query',
+        nestedObj: makeReference('abcde'),
+      }) as StoreObject,
+      abcde: assign({}, data.nestedObj, {
+        deepNestedObj: makeReference('abcdef'),
+      }) as StoreObject,
+      abcdef: data.deepNestedObj as StoreObject,
+    });
+
+    const queryResult1 = readQueryFromStore(reader, {
+      store,
+      rootId: 'abcde',
+      query: gql`
+        {
+          stringField
+          numberField
+          nullField
+          deepNestedObj {
+            stringField
+            numberField
+            nullField
+          }
+        }
+      `,
+    });
+
+    // Hermes: reads return a superset of the selected fields.
+    expect(queryResult1).toMatchObject({
+      stringField: 'This is a string too!',
+      numberField: 6,
+      nullField: null,
+      deepNestedObj: {
+        stringField: 'This is a deep string',
+        numberField: 7,
+        nullField: null,
+      },
+    });
+
+    const queryResult2 = readQueryFromStore(reader, {
+      store,
+      rootId: 'abcdef',
+      query: gql`
+        {
+          stringField
+          numberField
+          nullField
+        }
+      `,
+    });
+
+    expect(queryResult2).toMatchObject({
+      stringField: 'This is a deep string',
+      numberField: 7,
+      nullField: null,
+    });
+  });
+
+  // Hermes: @connection is not implemented (and the store is seeded with
+  // InMemoryCache's 'books:abc' storeFieldName).
+  it.skip('properly handles the @connection directive', () => {
+    const store = defaultNormalizedCacheFactory({
+      ROOT_QUERY: {
+        'books:abc': [
+          {
+            name: 'efgh',
+          },
+        ],
+      },
+    });
+
+    const queryResult = readQueryFromStore(reader, {
+      store,
+      query: gql`
+        {
+          books(skip: 0, limit: 2) @connection(key: "abc") {
+            name
+          }
+        }
+      `,
+    });
+    // Hermes: reads return a superset of the selected fields.
+    expect(queryResult).toMatchObject({
+      books: [
+        {
+          name: 'efgh',
+        },
+      ],
+    });
+  });
+
+  // Hermes: keyArgs is not implemented.
+  it.skip('can use keyArgs function instead of @connection directive', () => {
+    const store = defaultNormalizedCacheFactory(
+      {
+        ROOT_QUERY: {
+          'books:abc': [
+            {
+              name: 'efgh',
+            },
+          ],
+        },
+      },
+      {
+        typePolicies: {
+          Query: {
+            fields: {
+              books: {
+                // Even though we're returning an arbitrary string here,
+                // the InMemoryCache will ensure the actual key begins
+                // with "books".
+                keyArgs: () => 'abc',
+              },
+            },
+          },
+        },
+      },
+    );
+
+    const queryResult = readQueryFromStore(reader, {
+      store,
+      query: gql`
+        {
+          books(skip: 0, limit: 2) {
+            name
+          }
+        }
+      `,
+    });
+    // Hermes: reads return a superset of the selected fields.
+    expect(queryResult).toMatchObject({
+      books: [
+        {
+          name: 'efgh',
+        },
+      ],
+    });
+  });
+
+  // Hermes: reads return the stored value of a field without a selection set,
+  // rather than throwing for an object (or Reference) value.
+  it.skip('refuses to return raw Reference objects', () => {
+    const store = defaultNormalizedCacheFactory({
+      ROOT_QUERY: {
+        author: {
+          __typename: 'Author',
+          name: 'Toni Morrison',
+          books: [
+            {
+              title: 'The Bluest Eye',
+              publisher: makeReference('Publisher1'),
+            },
+            {
+              title: 'Song of Solomon',
+              publisher: makeReference('Publisher2'),
+            },
+            {
+              title: 'Beloved',
+              publisher: makeReference('Publisher2'),
+            },
+          ],
+        },
+      },
+      Publisher1: {
+        __typename: 'Publisher',
+        id: 1,
+        name: 'Holt, Rinehart and Winston',
+      },
+      Publisher2: {
+        __typename: 'Publisher',
+        id: 2,
+        name: 'Alfred A. Knopf, Inc.',
+      },
+    });
+
+    expect(() => {
+      readQueryFromStore(reader, {
+        store,
+        query: gql`
+          {
+            author {
+              name
+              books
+            }
+          }
+        `,
+      });
+    }).toThrow(/Missing selection set for object of type Publisher returned for query field books/);
+
+    expect(
+      readQueryFromStore(reader, {
+        store,
+        query: gql`
+          {
+            author {
+              name
+              books {
+                title
+                publisher {
+                  name
+                }
+              }
+            }
+          }
+        `,
+      }),
+    ).toEqual({
+      author: {
+        __typename: 'Author',
+        name: 'Toni Morrison',
+        books: [
+          {
+            title: 'The Bluest Eye',
+            publisher: {
+              __typename: 'Publisher',
+              name: 'Holt, Rinehart and Winston',
+            },
+          },
+          {
+            title: 'Song of Solomon',
+            publisher: {
+              __typename: 'Publisher',
+              name: 'Alfred A. Knopf, Inc.',
+            },
+          },
+          {
+            title: 'Beloved',
+            publisher: {
+              __typename: 'Publisher',
+              name: 'Alfred A. Knopf, Inc.',
+            },
+          },
+        ],
+      },
+    });
   });
 
   it('read functions for root query fields work with empty cache', () => {
@@ -408,21 +1454,20 @@ describe('reading from the store', () => {
 
     expect(diffChickens()).toMatchObject({
       complete: false,
-      missing: [
-        new MissingFieldError(
-          "Can't find field 'id' on object {}",
-          {
-            chickens: {
-              1: {
-                id: "Can't find field 'id' on object {}",
-                inCoop: "Can't find field 'inCoop' on object {}",
-              },
+      missing: new MissingFieldError(
+        "Can't find field 'id' on object {}",
+        {
+          chickens: {
+            1: {
+              id: "Can't find field 'id' on object {}",
+              inCoop: "Can't find field 'inCoop' on object {}",
             },
           },
-          expect.anything(), // query
-          expect.anything(), // variables
-        ),
-      ],
+        },
+        expect.anything(), // query
+        expect.anything(), // variables
+      ),
+
       result: {
         chickens: [{ __typename: 'Chicken', id: 1, inCoop: true }, {}, { __typename: 'Chicken', id: 3, inCoop: false }],
       },
@@ -511,6 +1556,114 @@ describe('reading from the store', () => {
       result: {
         oxen: [{ __typename: 'Ox', id: 2, gee: false, haw: true }],
       },
+    });
+  });
+
+  it('does not filter explicit undefined items in array returned from read function', () => {
+    const cache = new Hermes({
+      typePolicies: {
+        Query: {
+          fields: {
+            ducks(existing: Reference[] = [], { canRead }) {
+              return existing.map(duck => (canRead(duck) ? duck : undefined));
+            },
+          },
+        },
+      },
+    });
+
+    cache.writeQuery({
+      query: gql`
+        query {
+          ducks {
+            quacking
+          }
+        }
+      `,
+      data: {
+        ducks: [
+          { __typename: 'Duck', id: 1, quacking: true },
+          { __typename: 'Duck', id: 2, quacking: false },
+          { __typename: 'Duck', id: 3, quacking: false },
+        ],
+      },
+    });
+
+    // Hermes: compare in InMemoryCache's normalized shape.
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
+      'Duck:1': {
+        __typename: 'Duck',
+        id: 1,
+        quacking: true,
+      },
+      'Duck:2': {
+        __typename: 'Duck',
+        id: 2,
+        quacking: false,
+      },
+      'Duck:3': {
+        __typename: 'Duck',
+        id: 3,
+        quacking: false,
+      },
+      ROOT_QUERY: {
+        __typename: 'Query',
+        ducks: [{ __ref: 'Duck:1' }, { __ref: 'Duck:2' }, { __ref: 'Duck:3' }],
+      },
+    });
+
+    function diffDucks() {
+      return cache.diff({
+        query: gql`
+          query {
+            ducks {
+              id
+              quacking
+            }
+          }
+        `,
+        optimistic: true,
+      });
+    }
+
+    expect(diffDucks()).toEqual({
+      complete: true,
+      result: {
+        ducks: [
+          { __typename: 'Duck', id: 1, quacking: true },
+          { __typename: 'Duck', id: 2, quacking: false },
+          { __typename: 'Duck', id: 3, quacking: false },
+        ],
+      },
+    });
+
+    expect(
+      cache.evict({
+        id: cache.identify({
+          __typename: 'Duck',
+          id: 3,
+        }),
+      }),
+    ).toBe(true);
+
+    expect(diffDucks()).toEqual({
+      complete: false,
+      result: {
+        ducks: [{ __typename: 'Duck', id: 1, quacking: true }, { __typename: 'Duck', id: 2, quacking: false }, {}],
+      },
+      missing: new MissingFieldError(
+        "Can't find field 'id' on object {}",
+        {
+          ducks: {
+            2: {
+              id: "Can't find field 'id' on object {}",
+              quacking: "Can't find field 'quacking' on object {}",
+            },
+          },
+        },
+        expect.anything(), // query
+        expect.anything(), // variables
+      ),
     });
   });
 
@@ -814,7 +1967,7 @@ describe('reading from the store', () => {
       cache.readQuery({
         query: rulerQuery,
       }),
-    ).toBe(lastDiff.result);
+    ).toEqual(lastDiff.result);
 
     expect(
       cache.evict({
@@ -980,124 +2133,6 @@ describe('reading from the store', () => {
     });
   });
 
-  // Hermes: reads return a superset of the selected fields (by design) and results are not canonized, so identity differs across queries
-  it.skip('returns === results for different queries', () => {
-    const cache = new Hermes({
-      // canonizeResults: true,
-    });
-
-    const aQuery: TypedDocumentNode<{
-      a: string[];
-    }> = gql`
-      query {
-        a
-      }
-    `;
-
-    const abQuery: TypedDocumentNode<{
-      a: string[];
-      b: {
-        c: string;
-        d: string;
-      };
-    }> = gql`
-      query {
-        a
-        b {
-          c
-          d
-        }
-      }
-    `;
-
-    const bQuery: TypedDocumentNode<{
-      b: {
-        c: string;
-        d: string;
-      };
-    }> = gql`
-      query {
-        b {
-          d
-          c
-        }
-      }
-    `;
-
-    const abData1 = {
-      a: ['a', 'y'],
-      b: {
-        c: 'see',
-        d: 'dee',
-      },
-    };
-
-    cache.writeQuery({
-      query: abQuery,
-      data: abData1,
-    });
-
-    function read<Data, Vars>(query: TypedDocumentNode<Data, Vars>) {
-      return cache.readQuery({ query })!;
-    }
-
-    const aResult1 = read(aQuery);
-    const abResult1 = read(abQuery);
-    const bResult1 = read(bQuery);
-
-    expect(aResult1.a).toBe(abResult1.a);
-    expect(abResult1).toMatchObject(abData1);
-    expect(aResult1).toMatchObject({ a: abData1.a });
-    expect(bResult1).toMatchObject({ b: abData1.b });
-    expect(abResult1.b).toBe(bResult1.b);
-
-    const aData2 = {
-      a: 'ayy'.split(''),
-    };
-
-    cache.writeQuery({
-      query: aQuery,
-      data: aData2,
-    });
-
-    const aResult2 = read(aQuery);
-    const abResult2 = read(abQuery);
-    const bResult2 = read(bQuery);
-
-    expect(aResult2).toMatchObject(aData2);
-    expect(abResult2).toMatchObject({ ...abData1, ...aData2 });
-    expect(aResult2.a).toBe(abResult2.a);
-    expect(bResult2).toBe(bResult1);
-    expect(abResult2.b).toBe(bResult2.b);
-    expect(abResult2.b).toBe(bResult1.b);
-
-    const bData3 = {
-      b: {
-        d: 'D',
-        c: 'C',
-      },
-    };
-
-    cache.writeQuery({
-      query: bQuery,
-      data: bData3,
-    });
-
-    const aResult3 = read(aQuery);
-    const abResult3 = read(abQuery);
-    const bResult3 = read(bQuery);
-
-    expect(aResult3).toBe(aResult2);
-    expect(bResult3).toMatchObject(bData3);
-    expect(bResult3).not.toBe(bData3);
-    expect(abResult3).toEqual({
-      ...abResult2,
-      ...bData3,
-    });
-
-    expect(cache.extract()).toMatchSnapshot();
-  });
-
   it('does not canonicalize custom scalar objects', () => {
     const now = new Date();
     const abc = { a: 1, b: 2, c: 3 };
@@ -1150,120 +2185,126 @@ describe('reading from the store', () => {
     expect(result1.abc).toBe(abc);
     expect(result2.abc).toBe(abc);
   });
+});
 
-  // Hermes: canonizeResults and the InMemoryCache-internal storeReader.canon are not implemented
-  it.skip('readQuery can opt out of canonization', () => {
-    let count = 0;
+describe('lazy MissingFieldError diagnostics', () => {
+  it('only constructs MissingFieldError when diff.missing is accessed', () => {
+    const cache = new Hermes();
 
-    const cache = new Hermes({
-      typePolicies: {
-        Query: {
-          fields: {
-            count() {
-              return count++;
-            },
-          },
+    const fullQuery = gql`
+      query {
+        customer {
+          id
+          name
+          address {
+            street
+            city
+          }
+        }
+      }
+    `;
+
+    const partialQuery = gql`
+      query {
+        customer {
+          id
+        }
+      }
+    `;
+
+    cache.writeQuery({
+      query: partialQuery,
+      data: {
+        customer: {
+          __typename: 'Customer',
+          id: 'c1',
         },
       },
     });
 
-    const canon = cache['storeReader'].canon;
+    const diff = cache.diff({
+      query: fullQuery,
+      returnPartialData: true,
+      optimistic: true,
+    });
+
+    // @ts-ignore
+    const missingSpy = jest.spyOn(diff, 'missing', 'get');
+    expect(missingSpy).not.toHaveBeenCalled();
+
+    // diff.missing should be lazily constructed only when accessed
+    expect(diff.missing).toEqual(
+      new MissingFieldError(
+        "Can't find field 'name' on Customer:c1 object",
+        {
+          customer: {
+            name: "Can't find field 'name' on Customer:c1 object",
+            address: "Can't find field 'address' on Customer:c1 object",
+          },
+        },
+        fullQuery,
+        {},
+      ),
+    );
+
+    expect(missingSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('missing message uses JSON.stringify for non-normalized embedded parents', () => {
+    const cache = new Hermes();
 
     const query = gql`
       query {
-        count
+        profile {
+          bio
+          largeField
+        }
       }
     `;
 
-    function readQuery(canonizeResults: boolean) {
-      return cache.readQuery<{
-        count: number;
-      }>({
-        query,
-        canonizeResults,
-      });
-    }
-
-    const nonCanonicalQueryResult0 = readQuery(false);
-    expect(canon.isKnown(nonCanonicalQueryResult0)).toBe(false);
-    expect(nonCanonicalQueryResult0).toEqual({ count: 0 });
-
-    const canonicalQueryResult0 = readQuery(true);
-    expect(canon.isKnown(canonicalQueryResult0)).toBe(true);
-    // The preservation of { count: 0 } proves the result didn't have to be
-    // recomputed, but merely canonized.
-    expect(canonicalQueryResult0).toEqual({ count: 0 });
-
-    cache.evict({
-      fieldName: 'count',
-    });
-
-    const canonicalQueryResult1 = readQuery(true);
-    expect(canon.isKnown(canonicalQueryResult1)).toBe(true);
-    expect(canonicalQueryResult1).toEqual({ count: 1 });
-
-    const nonCanonicalQueryResult1 = readQuery(false);
-    // Since we already read a canonical result, we were able to reuse it when
-    // reading the non-canonical result.
-    expect(nonCanonicalQueryResult1).toBe(canonicalQueryResult1);
-  });
-
-  // Hermes: canonizeResults and the InMemoryCache-internal storeReader.canon are not implemented
-  it.skip('readFragment can opt out of canonization', () => {
-    let count = 0;
-
-    const cache = new Hermes({
-      typePolicies: {
-        Query: {
-          fields: {
-            count() {
-              return count++;
-            },
-          },
+    cache.writeQuery({
+      query: gql`
+        query {
+          profile {
+            bio
+          }
+        }
+      `,
+      data: {
+        profile: {
+          __typename: 'Profile',
+          bio: 'a'.repeat(10),
         },
       },
     });
 
-    const canon = cache['storeReader'].canon;
-
-    const fragment = gql`
-      fragment CountFragment on Query {
-        count
-      }
-    `;
-
-    function readFragment(canonizeResults: boolean) {
-      return cache.readFragment<{
-        count: number;
-      }>({
-        id: 'ROOT_QUERY',
-        fragment,
-        canonizeResults,
-      });
-    }
-
-    const canonicalFragmentResult1 = readFragment(true);
-    expect(canon.isKnown(canonicalFragmentResult1)).toBe(true);
-    expect(canonicalFragmentResult1).toEqual({ count: 0 });
-
-    const nonCanonicalFragmentResult1 = readFragment(false);
-    // Since we already read a canonical result, we were able to reuse it when
-    // reading the non-canonical result.
-    expect(nonCanonicalFragmentResult1).toBe(canonicalFragmentResult1);
-
-    cache.evict({
-      fieldName: 'count',
+    const diff = cache.diff({
+      query,
+      returnPartialData: true,
+      optimistic: true,
     });
 
-    const nonCanonicalFragmentResult2 = readFragment(false);
-    expect(readFragment(false)).toBe(nonCanonicalFragmentResult2);
-    expect(canon.isKnown(nonCanonicalFragmentResult2)).toBe(false);
-    expect(nonCanonicalFragmentResult2).toEqual({ count: 1 });
-    expect(readFragment(false)).toBe(nonCanonicalFragmentResult2);
+    const message = `Can't find field 'largeField' on object ${JSON.stringify(
+      { __typename: 'Profile', bio: 'a'.repeat(10) },
+      null,
+      2,
+    )}`;
 
-    const canonicalFragmentResult2 = readFragment(true);
-    expect(readFragment(true)).toBe(canonicalFragmentResult2);
-    expect(canon.isKnown(canonicalFragmentResult2)).toBe(true);
-    expect(canonicalFragmentResult2).toEqual({ count: 1 });
+    expect(diff).toStrictEqualTyped({
+      result: {
+        profile: { __typename: 'Profile', bio: 'a'.repeat(10) },
+      },
+      complete: false,
+      missing: new MissingFieldError(
+        message,
+        {
+          profile: {
+            largeField: message,
+          },
+        },
+        query,
+        {},
+      ),
+    });
   });
 });

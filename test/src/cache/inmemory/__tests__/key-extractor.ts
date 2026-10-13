@@ -1,6 +1,12 @@
-import { KeySpecifier } from '@apollo/client/cache/inmemory/policies';
 import { canonicalStringify } from '@apollo/client/utilities';
-import { getSpecifierPaths, collectSpecifierPaths, extractKeyPath } from '@apollo/client/cache/inmemory/key-extractor';
+import {
+  collectSpecifierPaths,
+  extractKeyPath,
+  getSpecifierPaths,
+  // not exported
+  // eslint-disable-next-line import/no-unresolved
+} from '@apollo/client/cache/inmemory/key-extractor';
+import type { KeySpecifier } from '@apollo/client/cache/inmemory/policies';
 
 describe('keyFields and keyArgs extraction', () => {
   it('getSpecifierPaths should work for various specifiers', () => {

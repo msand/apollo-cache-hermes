@@ -1,41 +1,29 @@
-import { useSuspenseFragment, UseSuspenseFragmentResult } from '@apollo/client/react/hooks/useSuspenseFragment';
-import {
-  ApolloClient,
-  FragmentType,
-  gql,
-  Masked,
-  MaskedDocumentNode,
-  MaybeMasked,
-  OperationVariables,
-  TypedDocumentNode,
-} from '@apollo/client/core';
-import * as React from 'react';
-import { Suspense } from 'react';
-import { ApolloProvider } from '@apollo/client/react/context';
+import { act, renderHook, screen, waitFor } from '@testing-library/react';
 import {
   createRenderStream,
   disableActEnvironment,
   renderHookToSnapshotStream,
   useTrackRenders,
 } from '@testing-library/react-render-stream';
-import { renderAsync, spyOnConsole } from '@apollo/client/testing/internal';
-import { act, renderHook, screen, waitFor } from '@testing-library/react';
-import { InvariantError } from 'ts-invariant';
-import { MockedProvider, MockSubscriptionLink, wait } from '@apollo/client/testing';
+import { userEvent } from '@testing-library/user-event';
 import { expectTypeOf } from 'expect-type';
-import userEvent from '@testing-library/user-event';
-import { loadErrorMessages } from '@apollo/client/dev';
+import React, { Suspense } from 'react';
+import type { FragmentType, MaybeMasked, OperationVariables, TypedDocumentNode } from '@apollo/client';
+import { ApolloClient, ApolloLink, DocumentTransform, gql } from '@apollo/client';
+import { ApolloProvider, useSuspenseFragment } from '@apollo/client/react';
+import { MockSubscriptionLink } from '@apollo/client/testing';
+import { MockedProvider } from '@apollo/client/testing/react';
+import { removeDirectivesFromDocument } from '@apollo/client/utilities/internal';
+import { InvariantError } from '@apollo/client/utilities/invariant';
+
+import { renderAsync, spyOnConsole } from '@apollo/client/testing/internal';
 
 import { Hermes } from '../../../../../src';
-
-// Hermes: the hooks come from the published @apollo/client package, whose error messages the
-// shared test env does not load.
-loadErrorMessages();
 
 function createDefaultRenderStream<TData = unknown>() {
   return createRenderStream({
     initialSnapshot: {
-      result: null as UseSuspenseFragmentResult<MaybeMasked<TData>> | null,
+      result: null as useSuspenseFragment.Result<MaybeMasked<TData>> | null,
     },
   });
 }
@@ -95,7 +83,10 @@ it('suspends until cache value is complete', async () => {
   const { render, takeRender, replaceSnapshot } = createDefaultRenderStream<ItemFragment>();
   const { SuspenseFallback } = createDefaultTrackedComponents();
 
-  const client = new ApolloClient({ cache: new Hermes() });
+  const client = new ApolloClient({
+    cache: new Hermes(),
+    link: ApolloLink.empty(),
+  });
 
   const fragment: TypedDocumentNode<ItemFragment> = gql`
     fragment ItemFragment on Item {
@@ -170,7 +161,10 @@ it('updates when the cache updates', async () => {
   const { takeRender, render, replaceSnapshot } = createDefaultRenderStream<ItemFragment>();
   const { SuspenseFallback } = createDefaultTrackedComponents();
 
-  const client = new ApolloClient({ cache: new Hermes() });
+  const client = new ApolloClient({
+    cache: new Hermes(),
+    link: ApolloLink.empty(),
+  });
 
   const fragment: TypedDocumentNode<ItemFragment> = gql`
     fragment ItemFragment on Item {
@@ -265,7 +259,10 @@ it('resuspends when data goes missing until complete again', async () => {
   const { takeRender, render, replaceSnapshot } = createDefaultRenderStream<ItemFragment>();
   const { SuspenseFallback } = createDefaultTrackedComponents();
 
-  const client = new ApolloClient({ cache: new Hermes() });
+  const client = new ApolloClient({
+    cache: new Hermes(),
+    link: ApolloLink.empty(),
+  });
 
   const fragment: TypedDocumentNode<ItemFragment> = gql`
     fragment ItemFragment on Item {
@@ -373,7 +370,10 @@ it('does not suspend and returns cache data when data is already in the cache', 
   const { takeRender, render, replaceSnapshot } = createDefaultRenderStream<ItemFragment>();
   const { SuspenseFallback } = createDefaultTrackedComponents();
 
-  const client = new ApolloClient({ cache: new Hermes() });
+  const client = new ApolloClient({
+    cache: new Hermes(),
+    link: ApolloLink.empty(),
+  });
 
   const fragment: TypedDocumentNode<ItemFragment> = gql`
     fragment ItemFragment on Item {
@@ -436,7 +436,10 @@ it('receives cache updates after initial result when data is written to the cach
   const { takeRender, render, replaceSnapshot } = createDefaultRenderStream<ItemFragment>();
   const { SuspenseFallback } = createDefaultTrackedComponents();
 
-  const client = new ApolloClient({ cache: new Hermes() });
+  const client = new ApolloClient({
+    cache: new Hermes(),
+    link: ApolloLink.empty(),
+  });
 
   const fragment: TypedDocumentNode<ItemFragment> = gql`
     fragment ItemFragment on Item {
@@ -521,8 +524,14 @@ it('allows the client to be overridden', async () => {
     }
   `;
 
-  const defaultClient = new ApolloClient({ cache: new Hermes() });
-  const client = new ApolloClient({ cache: new Hermes() });
+  const defaultClient = new ApolloClient({
+    cache: new Hermes(),
+    link: ApolloLink.empty(),
+  });
+  const client = new ApolloClient({
+    cache: new Hermes(),
+    link: ApolloLink.empty(),
+  });
 
   defaultClient.writeFragment({
     fragment,
@@ -569,7 +578,10 @@ it('suspends until data is complete when changing `from` with no data written to
   const { takeRender, replaceSnapshot, render } = createDefaultRenderStream<ItemFragment>();
   const { SuspenseFallback } = createDefaultTrackedComponents();
 
-  const client = new ApolloClient({ cache: new Hermes() });
+  const client = new ApolloClient({
+    cache: new Hermes(),
+    link: ApolloLink.empty(),
+  });
 
   client.writeFragment({
     fragment,
@@ -662,7 +674,10 @@ it('does not suspend when changing `from` with data already written to cache', a
   const { takeRender, replaceSnapshot, render } = createDefaultRenderStream<ItemFragment>();
   const { SuspenseFallback } = createDefaultTrackedComponents();
 
-  const client = new ApolloClient({ cache: new Hermes() });
+  const client = new ApolloClient({
+    cache: new Hermes(),
+    link: ApolloLink.empty(),
+  });
 
   client.writeFragment({
     fragment,
@@ -746,7 +761,10 @@ it('does not rerender when fields with @nonreactive change', async () => {
     }
   `;
 
-  const client = new ApolloClient({ cache: new Hermes() });
+  const client = new ApolloClient({
+    cache: new Hermes(),
+    link: ApolloLink.empty(),
+  });
 
   client.writeFragment({
     fragment,
@@ -802,7 +820,10 @@ it('does not rerender when fields with @nonreactive on nested fragment change', 
     }
   `;
 
-  const client = new ApolloClient({ cache: new Hermes() });
+  const client = new ApolloClient({
+    cache: new Hermes(),
+    link: ApolloLink.empty(),
+  });
 
   client.writeFragment({
     fragment,
@@ -855,13 +876,16 @@ it.failing('warns and suspends when passing parent object to `from` when key fie
     age: number;
   }
 
-  const fragment: TypedDocumentNode<Fragment, never> = gql`
+  const fragment: TypedDocumentNode<Fragment, Record<string, never>> = gql`
     fragment UserFields on User {
       age
     }
   `;
 
-  const client = new ApolloClient({ cache: new Hermes() });
+  const client = new ApolloClient({
+    cache: new Hermes(),
+    link: ApolloLink.empty(),
+  });
 
   const { replaceSnapshot, render, takeRender } = createDefaultRenderStream<Fragment>();
   const { SuspenseFallback } = createDefaultTrackedComponents();
@@ -914,7 +938,10 @@ it('returns null if `from` is `null`', async () => {
     }
   `;
 
-  const client = new ApolloClient({ cache: new Hermes() });
+  const client = new ApolloClient({
+    cache: new Hermes(),
+    link: ApolloLink.empty(),
+  });
 
   using _disabledAct = disableActEnvironment();
   const { takeSnapshot } = await renderHookToSnapshotStream(() => useSuspenseFragment({ fragment, from: null }), {
@@ -940,7 +967,10 @@ it('returns cached value when `from` changes from `null` to non-null value', asy
     }
   `;
 
-  const client = new ApolloClient({ cache: new Hermes() });
+  const client = new ApolloClient({
+    cache: new Hermes(),
+    link: ApolloLink.empty(),
+  });
 
   client.writeFragment({
     fragment,
@@ -999,7 +1029,10 @@ it('returns null value when `from` changes from non-null value to `null`', async
     }
   `;
 
-  const client = new ApolloClient({ cache: new Hermes() });
+  const client = new ApolloClient({
+    cache: new Hermes(),
+    link: ApolloLink.empty(),
+  });
 
   client.writeFragment({
     fragment,
@@ -1058,7 +1091,10 @@ it('suspends until cached value is available when `from` changes from `null` to 
     }
   `;
 
-  const client = new ApolloClient({ cache: new Hermes() });
+  const client = new ApolloClient({
+    cache: new Hermes(),
+    link: ApolloLink.empty(),
+  });
 
   const { takeRender, render, replaceSnapshot } = createDefaultRenderStream<ItemFragment | null>();
   const { SuspenseFallback } = createDefaultTrackedComponents();
@@ -1144,6 +1180,7 @@ it('returns masked fragment when data masking is enabled', async () => {
   const client = new ApolloClient({
     dataMasking: true,
     cache: new Hermes(),
+    link: ApolloLink.empty(),
   });
 
   const fragment: TypedDocumentNode<Post> = gql`
@@ -1212,6 +1249,7 @@ it('does not rerender for cache writes to masked fields', async () => {
   const client = new ApolloClient({
     dataMasking: true,
     cache: new Hermes(),
+    link: ApolloLink.empty(),
   });
 
   const fragment: TypedDocumentNode<Post> = gql`
@@ -1291,15 +1329,16 @@ it('updates child fragments for cache updates to masked fields', async () => {
   const client = new ApolloClient({
     dataMasking: true,
     cache: new Hermes(),
+    link: ApolloLink.empty(),
   });
 
-  const postFieldsFragment: MaskedDocumentNode<PostFields> = gql`
+  const postFieldsFragment: TypedDocumentNode<PostFields> = gql`
     fragment PostFields on Post {
       updatedAt
     }
   `;
 
-  const postFragment: MaskedDocumentNode<Post> = gql`
+  const postFragment: TypedDocumentNode<Post> = gql`
     fragment PostFragment on Post {
       id
       title
@@ -1322,8 +1361,8 @@ it('updates child fragments for cache updates to masked fields', async () => {
 
   const { render, mergeSnapshot, takeRender } = createRenderStream({
     initialSnapshot: {
-      parent: null as UseSuspenseFragmentResult<Masked<Post>> | null,
-      child: null as UseSuspenseFragmentResult<Masked<PostFields>> | null,
+      parent: null as useSuspenseFragment.Result<Post> | null,
+      child: null as useSuspenseFragment.Result<PostFields> | null,
     },
   });
 
@@ -1426,7 +1465,7 @@ it('tears down the subscription on unmount', async () => {
   `;
 
   const cache = new Hermes();
-  const client = new ApolloClient({ cache });
+  const client = new ApolloClient({ cache, link: ApolloLink.empty() });
 
   client.writeFragment({
     fragment,
@@ -1447,14 +1486,13 @@ it('tears down the subscription on unmount', async () => {
     expect(data).toEqual({ __typename: 'Item', id: 1, text: 'Item #1' });
   }
 
-  expect(cache['watches'].size).toBe(1);
+  expect(cache).toHaveNumWatches(1);
 
   unmount();
-  // We need to wait a tick since the cleanup is run in a setTimeout to
-  // prevent strict mode bugs.
-  await wait(0);
 
-  expect(cache['watches'].size).toBe(0);
+  // Cleanup happens async so we just need to ensure it happens sometime after
+  // mount
+  await waitFor(() => expect(cache).toHaveNumWatches(0));
 });
 
 it('tears down all watches when rendering multiple records', async () => {
@@ -1472,7 +1510,7 @@ it('tears down all watches when rendering multiple records', async () => {
   `;
 
   const cache = new Hermes();
-  const client = new ApolloClient({ cache });
+  const client = new ApolloClient({ cache, link: ApolloLink.empty() });
 
   client.writeFragment({
     fragment,
@@ -1508,11 +1546,10 @@ it('tears down all watches when rendering multiple records', async () => {
   }
 
   unmount();
-  // We need to wait a tick since the cleanup is run in a setTimeout to
-  // prevent strict mode bugs.
-  await wait(0);
 
-  expect(cache['watches'].size).toBe(0);
+  // Cleanup happens async so we just need to ensure it happens sometime after
+  // mount
+  await waitFor(() => expect(cache).toHaveNumWatches(0));
 });
 
 it('tears down watches after default autoDisposeTimeoutMs if component never renders again after suspending', async () => {
@@ -1577,11 +1614,13 @@ it('tears down watches after default autoDisposeTimeoutMs if component never ren
   // clear the microtask queue
   await act(() => Promise.resolve());
 
-  expect(cache['watches'].size).toBe(1);
+  expect(cache).toHaveNumWatches(1);
 
   jest.advanceTimersByTime(30_000);
+  // Run unsubscribe timeouts from cache watches
+  jest.runOnlyPendingTimers();
 
-  expect(cache['watches'].size).toBe(0);
+  expect(cache).toHaveNumWatches(0);
 
   jest.useRealTimers();
 });
@@ -1658,11 +1697,13 @@ it('tears down watches after configured autoDisposeTimeoutMs if component never 
   // clear the microtask queue
   await act(() => Promise.resolve());
 
-  expect(cache['watches'].size).toBe(1);
+  expect(cache).toHaveNumWatches(1);
 
   jest.advanceTimersByTime(5000);
+  // Run unsubscribe timeouts from cache watches
+  jest.runOnlyPendingTimers();
 
-  expect(cache['watches'].size).toBe(0);
+  expect(cache).toHaveNumWatches(0);
 
   jest.useRealTimers();
 });
@@ -1724,9 +1765,92 @@ it('cancels autoDisposeTimeoutMs if the component renders before timer finishes'
 
   jest.advanceTimersByTime(30_000);
 
-  expect(cache['watches'].size).toBe(1);
+  expect(cache).toHaveNumWatches(1);
 
   jest.useRealTimers();
+});
+
+it('runs custom document transforms', async () => {
+  interface ItemFragment {
+    __typename: 'Item';
+    id: number;
+    text: string;
+  }
+
+  const { render, takeRender, replaceSnapshot } = createDefaultRenderStream<ItemFragment>();
+  const { SuspenseFallback } = createDefaultTrackedComponents();
+
+  const documentTransform = new DocumentTransform(document => {
+    return removeDirectivesFromDocument([{ name: 'custom', remove: true }], document)!;
+  });
+
+  const client = new ApolloClient({
+    cache: new Hermes(),
+    link: ApolloLink.empty(),
+    documentTransform,
+  });
+
+  const fragment: TypedDocumentNode<ItemFragment> = gql`
+    fragment ItemFragment on Item {
+      id
+      text
+      description @custom
+    }
+  `;
+
+  function App() {
+    useTrackRenders();
+
+    const result = useSuspenseFragment({
+      fragment,
+      from: { __typename: 'Item', id: 1 },
+    });
+
+    replaceSnapshot({ result });
+
+    return null;
+  }
+
+  client.writeFragment({
+    fragment: gql`
+      fragment ItemFragment on Item {
+        id
+        text
+      }
+    `,
+    data: {
+      __typename: 'Item',
+      id: 1,
+      text: 'Item #1',
+    },
+  });
+
+  using _disabledAct = disableActEnvironment();
+  await render(
+    <Suspense fallback={<SuspenseFallback />}>
+      <App />
+    </Suspense>,
+    {
+      wrapper: ({ children }) => {
+        return <ApolloProvider client={client}>{children}</ApolloProvider>;
+      },
+    },
+  );
+
+  {
+    const { snapshot, renderedComponents } = await takeRender();
+
+    expect(renderedComponents).toStrictEqual([App]);
+    expect(snapshot.result).toEqual({
+      data: {
+        __typename: 'Item',
+        id: 1,
+        text: 'Item #1',
+      },
+    });
+  }
+
+  await expect(takeRender).not.toRerender();
 });
 
 describe.skip('type tests', () => {
@@ -1796,6 +1920,75 @@ describe.skip('type tests', () => {
     }
   });
 
+  it('returns null[] when `from` is null[]', () => {
+    type Data = { foo: string };
+    type Vars = Record<string, never>;
+    const fragment: TypedDocumentNode<Data, Vars> = gql``;
+
+    {
+      const { data } = useSuspenseFragment({ fragment, from: [null] });
+
+      expectTypeOf(data).toEqualTypeOf<Array<null>>();
+    }
+
+    {
+      const { data } = useSuspenseFragment<Data>({
+        fragment: gql``,
+        from: [null],
+      });
+
+      expectTypeOf(data).toEqualTypeOf<Array<null>>();
+    }
+  });
+
+  it('returns Array<TData | null> when `from` includes null with non-null', () => {
+    type Data = { foo: string };
+    type Vars = Record<string, never>;
+    const fragment: TypedDocumentNode<Data, Vars> = gql``;
+
+    {
+      const { data } = useSuspenseFragment({
+        fragment,
+        from: [null, { __typename: 'Item', id: 1 }],
+      });
+
+      expectTypeOf(data).toEqualTypeOf<Array<Data | null>>();
+    }
+
+    {
+      const { data } = useSuspenseFragment<Data>({
+        fragment: gql``,
+        from: [null, { __typename: 'Item', id: 1 }],
+      });
+
+      expectTypeOf(data).toEqualTypeOf<Array<Data | null>>();
+    }
+  });
+
+  it('returns TData[] when `from` includes array of non-null', () => {
+    type Data = { foo: string };
+    type Vars = Record<string, never>;
+    const fragment: TypedDocumentNode<Data, Vars> = gql``;
+
+    {
+      const { data } = useSuspenseFragment({
+        fragment,
+        from: [{ __typename: 'Item', id: 1 }],
+      });
+
+      expectTypeOf(data).toEqualTypeOf<Array<Data>>();
+    }
+
+    {
+      const { data } = useSuspenseFragment<Data>({
+        fragment: gql``,
+        from: [{ __typename: 'Item', id: 1 }],
+      });
+
+      expectTypeOf(data).toEqualTypeOf<Array<Data>>();
+    }
+  });
+
   it('variables are optional and can be anything with an untyped DocumentNode', () => {
     const fragment = gql``;
 
@@ -1832,10 +2025,12 @@ describe.skip('type tests', () => {
     useSuspenseFragment({ fragment, from: null, variables: { foo: 'bar' } });
   });
 
-  it('does not allow variables when TVariables is `never`', () => {
+  it('is invalid with TVariables as `never`', () => {
     const fragment: TypedDocumentNode<{ greeting: string }, never> = gql``;
 
+    // @ts-expect-error
     useSuspenseFragment({ fragment, from: null });
+    // @ts-expect-error
     useSuspenseFragment({ fragment, from: null, variables: {} });
     // @ts-expect-error no variables argument allowed
     useSuspenseFragment({ fragment, from: null, variables: { foo: 'bar' } });

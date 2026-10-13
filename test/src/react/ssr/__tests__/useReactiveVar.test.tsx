@@ -1,8 +1,9 @@
 /** @jest-environment node */
 import React from 'react';
-import { makeVar } from '@apollo/client/core';
-import { useReactiveVar } from '@apollo/client/react/hooks';
+import { makeVar } from '@apollo/client';
+import { useReactiveVar } from '@apollo/client/react';
 import { renderToStringWithData } from '@apollo/client/react/ssr';
+
 import { spyOnConsole } from '@apollo/client/testing/internal';
 
 describe('useReactiveVar Hook SSR', () => {

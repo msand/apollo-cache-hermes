@@ -1,21 +1,22 @@
-import { loadErrorMessages } from '@apollo/client/dev';
-import gql, { disableFragmentWarnings } from 'graphql-tag';
+import { disableFragmentWarnings, gql } from 'graphql-tag';
 import { expectTypeOf } from 'expect-type';
-import { TypePolicies } from '@apollo/client';
-import { cloneDeep } from '@apollo/client/utilities';
-import { makeReference, Reference, makeVar, TypedDocumentNode, isReference, DocumentNode } from '@apollo/client/core';
-import { Cache } from '@apollo/client/cache';
-import { StoreReader } from '@apollo/client/cache/inmemory/readFromStore';
-import { StoreWriter } from '@apollo/client/cache/inmemory/writeToStore';
-import { ObjectCanon } from '@apollo/client/cache/inmemory/object-canon';
+import type { DocumentNode, Reference, TypedDocumentNode } from '@apollo/client';
+import { isReference, makeVar } from '@apollo/client';
+import type { Cache } from '@apollo/client/cache';
+import { MissingFieldError } from '@apollo/client/cache';
+import { cloneDeep, makeReference } from '@apollo/client/utilities/internal';
+// not exported
+// eslint-disable-next-line import/no-unresolved
+import { defaultCacheSizes } from '@apollo/client/utilities/caching/sizes';
+
 import { spyOnConsole } from '@apollo/client/testing/internal';
 
 import { Hermes } from '../../../../../src';
-import { CacheContext } from '../../../../../src/context';
+import type { CacheContext } from '../../../../../src/context';
+import type { JsonObject } from '../../../../../src/primitive';
+import { toNormalizedCacheObject } from '../../../../helpers';
 
 disableFragmentWarnings();
-// These tests assert the @apollo/client error text rather than its production placeholder.
-loadErrorMessages();
 
 describe('Cache', () => {
   function itWithInitialData(
@@ -23,17 +24,11 @@ describe('Cache', () => {
     initialDataForCaches: { [key: string]: any }[],
     callback: (...caches: Hermes[]) => any,
   ) {
+    // Hermes: InMemoryCache's second variant disables resultCaching, which
+    // Hermes does not have, so both variants are default Hermes caches.
     const cachesList: Hermes[][] = [
-      initialDataForCaches.map(data =>
-        new Hermes({
-          addTypename: false,
-        }).restore(cloneDeep(data)),
-      ),
-      initialDataForCaches.map(data =>
-        new Hermes({
-          addTypename: false,
-        }).restore(cloneDeep(data)),
-      ),
+      initialDataForCaches.map(data => new Hermes().restore(cloneDeep(data))),
+      initialDataForCaches.map(data => new Hermes({}).restore(cloneDeep(data))),
     ];
 
     cachesList.forEach((caches, i) => {
@@ -44,11 +39,9 @@ describe('Cache', () => {
   function itWithCacheConfig(message: string, config: CacheContext.Configuration, callback: (cache: Hermes) => any) {
     const caches = [
       new Hermes({
-        addTypename: false,
         ...config,
       }),
       new Hermes({
-        addTypename: false,
         ...config,
       }),
     ];
@@ -366,6 +359,7 @@ describe('Cache', () => {
         },
       ],
       proxy => {
+        // Hermes: reads return a superset of the selected fields.
         expect(
           proxy.readFragment({
             id: 'foo',
@@ -378,7 +372,7 @@ describe('Cache', () => {
               }
             `,
           }),
-        ).toMatchObject({ e: 4, h: { i: 7 } });
+        ).toMatchObject({ __typename: 'Foo', e: 4, h: { __typename: 'Bar', i: 7 } });
         expect(
           proxy.readFragment({
             id: 'foo',
@@ -395,7 +389,13 @@ describe('Cache', () => {
               }
             `,
           }),
-        ).toMatchObject({ e: 4, f: 5, g: 6, h: { i: 7, j: 8, k: 9 } });
+        ).toMatchObject({
+          __typename: 'Foo',
+          e: 4,
+          f: 5,
+          g: 6,
+          h: { __typename: 'Bar', i: 7, j: 8, k: 9 },
+        });
         expect(
           proxy.readFragment({
             id: 'bar',
@@ -405,7 +405,7 @@ describe('Cache', () => {
               }
             `,
           }),
-        ).toMatchObject({ i: 7 });
+        ).toMatchObject({ __typename: 'Bar', i: 7 });
         expect(
           proxy.readFragment({
             id: 'bar',
@@ -417,7 +417,7 @@ describe('Cache', () => {
               }
             `,
           }),
-        ).toMatchObject({ i: 7, j: 8, k: 9 });
+        ).toMatchObject({ __typename: 'Bar', i: 7, j: 8, k: 9 });
         expect(
           proxy.readFragment({
             id: 'foo',
@@ -441,7 +441,13 @@ describe('Cache', () => {
             `,
             fragmentName: 'fragmentFoo',
           }),
-        ).toMatchObject({ e: 4, f: 5, g: 6, h: { i: 7, j: 8, k: 9 } });
+        ).toMatchObject({
+          __typename: 'Foo',
+          e: 4,
+          f: 5,
+          g: 6,
+          h: { __typename: 'Bar', i: 7, j: 8, k: 9 },
+        });
         expect(
           proxy.readFragment({
             id: 'bar',
@@ -465,7 +471,117 @@ describe('Cache', () => {
             `,
             fragmentName: 'fragmentBar',
           }),
-        ).toMatchObject({ i: 7, j: 8, k: 9 });
+        ).toMatchObject({ __typename: 'Bar', i: 7, j: 8, k: 9 });
+      },
+    );
+
+    itWithInitialData(
+      'will read some data from the store with `from`',
+      [
+        {
+          'Foo:1': {
+            __typename: 'Foo',
+            id: 1,
+            e: 4,
+            f: 5,
+          },
+        },
+      ],
+      proxy => {
+        // Hermes: reads return a superset of the selected fields.
+        expect(
+          proxy.readFragment({
+            fragment: gql`
+              fragment foo on Foo {
+                e
+                f
+              }
+            `,
+            from: { __typename: 'Foo', id: 1 },
+          }),
+        ).toMatchObject({ __typename: 'Foo', e: 4, f: 5 });
+
+        expect(
+          proxy.readFragment({
+            fragment: gql`
+              fragment foo on Foo {
+                e
+                f
+              }
+            `,
+            from: { __ref: 'Foo:1' },
+          }),
+        ).toMatchObject({ __typename: 'Foo', e: 4, f: 5 });
+
+        expect(
+          proxy.readFragment({
+            fragment: gql`
+              fragment foo on Foo {
+                e
+                f
+              }
+            `,
+            from: 'Foo:1',
+          }),
+        ).toMatchObject({ __typename: 'Foo', e: 4, f: 5 });
+      },
+    );
+
+    itWithInitialData(
+      'prefers `from` over `id`',
+      [
+        {
+          'Foo:1': {
+            __typename: 'Foo',
+            id: 1,
+            e: 4,
+            f: 5,
+          },
+        },
+      ],
+      proxy => {
+        // Hermes: reads return a superset of the selected fields.
+        expect(
+          // @ts-expect-error types don't allow `id` and `from`
+          proxy.readFragment({
+            fragment: gql`
+              fragment foo on Foo {
+                e
+                f
+              }
+            `,
+            id: 'unknown',
+            from: { __typename: 'Foo', id: 1 },
+          }),
+        ).toMatchObject({ __typename: 'Foo', e: 4, f: 5 });
+
+        expect(
+          // @ts-expect-error types don't allow `id` and `from`
+          proxy.readFragment({
+            fragment: gql`
+              fragment foo on Foo {
+                e
+                f
+              }
+            `,
+            id: 'unknown',
+            from: { __ref: 'Foo:1' },
+          }),
+        ).toMatchObject({ __typename: 'Foo', e: 4, f: 5 });
+
+        expect(
+          // @ts-expect-error types don't allow `id` and `from`
+          proxy.readFragment({
+            fragment: gql`
+              fragment foo on Foo {
+                e
+                f
+              }
+            `,
+            id: 'unknown',
+            from: 'Foo:1',
+          }),
+        ).toMatchObject({ __typename: 'Foo', e: 4, f: 5 });
       },
     );
 
@@ -495,7 +611,7 @@ describe('Cache', () => {
               value: 42,
             },
           }),
-        ).toMatchObject({ a: 1, b: 2 });
+        ).toEqual({ __typename: 'Foo', a: 1, b: 2 });
       },
     );
 
@@ -549,7 +665,7 @@ describe('Cache', () => {
               }
             `,
           }),
-        ).toMatchObject({ a: 1, b: 2, c: 3 });
+        ).toEqual({ __typename: 'Foo', a: 1, b: 2, c: 3 });
       },
     );
 
@@ -1047,6 +1163,50 @@ describe('Cache', () => {
         },
       });
     });
+
+    it('does not write @stream directive as part of the cache key', () => {
+      const cache = new Hermes();
+
+      cache.writeQuery({
+        data: {
+          list: [{ __typename: 'Item', id: '1', value: 1 }],
+        },
+        query: gql`
+          query {
+            list @stream(initialCount: 1) {
+              id
+              value
+            }
+          }
+        `,
+      });
+
+      // Hermes: compare in InMemoryCache's normalized shape.
+      expect(toNormalizedCacheObject(cache.extract())).toStrictEqualTyped({
+        ROOT_QUERY: {
+          __typename: 'Query',
+          list: [{ __ref: 'Item:1' }],
+        },
+        'Item:1': { __typename: 'Item', id: '1', value: 1 },
+      });
+
+      // We should be able to read the list without the `@stream` directive and
+      // get back results
+      expect(
+        cache.readQuery({
+          query: gql`
+            query {
+              list {
+                id
+                value
+              }
+            }
+          `,
+        }),
+      ).toStrictEqualTyped({
+        list: [{ __typename: 'Item', id: '1', value: 1 }],
+      });
+    });
   });
 
   describe('writeFragment', () => {
@@ -1121,7 +1281,6 @@ describe('Cache', () => {
       'will write some deeply nested data into the store at any id',
       {
         dataIdFromObject: (o: any) => o.id,
-        addTypename: false,
       },
       proxy => {
         proxy.writeFragment({
@@ -1240,86 +1399,145 @@ describe('Cache', () => {
       },
     );
 
-    itWithCacheConfig(
-      'writes data that can be read back',
-      {
-        addTypename: true,
-      },
-      proxy => {
-        const readWriteFragment = gql`
-          fragment aFragment on query {
-            getSomething {
-              id
-            }
+    itWithCacheConfig('writes data that can be read back', {}, proxy => {
+      const readWriteFragment = gql`
+        fragment aFragment on query {
+          getSomething {
+            id
           }
-        `;
-        const data = {
-          __typename: 'query',
-          getSomething: { id: '123', __typename: 'Something' },
-        };
-        proxy.writeFragment({
-          data,
-          id: 'query',
-          fragment: readWriteFragment,
-        });
+        }
+      `;
+      const data = {
+        __typename: 'query',
+        getSomething: { id: '123', __typename: 'Something' },
+      };
+      proxy.writeFragment({
+        data,
+        id: 'query',
+        fragment: readWriteFragment,
+      });
 
-        const result = proxy.readFragment({
-          fragment: readWriteFragment,
-          id: 'query',
-        });
-        expect(result).toEqual(data);
-      },
-    );
+      const result = proxy.readFragment({
+        fragment: readWriteFragment,
+        id: 'query',
+      });
+      expect(result).toEqual(data);
+    });
 
-    itWithCacheConfig(
-      'will write some data to the store with variables',
-      {
-        addTypename: true,
-      },
-      proxy => {
-        proxy.writeFragment({
-          data: {
-            a: 1,
-            b: 2,
-            __typename: 'Foo',
-          },
-          id: 'foo',
-          fragment: gql`
-            fragment foo on Foo {
-              a: field(literal: true, value: 42)
-              b: field(literal: $literal, value: $value)
-            }
-          `,
-          variables: {
-            literal: false,
-            value: 42,
-          },
-        });
+    itWithCacheConfig('will write some data to the store with variables', {}, proxy => {
+      proxy.writeFragment({
+        data: {
+          a: 1,
+          b: 2,
+          __typename: 'Foo',
+        },
+        id: 'foo',
+        fragment: gql`
+          fragment foo on Foo {
+            a: field(literal: true, value: 42)
+            b: field(literal: $literal, value: $value)
+          }
+        `,
+        variables: {
+          literal: false,
+          value: 42,
+        },
+      });
 
-        expect((proxy as Hermes).extract()).toEqual({
-          foo: {
-            type: 0,
-            data: {
-              __typename: 'Foo',
-            },
-            parameterized: [
-              { id: 'foo❖["field"]❖{"literal":true,"value":42}', path: ['field'] },
-              { id: 'foo❖["field"]❖{"literal":false,"value":42}', path: ['field'] },
-            ],
-          },
-          'foo❖["field"]❖{"literal":true,"value":42}': {
-            type: 1,
-            data: 1,
-            inbound: [{ id: 'foo', path: ['field'] }],
-          },
-          'foo❖["field"]❖{"literal":false,"value":42}': {
-            type: 1,
-            data: 2,
-            inbound: [{ id: 'foo', path: ['field'] }],
-          },
-        });
-      },
-    );
+      // Hermes: compare in InMemoryCache's normalized shape (Hermes has no __META).
+      expect(toNormalizedCacheObject(proxy.extract())).toEqual({
+        foo: {
+          __typename: 'Foo',
+          'field({"literal":true,"value":42})': 1,
+          'field({"literal":false,"value":42})': 2,
+        },
+      });
+    });
+
+    itWithCacheConfig('can use the `from` option', {}, proxy => {
+      proxy.writeFragment({
+        data: {
+          id: 1,
+          a: 1,
+          b: 2,
+          __typename: 'Foo',
+        },
+        from: { __typename: 'Foo', id: 1 },
+        fragment: gql`
+          fragment foo on Foo {
+            id
+            a
+            b
+          }
+        `,
+      });
+
+      // Hermes: compare in InMemoryCache's normalized shape (Hermes has no __META).
+      expect(toNormalizedCacheObject(proxy.extract())).toEqual({
+        'Foo:1': {
+          __typename: 'Foo',
+          id: 1,
+          a: 1,
+          b: 2,
+        },
+      });
+
+      proxy.writeFragment({
+        data: {
+          c: 3,
+          d: 4,
+          __typename: 'Foo',
+        },
+        from: { __ref: 'Foo:1' },
+        fragment: gql`
+          fragment foo on Foo {
+            c
+            d
+          }
+        `,
+      });
+
+      // Hermes: compare in InMemoryCache's normalized shape (Hermes has no __META).
+      expect(toNormalizedCacheObject(proxy.extract())).toEqual({
+        'Foo:1': {
+          __typename: 'Foo',
+          id: 1,
+          a: 1,
+          b: 2,
+          c: 3,
+          d: 4,
+        },
+      });
+
+      proxy.writeFragment({
+        data: {
+          e: 5,
+          f: 6,
+          __typename: 'Foo',
+        },
+        from: 'Foo:1',
+        fragment: gql`
+          fragment foo on Foo {
+            e
+            f
+          }
+        `,
+      });
+
+      // Hermes: compare in InMemoryCache's normalized shape (Hermes has no __META).
+      expect(toNormalizedCacheObject(proxy.extract())).toEqual({
+        'Foo:1': {
+          __typename: 'Foo',
+          id: 1,
+          a: 1,
+          b: 2,
+          c: 3,
+          d: 4,
+          e: 5,
+          f: 6,
+        },
+      });
+    });
   });
 
   describe('cache.updateQuery and cache.updateFragment', () => {
@@ -1352,7 +1570,9 @@ describe('Cache', () => {
         query,
         optimistic: true,
         callback(diff) {
-          results.push(diff.result!);
+          if (diff.complete) {
+            results.push(diff.result);
+          }
         },
       });
 
@@ -1409,7 +1629,7 @@ describe('Cache', () => {
         name: 'Ben Newman',
       });
 
-      cache.updateFragment(
+      cache.updateFragment<any>(
         {
           id: bnId,
           fragment: usernameFragment,
@@ -1490,6 +1710,44 @@ describe('Cache', () => {
 
       cancel();
     });
+
+    it('can use `from` with `updateFragment`', async () => {
+      type Data = { a: number; b: number; __typename: 'Foo' };
+
+      const cache = new Hermes();
+      const fragment: TypedDocumentNode<Data, Record<string, never>> = gql`
+        fragment foo on Foo {
+          a
+          b
+        }
+      `;
+
+      function update(data: Data | null): Data {
+        if (!data) {
+          return { a: 1, b: 2, __typename: 'Foo' };
+        }
+
+        return { a: data.a + 1, b: data.b + 1, __typename: 'Foo' };
+      }
+
+      expect(cache.updateFragment({ fragment, from: { __typename: 'Foo', id: 1 } }, update)).toStrictEqualTyped({
+        __typename: 'Foo',
+        a: 1,
+        b: 2,
+      });
+
+      expect(cache.updateFragment({ fragment, from: { __ref: 'Foo:1' } }, update)).toStrictEqualTyped({
+        __typename: 'Foo',
+        a: 2,
+        b: 3,
+      });
+
+      expect(cache.updateFragment({ fragment, from: 'Foo:1' }, update)).toStrictEqualTyped({
+        __typename: 'Foo',
+        a: 3,
+        b: 4,
+      });
+    });
   });
 
   describe('cache.restore', () => {
@@ -1505,16 +1763,10 @@ describe('Cache', () => {
       `;
 
       const originalReader = cache['storeReader'];
-      expect(originalReader).toBeInstanceOf(StoreReader);
-
       const originalWriter = cache['storeWriter'];
-      expect(originalWriter).toBeInstanceOf(StoreWriter);
 
       const originalMBW = cache['maybeBroadcastWatch'];
       expect(typeof originalMBW).toBe('function');
-
-      const originalCanon = originalReader.canon;
-      expect(originalCanon).toBeInstanceOf(ObjectCanon);
 
       cache.writeQuery({
         query,
@@ -1543,9 +1795,6 @@ describe('Cache', () => {
       expect(originalReader).not.toBe(cache['storeReader']);
       expect(originalWriter).not.toBe(cache['storeWriter']);
       expect(originalMBW).not.toBe(cache['maybeBroadcastWatch']);
-      // The cache.storeReader.canon is preserved by default, but can be dropped
-      // by passing resetResultIdentities:true to cache.gc.
-      expect(originalCanon).toBe(cache['storeReader'].canon);
     });
   });
 
@@ -1616,19 +1865,17 @@ describe('Cache', () => {
       expect(dirtied.has(bInfo.watch)).toBe(false);
 
       expect(aInfo.diffs.length).toBe(1);
-      expect(last(aInfo.diffs)).toMatchObject({
+      expect(last(aInfo.diffs)).toEqual({
         complete: true,
-        entityIds: new Set(['ROOT_QUERY']),
         result: {
           a: 'ay',
         },
       });
 
       expect(abInfo.diffs.length).toBe(1);
-      expect(last(abInfo.diffs)).toMatchObject({
+      expect(last(abInfo.diffs)).toEqual({
         complete: false,
-        entityIds: new Set(['ROOT_QUERY']),
-        missing: expect.any(Array),
+        missing: expect.any(MissingFieldError),
         result: {
           a: 'ay',
         },
@@ -1638,7 +1885,6 @@ describe('Cache', () => {
 
       dirtied.clear();
 
-      // noinspection JSVoidFunctionReturnValueUsed
       const bUpdateResult = cache.batch({
         update(cache) {
           cache.writeQuery({
@@ -1662,18 +1908,16 @@ describe('Cache', () => {
       expect(dirtied.has(bInfo.watch)).toBe(true);
 
       expect(aInfo.diffs.length).toBe(1);
-      expect(last(aInfo.diffs)).toMatchObject({
+      expect(last(aInfo.diffs)).toEqual({
         complete: true,
-        entityIds: new Set(['ROOT_QUERY']),
         result: {
           a: 'ay',
         },
       });
 
       expect(abInfo.diffs.length).toBe(2);
-      expect(last(abInfo.diffs)).toMatchObject({
+      expect(last(abInfo.diffs)).toEqual({
         complete: true,
-        entityIds: new Set(['ROOT_QUERY']),
         result: {
           a: 'ay',
           b: 'bee',
@@ -1681,9 +1925,9 @@ describe('Cache', () => {
       });
 
       expect(bInfo.diffs.length).toBe(1);
+      // Hermes: reads return a superset of the selected fields.
       expect(last(bInfo.diffs)).toMatchObject({
         complete: true,
-        entityIds: new Set(['ROOT_QUERY']),
         result: {
           b: 'bee',
         },
@@ -1837,24 +2081,24 @@ describe('Cache', () => {
       expect(dirtied.has(abInfo.watch)).toBe(true);
       expect(dirtied.has(bInfo.watch)).toBe(false);
 
+      // Hermes: reads return a superset of the selected fields.
       expect(aInfo.diffs).toMatchObject([
         // This diff resulted from the cache.modify call in the cache.batch
         // update function.
         {
           complete: true,
-          entityIds: new Set(['ROOT_QUERY']),
           result: {
             a: 'ayyyy',
           },
         },
       ]);
 
+      // Hermes: reads return a superset of the selected fields.
       expect(abInfo.diffs).toMatchObject([
         // This diff resulted from the cache.modify call in the cache.batch
         // update function.
         {
           complete: true,
-          entityIds: new Set(['ROOT_QUERY']),
           result: {
             a: 'ayyyy',
             b: 'beeeee',
@@ -1863,30 +2107,31 @@ describe('Cache', () => {
       ]);
 
       // No diffs so far for bQuery.
-      expect(bInfo.diffs).toEqual([]);
+      // Hermes: reads return a superset of the selected fields.
+      expect(bInfo.diffs).toMatchObject([]);
 
       // Trigger broadcast of watchers that were dirty before the cache.batch
       // transaction.
       cache['broadcastWatches']();
 
+      // Hermes: reads return a superset of the selected fields.
       expect(aInfo.diffs).toMatchObject([
         // Same array of diffs as before.
         {
           complete: true,
-          entityIds: new Set(['ROOT_QUERY']),
           result: {
             a: 'ayyyy',
           },
         },
       ]);
 
+      // Hermes: reads return a superset of the selected fields.
       expect(abInfo.diffs).toMatchObject([
         // The abQuery watcher was dirty before the cache.batch transaction,
         // but it got picked up in the post-transaction broadcast, which is why
         // we do not see another (duplicate) diff here.
         {
           complete: true,
-          entityIds: new Set(['ROOT_QUERY']),
           result: {
             a: 'ayyyy',
             b: 'beeeee',
@@ -1894,13 +2139,13 @@ describe('Cache', () => {
         },
       ]);
 
+      // Hermes: reads return a superset of the selected fields.
       expect(bInfo.diffs).toMatchObject([
         // This diff is caused by the data written by cache.writeQuery before
         // the cache.batch transaction, but gets broadcast only after the batch
         // transaction, by cache["broadcastWatches"]() above.
         {
           complete: true,
-          entityIds: new Set(['ROOT_QUERY']),
           result: {
             b: 'beeeee',
           },
@@ -2137,6 +2382,19 @@ describe('Cache', () => {
   });
 });
 
+describe('resultCacheMaxSize', () => {
+  // Hermes: asserts the sizes of InMemoryCache's internal memoization caches
+  // (maybeBroadcastWatch, executeSelectionSet, getFragmentDoc).
+  it.skip('uses default max size on caches', () => {
+    const cache = new Hermes() as any;
+    expect(cache['maybeBroadcastWatch'].options.max).toBe(defaultCacheSizes['inMemoryCache.maybeBroadcastWatch']);
+    expect(cache['storeReader']['executeSelectionSet'].options.max).toBe(
+      defaultCacheSizes['inMemoryCache.executeSelectionSet'],
+    );
+    expect(cache['getFragmentDoc'].options.max).toBe(defaultCacheSizes['cache.fragmentQueryDocuments']);
+  });
+});
+
 describe('Hermes#broadcastWatches', () => {
   it('should keep distinct consumers distinct (issue #5733)', () => {
     const cache = new Hermes();
@@ -2189,8 +2447,6 @@ describe('Hermes#broadcastWatches', () => {
           },
         },
         complete: true,
-        entityIds: new Set(['ROOT_QUERY']),
-        dynamicNodeIds: new Set(['ROOT_QUERY❖["value"]❖{"arg":1}']),
       },
     ];
 
@@ -2212,8 +2468,6 @@ describe('Hermes#broadcastWatches', () => {
           },
         },
         complete: true,
-        entityIds: new Set(['ROOT_QUERY']),
-        dynamicNodeIds: new Set(['ROOT_QUERY❖["value"]❖{"arg":2}']),
       },
     ];
 
@@ -2238,8 +2492,6 @@ describe('Hermes#broadcastWatches', () => {
           },
         },
         complete: true,
-        entityIds: new Set(['ROOT_QUERY']),
-        dynamicNodeIds: new Set(['ROOT_QUERY❖["value"]❖{"arg":1}']),
       },
     ];
 
@@ -2253,8 +2505,6 @@ describe('Hermes#broadcastWatches', () => {
           },
         },
         complete: true,
-        entityIds: new Set(['ROOT_QUERY']),
-        dynamicNodeIds: new Set(['ROOT_QUERY❖["value"]❖{"arg":1}']),
       },
     ];
 
@@ -2278,8 +2528,6 @@ describe('Hermes#broadcastWatches', () => {
           },
         },
         complete: true,
-        entityIds: new Set(['ROOT_QUERY']),
-        dynamicNodeIds: new Set(['ROOT_QUERY❖["value"]❖{"arg":2}']),
       },
     ];
 
@@ -2291,164 +2539,6 @@ describe('Hermes#broadcastWatches', () => {
       // New results:
       received2AllCaps,
     ]);
-  });
-
-  // Hermes: canonizeResults is InMemoryCache-only
-  it.skip('should pass WatchOptions through to cache.diff', () => {
-    const typePolicies: TypePolicies = {
-      Query: {
-        fields: {
-          object(_, { variables }) {
-            return { name: variables?.name ?? 'UNKNOWN' };
-          },
-        },
-      },
-    };
-
-    const canonicalCache = new Hermes({
-      canonizeResults: true,
-      typePolicies,
-    } as CacheContext.Configuration);
-
-    const nonCanonicalCache = new Hermes({
-      canonizeResults: false,
-      typePolicies,
-    } as CacheContext.Configuration);
-
-    const query = gql`
-      query {
-        object {
-          name
-        }
-      }
-    `;
-
-    const unwatchers = new Set<() => void>();
-
-    type Diff = Cache.DiffResult<{
-      object: {
-        name: string;
-      };
-    }>;
-    const diffs: Record<string, Diff[]> = Object.create(null);
-    function addDiff(name: string, diff: Diff) {
-      (diffs[name] || (diffs[name] = [])).push(diff);
-    }
-
-    const commonWatchOptions = {
-      query,
-      optimistic: true,
-      immediate: true,
-      callback(diff: Diff) {
-        addDiff(diff.result!.object.name, diff);
-      },
-    };
-
-    unwatchers.add(
-      canonicalCache.watch({
-        ...commonWatchOptions,
-        variables: { name: 'canonicalByDefault' },
-        // Pass nothing for canonizeResults to let the default for canonicalCache
-        // (true) prevail.
-      }),
-    );
-
-    unwatchers.add(
-      nonCanonicalCache.watch({
-        ...commonWatchOptions,
-        variables: { name: 'nonCanonicalByDefault' },
-        // Pass nothing for canonizeResults to let the default for
-        // nonCanonicalCache (false) prevail.
-      }),
-    );
-
-    unwatchers.add(
-      nonCanonicalCache.watch({
-        ...commonWatchOptions,
-        variables: { name: 'canonicalByChoice' },
-        canonizeResults: true, // Override the default.
-      }),
-    );
-
-    unwatchers.add(
-      canonicalCache.watch({
-        ...commonWatchOptions,
-        variables: { name: 'nonCanonicalByChoice' },
-        canonizeResults: false, // Override the default.
-      }),
-    );
-
-    function makeDiff(name: string): Diff {
-      return {
-        complete: true,
-        result: {
-          object: { name },
-        },
-      };
-    }
-
-    const canonicalByDefaultDiff = makeDiff('canonicalByDefault');
-    const nonCanonicalByDefaultDiff = makeDiff('nonCanonicalByDefault');
-    const canonicalByChoiceDiff = makeDiff('canonicalByChoice');
-    const nonCanonicalByChoiceDiff = makeDiff('nonCanonicalByChoice');
-
-    expect(diffs).toEqual({
-      canonicalByDefault: [canonicalByDefaultDiff],
-      nonCanonicalByDefault: [nonCanonicalByDefaultDiff],
-      canonicalByChoice: [canonicalByChoiceDiff],
-      nonCanonicalByChoice: [nonCanonicalByChoiceDiff],
-    });
-
-    [canonicalCache, nonCanonicalCache].forEach(cache => {
-      // Hack: delete every watch.lastDiff, so subsequent results will be
-      // broadcast, even though they are deeply equal to the previous results.
-      cache['watches'].forEach(watch => {
-        delete watch.lastDiff;
-      });
-    });
-
-    // Evict Query.object to invalidate the result cache.
-    canonicalCache.evict({
-      fieldName: 'object',
-    });
-    nonCanonicalCache.evict({
-      fieldName: 'object',
-    });
-
-    // Every watcher receives the same (deeply equal) Diff a second time.
-    expect(diffs).toEqual({
-      canonicalByDefault: [canonicalByDefaultDiff, canonicalByDefaultDiff],
-      nonCanonicalByDefault: [nonCanonicalByDefaultDiff, nonCanonicalByDefaultDiff],
-      canonicalByChoice: [canonicalByChoiceDiff, canonicalByChoiceDiff],
-      nonCanonicalByChoice: [nonCanonicalByChoiceDiff, nonCanonicalByChoiceDiff],
-    });
-
-    function expectCanonical(name: string) {
-      const count = diffs[name].length;
-      const firstDiff = diffs[name][0];
-      for (let i = 1; i < count; ++i) {
-        expect(firstDiff).toEqual(diffs[name][i]);
-        expect(firstDiff.result).toBe(diffs[name][i].result);
-      }
-    }
-
-    function expectNonCanonical(name: string) {
-      const count = diffs[name].length;
-      const firstDiff = diffs[name][0];
-      for (let i = 1; i < count; ++i) {
-        expect(firstDiff).toEqual(diffs[name][i]);
-        expect(firstDiff.result).not.toBe(diffs[name][i].result);
-      }
-    }
-
-    // However, some of the diff.result objects are canonized and thus ===, and
-    // others are deeply equal but not canonized (and thus not ===).
-    expectCanonical('canonicalByDefault');
-    expectCanonical('canonicalByChoice');
-    expectNonCanonical('nonCanonicalByDefault');
-    expectNonCanonical('nonCanonicalByChoice');
-
-    unwatchers.forEach(unwatch => unwatch());
   });
 });
 
@@ -2563,7 +2653,6 @@ describe('Hermes#modify', () => {
 
   it('should allow invalidation using details.INVALIDATE', () => {
     const cache = new Hermes({
-      // canonizeResults: true,
       typePolicies: {
         Book: {
           keyFields: ['isbn'],
@@ -2635,6 +2724,8 @@ describe('Hermes#modify', () => {
 
     const resultAfterAuthorInvalidation = read();
     expect(resultAfterAuthorInvalidation).toEqual(initialResult);
+    // Hermes: INVALIDATE does not change the data, so Hermes keeps its cached
+    // read result (InMemoryCache rebuilds an equal, but new, result).
     expect(resultAfterAuthorInvalidation).toBe(initialResult);
 
     expect(
@@ -2652,6 +2743,7 @@ describe('Hermes#modify', () => {
 
     const resultAfterBookInvalidation = read();
     expect(resultAfterBookInvalidation).toEqual(resultAfterAuthorInvalidation);
+    // Hermes: as above, the cached read result is kept.
     expect(resultAfterBookInvalidation).toBe(resultAfterAuthorInvalidation);
     expect(resultAfterBookInvalidation.currentlyReading.author).toEqual({
       __typename: 'Author',
@@ -2789,8 +2881,10 @@ describe('Hermes#modify', () => {
     });
 
     const snapshotWithoutYOB = cache.extract();
-    expect(snapshotWithoutYOB[authorId]!.data.yearOfBirth).toBeUndefined();
-    expect('yearOfBirth' in snapshotWithoutYOB[authorId]!.data).toBe(false);
+    // Hermes: a serialized node's `data` is typed as any JSON value.
+    const authorDataWithoutYOB = snapshotWithoutYOB[authorId]!.data as JsonObject;
+    expect(authorDataWithoutYOB.yearOfBirth).toBeUndefined();
+    expect('yearOfBirth' in authorDataWithoutYOB).toBe(false);
     expect(snapshotWithoutYOB).toEqual({
       ROOT_QUERY: {
         type: 0,
@@ -3188,7 +3282,6 @@ describe('Hermes#modify', () => {
     function makeResult(__typename: string, value: number, complete: boolean = true) {
       return {
         complete,
-        entityIds: new Set(['ROOT_QUERY', `${__typename}:1`]),
         result: {
           [__typename.toLowerCase()]: {
             __typename,
@@ -3201,6 +3294,7 @@ describe('Hermes#modify', () => {
     const a123 = makeResult('A', 123);
     const b321 = makeResult('B', 321);
 
+    // Hermes: reads return a superset of the selected fields.
     expect(aResults).toMatchObject([a123]);
     expect(bResults).toMatchObject([b321]);
 
@@ -3218,6 +3312,7 @@ describe('Hermes#modify', () => {
 
     const a124 = makeResult('A', 124);
 
+    // Hermes: reads return a superset of the selected fields.
     expect(aResults).toMatchObject([a123, a124]);
     expect(bResults).toMatchObject([b321]);
 
@@ -3232,21 +3327,21 @@ describe('Hermes#modify', () => {
 
     const b322 = makeResult('B', 322);
 
+    // Hermes: reads return a superset of the selected fields.
     expect(aResults).toMatchObject([a123, a124]);
     expect(bResults).toMatchObject([b321, b322]);
 
     // Check that resetting the result cache does not trigger additional watch
     // notifications.
     expect(
-      cache.gc(
-        /* {
-        resetResultCache: true,
-      } */
-      ),
+      // Hermes: gc takes no resetResultCache option.
+      cache.gc(),
     ).toEqual([]);
+    // Hermes: reads return a superset of the selected fields.
     expect(aResults).toMatchObject([a123, a124]);
     expect(bResults).toMatchObject([b321, b322]);
     cache['broadcastWatches']();
+    // Hermes: reads return a superset of the selected fields.
     expect(aResults).toMatchObject([a123, a124]);
     expect(bResults).toMatchObject([b321, b322]);
   });
@@ -3713,10 +3808,10 @@ describe('Hermes#modify', () => {
 });
 
 describe('ReactiveVar and makeVar', () => {
-  function makeCacheAndVar(resultCaching: boolean) {
+  // Hermes: resultCaching is InMemoryCache-only, so it is ignored.
+  function makeCacheAndVar(_resultCaching: boolean) {
     const nameVar = makeVar('Ben');
     const cache: Hermes = new Hermes({
-      // resultCaching,
       typePolicies: {
         Person: {
           fields: {
@@ -3789,14 +3884,11 @@ describe('ReactiveVar and makeVar', () => {
     });
   });
 
-  // Hermes: no resultCaching option or canonizeResults (asserts canonical result identity)
+  // Hermes: no resultCaching option (asserts that every read builds a new result object)
   it.skip('should work with resultCaching disabled (unusual)', () => {
     const { cache, nameVar, query } = makeCacheAndVar(false);
 
-    const result1 = cache.readQuery({
-      query,
-      canonizeResults: true,
-    });
+    const result1 = cache.readQuery({ query });
     expect(result1).toEqual({
       onCall: {
         __typename: 'Person',
@@ -3804,20 +3896,14 @@ describe('ReactiveVar and makeVar', () => {
       },
     });
 
-    const result2 = cache.readQuery({
-      query,
-      canonizeResults: true,
-    });
+    const result2 = cache.readQuery({ query });
     expect(result2).toEqual(result1);
-    expect(result2).toBe(result1);
+    expect(result2).not.toBe(result1);
 
     expect(nameVar()).toBe('Ben');
     expect(nameVar('Hugh')).toBe('Hugh');
 
-    const result3 = cache.readQuery({
-      query,
-      canonizeResults: true,
-    });
+    const result3 = cache.readQuery({ query });
     expect(result3).toEqual({
       onCall: {
         __typename: 'Person',
@@ -3875,8 +3961,8 @@ describe('ReactiveVar and makeVar', () => {
 
   it('should remove all watchers when cache.reset() called', () => {
     const { cache, query, nameVar } = makeCacheAndVar(false);
-    const unwatchers: Record<string, Array<() => void>> = Object.create(null);
-    const diffCounts: Record<string, number> = Object.create(null);
+    const unwatchers: Record<string, Array<() => void>> = {};
+    const diffCounts: Record<string, number> = {};
 
     function watch(id: string) {
       const fns = unwatchers[id] || (unwatchers[id] = []);
@@ -4111,8 +4197,7 @@ describe('ReactiveVar and makeVar', () => {
       name2: 'Jenn',
     });
 
-    // Hermes: diffs also carry Hermes' entityIds/dynamicNodeIds bookkeeping.
-    expect(watchDiffs).toMatchObject([
+    expect(watchDiffs).toEqual([
       {
         complete: true,
         result: {
@@ -4132,7 +4217,7 @@ describe('ReactiveVar and makeVar', () => {
       name2: 'Hugh',
     });
 
-    expect(watchDiffs).toMatchObject([
+    expect(watchDiffs).toEqual([
       {
         complete: true,
         result: {
@@ -4158,8 +4243,6 @@ describe('ReactiveVar and makeVar', () => {
         value
       }
     `;
-    // Hermes: watch callbacks also receive internal entityIds/dynamicNodeIds
-    // bookkeeping, hence toMatchObject.
     const diffs: Cache.DiffResult<any>[] = [];
     const watch: Cache.WatchOptions = {
       query,
@@ -4181,12 +4264,12 @@ describe('ReactiveVar and makeVar', () => {
     // This should not trigger a broadcast, since we haven't associated
     // this cache with rv yet.
     rv(rv() + 1);
-    expect(diffs).toMatchObject([]);
+    expect(diffs).toEqual([]);
 
     // The rv.attachCache method returns rv, for chaining.
     rv.attachCache(cache)(rv() + 1);
 
-    expect(diffs).toMatchObject([
+    expect(diffs).toEqual([
       {
         complete: true,
         result: {
@@ -4203,7 +4286,7 @@ describe('ReactiveVar and makeVar', () => {
       },
     });
 
-    expect(diffs).toMatchObject([
+    expect(diffs).toEqual([
       {
         complete: true,
         result: {
@@ -4213,7 +4296,7 @@ describe('ReactiveVar and makeVar', () => {
     ]);
 
     rv(rv() + 1);
-    expect(diffs).toMatchObject([
+    expect(diffs).toEqual([
       {
         complete: true,
         result: {
@@ -4241,7 +4324,7 @@ describe('ReactiveVar and makeVar', () => {
     // Since we called rv.forgetCache(cache) above, updating rv here
     // should not trigger a broadcast.
     rv(rv() + 1);
-    expect(diffs).toMatchObject([
+    expect(diffs).toEqual([
       {
         complete: true,
         result: {
@@ -4257,7 +4340,7 @@ describe('ReactiveVar and makeVar', () => {
     ]);
 
     cache['broadcastWatches']();
-    expect(diffs).toMatchObject([
+    expect(diffs).toEqual([
       {
         complete: true,
         result: {

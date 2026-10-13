@@ -1,7 +1,7 @@
 import { renderHook } from '@testing-library/react';
+// not exported; Hermes: imported from the published package's file (see test/env/resolver.ts)
+// eslint-disable-next-line import/no-unresolved
 import { useDeepMemo } from '@apollo/client/react/hooks/internal/useDeepMemo';
-
-const expect = jestExpect;
 
 describe('useDeepMemo', () => {
   it('ensures the value is initialized', () => {

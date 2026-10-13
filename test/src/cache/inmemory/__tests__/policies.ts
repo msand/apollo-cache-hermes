@@ -1,11 +1,13 @@
-import gql from 'graphql-tag';
-import { ApolloClient, FieldPolicy } from '@apollo/client';
-import { ReactiveVar, makeVar } from '@apollo/client/cache/inmemory/reactiveVars';
-import { Reference, StoreObject, NetworkStatus, TypedDocumentNode, DocumentNode } from '@apollo/client/core';
-import { MissingFieldError } from '@apollo/client/cache';
-import { relayStylePagination, stringifyForDisplay } from '@apollo/client/utilities';
-import { StorageType } from '@apollo/client/cache/inmemory/policies';
-import { MockLink } from '@apollo/client/testing/core';
+import { gql } from 'graphql-tag';
+import type { DocumentNode, OperationVariables, Reference, StoreObject, TypedDocumentNode } from '@apollo/client';
+import { ApolloClient, NetworkStatus } from '@apollo/client';
+import type { FieldPolicy, ReactiveVar } from '@apollo/client/cache';
+import { makeVar, MissingFieldError } from '@apollo/client/cache';
+import { MockLink } from '@apollo/client/testing';
+import { relayStylePagination } from '@apollo/client/utilities';
+import { stringifyForDisplay } from '@apollo/client/utilities/internal';
+import type { StorageType } from '@apollo/client/cache/inmemory/policies';
+
 import { ObservableStream, spyOnConsole } from '@apollo/client/testing/internal';
 
 import { Hermes } from '../../../../../src';
@@ -1269,9 +1271,9 @@ describe('type policies', () => {
         },
       };
 
-      function check<TData extends typeof data, TVars>(
-        query: DocumentNode | TypedDocumentNode<TData, TVars>,
-        variables?: TVars,
+      function check<TData extends typeof data, TVariables extends OperationVariables>(
+        query: DocumentNode | TypedDocumentNode<TData, TVariables>,
+        variables?: TVariables,
       ) {
         cache.writeQuery<typeof data>({ query, variables, data });
         expect(cache.readQuery({ query, variables })).toEqual(data);
@@ -2221,26 +2223,24 @@ describe('type policies', () => {
           ],
         },
         complete: false,
-        missing: [
-          new MissingFieldError(
-            `Can't find field 'result' on Job:{"name":"Job #${1}"} object`,
-            {
-              jobs: {
-                0: {
-                  result: 'Can\'t find field \'result\' on Job:{"name":"Job #1"} object',
-                },
-                1: {
-                  result: 'Can\'t find field \'result\' on Job:{"name":"Job #2"} object',
-                },
-                2: {
-                  result: 'Can\'t find field \'result\' on Job:{"name":"Job #3"} object',
-                },
+        missing: new MissingFieldError(
+          `Can't find field 'result' on Job:{"name":"Job #${1}"} object`,
+          {
+            jobs: {
+              0: {
+                result: 'Can\'t find field \'result\' on Job:{"name":"Job #1"} object',
+              },
+              1: {
+                result: 'Can\'t find field \'result\' on Job:{"name":"Job #2"} object',
+              },
+              2: {
+                result: 'Can\'t find field \'result\' on Job:{"name":"Job #3"} object',
               },
             },
-            expect.anything(), // query
-            expect.anything(), // variables
-          ),
-        ],
+          },
+          expect.anything(), // query
+          expect.anything(), // variables
+        ),
       });
 
       function setResult(jobNum: number) {
@@ -2294,23 +2294,21 @@ describe('type policies', () => {
           ],
         },
         complete: false,
-        missing: [
-          new MissingFieldError(
-            `Can't find field 'result' on Job:{"name":"Job #${1}"} object`,
-            {
-              jobs: {
-                0: {
-                  result: 'Can\'t find field \'result\' on Job:{"name":"Job #1"} object',
-                },
-                2: {
-                  result: 'Can\'t find field \'result\' on Job:{"name":"Job #3"} object',
-                },
+        missing: new MissingFieldError(
+          `Can't find field 'result' on Job:{"name":"Job #${1}"} object`,
+          {
+            jobs: {
+              0: {
+                result: 'Can\'t find field \'result\' on Job:{"name":"Job #1"} object',
+              },
+              2: {
+                result: 'Can\'t find field \'result\' on Job:{"name":"Job #3"} object',
               },
             },
-            expect.anything(), // query
-            expect.anything(), // variables
-          ),
-        ],
+          },
+          expect.anything(), // query
+          expect.anything(), // variables
+        ),
       });
 
       cache.writeQuery({
@@ -2361,23 +2359,21 @@ describe('type policies', () => {
           ],
         },
         complete: false,
-        missing: [
-          new MissingFieldError(
-            `Can't find field 'result' on Job:{"name":"Job #${1}"} object`,
-            {
-              jobs: {
-                0: {
-                  result: 'Can\'t find field \'result\' on Job:{"name":"Job #1"} object',
-                },
-                2: {
-                  result: 'Can\'t find field \'result\' on Job:{"name":"Job #3"} object',
-                },
+        missing: new MissingFieldError(
+          `Can't find field 'result' on Job:{"name":"Job #${1}"} object`,
+          {
+            jobs: {
+              0: {
+                result: 'Can\'t find field \'result\' on Job:{"name":"Job #1"} object',
+              },
+              2: {
+                result: 'Can\'t find field \'result\' on Job:{"name":"Job #3"} object',
               },
             },
-            expect.anything(), // query
-            expect.anything(), // variables
-          ),
-        ],
+          },
+          expect.anything(), // query
+          expect.anything(), // variables
+        ),
       });
 
       setResult(1);
@@ -3315,19 +3311,45 @@ describe('type policies', () => {
         }),
       ).toBe(null);
 
-      expect(() =>
-        cache.diff({
-          optimistic: true,
-          returnPartialData: false,
-          query: gql`
+      const diff = cache.diff({
+        optimistic: true,
+        returnPartialData: false,
+        query: gql`
+          query {
+            me {
+              secret
+            }
+          }
+        `,
+      });
+
+      const missingFieldErrorMessage = `Can't find field 'secret' on object ${JSON.stringify(
+        {
+          __typename: 'Person',
+          name: 'Ben Newman',
+        },
+        null,
+        2,
+      )}`;
+
+      expect(diff.complete).toBe(false);
+      expect(diff.result).toBeNull();
+      expect(diff.missing).toEqual(
+        new MissingFieldError(
+          missingFieldErrorMessage,
+          {
+            me: { secret: missingFieldErrorMessage },
+          },
+          gql`
             query {
               me {
                 secret
               }
             }
           `,
-        }),
-      ).toThrow("Can't find field 'secret' ");
+          {},
+        ),
+      );
 
       expect(secretReadAttempted).toBe(true);
     });
@@ -3571,7 +3593,6 @@ describe('type policies', () => {
     // keyArgs-based field)
     it.skip('can handle Relay-style pagination without args', async () => {
       const cache = new Hermes({
-        addTypename: false,
         typePolicies: {
           Query: {
             fields: {
@@ -3650,6 +3671,7 @@ describe('type policies', () => {
           result: {
             data: {
               todos: {
+                __typename: 'TodosConnection',
                 totalCount: 1292,
               },
             },
@@ -3663,6 +3685,7 @@ describe('type policies', () => {
           result: {
             data: {
               todos: {
+                __typename: 'TodosConnection',
                 edges: secondEdges,
                 pageInfo: secondPageInfo,
                 totalCount: 1292,
@@ -3677,25 +3700,23 @@ describe('type policies', () => {
           result: {
             data: {
               todos: {
+                __typename: 'TodosConnection',
                 totalCount: 1293,
                 extraMetaData: 'extra',
               },
             },
           },
         },
-      ]).setOnError(error => {
-        throw new Error(error);
-      });
+      ]);
 
       const client = new ApolloClient({ link, cache });
 
       let result = await client.query({ query: firstQuery });
 
-      expect(result).toEqual({
-        loading: false,
-        networkStatus: NetworkStatus.ready,
+      expect(result).toStrictEqualTyped({
         data: {
           todos: {
+            __typename: 'TodosConnection',
             totalCount: 1292,
           },
         },
@@ -3705,6 +3726,7 @@ describe('type policies', () => {
         ROOT_QUERY: {
           __typename: 'Query',
           todos: {
+            __typename: 'TodosConnection',
             edges: [],
             pageInfo: {
               endCursor: '',
@@ -3722,11 +3744,10 @@ describe('type policies', () => {
         variables: secondVariables,
       });
 
-      expect(result).toEqual({
-        loading: false,
-        networkStatus: NetworkStatus.ready,
+      expect(result).toStrictEqualTyped({
         data: {
           todos: {
+            __typename: 'TodosConnection',
             edges: secondEdges,
             pageInfo: secondPageInfo,
             totalCount: 1292,
@@ -3737,11 +3758,10 @@ describe('type policies', () => {
       expect(cache.extract()).toMatchSnapshot();
 
       result = await client.query({ query: thirdQuery });
-      expect(result).toEqual({
-        loading: false,
-        networkStatus: NetworkStatus.ready,
+      expect(result).toStrictEqualTyped({
         data: {
           todos: {
+            __typename: 'TodosConnection',
             totalCount: 1293,
             extraMetaData: 'extra',
           },
@@ -3754,7 +3774,6 @@ describe('type policies', () => {
     // keyArgs-based field)
     it.skip('can handle Relay-style pagination', async () => {
       const cache = new Hermes({
-        addTypename: false,
         typePolicies: {
           Query: {
             fields: {
@@ -4113,9 +4132,7 @@ describe('type policies', () => {
             },
           },
         },
-      ]).setOnError(error => {
-        throw new Error(error);
-      });
+      ]);
 
       const client = new ApolloClient({ link, cache });
 
@@ -4130,6 +4147,7 @@ describe('type policies', () => {
         }
       >({
         query,
+        notifyOnNetworkStatusChange: false,
         variables: {
           query: 'Basquiat',
           first: 3,
@@ -4138,7 +4156,7 @@ describe('type policies', () => {
 
       const stream = new ObservableStream(observable);
 
-      await expect(stream).toEmitValue({
+      await expect(stream).toEmitTypedValue({
         loading: false,
         networkStatus: NetworkStatus.ready,
         data: {
@@ -4148,6 +4166,8 @@ describe('type policies', () => {
             totalCount: 1292,
           },
         },
+        dataState: 'complete',
+        partial: false,
       });
       expect(cache.extract()).toMatchSnapshot();
 
@@ -4156,7 +4176,7 @@ describe('type policies', () => {
       {
         const result = await stream.takeNext();
 
-        expect(result).toEqual({
+        expect(result).toStrictEqualTyped({
           loading: false,
           networkStatus: NetworkStatus.ready,
           data: {
@@ -4172,6 +4192,8 @@ describe('type policies', () => {
               totalCount: 1292,
             },
           },
+          dataState: 'complete',
+          partial: false,
         });
         expect(cache.extract()).toMatchSnapshot();
       }
@@ -4183,7 +4205,7 @@ describe('type policies', () => {
 
         expect(result.data.search.edges.length).toBe(5);
 
-        expect(result).toEqual({
+        expect(result).toStrictEqualTyped({
           loading: false,
           networkStatus: NetworkStatus.ready,
           data: {
@@ -4199,6 +4221,8 @@ describe('type policies', () => {
               totalCount: 1292,
             },
           },
+          dataState: 'complete',
+          partial: false,
         });
 
         expect(cache.extract()).toMatchSnapshot();
@@ -4209,7 +4233,7 @@ describe('type policies', () => {
       {
         const result = await stream.takeNext();
 
-        expect(result).toEqual({
+        expect(result).toStrictEqualTyped({
           loading: false,
           networkStatus: NetworkStatus.ready,
           data: {
@@ -4225,6 +4249,8 @@ describe('type policies', () => {
               totalCount: 1292,
             },
           },
+          dataState: 'complete',
+          partial: false,
         });
 
         expect(result.data.search.edges).toEqual([...firstEdges, ...secondEdges]);
@@ -4239,7 +4265,7 @@ describe('type policies', () => {
 
         expect(result.data.search.edges.length).toBe(7);
 
-        expect(result).toEqual({
+        expect(result).toStrictEqualTyped({
           loading: false,
           networkStatus: NetworkStatus.ready,
           data: {
@@ -4255,6 +4281,8 @@ describe('type policies', () => {
               totalCount: 1292,
             },
           },
+          dataState: 'complete',
+          partial: false,
         });
 
         expect(cache.extract()).toMatchSnapshot();
@@ -4273,9 +4301,7 @@ describe('type policies', () => {
         });
         const snapshot = cache.extract();
 
-        expect(result).toEqual({
-          loading: false,
-          networkStatus: NetworkStatus.ready,
+        expect(result).toStrictEqualTyped({
           data: {
             search: {
               edges: turrellEdges.slice(0, 1),
@@ -4335,7 +4361,7 @@ describe('type policies', () => {
           },
         });
 
-        expect(result).toEqual({
+        expect(result).toStrictEqualTyped({
           loading: false,
           networkStatus: NetworkStatus.ready,
           data: {
@@ -4351,6 +4377,8 @@ describe('type policies', () => {
               totalCount: 1292,
             },
           },
+          dataState: 'complete',
+          partial: false,
         });
 
         expect(cache.extract()).toMatchSnapshot();
@@ -4368,9 +4396,7 @@ describe('type policies', () => {
         });
         const snapshot = cache.extract();
 
-        expect(result).toEqual({
-          loading: false,
-          networkStatus: NetworkStatus.ready,
+        expect(result).toStrictEqualTyped({
           data: {
             search: {
               edges: turrellEdges,
@@ -4698,7 +4724,18 @@ describe('type policies', () => {
 
       expect(read()).toBe(null);
 
-      expect(diff).toThrow(/Dangling reference to missing Book:{"isbn":"156858217X"} object/);
+      expect(diff()).toEqual({
+        complete: false,
+        result: null,
+        missing: new MissingFieldError(
+          'Dangling reference to missing Book:{"isbn":"156858217X"} object',
+          {
+            book: 'Dangling reference to missing Book:{"isbn":"156858217X"} object',
+          },
+          query,
+          { isbn: '156858217X' },
+        ),
+      });
 
       const stealThisData = {
         __typename: 'Book',
@@ -4831,10 +4868,32 @@ describe('type policies', () => {
       });
 
       expect(read('0393354326')).toBe(null);
-      expect(() => diff('0393354326')).toThrow(/Dangling reference to missing Book:{"isbn":"0393354326"} object/);
+      expect(diff('0393354326')).toEqual({
+        complete: false,
+        result: null,
+        missing: new MissingFieldError(
+          'Dangling reference to missing Book:{"isbn":"0393354326"} object',
+          {
+            book: 'Dangling reference to missing Book:{"isbn":"0393354326"} object',
+          },
+          query,
+          { isbn: '0393354326' },
+        ),
+      });
 
       expect(read('156858217X')).toBe(null);
-      expect(() => diff('156858217X')).toThrow(/Dangling reference to missing Book:{"isbn":"156858217X"} object/);
+      expect(diff('156858217X')).toEqual({
+        complete: false,
+        result: null,
+        missing: new MissingFieldError(
+          'Dangling reference to missing Book:{"isbn":"156858217X"} object',
+          {
+            book: 'Dangling reference to missing Book:{"isbn":"156858217X"} object',
+          },
+          query,
+          { isbn: '156858217X' },
+        ),
+      });
     });
 
     it('can force merging of unidentified non-normalized data', () => {
@@ -6004,7 +6063,6 @@ describe('type policies', () => {
     function readFirstBookResult() {
       return cache.readQuery<{ author: any }>({
         query: firstBookQuery,
-        canonizeResults: true,
       })!;
     }
 
@@ -6263,7 +6321,7 @@ describe('type policies', () => {
             currentTask: {
               merge(existing, incoming) {
                 // Not a very reasonable merge strategy, but returning
-                // existing here triggers issue #6245, persumably because
+                // existing here triggers issue #6245, presumably because
                 // the existing data is frozen.
                 return existing || incoming;
               },

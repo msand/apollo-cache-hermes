@@ -1,5 +1,7 @@
-import { DocumentNode } from 'graphql';
-import gql from 'graphql-tag';
+import type { DocumentNode } from 'graphql';
+import { gql } from 'graphql-tag';
+import { __DEV__ } from '@apollo/client/utilities/environment';
+
 import { spyOnConsole } from '@apollo/client/testing/internal';
 
 import { Hermes } from '../../../../../src';
@@ -22,7 +24,7 @@ function assertDeeplyFrozen(value: any, stack: any[] = []) {
 // internal StoreWriter/StoreReader/EntityStore (which never touch Hermes).
 // addTypename is off because StoreWriter/StoreReader use the document as is,
 // and diff with returnPartialData: false mirrors readQueryFromStore.
-function storeRoundtrip(query: DocumentNode, result: any, variables = {}) {
+function storeRoundtrip(query: DocumentNode, result: any, variables = {}, expectedResult = result) {
   const cache = new Hermes({
     addTypename: false,
     possibleTypes: {
@@ -35,7 +37,7 @@ function storeRoundtrip(query: DocumentNode, result: any, variables = {}) {
   const readQuery = () => cache.diff<any>({ query, variables, optimistic: false, returnPartialData: false }).result;
 
   const reconstructedResult = readQuery();
-  expect(reconstructedResult).toEqual(result);
+  expect(reconstructedResult).toEqual(expectedResult);
 
   // Make sure the result is identical if we haven't written anything new
   // to the store. https://github.com/apollographql/apollo-client/pull/3394
@@ -70,8 +72,8 @@ function storeRoundtrip(query: DocumentNode, result: any, variables = {}) {
 
   const deletedRootResult = readQuery();
   // Hermes: reads may return a superset of the selected fields (see README),
-  // so the root result now also carries the bogus oyez field.
-  expect(deletedRootResult).toEqual({ ...result, oyez: 1234 });
+  // so the root (complete) result now also carries the bogus oyez field.
+  expect(deletedRootResult).toEqual(expectedResult === null ? null : { ...expectedResult, oyez: 1234 });
 
   if (deletedRootResult === reconstructedResult) {
     // We don't expect the new result to be identical to the previous result,
@@ -249,6 +251,20 @@ describe('roundtrip', () => {
           }
         `,
         {},
+        {},
+        {},
+      );
+    });
+    it('should be able to query with include directive false', () => {
+      storeRoundtrip(
+        gql`
+          query {
+            fortuneCookie @include(if: false)
+          }
+        `,
+        {},
+        {},
+        {},
       );
     });
 
@@ -307,33 +323,33 @@ describe('roundtrip', () => {
     // However, the user may have written this result with client.writeQuery.
     it('should throw an error on two of the same inline fragment types', () => {
       using _consoleSpies = spyOnConsole.takeSnapshots('error');
-      expect(() => {
-        storeRoundtrip(
-          gql`
-            query {
-              all_people {
-                __typename
-                name
-                ... on Jedi {
-                  side
-                }
-                ... on Jedi {
-                  rank
-                }
+      storeRoundtrip(
+        gql`
+          query {
+            all_people {
+              __typename
+              name
+              ... on Jedi {
+                side
+              }
+              ... on Jedi {
+                rank
               }
             }
-          `,
-          {
-            all_people: [
-              {
-                __typename: 'Jedi',
-                name: 'Luke Skywalker',
-                side: 'bright',
-              },
-            ],
-          },
-        );
-      }).toThrow(/Can't find field 'rank' /);
+          }
+        `,
+        {
+          all_people: [
+            {
+              __typename: 'Jedi',
+              name: 'Luke Skywalker',
+              side: 'bright',
+            },
+          ],
+        },
+        {},
+        null,
+      );
     });
 
     it('should resolve fields it can on interface with non matching inline fragments', () => {
@@ -448,37 +464,37 @@ describe('roundtrip', () => {
 
     it('should throw on error on two of the same spread fragment types', () => {
       using _consoleSpies = spyOnConsole.takeSnapshots('error');
-      expect(() => {
-        storeRoundtrip(
-          gql`
-            fragment jediSide on Jedi {
-              side
-            }
+      storeRoundtrip(
+        gql`
+          fragment jediSide on Jedi {
+            side
+          }
 
-            fragment jediRank on Jedi {
-              rank
-            }
+          fragment jediRank on Jedi {
+            rank
+          }
 
-            query {
-              all_people {
-                __typename
-                name
-                ...jediSide
-                ...jediRank
-              }
+          query {
+            all_people {
+              __typename
+              name
+              ...jediSide
+              ...jediRank
             }
-          `,
-          {
-            all_people: [
-              {
-                __typename: 'Jedi',
-                name: 'Luke Skywalker',
-                side: 'bright',
-              },
-            ],
-          },
-        );
-      }).toThrow(/Can't find field 'rank' /);
+          }
+        `,
+        {
+          all_people: [
+            {
+              __typename: 'Jedi',
+              name: 'Luke Skywalker',
+              side: 'bright',
+            },
+          ],
+        },
+        {},
+        null,
+      );
     });
 
     it('should resolve on @include and @skip with inline fragments', () => {

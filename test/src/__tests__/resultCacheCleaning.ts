@@ -1,8 +1,10 @@
 import { makeExecutableSchema } from '@graphql-tools/schema';
-import { ApolloClient, Resolvers, gql } from '@apollo/client';
+import { ApolloClient, gql } from '@apollo/client';
 import { SchemaLink } from '@apollo/client/link/schema';
 
 import { Hermes } from '../../../src';
+
+type Resolvers = Parameters<typeof makeExecutableSchema>[0]['resolvers'];
 
 // Hermes: asserts on InMemoryCache's StoreReader result caches (executeSelectionSet,
 // executeSubSelectedArray), which Hermes does not have.
@@ -137,7 +139,7 @@ describe.skip('resultCache cleaning', () => {
     },
   };
 
-  let client: ApolloClient<any>;
+  let client: ApolloClient;
 
   beforeEach(() => {
     client = new ApolloClient({

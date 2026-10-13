@@ -1,4 +1,4 @@
-import { stripTypename } from '@apollo/client/utilities/common/stripTypename';
+import { stripTypename } from '@apollo/client/utilities';
 
 it('omits __typename from a shallow object', () => {
   expect(stripTypename({ __typename: 'Person', firstName: 'Foo', lastName: 'Bar' })).toEqual({

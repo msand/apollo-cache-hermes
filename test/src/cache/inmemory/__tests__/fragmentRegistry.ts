@@ -1,14 +1,12 @@
-import { loadErrorMessages } from '@apollo/client/dev';
+import { Observable } from 'rxjs';
 import { ApolloClient, ApolloLink, gql, NetworkStatus } from '@apollo/client';
-import { getFragmentDefinitions, Observable } from '@apollo/client/utilities';
 import { createFragmentRegistry } from '@apollo/client/cache';
+import { getFragmentDefinitions } from '@apollo/client/utilities/internal';
+
 import { ObservableStream } from '@apollo/client/testing/internal';
 
 import { Hermes } from '../../../../../src';
 import { toNormalizedCacheObject } from '../../../../helpers';
-
-// These tests assert the @apollo/client error text rather than its production placeholder.
-loadErrorMessages();
 
 describe('FragmentRegistry', () => {
   it('can be passed to Hermes', () => {
@@ -69,13 +67,16 @@ describe('FragmentRegistry', () => {
               'SourceFragment',
             ]);
 
-            observer.next({
-              data: {
-                source: 'link',
-              },
-            });
+            // Emit value async so we can observe the loading state
+            setTimeout(() => {
+              observer.next({
+                data: {
+                  source: 'link',
+                },
+              });
 
-            observer.complete();
+              observer.complete();
+            });
           }),
       ),
     });
@@ -95,22 +96,26 @@ describe('FragmentRegistry', () => {
 
     const stream = new ObservableStream(client.watchQuery({ query, fetchPolicy: 'cache-and-network' }));
 
-    await expect(stream).toEmitValue({
+    await expect(stream).toEmitTypedValue({
       loading: true,
       networkStatus: NetworkStatus.loading,
       data: {
         __typename: 'Query',
         source: 'local',
       },
+      dataState: 'complete',
+      partial: false,
     });
 
-    await expect(stream).toEmitValue({
+    await expect(stream).toEmitTypedValue({
       loading: false,
       networkStatus: NetworkStatus.ready,
       data: {
         __typename: 'Query',
         source: 'link',
       },
+      dataState: 'complete',
+      partial: false,
     });
 
     expect(cache.readQuery({ query })).toEqual({
@@ -214,6 +219,141 @@ describe('FragmentRegistry', () => {
         id: 12345,
         name: 'Ben Newman',
       },
+    });
+  });
+
+  it('does not reuse a cached fragment-resolution error across queries with differing available fragments', () => {
+    const cache = new Hermes({
+      fragments: createFragmentRegistry(gql`
+        fragment RegisteredWithHole on Person {
+          __typename
+          id
+          ...ProvidedByQuery
+        }
+      `),
+    });
+
+    cache.writeQuery({
+      query: gql`
+        query {
+          me {
+            __typename
+            id
+            name
+          }
+        }
+      `,
+      data: {
+        me: {
+          __typename: 'Person',
+          id: 12345,
+          name: 'Ada',
+        },
+      },
+    });
+
+    const queryMissingFragment = gql`
+      query MissingFragment {
+        me {
+          ...RegisteredWithHole
+        }
+      }
+    `;
+
+    const queryProvidingFragment = gql`
+      query ProvidingFragment {
+        me {
+          ...RegisteredWithHole
+        }
+      }
+
+      fragment ProvidedByQuery on Person {
+        name
+      }
+    `;
+
+    // Reading the registered fragment without a definition for its
+    // `...ProvidedByQuery` spread throws. Critically, this must not poison the
+    // cache entry for the shared registry fragment node.
+    expect(() => {
+      cache.readQuery({ query: queryMissingFragment });
+    }).toThrow(/No fragment named ProvidedByQuery/);
+
+    // Reading the same registry fragment from a query that *does* define
+    // `ProvidedByQuery` must succeed rather than re-throwing the error cached
+    // from the previous read.
+    expect(cache.readQuery({ query: queryProvidingFragment })).toEqual({
+      me: {
+        __typename: 'Person',
+        id: 12345,
+        name: 'Ada',
+      },
+    });
+  });
+
+  it("does not reuse a cached result across queries that bind a registry fragment's unbound spread to different fields", () => {
+    const cache = new Hermes({
+      fragments: createFragmentRegistry(gql`
+        fragment PersonFields on Person {
+          __typename
+          id
+          ...Extra
+        }
+      `),
+    });
+
+    cache.writeQuery({
+      query: gql`
+        query {
+          me {
+            __typename
+            id
+            name
+            email
+          }
+        }
+      `,
+      data: {
+        me: {
+          __typename: 'Person',
+          id: 12345,
+          name: 'Ada',
+          email: 'ada@example.com',
+        },
+      },
+    });
+
+    const queryName = gql`
+      query WithName {
+        me {
+          ...PersonFields
+        }
+      }
+
+      fragment Extra on Person {
+        name
+      }
+    `;
+
+    const queryEmail = gql`
+      query WithEmail {
+        me {
+          ...PersonFields
+        }
+      }
+
+      fragment Extra on Person {
+        email
+      }
+    `;
+
+    // Hermes: reads return a superset of the selected fields.
+    expect(cache.readQuery({ query: queryName })).toMatchObject({
+      me: { __typename: 'Person', id: 12345, name: 'Ada' },
+    });
+
+    expect(cache.readQuery({ query: queryEmail })).toMatchObject({
+      me: { __typename: 'Person', id: 12345, email: 'ada@example.com' },
     });
   });
 
