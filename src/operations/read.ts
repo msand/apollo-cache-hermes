@@ -131,8 +131,9 @@ export function read<TSerialized>(
       if (
         (!operation.isStatic && (data || outbound || parameterized || context.typePolicies)) ||
         (operation.parsedQuery.__typename &&
-          data &&
-          !('__typename' in (data as JsonObject)) &&
+          // An empty root (e.g. after writing `{}`) still reads its __typename.
+          (data || isRootId(operation.rootId)) &&
+          !(data && '__typename' in (data as JsonObject)) &&
           selectsRootTypename(operation.info))
       ) {
         const dynamicNodeIds = new Set<NodeId>();
