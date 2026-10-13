@@ -1,7 +1,6 @@
 import { GraphQLScalarType, version as graphqlVersion } from 'graphql';
 import type { TypedDocumentNode } from '@apollo/client';
 import { gql } from '@apollo/client';
-import type { InMemoryCache } from '@apollo/client/cache';
 import { Scalar } from '@apollo/client/cache';
 
 import {
@@ -263,8 +262,7 @@ it('is uses the configured type guard when configured', () => {
   expect(scalar.is(new Date('2026-01-01T00:00:00.000Z'))).toBe(true);
   expect(scalar.is(new Date('invalid'))).toBe(false);
 });
-// Hermes: Hermes stores scalar values serialized (and parses them when read); these assert InMemoryCache's parsed storage.
-it.skip('stores parsed scalar value in the cache when writing via cache.writeQuery', () => {
+it('stores parsed scalar value in the cache when writing via cache.writeQuery', () => {
   const cache = new Hermes({
     scalars: { DateTime: dateTimeScalar },
     typePolicies: {
@@ -296,16 +294,17 @@ it.skip('stores parsed scalar value in the cache when writing via cache.writeQue
     },
   });
 
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: { __typename: 'Query', event: { __ref: 'Event:1' } },
     'Event:1': {
       __typename: 'Event',
       id: '1',
-      startTime: new Date('2026-01-01T00:00:00.000Z'),
+      startTime: '2026-01-01T00:00:00.000Z',
     },
   });
 });
-// Hermes: Hermes stores scalar values serialized (and parses them when read); these assert InMemoryCache's parsed storage.
+// Hermes: Hermes stores custom scalars serialized, so a serialized value is stored as it is (this asserts InMemoryCache's parsing when writing).
 it.skip('parses serialized scalar value when writing via cache.writeQuery', () => {
   const cache = new Hermes({
     scalars: { DateTime: dateTimeScalar },
@@ -348,7 +347,7 @@ it.skip('parses serialized scalar value when writing via cache.writeQuery', () =
   });
 });
 // Hermes: queryType/mutationType/subscriptionType typePolicies (custom root typenames) are not supported.
-it.skip('stores a parsed scalar value on a custom root type when writing via cache.writeQuery', () => {
+it('stores a parsed scalar value on a custom root type when writing via cache.writeQuery', () => {
   const cache = new Hermes({
     scalars: { DateTime: dateTimeScalar },
     typePolicies: {
@@ -374,15 +373,15 @@ it.skip('stores a parsed scalar value on a custom root type when writing via cac
     },
   });
 
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: {
       __typename: 'RootQuery',
-      now: new Date('2026-01-01T00:00:00.000Z'),
+      now: '2026-01-01T00:00:00.000Z',
     },
   });
 });
-// Hermes: Hermes stores scalar values serialized (and parses them when read); these assert InMemoryCache's parsed storage.
-it.skip('leaves parsed value unchanged when no scalar policy is configured', () => {
+it('leaves parsed value unchanged when no scalar policy is configured', () => {
   const cache = new Hermes({
     scalars: { DateTime: dateTimeScalar },
   });
@@ -407,17 +406,17 @@ it.skip('leaves parsed value unchanged when no scalar policy is configured', () 
     },
   });
 
+  // Hermes: the stored Date is compared in InMemoryCache's normalized shape, which copies values like a JSON round trip.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: { __typename: 'Query', event: { __ref: 'Event:1' } },
     'Event:1': {
       __typename: 'Event',
       id: '1',
-      startTime: new Date('2026-01-01T00:00:00.000Z'),
+      startTime: '2026-01-01T00:00:00.000Z',
     },
   });
 });
-// Hermes: Hermes stores scalar values serialized (and parses them when read); these assert InMemoryCache's parsed storage.
-it.skip('stores parsed scalar value in the cache when the field has an alias', () => {
+it('stores parsed scalar value in the cache when the field has an alias', () => {
   const cache = new Hermes({
     scalars: { DateTime: dateTimeScalar },
     typePolicies: {
@@ -450,17 +449,17 @@ it.skip('stores parsed scalar value in the cache when the field has an alias', (
     },
   });
 
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: { __typename: 'Query', event: { __ref: 'Event:1' } },
     'Event:1': {
       __typename: 'Event',
       id: '1',
-      startTime: new Date('2026-01-01T00:00:00.000Z'),
+      startTime: '2026-01-01T00:00:00.000Z',
     },
   });
 });
-// Hermes: Hermes stores scalar values serialized (and parses them when read); these assert InMemoryCache's parsed storage.
-it.skip('stores parsed scalar value in the cache when the field has arguments with variables', () => {
+it('stores parsed scalar value in the cache when the field has arguments with variables', () => {
   const cache = new Hermes({
     scalars: { DateTime: dateTimeScalar },
     typePolicies: {
@@ -493,17 +492,17 @@ it.skip('stores parsed scalar value in the cache when the field has arguments wi
     variables: { timezone: 'UTC' },
   });
 
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: { __typename: 'Query', event: { __ref: 'Event:1' } },
     'Event:1': {
       __typename: 'Event',
       id: '1',
-      'startTime({"timezone":"UTC"})': new Date('2026-01-01T00:00:00.000Z'),
+      'startTime({"timezone":"UTC"})': '2026-01-01T00:00:00.000Z',
     },
   });
 });
-// Hermes: Hermes stores scalar values serialized (and parses them when read); these assert InMemoryCache's parsed storage.
-it.skip('stores parsed scalar value in the cache when the field has arguments with literal value', () => {
+it('stores parsed scalar value in the cache when the field has arguments with literal value', () => {
   const cache = new Hermes({
     scalars: { DateTime: dateTimeScalar },
     typePolicies: {
@@ -535,17 +534,17 @@ it.skip('stores parsed scalar value in the cache when the field has arguments wi
     },
   });
 
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: { __typename: 'Query', event: { __ref: 'Event:1' } },
     'Event:1': {
       __typename: 'Event',
       id: '1',
-      'startTime({"timezone":"UTC"})': new Date('2026-01-01T00:00:00.000Z'),
+      'startTime({"timezone":"UTC"})': '2026-01-01T00:00:00.000Z',
     },
   });
 });
-// Hermes: Hermes stores scalar values serialized (and parses them when read); these assert InMemoryCache's parsed storage.
-it.skip('stores each element as a parsed value when writing an array of scalar values', () => {
+it('stores each element as a parsed value when writing an array of scalar values', () => {
   const cache = new Hermes({
     scalars: { DateTime: dateTimeScalar },
     typePolicies: {
@@ -575,17 +574,18 @@ it.skip('stores each element as a parsed value when writing an array of scalar v
     },
   });
 
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: {
       __typename: 'Query',
       schedule: {
         __typename: 'Schedule',
-        meetingTimes: [new Date('2026-01-01T09:00:00.000Z'), new Date('2026-01-02T09:00:00.000Z')],
+        meetingTimes: ['2026-01-01T09:00:00.000Z', '2026-01-02T09:00:00.000Z'],
       },
     },
   });
 });
-// Hermes: Hermes stores scalar values serialized (and parses them when read); these assert InMemoryCache's parsed storage.
+// Hermes: Hermes stores custom scalars serialized, so serialized values are stored as they are (this asserts InMemoryCache's parsing when writing).
 it.skip('parses each serialized element when writing an array of scalar values', () => {
   const cache = new Hermes({
     scalars: { DateTime: dateTimeScalar },
@@ -627,7 +627,7 @@ it.skip('parses each serialized element when writing an array of scalar values',
   });
 });
 // Hermes: Hermes stores scalar values serialized (and parses them when read); these assert InMemoryCache's parsed storage.
-it.skip('stores each leaf element as a parsed value when writing a 2D array of scalar values', () => {
+it('stores each leaf element as a parsed value when writing a 2D array of scalar values', () => {
   const cache = new Hermes({
     scalars: { DateTime: dateTimeScalar },
     typePolicies: {
@@ -660,20 +660,19 @@ it.skip('stores each leaf element as a parsed value when writing a 2D array of s
     },
   });
 
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: {
       __typename: 'Query',
       schedule: {
         __typename: 'Schedule',
-        availabilitySlots: [
-          [new Date('2026-01-01T09:00:00.000Z'), new Date('2026-01-01T10:00:00.000Z')],
-          [new Date('2026-01-02T14:00:00.000Z')],
-        ],
+        availabilitySlots: [['2026-01-01T09:00:00.000Z', '2026-01-01T10:00:00.000Z'], ['2026-01-02T14:00:00.000Z']],
       },
     },
   });
 });
-// Hermes: Hermes stores scalar values serialized (and parses them when read); these assert InMemoryCache's parsed storage.
+// Hermes: Hermes stores custom scalars serialized, so the serialized array is stored as it is (this asserts InMemoryCache's parsing
+// when writing; reads parse it as a whole, see 'returns an array-shaped scalar value as a whole when reading').
 it.skip('passes an array-shaped scalar value to parse as a whole when scalar is defined without list syntax', () => {
   const cache = new Hermes({
     scalars: {
@@ -720,7 +719,8 @@ it.skip('passes an array-shaped scalar value to parse as a whole when scalar is 
     },
   });
 });
-// Hermes: Hermes stores scalar values serialized (and parses them when read); these assert InMemoryCache's parsed storage.
+// Hermes: Hermes stores custom scalars serialized, so the serialized arrays are stored as they are (this asserts InMemoryCache's
+// parsing when writing; reads parse them, see 'parses each array-shaped scalar when reading a list of array-shaped scalars').
 it.skip('parses each array-shaped scalar when writing a list of array-shaped scalars', () => {
   const cache = new Hermes({
     scalars: {
@@ -777,7 +777,7 @@ it.skip('parses each array-shaped scalar when writing a list of array-shaped sca
   });
 });
 // Hermes: a field's read and merge functions still run alongside its scalar policy (InMemoryCache ignores them, with a warning).
-it.skip('passes through a non-array value and warns when a list scalar receives an object', () => {
+it('passes through a non-array value and warns when a list scalar receives an object', () => {
   using _ = spyOnConsole('warn');
 
   const cache = new Hermes({
@@ -811,12 +811,13 @@ it.skip('passes through a non-array value and warns when a list scalar receives 
     },
   });
 
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: { __typename: 'Query', event: { __ref: 'Event:1' } },
     'Event:1': {
       __typename: 'Event',
       id: '1',
-      dates: new Date('2026-01-01T00:00:00.000Z'),
+      dates: '2026-01-01T00:00:00.000Z',
     },
   });
 
@@ -864,8 +865,7 @@ it('stores null as-is when null is written to a scalar field', () => {
     },
   });
 });
-// Hermes: Hermes stores scalar values serialized (and parses them when read); these assert InMemoryCache's parsed storage.
-it.skip('stores object-based parsed scalar values (e.g. Map) when writing', () => {
+it('stores object-based parsed scalar values (e.g. Map) when writing', () => {
   const cache = new Hermes({
     scalars: { JSONObject: jsonObjectScalar },
     typePolicies: {
@@ -900,20 +900,17 @@ it.skip('stores object-based parsed scalar values (e.g. Map) when writing', () =
     },
   });
 
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: { __typename: 'Query', product: { __ref: 'Product:1' } },
     'Product:1': {
       __typename: 'Product',
       id: '1',
-      metadata: new Map([
-        ['color', 'red'],
-        ['size', 'large'],
-      ]),
+      metadata: { color: 'red', size: 'large' },
     },
   });
 });
-// Hermes: Hermes stores scalar values serialized (and parses them when read); these assert InMemoryCache's parsed storage.
-it.skip('stores parsed scalar value in the cache when writing via cache.writeFragment', () => {
+it('stores parsed scalar value in the cache when writing via cache.writeFragment', () => {
   const cache = new Hermes({
     scalars: { DateTime: dateTimeScalar },
     typePolicies: {
@@ -941,16 +938,16 @@ it.skip('stores parsed scalar value in the cache when writing via cache.writeFra
     },
   });
 
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     'Event:1': {
       __typename: 'Event',
       id: '1',
-      startTime: new Date('2026-01-01T00:00:00.000Z'),
+      startTime: '2026-01-01T00:00:00.000Z',
     },
   });
 });
-// Hermes: Hermes stores scalar values serialized (and parses them when read); these assert InMemoryCache's parsed storage.
-it.skip('stores parsed scalar value in the cache when overwriting an existing field', () => {
+it('stores parsed scalar value in the cache when overwriting an existing field', () => {
   const cache = new Hermes({
     scalars: { DateTime: dateTimeScalar },
     typePolicies: {
@@ -993,17 +990,17 @@ it.skip('stores parsed scalar value in the cache when overwriting an existing fi
     },
   });
 
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: { __typename: 'Query', event: { __ref: 'Event:1' } },
     'Event:1': {
       __typename: 'Event',
       id: '1',
-      startTime: new Date('2026-06-15T14:30:00.000Z'),
+      startTime: '2026-06-15T14:30:00.000Z',
     },
   });
 });
-// Hermes: a field's read and merge functions still run alongside its scalar policy (InMemoryCache ignores them, with a warning).
-it.skip('ignores the merge function and stores the parsed scalar value when a merge function is also configured on the field', () => {
+it('ignores the merge function and stores the parsed scalar value when a merge function is also configured on the field', () => {
   using _ = spyOnConsole('warn');
   const merge = jest.fn((_existing: unknown, incoming: unknown) => incoming);
 
@@ -1042,6 +1039,7 @@ it.skip('ignores the merge function and stores the parsed scalar value when a me
   });
 
   expect(merge).not.toHaveBeenCalled();
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: {
       __typename: 'Query',
@@ -1050,15 +1048,14 @@ it.skip('ignores the merge function and stores the parsed scalar value when a me
     'Event:1': {
       __typename: 'Event',
       id: '1',
-      startTime: new Date('2026-01-01T00:00:00.000Z'),
+      startTime: '2026-01-01T00:00:00.000Z',
     },
   });
 
   expect(console.warn).toHaveBeenCalledTimes(1);
   expect(console.warn).toHaveBeenCalledWith(WARNINGS.SCALAR_FIELD_CONFIG, 'Event.startTime', 'DateTime', 'merge');
 });
-// Hermes: a field's read and merge functions still run alongside its scalar policy (InMemoryCache ignores them, with a warning).
-it.skip('stores the parsed incoming value instead of the value returned by an ignored merge function', () => {
+it('stores the parsed incoming value instead of the value returned by an ignored merge function', () => {
   using _ = spyOnConsole('warn');
 
   const cache = new Hermes({
@@ -1095,6 +1092,7 @@ it.skip('stores the parsed incoming value instead of the value returned by an ig
     },
   });
 
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: {
       __typename: 'Query',
@@ -1103,12 +1101,11 @@ it.skip('stores the parsed incoming value instead of the value returned by an ig
     'Event:1': {
       __typename: 'Event',
       id: '1',
-      startTime: new Date('2026-01-01T00:00:00.000Z'),
+      startTime: '2026-01-01T00:00:00.000Z',
     },
   });
 });
-// Hermes: a field's read and merge functions still run alongside its scalar policy (InMemoryCache ignores them, with a warning).
-it.skip('stores each element as a parsed value when writing an array of scalar values with an ignored merge function', () => {
+it('stores each element as a parsed value when writing an array of scalar values with an ignored merge function', () => {
   using _ = spyOnConsole('warn');
   const merge = jest.fn((_existing: unknown, incoming: unknown) => incoming);
 
@@ -1145,18 +1142,18 @@ it.skip('stores each element as a parsed value when writing an array of scalar v
   });
 
   expect(merge).not.toHaveBeenCalled();
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: {
       __typename: 'Query',
       schedule: {
         __typename: 'Schedule',
-        meetingTimes: [new Date('2026-01-01T09:00:00.000Z'), new Date('2026-01-02T09:00:00.000Z')],
+        meetingTimes: ['2026-01-01T09:00:00.000Z', '2026-01-02T09:00:00.000Z'],
       },
     },
   });
 });
-// Hermes: a field's read and merge functions still run alongside its scalar policy (InMemoryCache ignores them, with a warning).
-it.skip('stores each leaf element as a parsed value when writing a 2D array of scalar values with an ignored merge function', () => {
+it('stores each leaf element as a parsed value when writing a 2D array of scalar values with an ignored merge function', () => {
   using _ = spyOnConsole('warn');
   const merge = jest.fn((_existing: unknown, incoming: unknown) => incoming);
 
@@ -1196,20 +1193,19 @@ it.skip('stores each leaf element as a parsed value when writing a 2D array of s
   });
 
   expect(merge).not.toHaveBeenCalled();
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: {
       __typename: 'Query',
       schedule: {
         __typename: 'Schedule',
-        availabilitySlots: [
-          [new Date('2026-01-01T09:00:00.000Z'), new Date('2026-01-01T10:00:00.000Z')],
-          [new Date('2026-01-02T14:00:00.000Z')],
-        ],
+        availabilitySlots: [['2026-01-01T09:00:00.000Z', '2026-01-01T10:00:00.000Z'], ['2026-01-02T14:00:00.000Z']],
       },
     },
   });
 });
-// Hermes: Hermes stores scalar values serialized (and parses them when read); these assert InMemoryCache's parsed storage.
+// Hermes: timeSlots is configured as '[DateTime]' but written as a 2D array of Dates: InMemoryCache stores the inner arrays as
+// they are (they pass the scalar's default `is` check), while Hermes, which stores custom scalars serialized, cannot serialize them.
 it.skip('stores parsed scalar values across a complex nested write', () => {
   const cache = new Hermes({
     scalars: {
@@ -1377,7 +1373,7 @@ it.skip('stores parsed scalar values across a complex nested write', () => {
   });
 });
 // Hermes: cache.modify does not serialize scalar values, and Hermes stores scalar values serialized (these assert InMemoryCache's parsed storage).
-it.skip('stores parsed scalar value in the cache when modifying via cache.modify', () => {
+it('stores parsed scalar value in the cache when modifying via cache.modify', () => {
   const cache = new Hermes({
     scalars: { DateTime: dateTimeScalar },
     typePolicies: {
@@ -1416,17 +1412,17 @@ it.skip('stores parsed scalar value in the cache when modifying via cache.modify
     },
   });
 
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: { __typename: 'Query', event: { __ref: 'Event:1' } },
     'Event:1': {
       __typename: 'Event',
       id: '1',
-      startTime: new Date('2026-06-15T14:30:00.000Z'),
+      startTime: '2026-06-15T14:30:00.000Z',
     },
   });
 });
-// Hermes: cache.modify does not serialize scalar values, and Hermes stores scalar values serialized (these assert InMemoryCache's parsed storage).
-it.skip('parses serialized scalar value when modifying via cache.modify', () => {
+it('parses serialized scalar value when modifying via cache.modify', () => {
   const cache = new Hermes({
     scalars: { DateTime: dateTimeScalar },
     typePolicies: {
@@ -1465,12 +1461,13 @@ it.skip('parses serialized scalar value when modifying via cache.modify', () => 
     },
   });
 
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: { __typename: 'Query', event: { __ref: 'Event:1' } },
     'Event:1': {
       __typename: 'Event',
       id: '1',
-      startTime: new Date('2026-06-15T14:30:00.000Z'),
+      startTime: '2026-06-15T14:30:00.000Z',
     },
   });
 });
@@ -1526,7 +1523,7 @@ it('cache.modify preserves referential identity for deeply equal parsed scalar v
 
   expect(rawCacheData(cache)['Event:1']!.startTime).toBe(existingStartTime);
 });
-// Hermes: cache.modify does not serialize scalar values, and Hermes stores scalar values serialized (these assert InMemoryCache's parsed storage).
+// Hermes: Hermes stores custom scalars serialized, so the stored object is not the modifier's (parsed) object.
 it.skip('cache.modify preserves references when scalar values are already parsed', () => {
   const cache = new Hermes({
     scalars: { DateTime: dateTimeScalar },
@@ -1578,8 +1575,7 @@ it.skip('cache.modify preserves references when scalar values are already parsed
   expect(modifiedEvent).toBe(replacementEvent);
   expect((modifiedEvent as any).startTime).toBe(replacementEvent.startTime);
 });
-// Hermes: cache.modify does not serialize scalar values, and Hermes stores scalar values serialized (these assert InMemoryCache's parsed storage).
-it.skip('leaves parsed value unchanged when modifying via cache.modify with no scalar policy configured', () => {
+it('leaves parsed value unchanged when modifying via cache.modify with no scalar policy configured', () => {
   const cache = new Hermes({
     scalars: { DateTime: dateTimeScalar },
   });
@@ -1611,17 +1607,17 @@ it.skip('leaves parsed value unchanged when modifying via cache.modify with no s
     },
   });
 
+  // Hermes: the stored Date is compared in InMemoryCache's normalized shape, which copies values like a JSON round trip.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: { __typename: 'Query', event: { __ref: 'Event:1' } },
     'Event:1': {
       __typename: 'Event',
       id: '1',
-      startTime: new Date('2026-06-15T14:30:00.000Z'),
+      startTime: '2026-06-15T14:30:00.000Z',
     },
   });
 });
-// Hermes: cache.modify does not serialize scalar values, and Hermes stores scalar values serialized (these assert InMemoryCache's parsed storage).
-it.skip('parses a scalar field on an implicit root type when modifying via cache.modify', () => {
+it('parses a scalar field on an implicit root type when modifying via cache.modify', () => {
   const cache = new Hermes({
     scalars: { DateTime: dateTimeScalar },
     typePolicies: {
@@ -1646,14 +1642,15 @@ it.skip('parses a scalar field on an implicit root type when modifying via cache
     },
   });
 
+  // Hermes: custom scalar values are stored serialized, and root objects have their root type's __typename.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: {
-      now: new Date('2026-06-15T14:30:00.000Z'),
+      __typename: 'Query',
+      now: '2026-06-15T14:30:00.000Z',
     },
   });
 });
-// Hermes: cache.modify does not serialize scalar values, and Hermes stores scalar values serialized (these assert InMemoryCache's parsed storage).
-it.skip('stores each element as a parsed value when modifying an array of scalar values via cache.modify', () => {
+it('stores each element as a parsed value when modifying an array of scalar values via cache.modify', () => {
   const cache = new Hermes({
     scalars: { DateTime: dateTimeScalar },
     typePolicies: {
@@ -1692,17 +1689,17 @@ it.skip('stores each element as a parsed value when modifying an array of scalar
     },
   });
 
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: { __typename: 'Query', speaker: { __ref: 'Speaker:1' } },
     'Speaker:1': {
       __typename: 'Speaker',
       id: '1',
-      availableTimes: [new Date('2026-01-01T09:00:00.000Z'), new Date('2026-01-02T09:00:00.000Z')],
+      availableTimes: ['2026-01-01T09:00:00.000Z', '2026-01-02T09:00:00.000Z'],
     },
   });
 });
-// Hermes: cache.modify does not serialize scalar values, and Hermes stores scalar values serialized (these assert InMemoryCache's parsed storage).
-it.skip('stores each leaf element as a parsed value when modifying a 2D array of scalar values via cache.modify', () => {
+it('stores each leaf element as a parsed value when modifying a 2D array of scalar values via cache.modify', () => {
   const cache = new Hermes({
     scalars: { DateTime: dateTimeScalar },
     typePolicies: {
@@ -1744,15 +1741,13 @@ it.skip('stores each leaf element as a parsed value when modifying a 2D array of
     },
   });
 
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: { __typename: 'Query', speaker: { __ref: 'Speaker:1' } },
     'Speaker:1': {
       __typename: 'Speaker',
       id: '1',
-      availabilitySlots: [
-        [new Date('2026-01-01T09:00:00.000Z'), new Date('2026-01-01T10:00:00.000Z')],
-        [new Date('2026-01-02T14:00:00.000Z')],
-      ],
+      availabilitySlots: [['2026-01-01T09:00:00.000Z', '2026-01-01T10:00:00.000Z'], ['2026-01-02T14:00:00.000Z']],
     },
   });
 });
@@ -1851,8 +1846,7 @@ it('deletes a scalar field when returning DELETE from cache.modify', () => {
     },
   });
 });
-// Hermes: cache.modify does not serialize scalar values, and Hermes stores scalar values serialized (these assert InMemoryCache's parsed storage).
-it.skip('stores object-based parsed scalar values when modifying via cache.modify', () => {
+it('stores object-based parsed scalar values when modifying via cache.modify', () => {
   const cache = new Hermes({
     scalars: { JSONObject: jsonObjectScalar },
     typePolicies: {
@@ -1895,15 +1889,13 @@ it.skip('stores object-based parsed scalar values when modifying via cache.modif
     },
   });
 
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: { __typename: 'Query', product: { __ref: 'Product:1' } },
     'Product:1': {
       __typename: 'Product',
       id: '1',
-      metadata: new Map([
-        ['color', 'blue'],
-        ['size', 'medium'],
-      ]),
+      metadata: { color: 'blue', size: 'medium' },
     },
   });
 });
@@ -2401,7 +2393,7 @@ it.skip('cache.restore() parses scalar fields on root objects with an implicit t
     },
   });
 });
-// Hermes: queryType/mutationType/subscriptionType typePolicies (custom root typenames) are not supported.
+// Hermes: Hermes stores custom scalars serialized, so restore() does not parse them (this asserts InMemoryCache's parsed storage).
 it.skip('cache.restore() parses scalar fields on a custom root type with an implicit typename', () => {
   const cache = new Hermes({
     scalars: { DateTime: dateTimeScalar },
@@ -2534,8 +2526,7 @@ it('cache.extract() serializes scalar fields on root objects with an implicit ty
     },
   });
 });
-// Hermes: queryType/mutationType/subscriptionType typePolicies (custom root typenames) are not supported.
-it.skip('cache.extract() serializes scalar fields on a custom root type with an implicit typename', () => {
+it('cache.extract() serializes scalar fields on a custom root type with an implicit typename', () => {
   const cache = new Hermes({
     scalars: { DateTime: dateTimeScalar },
     typePolicies: {
@@ -2561,9 +2552,8 @@ it.skip('cache.extract() serializes scalar fields on a custom root type with an 
     },
   });
 
-  // Hermes: compare in InMemoryCache's normalized shape.
-
-  expect(toNormalizedCacheObject(cache.extract())).toEqual({
+  // Hermes: compare in InMemoryCache's normalized shape (with the cache's root typenames).
+  expect(toNormalizedCacheObject(cache.extract(), cache.policies.rootTypenamesById)).toEqual({
     ROOT_QUERY: {
       __typename: 'RootQuery',
       now: '2026-01-01T00:00:00.000Z',
@@ -2792,8 +2782,7 @@ it('parses scalar value when reading a field via cache.readQuery', () => {
     },
   });
 });
-// Hermes: queryType/mutationType/subscriptionType typePolicies (custom root typenames) are not supported.
-it.skip('parses a scalar field on a custom root type via cache.readQuery', () => {
+it('parses a scalar field on a custom root type via cache.readQuery', () => {
   const cache = new Hermes({
     scalars: { DateTime: dateTimeScalar },
     typePolicies: {
@@ -2862,8 +2851,7 @@ it('parses scalar value when reading a field via cache.readFragment', () => {
     startTime: new Date('2026-01-01T00:00:00.000Z'),
   });
 });
-// Hermes: queryType/mutationType/subscriptionType typePolicies (custom root typenames) are not supported.
-it.skip('parses a scalar field on a custom root type via cache.readFragment', () => {
+it('parses a scalar field on a custom root type via cache.readFragment', () => {
   const cache = new Hermes({
     scalars: { DateTime: dateTimeScalar },
     typePolicies: {
@@ -3981,8 +3969,7 @@ it('parses scalar values on each emit from cache.watchFragment', async () => {
 
   await expect(stream).not.toEmitAnything();
 });
-// Hermes: a field's read and merge functions still run alongside its scalar policy (InMemoryCache ignores them, with a warning).
-it.skip('ignores scalar and emits a dev warning when a scalar option is set on a field with a selection set', () => {
+it('ignores scalar and emits a dev warning when a scalar option is set on a field with a selection set', () => {
   using _ = spyOnConsole('warn');
 
   const cache = new Hermes({
@@ -4027,8 +4014,7 @@ it.skip('ignores scalar and emits a dev warning when a scalar option is set on a
   expect(console.warn).toHaveBeenCalledTimes(1);
   expect(console.warn).toHaveBeenCalledWith(WARNINGS.NON_SCALAR_FIELD, 'Query.event', 'DateTime');
 });
-// Hermes: a field's read and merge functions still run alongside its scalar policy (InMemoryCache ignores them, with a warning).
-it.skip('ignores a read function and emits a dev warning when the field is configured with a scalar', () => {
+it('ignores a read function and emits a dev warning when the field is configured with a scalar', () => {
   using _ = spyOnConsole('warn');
   const read = jest.fn(() => new Date('2020-06-15T14:30:00.000Z'));
 
@@ -4075,8 +4061,7 @@ it.skip('ignores a read function and emits a dev warning when the field is confi
   expect(console.warn).toHaveBeenCalledTimes(1);
   expect(console.warn).toHaveBeenCalledWith(WARNINGS.SCALAR_FIELD_CONFIG, 'Event.startTime', 'DateTime', 'read');
 });
-// Hermes: a field's read and merge functions still run alongside its scalar policy (InMemoryCache ignores them, with a warning).
-it.skip('ignores both read and merge functions and warns for each when the field is configured with a scalar', () => {
+it('ignores both read and merge functions and warns for each when the field is configured with a scalar', () => {
   using _ = spyOnConsole('warn');
   const read = jest.fn(() => new Date('2020-06-15T14:30:00.000Z'));
   const merge = jest.fn((_existing: unknown, incoming: unknown) => incoming);
@@ -4126,8 +4111,7 @@ it.skip('ignores both read and merge functions and warns for each when the field
   expect(console.warn).toHaveBeenCalledWith(WARNINGS.SCALAR_FIELD_CONFIG, 'Event.startTime', 'DateTime', 'read');
   expect(console.warn).toHaveBeenCalledWith(WARNINGS.SCALAR_FIELD_CONFIG, 'Event.startTime', 'DateTime', 'merge');
 });
-// Hermes: a field's read and merge functions still run alongside its scalar policy (InMemoryCache ignores them, with a warning).
-it.skip('ignores the merge: true shorthand and warns when the field is configured with a scalar', () => {
+it('ignores the merge: true shorthand and warns when the field is configured with a scalar', () => {
   using _ = spyOnConsole('warn');
 
   const cache = new Hermes({
@@ -4172,21 +4156,20 @@ it.skip('ignores the merge: true shorthand and warns when the field is configure
     },
   });
 
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: { __typename: 'Query', product: { __ref: 'Product:1' } },
     'Product:1': {
       __typename: 'Product',
       id: '1',
-      metadata: new Map([['size', 'large']]),
+      metadata: { size: 'large' },
     },
   });
 
   expect(console.warn).toHaveBeenCalledTimes(1);
   expect(console.warn).toHaveBeenCalledWith(WARNINGS.SCALAR_FIELD_CONFIG, 'Product.metadata', 'JSONObject', 'merge');
 });
-// Hermes: Hermes stores scalar values serialized (and parses them when read); this asserts InMemoryCache's parsed
-// storage (the field is stored under all its arguments, as expected).
-it.skip('does not apply the implicit keyArgs: false when read and merge functions are ignored for a scalar field', () => {
+it('does not apply the implicit keyArgs: false when read and merge functions are ignored for a scalar field', () => {
   using _ = spyOnConsole('warn');
 
   const cache = new Hermes({
@@ -4224,17 +4207,17 @@ it.skip('does not apply the implicit keyArgs: false when read and merge function
     },
   });
 
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: { __typename: 'Query', event: { __ref: 'Event:1' } },
     'Event:1': {
       __typename: 'Event',
       id: '1',
-      'startTime({"timezone":"UTC"})': new Date('2026-01-01T00:00:00.000Z'),
+      'startTime({"timezone":"UTC"})': '2026-01-01T00:00:00.000Z',
     },
   });
 });
-// Hermes: a field's read and merge functions still run alongside its scalar policy (InMemoryCache ignores them, with a warning).
-it.skip('warns once for an ignored function no matter how many times the field is written or read', () => {
+it('warns once for an ignored function no matter how many times the field is written or read', () => {
   using _ = spyOnConsole('warn');
 
   const cache = new Hermes({
@@ -4336,8 +4319,7 @@ it('runs read and merge functions and does not warn when the field policy has no
   expect(merge).toHaveBeenCalled();
   expect(console.warn).not.toHaveBeenCalled();
 });
-// Hermes: a field's read and merge functions still run alongside its scalar policy (InMemoryCache ignores them, with a warning).
-it.skip('ignores read and merge functions when the scalar option names an unregistered scalar', () => {
+it('ignores read and merge functions when the scalar option names an unregistered scalar', () => {
   using _ = spyOnConsole('warn');
   const read = jest.fn(() => 'read value');
   const merge = jest.fn((_existing: unknown, incoming: unknown) => incoming);
@@ -4386,8 +4368,7 @@ it.skip('ignores read and merge functions when the scalar option names an unregi
   expect(console.warn).toHaveBeenCalledWith(WARNINGS.SCALAR_FIELD_CONFIG, 'Event.startTime', 'Unregistered', 'read');
   expect(console.warn).toHaveBeenCalledWith(WARNINGS.SCALAR_FIELD_CONFIG, 'Event.startTime', 'Unregistered', 'merge');
 });
-// Hermes: typePolicies cannot be added once the cache is created (no policies.addTypePolicies).
-it.skip('unsets read and merge functions when policies.addTypePolicies adds a scalar to the field', () => {
+it('unsets read and merge functions when policies.addTypePolicies adds a scalar to the field', () => {
   using _ = spyOnConsole('warn');
   const read = jest.fn(() => new Date('2020-06-15T14:30:00.000Z'));
   const merge = jest.fn((_existing: unknown, incoming: unknown) => incoming);
@@ -4403,8 +4384,7 @@ it.skip('unsets read and merge functions when policies.addTypePolicies adds a sc
     },
   });
 
-  // Hermes: Hermes has no `policies`; this upstream test is skipped.
-  (cache as unknown as InMemoryCache).policies.addTypePolicies({
+  cache.policies.addTypePolicies({
     Event: {
       fields: {
         startTime: { scalar: 'DateTime' },
@@ -4432,12 +4412,13 @@ it.skip('unsets read and merge functions when policies.addTypePolicies adds a sc
     },
   });
 
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: { __typename: 'Query', event: { __ref: 'Event:1' } },
     'Event:1': {
       __typename: 'Event',
       id: '1',
-      startTime: new Date('2026-01-01T00:00:00.000Z'),
+      startTime: '2026-01-01T00:00:00.000Z',
     },
   });
 
@@ -4455,8 +4436,7 @@ it.skip('unsets read and merge functions when policies.addTypePolicies adds a sc
   expect(console.warn).toHaveBeenCalledWith(WARNINGS.SCALAR_FIELD_CONFIG, 'Event.startTime', 'DateTime', 'read');
   expect(console.warn).toHaveBeenCalledWith(WARNINGS.SCALAR_FIELD_CONFIG, 'Event.startTime', 'DateTime', 'merge');
 });
-// Hermes: typePolicies cannot be added once the cache is created (no policies.addTypePolicies).
-it.skip('ignores read and merge functions added by policies.addTypePolicies to a field that already has a scalar', () => {
+it('ignores read and merge functions added by policies.addTypePolicies to a field that already has a scalar', () => {
   using _ = spyOnConsole('warn');
   const read = jest.fn(() => new Date('2020-06-15T14:30:00.000Z'));
   const merge = jest.fn((_existing: unknown, incoming: unknown) => incoming);
@@ -4472,8 +4452,7 @@ it.skip('ignores read and merge functions added by policies.addTypePolicies to a
     },
   });
 
-  // Hermes: Hermes has no `policies`; this upstream test is skipped.
-  (cache as unknown as InMemoryCache).policies.addTypePolicies({
+  cache.policies.addTypePolicies({
     Event: {
       fields: {
         startTime: { read, merge },
@@ -4501,12 +4480,13 @@ it.skip('ignores read and merge functions added by policies.addTypePolicies to a
     },
   });
 
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: { __typename: 'Query', event: { __ref: 'Event:1' } },
     'Event:1': {
       __typename: 'Event',
       id: '1',
-      startTime: new Date('2026-01-01T00:00:00.000Z'),
+      startTime: '2026-01-01T00:00:00.000Z',
     },
   });
 
@@ -4524,8 +4504,7 @@ it.skip('ignores read and merge functions added by policies.addTypePolicies to a
   expect(console.warn).toHaveBeenCalledWith(WARNINGS.SCALAR_FIELD_CONFIG, 'Event.startTime', 'DateTime', 'read');
   expect(console.warn).toHaveBeenCalledWith(WARNINGS.SCALAR_FIELD_CONFIG, 'Event.startTime', 'DateTime', 'merge');
 });
-// Hermes: typePolicies cannot be added once the cache is created (no policies.addTypePolicies).
-it.skip('ignores a read function added by policies.addTypePolicies with the field policy shorthand for a field that already has a scalar', () => {
+it('ignores a read function added by policies.addTypePolicies with the field policy shorthand for a field that already has a scalar', () => {
   using _ = spyOnConsole('warn');
   const read = jest.fn(() => new Date('2020-06-15T14:30:00.000Z'));
 
@@ -4540,8 +4519,7 @@ it.skip('ignores a read function added by policies.addTypePolicies with the fiel
     },
   });
 
-  // Hermes: Hermes has no `policies`; this upstream test is skipped.
-  (cache as unknown as InMemoryCache).policies.addTypePolicies({
+  cache.policies.addTypePolicies({
     Event: {
       fields: {
         startTime: read,
@@ -4581,8 +4559,7 @@ it.skip('ignores a read function added by policies.addTypePolicies with the fiel
   expect(console.warn).toHaveBeenCalledTimes(1);
   expect(console.warn).toHaveBeenCalledWith(WARNINGS.SCALAR_FIELD_CONFIG, 'Event.startTime', 'DateTime', 'read');
 });
-// Hermes: typePolicies cannot be added once the cache is created (no policies.addTypePolicies).
-it.skip('deep merges scalar option with policies.addTypePolicies', () => {
+it('deep merges scalar option with policies.addTypePolicies', () => {
   using _ = spyOnConsole('warn');
   const endDateMerge = jest.fn((_existing: unknown, incoming: unknown) => incoming);
 
@@ -4612,8 +4589,7 @@ it.skip('deep merges scalar option with policies.addTypePolicies', () => {
     },
   });
 
-  // Hermes: Hermes has no `policies`; this upstream test is skipped.
-  (cache as unknown as InMemoryCache).policies.addTypePolicies({
+  cache.policies.addTypePolicies({
     Conference: {
       fields: {
         endDate: { scalar: 'DateTime' },
@@ -4751,8 +4727,7 @@ it.skip('deep merges scalar option with policies.addTypePolicies', () => {
   expect(console.warn).toHaveBeenCalledTimes(1);
   expect(console.warn).toHaveBeenCalledWith(WARNINGS.SCALAR_FIELD_CONFIG, 'Conference.endDate', 'DateTime', 'merge');
 });
-// Hermes: typePolicies cannot be added once the cache is created (no policies.addTypePolicies).
-it.skip('preserves an existing scalar option when policies.addTypePolicies updates another field option', () => {
+it('preserves an existing scalar option when policies.addTypePolicies updates another field option', () => {
   const cache = new Hermes({
     scalars: { DateTime: dateTimeScalar },
     typePolicies: {
@@ -4766,8 +4741,7 @@ it.skip('preserves an existing scalar option when policies.addTypePolicies updat
     },
   });
 
-  // Hermes: Hermes has no `policies`; this upstream test is skipped.
-  (cache as unknown as InMemoryCache).policies.addTypePolicies({
+  cache.policies.addTypePolicies({
     Event: {
       fields: {
         startTime: {
@@ -4797,6 +4771,7 @@ it.skip('preserves an existing scalar option when policies.addTypePolicies updat
     },
   });
 
+  // Hermes: custom scalar values are stored serialized.
   expect(rawCacheData(cache)).toEqual({
     ROOT_QUERY: {
       __typename: 'Query',
@@ -4805,7 +4780,7 @@ it.skip('preserves an existing scalar option when policies.addTypePolicies updat
     'Event:1': {
       __typename: 'Event',
       id: '1',
-      'startTime:{"timezone":"UTC"}': new Date('2026-01-01T00:00:00.000Z'),
+      'startTime:{"timezone":"UTC"}': '2026-01-01T00:00:00.000Z',
     },
   });
 });
@@ -4883,5 +4858,5 @@ it('maintains referential equality with multiple cache reads', () => {
 // Hermes: its extract() is the raw stored data (in InMemoryCache's normalized
 // shape here). Hermes stores scalar values serialized.
 function rawCacheData(cache: Hermes) {
-  return toNormalizedCacheObject(cache.extract());
+  return toNormalizedCacheObject(cache.extract(), cache.policies.rootTypenamesById);
 }

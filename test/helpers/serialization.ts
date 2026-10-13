@@ -36,8 +36,15 @@ export const mapToEntries2 = (map: Map<string, NodeReference> | undefined): Node
  * or, for fields stored per their keyArgs policies (or @connection
  * directives), the store field name their node id ends with (e.g.
  * `field:{"arg":1}`).
+ *
+ * Like InMemoryCache's, root objects have the __typename of their root type:
+ * Query, Mutation or Subscription, unless `rootTypenames` (e.g. a cache's
+ * `policies.rootTypenamesById`) says otherwise.
  */
-export function toNormalizedCacheObject(serialized: Record<string, any>): Record<string, any> {
+export function toNormalizedCacheObject(
+  serialized: Record<string, any>,
+  rootTypenames: Record<string, string> = defaultRootTypenames,
+): Record<string, any> {
   const build = (id: string): any => {
     const node = serialized[id];
     const root = { value: cloneData(node.data ?? (node.type === 0 ? {} : null)) };
@@ -91,7 +98,7 @@ function cloneData(value: any): any {
   return value;
 }
 
-const rootTypenames: Record<string, string> = {
+const defaultRootTypenames: Record<string, string> = {
   ROOT_QUERY: 'Query',
   ROOT_MUTATION: 'Mutation',
   ROOT_SUBSCRIPTION: 'Subscription',

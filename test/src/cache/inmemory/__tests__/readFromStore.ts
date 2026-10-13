@@ -1138,9 +1138,7 @@ describe('reading from the store', () => {
     });
   });
 
-  // Hermes: reads return the stored value of a field without a selection set,
-  // rather than throwing for an object (or Reference) value.
-  it.skip('refuses to return raw Reference objects', () => {
+  it('refuses to return raw Reference objects', () => {
     const store = defaultNormalizedCacheFactory({
       ROOT_QUERY: {
         author: {
@@ -1205,7 +1203,8 @@ describe('reading from the store', () => {
           }
         `,
       }),
-    ).toEqual({
+      // Hermes: results may contain a superset of the selected fields.
+    ).toMatchObject({
       author: {
         __typename: 'Author',
         name: 'Toni Morrison',

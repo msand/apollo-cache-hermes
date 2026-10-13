@@ -12,8 +12,8 @@ import {
 
 import { Hermes } from '../../../../../src';
 
-// Hermes: Hermes does not implement custom scalars, so its configuration has no `scalars`
-// option and its field policies no `scalar` setting. Tests that depend on them are skipped.
+// Hermes: the tests create a Hermes cache (configured like InMemoryCache, with `scalars` and
+// `scalar` field policies) in place of an InMemoryCache.
 function createCache(config: object) {
   return new Hermes(config as ConstructorParameters<typeof Hermes>[0]);
 }

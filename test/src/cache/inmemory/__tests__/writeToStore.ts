@@ -3111,8 +3111,7 @@ describe('writing to the store', () => {
     });
   });
 
-  // Hermes: nested keyFields are not supported
-  it.skip('user objects should be able to have { __typename: "Mutation" }', () => {
+  it('user objects should be able to have { __typename: "Mutation" }', () => {
     const cache = new Hermes({
       typePolicies: {
         Mutation: {
@@ -3160,7 +3159,36 @@ describe('writing to the store', () => {
       },
     });
 
-    expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
+    // Hermes: InMemoryCache also merges the key fields it reads through the
+    // gene references into the stored objects (so its snapshot has
+    // gene: { __ref, id }); Hermes stores just the references.
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
+      'Gene:{"id":"SLC45A2"}': {
+        __typename: 'Gene',
+        id: 'SLC45A2',
+      },
+      'Gene:{"id":"SNAI2"}': {
+        __typename: 'Gene',
+        id: 'SNAI2',
+      },
+      'Mutation:{"gene":{"id":"SLC45A2"},"name":"albinism"}': {
+        __typename: 'Mutation',
+        gene: { __ref: 'Gene:{"id":"SLC45A2"}' },
+        name: 'albinism',
+      },
+      'Mutation:{"gene":{"id":"SNAI2"},"name":"piebaldism"}': {
+        __typename: 'Mutation',
+        gene: { __ref: 'Gene:{"id":"SNAI2"}' },
+        name: 'piebaldism',
+      },
+      ROOT_QUERY: {
+        __typename: 'Query',
+        mutations: [
+          { __ref: 'Mutation:{"gene":{"id":"SLC45A2"},"name":"albinism"}' },
+          { __ref: 'Mutation:{"gene":{"id":"SNAI2"},"name":"piebaldism"}' },
+        ],
+      },
+    });
     expect(cache.readQuery({ query })).toEqual({
       mutations: [
         {

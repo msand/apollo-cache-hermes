@@ -104,8 +104,7 @@ describe('type policies', () => {
     checkAuthorName(cache);
   });
 
-  // Hermes: nested keyFields are not supported
-  it.skip('can specify composite keyFields', () => {
+  it('can specify composite keyFields', () => {
     const cache = new Hermes({
       typePolicies: {
         Book: {
@@ -121,7 +120,8 @@ describe('type policies', () => {
       },
     });
 
-    expect(cache.extract(true)).toEqual({
+    // Hermes: compare in InMemoryCache's normalized shape; the unselected isbn and subtitle fields are stored too.
+    expect(toNormalizedCacheObject(cache.extract(true))).toEqual({
       ROOT_QUERY: {
         __typename: 'Query',
         book: {
@@ -130,7 +130,9 @@ describe('type policies', () => {
       },
       'Book:{"title":"The Information","author":{"name":"James Gleick"}}': {
         __typename: 'Book',
+        isbn: '1400096235',
         title: 'The Information',
+        subtitle: 'A History, a Theory, a Flood',
         author: {
           name: 'James Gleick',
         },
@@ -140,8 +142,7 @@ describe('type policies', () => {
     checkAuthorName(cache);
   });
 
-  // Hermes: nested keyFields are not supported
-  it.skip('can specify nested keyFields with alias', () => {
+  it('can specify nested keyFields with alias', () => {
     const cache = new Hermes({
       typePolicies: {
         Book: {
@@ -176,7 +177,8 @@ describe('type policies', () => {
       },
     });
 
-    expect(cache.extract(true)).toEqual({
+    // Hermes: compare in InMemoryCache's normalized shape; the unselected isbn and subtitle fields are stored too.
+    expect(toNormalizedCacheObject(cache.extract(true))).toEqual({
       ROOT_QUERY: {
         __typename: 'Query',
         book: {
@@ -185,7 +187,9 @@ describe('type policies', () => {
       },
       'Book:{"title":"The Information","author":{"name":"James Gleick"}}': {
         __typename: 'Book',
+        isbn: '1400096235',
         title: 'The Information',
+        subtitle: 'A History, a Theory, a Flood',
         // Note that "author" and "name" are stored internally, since they are
         // the true names of their fields (according to the schema), despite the
         // writer:author and alias:name aliases.
@@ -198,8 +202,7 @@ describe('type policies', () => {
     checkAuthorName(cache);
   });
 
-  // Hermes: nested keyFields are not supported
-  it.skip('keeps keyFields in specified order', () => {
+  it('keeps keyFields in specified order', () => {
     const cache = new Hermes({
       typePolicies: {
         Book: {
@@ -215,7 +218,8 @@ describe('type policies', () => {
       },
     });
 
-    expect(cache.extract(true)).toEqual({
+    // Hermes: compare in InMemoryCache's normalized shape; the unselected isbn and subtitle fields are stored too.
+    expect(toNormalizedCacheObject(cache.extract(true))).toEqual({
       ROOT_QUERY: {
         __typename: 'Query',
         book: {
@@ -224,7 +228,9 @@ describe('type policies', () => {
       },
       'Book:{"author":{"name":"James Gleick"},"title":"The Information"}': {
         __typename: 'Book',
+        isbn: '1400096235',
         title: 'The Information',
+        subtitle: 'A History, a Theory, a Flood',
         author: {
           name: 'James Gleick',
         },
@@ -234,8 +240,7 @@ describe('type policies', () => {
     checkAuthorName(cache);
   });
 
-  // Hermes: nested keyFields are not supported (object key values are stringified as written, with aliases)
-  it.skip('serializes nested keyFields objects in stable order', () => {
+  it('serializes nested keyFields objects in stable order', () => {
     const cache = new Hermes({
       typePolicies: {
         Book: {
@@ -278,6 +283,22 @@ describe('type policies', () => {
       },
     });
 
+    // Hermes: the second write orphans this book, which Hermes deletes right
+    // away, so check it now.
+    expect(
+      toNormalizedCacheObject(cache.extract(true))[
+        'Book:{"title":"Brainscapes","author":{"__typename":"Person","firstName":"Rebecca","lastName":"Schwarzlose"}}'
+      ],
+    ).toEqual({
+      __typename: 'Book',
+      title: 'Brainscapes',
+      author: {
+        __typename: 'Person',
+        firstName: 'Rebecca',
+        lastName: 'Schwarzlose',
+      },
+    });
+
     cache.writeQuery({
       query,
       data: {
@@ -295,19 +316,11 @@ describe('type policies', () => {
       },
     });
 
-    expect(cache.extract(true)).toEqual({
+    // Hermes: compare in InMemoryCache's normalized shape (without the deleted first book).
+    expect(toNormalizedCacheObject(cache.extract(true))).toEqual({
       // The order of the author object's __typename, firstName, and lastName
       // fields has been determined by our keyFields configuration and stable
       // stringification.
-      'Book:{"title":"Brainscapes","author":{"__typename":"Person","firstName":"Rebecca","lastName":"Schwarzlose"}}': {
-        __typename: 'Book',
-        title: 'Brainscapes',
-        author: {
-          __typename: 'Person',
-          firstName: 'Rebecca',
-          lastName: 'Schwarzlose',
-        },
-      },
       // Again, __typename, firstName, and then lastName, despite the different
       // order of keys in the data we wrote.
       'Book:{"title":"The Science of Can and Can\'t","author":{"__typename":"Person","firstName":"Chiarra","lastName":"Marletto"}}':
@@ -330,8 +343,7 @@ describe('type policies', () => {
     });
   });
 
-  // Hermes: keyFields functions are not supported
-  it.skip('accepts keyFields functions', () => {
+  it('accepts keyFields functions', () => {
     const cache = new Hermes({
       typePolicies: {
         Book: {
@@ -352,7 +364,8 @@ describe('type policies', () => {
       },
     });
 
-    expect(cache.extract(true)).toEqual({
+    // Hermes: compare in InMemoryCache's normalized shape; the unselected subtitle field is stored too.
+    expect(toNormalizedCacheObject(cache.extract(true))).toEqual({
       ROOT_QUERY: {
         __typename: 'Query',
         book: {
@@ -363,6 +376,7 @@ describe('type policies', () => {
         __typename: 'Book',
         isbn: '1400096235',
         title: 'The Information',
+        subtitle: 'A History, a Theory, a Flood',
         author: {
           name: 'James Gleick',
         },
@@ -467,8 +481,7 @@ describe('type policies', () => {
     );
   });
 
-  // Hermes: typePolicies cannot be added once the cache is created (no policies.addTypePolicies)
-  it.skip('does not clobber previous keyFields with undefined', () => {
+  it('does not clobber previous keyFields with undefined', () => {
     const cache = new Hermes({
       typePolicies: {
         Movie: {
@@ -479,7 +492,7 @@ describe('type policies', () => {
       },
     });
 
-    (cache as any).policies.addTypePolicies({
+    cache.policies.addTypePolicies({
       Movie: {
         fields: {
           isPurchased() {
@@ -497,8 +510,7 @@ describe('type policies', () => {
     ).toBe('MotionPicture::3993d4118143');
   });
 
-  // Hermes: typePolicies cannot be added once the cache is created (no policies.addTypePolicies)
-  it.skip('does not remove previous typePolicies', () => {
+  it('does not remove previous typePolicies', () => {
     const cache = new Hermes({
       typePolicies: {
         Query: {
@@ -509,7 +521,7 @@ describe('type policies', () => {
       },
     });
 
-    (cache as any).policies.addTypePolicies({
+    cache.policies.addTypePolicies({
       Query: {
         fields: {
           bar: () => 'bar',
@@ -537,8 +549,7 @@ describe('type policies', () => {
     ).toEqual({ bar: 'bar' });
   });
 
-  // Hermes: inheritance of typePolicies via possibleTypes is not implemented
-  it.skip('support inheritance', () => {
+  it('support inheritance', () => {
     const cache = new Hermes({
       possibleTypes: {
         Reptile: ['Snake', 'Turtle'],
@@ -617,7 +628,8 @@ describe('type policies', () => {
       data: { reptiles },
     });
 
-    expect(cache.extract()).toMatchSnapshot();
+    // Hermes: compare in InMemoryCache's normalized shape.
+    expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
 
     const result1 = cache.readQuery({ query })!;
     expect(result1).toEqual({
@@ -654,11 +666,13 @@ describe('type policies', () => {
           venomous: 'unknown',
         });
       } else {
-        expect(reptile).toBe(result1.reptiles[i]);
+        // Hermes: results are not cached per entity, so the results of the
+        // other reptiles are equal rather than identical.
+        expect(reptile).toEqual(result1.reptiles[i]);
       }
     });
 
-    (cache as any).policies.addPossibleTypes({
+    cache.policies.addPossibleTypes({
       Viper: ['DeathAdder'],
     });
 
@@ -670,8 +684,7 @@ describe('type policies', () => {
     ).toBe('DeathAdder:{"tagId":"LethalAbacus666"}');
   });
 
-  // Hermes: inheritance of typePolicies via possibleTypes is not implemented
-  it.skip('specific field policies will not override supertype policies', () => {
+  it('specific field policies will not override supertype policies', () => {
     const cache = new Hermes({
       typePolicies: {
         Named: {
@@ -746,8 +759,7 @@ describe('type policies', () => {
     });
   });
 
-  // Hermes: inheritance of typePolicies via possibleTypes is not implemented
-  it.skip('typePolicies can be inherited from supertypes with fuzzy possibleTypes', () => {
+  it('typePolicies can be inherited from supertypes with fuzzy possibleTypes', () => {
     const cache = new Hermes({
       possibleTypes: {
         EntitySupertype: ['.*Entity'],
@@ -801,7 +813,8 @@ describe('type policies', () => {
       },
     });
 
-    expect(cache.extract()).toEqual({
+    // Hermes: compare in InMemoryCache's normalized shape.
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
         __typename: 'Query',
         coworkers: [
@@ -848,7 +861,8 @@ describe('type policies', () => {
       }
     `;
 
-    expect(cache.readQuery({ query: queryWithAlias })).toEqual({
+    // Hermes: results may contain a superset of the selected fields.
+    expect(cache.readQuery({ query: queryWithAlias })).toMatchObject({
       coworkers: [
         { __typename: 'CoworkerEntity', idAlias: 'qwer', name: 'Alessia' },
         { __typename: 'CoworkerEntity', idAlias: 'asdf', name: 'Jerel' },
@@ -878,7 +892,8 @@ describe('type policies', () => {
       ],
     });
 
-    expect(cache.extract()).toEqual({
+    // Hermes: compare in InMemoryCache's normalized shape.
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
         __typename: 'Query',
         coworkers: [
@@ -1440,8 +1455,7 @@ describe('type policies', () => {
       ]);
     });
 
-    // Hermes: nested keyFields (Comment: ['author', ['name']]) are not supported.
-    it.skip(`can return KeySpecifier arrays from keyArgs functions`, () => {
+    it(`can return KeySpecifier arrays from keyArgs functions`, () => {
       const cache = new Hermes({
         typePolicies: {
           Thread: {
@@ -5418,8 +5432,7 @@ describe('type policies', () => {
       return data;
     }
 
-    // Hermes: inheritance of typePolicies via possibleTypes is not implemented
-    it.skip('can force merging with inherited type policy merge function', () => {
+    it('can force merging with inherited type policy merge function', () => {
       let personMergeCount = 0;
 
       const cache = new Hermes({
@@ -5666,8 +5679,7 @@ describe('type policies', () => {
       }
     });
 
-    // Hermes: inheritance of typePolicies via possibleTypes is not implemented
-    it.skip('can force merging with inherited field merge function', () => {
+    it('can force merging with inherited field merge function', () => {
       let authorMergeCount = 0;
 
       const cache = new Hermes({
@@ -5869,8 +5881,7 @@ describe('type policies', () => {
     });
   });
 
-  // Hermes: keyFields functions are not supported (keyArgs functions are).
-  it.skip(`allows keyFields and keyArgs functions to return false`, () => {
+  it(`allows keyFields and keyArgs functions to return false`, () => {
     const cache = new Hermes({
       typePolicies: {
         Person: {
@@ -6449,8 +6460,7 @@ describe('type policies', () => {
     expect(cache.extract()).toEqual(snapshot);
   });
 
-  // Hermes: queryType/mutationType/subscriptionType typePolicies are not supported
-  it.skip('can alter the root query __typename', () => {
+  it('can alter the root query __typename', () => {
     const cache = new Hermes({
       typePolicies: {
         RootQuery: {
@@ -6501,7 +6511,8 @@ describe('type policies', () => {
       },
     });
 
-    expect(cache.extract()).toMatchSnapshot();
+    // Hermes: compare in InMemoryCache's normalized shape.
+    expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
 
     expect(
       cache.readQuery({
@@ -6513,8 +6524,7 @@ describe('type policies', () => {
     });
   });
 
-  // Hermes: queryType/mutationType/subscriptionType typePolicies are not supported
-  it.skip('can configure {query,mutation,subscription}Type:true', () => {
+  it('can configure {query,mutation,subscription}Type:true', () => {
     const cache = new Hermes({
       typePolicies: {
         RootQuery: {

@@ -1088,9 +1088,7 @@ describe('diffing queries against the store', () => {
   });
 
   describe('malformed queries', () => {
-    // Hermes: reads return the stored value of a field without a selection set,
-    // rather than validating it
-    it.skip('throws for non-scalar query fields without selection sets', () => {
+    it('throws for non-scalar query fields without selection sets', () => {
       // Issue #4025, fixed by PR #4038.
 
       const validQuery = gql`
