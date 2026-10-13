@@ -4,7 +4,7 @@ import type { Reference } from '@apollo/client/cache';
 import type { StoreObject } from '@apollo/client/utilities';
 
 import type { CacheContext } from '../context';
-import { isRootNodeId, makeToReference, typenameOf } from '../context/helpers';
+import { isRootNodeId, makeToReference, missingKeyFieldError, typenameOf } from '../context/helpers';
 import { argsStoreKey, storeFieldNameOf } from '../context/storeFieldNames';
 import type { GraphSnapshot as GraphSnapshotType } from '../GraphSnapshot';
 import type { NodeReference, EntitySnapshot as EntitySnapshotType, NodeSnapshot } from '../nodes';
@@ -19,6 +19,7 @@ import * as nodes from '../nodes';
 import * as util from '../util';
 import type { FragmentMap } from '../util';
 
+import { uncaughtWriteError } from './checkWrite';
 import { FieldFunctions, withReferences } from './fieldFunctions';
 import type { StreamInfoRef } from './streamFields';
 import { defaultStreamFieldMergeFn, runStreamAwareMerge, streamInfoOf, usesDefaultStreamMerge } from './streamFields';
@@ -257,6 +258,8 @@ export class SnapshotEditor<TSerialized> {
   private _fieldFunctionsInstance: FieldFunctions<TSerialized> | undefined;
   /** The fragments of the operation being merged, for keyFields functions. */
   private _fragmentMap: FragmentMap | undefined;
+  /** Whether the payload being merged is pruned (see mergePayload). */
+  private _prune = false;
   /** The reference edits of the payload being merged (see mergePayload). */
   private _referenceEdits: ReferenceEdit[] | undefined;
 
@@ -293,6 +296,7 @@ export class SnapshotEditor<TSerialized> {
     this._overwrite = !!query.overwrite;
     this._fieldFunctionsInstance = undefined;
     this._fragmentMap = parsed.info.fragmentMap;
+    this._prune = prune;
 
     // We collect all warnings associated with this operation to avoid
     // overwhelming the log for particularly nasty payloads.
@@ -559,8 +563,10 @@ export class SnapshotEditor<TSerialized> {
       this._setValue(containerId, path, {});
     }
 
-    // The schema names of the selected fields (written from their response keys).
-    const selectedNames = new Set<string>();
+    const { policies } = this._context;
+    // The schema names of the fields selected under aliases (written from their
+    // response keys rather than as unselected fields; see below).
+    let aliasedNames: Set<string> | undefined;
 
     // Finally, we can walk into individual values.
     for (const payloadName in parsed) {
@@ -578,7 +584,7 @@ export class SnapshotEditor<TSerialized> {
       }
       // Having a schemaName on the node implies that payloadName is an alias.
       const schemaName = node.schemaName ? node.schemaName : payloadName;
-      selectedNames.add(schemaName);
+      if (schemaName !== payloadName) (aliasedNames ??= new Set()).add(schemaName);
       // Don't trust our inputs.
       if (fieldValue === undefined) {
         // If it was explicitly undefined, that likely indicates a malformed
@@ -649,8 +655,11 @@ export class SnapshotEditor<TSerialized> {
       // (or @connection directives) say, like InMemoryCache's store field names.
       const args = (node.args as JsonObject | undefined) ?? null;
       const field = fieldNodeOf(node);
-      const storeKey = this._context.storeFieldNames.storeKey(typename, schemaName, args, field, this._variables);
-      const storeFieldName = storeFieldNameOf(schemaName, storeKey, args);
+      // (Without arguments or keyArgs policies, fields are stored under their names.)
+      const storeKey =
+        args || policies.hasKeyArgs
+          ? this._context.storeFieldNames.storeKey(typename, schemaName, args, field, this._variables)
+          : undefined;
 
       if (storeKey !== undefined) {
         if (fieldValue === null && prune) {
@@ -670,11 +679,13 @@ export class SnapshotEditor<TSerialized> {
       writtenFields?.add(schemaName);
 
       // Like InMemoryCache, fall back to the merge policy of the child's type.
-      let merge = this._context.policies.getMergeFunction(
-        typename,
-        schemaName,
-        node.children && isObject(fieldValue) ? fieldValue.__typename : undefined,
-      );
+      let merge = policies.hasMergePolicies
+        ? policies.getMergeFunction(
+            typename,
+            schemaName,
+            node.children && isObject(fieldValue) ? fieldValue.__typename : undefined,
+          )
+        : undefined;
       // Like InMemoryCache, the chunks of `@stream` lists without a merge
       // policy are merged into the cached list by its default stream merge.
       if (merge === undefined && usesDefaultStreamMerge(this._streamInfo, field, fieldValue, this._variables)) {
@@ -692,6 +703,7 @@ export class SnapshotEditor<TSerialized> {
         const incoming = children
           ? this._normalizeIncoming(referenceEdits, warnings, writePath, children, fieldValue, prune, node.propMap)
           : fieldValue;
+        const storeFieldName = storeFieldNameOf(schemaName, storeKey, args);
         const storageKeys = [containerId, ...path, storeFieldName];
         const fieldMerge = merge;
         fieldValue = runStreamAwareMerge(this._streamInfo, writePath, incoming, streamFieldInfo =>
@@ -770,7 +782,7 @@ export class SnapshotEditor<TSerialized> {
       // stores selected fields, the aliased value wins (e.g. when Apollo Client
       // writes back a cache diff's result, which has both).
       for (const payloadName of Object.keys(payload)) {
-        if (!hasOwn.call(parsed, payloadName) && !selectedNames.has(payloadName)) {
+        if (!hasOwn.call(parsed, payloadName) && !aliasedNames?.has(payloadName)) {
           const value = payload[payloadName];
           const fieldPath = [...path, payloadName];
           writtenFields?.add(payloadName);
@@ -850,11 +862,23 @@ export class SnapshotEditor<TSerialized> {
     propMap: { [prop: string]: string } | undefined,
   ): NodeId | undefined {
     if (!isObject(payload)) return undefined;
-    return this._context.entityIdForValue(
-      getPayloadProxy(payload, propMap),
+    const { policies } = this._context;
+    const object = getPayloadProxy(payload, propMap) as JsonObject;
+    // Without keyFields or dataIdFromObject, ids don't depend on the context.
+    if (!policies.identifiesWithContext) return policies.identify(object)[0];
+
+    const [id, missingKeyField] = policies.identify(
+      object,
       { selectionSet: selectionSetOf(parsed), fragmentMap: this._fragmentMap },
       () => toStoreObject(payload, parsed, (node, typename) => this._fieldForType(node, typename)),
     );
+    // Like InMemoryCache, writing an object without all of its keyFields
+    // fails (rather than just leaving it unidentified). Pruned reads of the
+    // cache may be partial, though.
+    if (id === undefined && missingKeyField !== undefined && !this._prune) {
+      throw uncaughtWriteError(missingKeyFieldError(missingKeyField, payload));
+    }
+    return id;
   }
 
   /**

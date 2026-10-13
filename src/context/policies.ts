@@ -97,6 +97,12 @@ export class Policies {
   /** Whether any field policy has a read function (which may read reactive variables). */
   hasReadFunctions = false;
 
+  /** Whether any field policy has keyArgs (without which fields without arguments are stored under their names). */
+  hasKeyArgs = false;
+
+  /** Whether any type or field policy has a merge function (or merge: true/false). */
+  hasMergePolicies = false;
+
   /** Whether any field policy has keyArgs that may key fields without arguments (see hasFieldPolicies). */
   private _hasDynamicKeyArgs = false;
 
@@ -131,6 +137,15 @@ export class Policies {
 
   private readonly _dataIdFromObject: DataIdFromObject | undefined;
 
+  /**
+   * Whether identifying objects may depend on more than their own fields:
+   * keyFields policies and dataIdFromObject get the KeyFieldsContext (and
+   * keyFields may be missing).
+   */
+  get identifiesWithContext(): boolean {
+    return this.hasKeyFields || !!this._dataIdFromObject;
+  }
+
   /** Whether possibleTypes has (fuzzy) regular expression subtypes. */
   get hasFuzzySubtypes(): boolean {
     return this._fuzzySubtypes.size > 0;
@@ -159,7 +174,8 @@ export class Policies {
     // those of the other root types.
     if (typename === this.rootTypenamesById.ROOT_QUERY) return ['ROOT_QUERY'];
 
-    const keyFn = typeof typename === 'string' ? this.getTypePolicy(typename).keyFn : undefined;
+    // (Only types with keyFields policies, or their subtypes, have keyFns.)
+    const keyFn = this.hasKeyFields && typeof typename === 'string' ? this.getTypePolicy(typename).keyFn : undefined;
     const dataIdFromObject = this._dataIdFromObject;
 
     if (!keyFn && !dataIdFromObject) return [defaultDataIdFromObject(object)];
@@ -240,6 +256,7 @@ export class Policies {
 
       if (incoming.fields) this._noteFieldPolicies(incoming.fields);
       if (incoming.keyFields !== undefined) this.hasKeyFields = true;
+      if (incoming.merge !== undefined) this.hasMergePolicies = true;
 
       if (hasOwn.call(this._toBeAdded, typename)) {
         this._toBeAdded[typename].push(incoming);
@@ -258,8 +275,10 @@ export class Policies {
         continue;
       }
       if (typeof field.read === 'function') this.hasReadFunctions = true;
+      if (field.merge !== undefined) this.hasMergePolicies = true;
       if (field.scalar) this._hasScalarFields = true;
       const { keyArgs } = field;
+      if (keyArgs !== undefined) this.hasKeyArgs = true;
       if (typeof keyArgs === 'function' || (Array.isArray(keyArgs) && specifierKeysContextValues(keyArgs))) {
         this._hasDynamicKeyArgs = true;
       }
