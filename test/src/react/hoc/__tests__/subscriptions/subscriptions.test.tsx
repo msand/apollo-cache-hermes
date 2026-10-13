@@ -311,7 +311,12 @@ describe('subscriptions', () => {
       ),
     );
 
+    // Hermes: skip ticks until the previous results have been committed, so a
+    // busy CI runner can't send the same result twice and shift every step.
+    let emittedAt = -1;
     const interval = setInterval(() => {
+      if (count === emittedAt) return;
+      emittedAt = count;
       try {
         if (count > 2) {
           userLink.simulateResult(results3[count - 2]);
