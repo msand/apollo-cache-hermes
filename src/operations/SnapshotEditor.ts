@@ -723,6 +723,7 @@ export class SnapshotEditor<TSerialized> {
             ),
           ),
         ) as JsonValue | undefined;
+        if (children) fieldValue = this._withResponseKeys(fieldValue, children);
         fieldMode = 'replace';
 
         // Fields merged into undefined are not stored.
@@ -828,26 +829,89 @@ export class SnapshotEditor<TSerialized> {
       return makeRef(entityId);
     }
 
+    // Like InMemoryCache's store objects, fields selected under aliases are
+    // keyed by their names.
+    const renamed = this._aliasedFields(parsed, value.__typename);
     let normalized = value;
     for (const payloadName in parsed) {
       const { children, propMap: childPropMap, schemaName } = this._fieldForType(parsed[payloadName], value.__typename);
       const child = value[payloadName];
-      if (!children || child === undefined) continue;
-      const normalizedChild = this._normalizeIncoming(
-        referenceEdits,
-        warnings,
-        [...path, schemaName ?? payloadName],
-        children,
-        child,
-        prune,
-        childPropMap,
-      );
-      if (normalizedChild !== child) {
+      if (child === undefined) continue;
+      const normalizedChild = children
+        ? this._normalizeIncoming(
+            referenceEdits,
+            warnings,
+            [...path, schemaName ?? payloadName],
+            children,
+            child,
+            prune,
+            childPropMap,
+          )
+        : child;
+      // (Unless the object has a key of that name too.)
+      const name = renamed?.get(payloadName);
+      if (name !== undefined && hasOwn.call(value, name)) continue;
+      if (normalizedChild !== child || name) {
         normalized = normalized === value ? { ...value } : normalized;
-        normalized[payloadName] = normalizedChild;
+        if (name) delete normalized[payloadName];
+        normalized[name ?? payloadName] = normalizedChild;
       }
     }
     return normalized;
+  }
+
+  /**
+   * The inverse of _normalizeIncoming's renaming: a merge function's result
+   * (whose objects have the fields selected under aliases by their names),
+   * with those fields under their response keys again, for writing.
+   */
+  private _withResponseKeys(value: unknown, parsed: ParsedQuery): any {
+    if (Array.isArray(value)) {
+      let copy: unknown[] | undefined;
+      value.forEach((item, index) => {
+        const newItem = this._withResponseKeys(item, parsed);
+        if (newItem !== item) (copy ??= value.slice())[index] = newItem;
+      });
+      return copy ?? value;
+    }
+    if (!isObject(value) || isReference(value)) return value;
+
+    const renamed = this._aliasedFields(parsed, value.__typename);
+    let result = value;
+    for (const payloadName in parsed) {
+      const { children } = this._fieldForType(parsed[payloadName], value.__typename);
+      const name = renamed?.get(payloadName);
+      const fromName = name !== undefined && !hasOwn.call(value, payloadName);
+      const child = fromName ? value[name] : value[payloadName];
+      if (child === undefined) continue;
+      const newChild = children ? this._withResponseKeys(child, children) : child;
+      if (newChild !== child || fromName) {
+        result = result === value ? { ...value } : result;
+        if (fromName) delete result[name];
+        result[payloadName] = newChild as JsonValue;
+      }
+    }
+    return result;
+  }
+
+  /**
+   * The fields selected under aliases (by response key) for objects of type
+   * `typename`, with their names: those that can be keyed by their names, as
+   * no other field is selected under (or with) the same name.
+   */
+  private _aliasedFields(parsed: ParsedQuery, typename: unknown): Map<string, string> | undefined {
+    let aliased: Map<string, string> | undefined;
+    const names = new Set<string>();
+    for (const payloadName in parsed) {
+      const name = this._fieldForType(parsed[payloadName], typename).schemaName ?? payloadName;
+      if (names.has(name) || (name !== payloadName && hasOwn.call(parsed, name))) {
+        aliased?.forEach((other, key) => other === name && aliased!.delete(key));
+        continue;
+      }
+      names.add(name);
+      if (name !== payloadName) (aliased ??= new Map()).set(payloadName, name);
+    }
+    return aliased?.size ? aliased : undefined;
   }
 
   /**

@@ -305,4 +305,44 @@ describe(`merge policies`, () => {
       });
     }
   });
+  describe(`incoming values of merge functions`, () => {
+    for (const [name, Cache] of Object.entries(caches)) {
+      it(`have the fields selected under aliases by their names (${name})`, () => {
+        const incomings: unknown[] = [];
+        const cache = new Cache({
+          typePolicies: {
+            Query: {
+              fields: {
+                settings: {
+                  merge(existing, incoming) {
+                    incomings.push(incoming);
+                    return { ...existing, ...incoming };
+                  },
+                },
+              },
+            },
+          },
+        });
+        const query = gql`
+          {
+            settings {
+              theme: colorScheme
+              nested {
+                size: fontSize
+              }
+            }
+          }
+        `;
+        cache.writeQuery({ query, data: { settings: { theme: 'dark', nested: { size: 12 } } } });
+        cache.writeQuery({ query, data: { settings: { theme: 'light', nested: { size: 14 } } } });
+
+        expect(incomings).to.deep.eq([
+          { colorScheme: 'dark', nested: { fontSize: 12 } },
+          { colorScheme: 'light', nested: { fontSize: 14 } },
+        ]);
+        const { settings } = cache.readQuery<any>({ query });
+        expect([settings.theme, settings.nested.size]).to.deep.eq(['light', 14]);
+      });
+    }
+  });
 });
