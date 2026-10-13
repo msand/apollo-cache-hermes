@@ -284,8 +284,6 @@ Object {
         ],
       },
     ],
-    "outbound": Array [],
-    "parameterized": Array [],
     "type": 0,
   },
   "foo": Object {
@@ -296,7 +294,6 @@ Object {
       "bar": undefined,
       "c": 3,
     },
-    "inbound": Array [],
     "outbound": Array [
       Object {
         "id": "bar",
@@ -305,7 +302,6 @@ Object {
         ],
       },
     ],
-    "parameterized": Array [],
     "type": 0,
   },
 }
