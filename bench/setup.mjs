@@ -31,7 +31,9 @@ const run = (cmd, args, cwd) => {
 const published = { 'hermes-0.9.12': '0.9.12', 'hermes-0.10.0': '0.10.0', 'hermes-0.11.0': '0.11.0' };
 
 const only = process.argv.slice(2).filter(arg => !arg.startsWith('--'));
-for (const name of only.length ? only : Object.keys(IMPLS)) {
+// (hermes-dev is a copy of hermes-branch made by bench/dev-sync.mjs.)
+const names = only.length ? only : Object.keys(IMPLS).filter(name => name !== 'hermes-dev');
+for (const name of names) {
   const dir = implDir(name);
   const tarball = path.join(dir, 'hermes.tgz');
   if (name === 'hermes-branch') {
@@ -75,7 +77,9 @@ for (const name of only.length ? only : Object.keys(IMPLS)) {
   } else if (published[name] && !fs.existsSync(tarball)) {
     const packed = run(
       'npm',
-      ['pack', `msand-apollo-cache-hermes@${published[name]}`, '--ignore-scripts', '--silent'],
+      // (Releases of this package itself are exempt from a min-release-age in
+      // the npm config; their dependencies are installed as configured.)
+      ['pack', `msand-apollo-cache-hermes@${published[name]}`, '--ignore-scripts', '--silent', '--min-release-age=0'],
       dir,
     )
       .trim()
@@ -87,4 +91,4 @@ for (const name of only.length ? only : Object.keys(IMPLS)) {
   fs.rmSync(path.join(dir, 'node_modules', 'msand-apollo-cache-hermes'), { recursive: true, force: true });
   run('npm', ['install', '--no-audit', '--no-fund', '--ignore-scripts', '--no-package-lock'], dir);
 }
-console.log('Installed:', (only.length ? only : Object.keys(IMPLS)).join(', '));
+console.log('Installed:', names.join(', '));

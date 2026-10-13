@@ -25,13 +25,29 @@ export const IMPLS = {
     kind: 'hermes',
     ref: '4946e9c8',
   },
+  // This branch before the performance work (after the code-review fixes).
+  'hermes-pre-perf': {
+    label: 'Hermes e9e5aa27 (before performance work) + AC 4.3.3',
+    dir: 'hermes-pre-perf',
+    kind: 'hermes',
+    ref: 'e9e5aa27',
+  },
   'hermes-branch': { label: 'Hermes (this branch) + AC 4.3.3', dir: 'hermes-branch', kind: 'hermes' },
+  // For trying out changes: `node bench/dev-sync.mjs` copies this checkout's compiled src/ into it.
+  'hermes-dev': { label: 'Hermes (working copy) + AC 4.3.3', dir: 'hermes-dev', kind: 'hermes' },
   'inmemory-3': { label: 'InMemoryCache AC 3.14.1', dir: 'inmemory-3', kind: 'inmemory' },
   'inmemory-4': { label: 'InMemoryCache AC 4.3.3', dir: 'inmemory-4', kind: 'inmemory' },
 };
 
 /** Consecutive Hermes versions, oldest first, for regression flags. */
-export const HERMES_LINEAGE = ['hermes-0.9.12', 'hermes-0.10.0', 'hermes-0.11.0', 'hermes-pre-review', 'hermes-branch'];
+export const HERMES_LINEAGE = [
+  'hermes-0.9.12',
+  'hermes-0.10.0',
+  'hermes-0.11.0',
+  'hermes-pre-review',
+  'hermes-pre-perf',
+  'hermes-branch',
+];
 
 export function implDir(name) {
   return path.join(here, 'impl', IMPLS[name].dir);
