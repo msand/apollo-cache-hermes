@@ -18,13 +18,20 @@ export const IMPLS = {
   'hermes-0.9.12': { label: 'Hermes 0.9.12 + AC 3.10.8', dir: 'hermes-0.9.12', kind: 'hermes' },
   'hermes-0.10.0': { label: 'Hermes 0.10.0 + AC 3.10.8', dir: 'hermes-0.10.0', kind: 'hermes' },
   'hermes-0.11.0': { label: 'Hermes 0.11.0 + AC 3.14.1', dir: 'hermes-0.11.0', kind: 'hermes' },
+  // This branch before the code-review fixes, built from a git ref (see setup.mjs).
+  'hermes-pre-review': {
+    label: 'Hermes 4946e9c8 (before review fixes) + AC 4.3.3',
+    dir: 'hermes-pre-review',
+    kind: 'hermes',
+    ref: '4946e9c8',
+  },
   'hermes-branch': { label: 'Hermes (this branch) + AC 4.3.3', dir: 'hermes-branch', kind: 'hermes' },
   'inmemory-3': { label: 'InMemoryCache AC 3.14.1', dir: 'inmemory-3', kind: 'inmemory' },
   'inmemory-4': { label: 'InMemoryCache AC 4.3.3', dir: 'inmemory-4', kind: 'inmemory' },
 };
 
 /** Consecutive Hermes versions, oldest first, for regression flags. */
-export const HERMES_LINEAGE = ['hermes-0.9.12', 'hermes-0.10.0', 'hermes-0.11.0', 'hermes-branch'];
+export const HERMES_LINEAGE = ['hermes-0.9.12', 'hermes-0.10.0', 'hermes-0.11.0', 'hermes-pre-review', 'hermes-branch'];
 
 export function implDir(name) {
   return path.join(here, 'impl', IMPLS[name].dir);

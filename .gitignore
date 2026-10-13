@@ -30,4 +30,4 @@
 /bench/impl/*/package-lock.json
 /bench/impl/*/hermes.tgz
 /bench/impl/*/BUILD_COMMIT
-/bench/results.json
+/bench/results*.json
