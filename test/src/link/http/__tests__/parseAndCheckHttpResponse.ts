@@ -1,9 +1,7 @@
 import gql from 'graphql-tag';
 import fetchMock from 'fetch-mock';
-
-import { createOperation } from '../../utils/createOperation';
-import { parseAndCheckHttpResponse } from '../parseAndCheckHttpResponse';
-import { itAsync } from '../../../testing';
+import { createOperation } from '@apollo/client/link/utils/createOperation';
+import { parseAndCheckHttpResponse } from '@apollo/client/link/http/parseAndCheckHttpResponse';
 
 const query = gql`
   query SampleQuery {
@@ -20,89 +18,77 @@ describe('parseAndCheckResponse', () => {
 
   const operations = [createOperation({}, { query })];
 
-  itAsync('throws a Server error when response is > 300 with unparsable json', (resolve, reject) => {
+  it('throws a Server error when response is > 300 with unparsable json', async () => {
     const status = 400;
     fetchMock.mockGlobal().route('begin:http://localhost/error', status);
-    fetch('/error')
+
+    const error = await fetch('/error')
       .then(parseAndCheckHttpResponse(operations))
-      .then(reject)
-      .catch(e => {
-        expect(e.statusCode).toBe(status);
-        expect(e.name).toBe('ServerError');
-        expect(e).toHaveProperty('response');
-        expect(e.bodyText).toBe(undefined);
-        resolve();
-      })
-      .catch(reject);
+      .catch(error => error);
+
+    expect(error.statusCode).toBe(status);
+    expect(error.name).toBe('ServerError');
+    expect(error).toHaveProperty('response');
+    expect(error.bodyText).toBe(undefined);
   });
 
-  itAsync('throws a ServerParse error when response is 200 with unparsable json', (resolve, reject) => {
+  it('throws a ServerParse error when response is 200 with unparsable json', async () => {
     const status = 200;
     fetchMock.mockGlobal().route('begin:http://localhost/error', status);
-    fetch('/error')
+    const error = await fetch('/error')
       .then(parseAndCheckHttpResponse(operations))
-      .then(reject)
-      .catch(e => {
-        expect(e.statusCode).toBe(status);
-        expect(e.name).toBe('ServerParseError');
-        expect(e).toHaveProperty('response');
-        expect(e).toHaveProperty('bodyText');
-        resolve();
-      })
-      .catch(reject);
+      .catch(error => error);
+
+    expect(error.statusCode).toBe(status);
+    expect(error.name).toBe('ServerParseError');
+    expect(error).toHaveProperty('response');
+    expect(error).toHaveProperty('bodyText');
   });
 
-  itAsync('throws a network error with a status code and result', (resolve, reject) => {
+  it('throws a network error with a status code and result', async () => {
     const status = 403;
     const body = { data: 'fail' }; // does not contain data or errors
     fetchMock.mockGlobal().route('begin:http://localhost/error', {
       body,
       status,
     });
-    fetch('/error')
+    const error = await fetch('/error')
       .then(parseAndCheckHttpResponse(operations))
-      .then(reject)
-      .catch(e => {
-        expect(e.statusCode).toBe(status);
-        expect(e.name).toBe('ServerError');
-        expect(e).toHaveProperty('response');
-        expect(e).toHaveProperty('result');
-        resolve();
-      })
-      .catch(reject);
+      .catch(error => error);
+
+    expect(error.statusCode).toBe(status);
+    expect(error.name).toBe('ServerError');
+    expect(error).toHaveProperty('response');
+    expect(error).toHaveProperty('result');
   });
 
-  itAsync('throws a server error on incorrect data', (resolve, reject) => {
-    const data = { hello: 'world' }; // does not contain data or erros
+  it('throws a server error on incorrect data', async () => {
+    const data = { hello: 'world' }; //does not contain data or erros
     fetchMock.mockGlobal().route('begin:http://localhost/incorrect', data);
-    fetch('/incorrect')
+    const error = await fetch('/incorrect')
       .then(parseAndCheckHttpResponse(operations))
-      .then(reject)
-      .catch(e => {
-        expect(e.statusCode).toBe(200);
-        expect(e.name).toBe('ServerError');
-        expect(e).toHaveProperty('response');
-        expect(e.result).toEqual(data);
-        resolve();
-      })
-      .catch(reject);
+      .catch(error => error);
+
+    expect(error.statusCode).toBe(200);
+    expect(error.name).toBe('ServerError');
+    expect(error).toHaveProperty('response');
+    expect(error.result).toEqual(data);
   });
 
-  itAsync('is able to return a correct GraphQL result', (resolve, reject) => {
+  it('is able to return a correct GraphQL result', async () => {
     const errors = ['', `${new Error('hi')}`];
     const data = { data: { hello: 'world' }, errors };
 
     fetchMock.mockGlobal().route('begin:http://localhost/data', {
       body: data,
     });
-    fetch('/data')
-      .then(parseAndCheckHttpResponse(operations))
-      .then(({ data, errors: e }) => {
-        expect(data).toEqual({ hello: 'world' });
-        expect(e.length).toEqual(errors.length);
-        expect(e).toEqual(errors);
-        resolve();
-      })
-      .catch(reject);
+
+    {
+      const { data, errors: e } = await fetch('/data').then(parseAndCheckHttpResponse(operations));
+
+      expect(data).toEqual({ hello: 'world' });
+      expect(e.length).toEqual(errors.length);
+      expect(e).toEqual(errors);
+    }
   });
 });

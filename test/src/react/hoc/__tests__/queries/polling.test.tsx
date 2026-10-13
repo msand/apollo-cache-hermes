@@ -4,10 +4,10 @@ import gql from 'graphql-tag';
 import { DocumentNode } from 'graphql';
 import { ApolloClient, ApolloLink, ApolloProvider } from '@apollo/client';
 import { graphql, ChildProps } from '@apollo/client/react/hoc';
+import { itAsync, mockSingleLink } from '@apollo/client/testing';
+import { Observable } from '@apollo/client/utilities';
 
 import { Hermes } from '../../../../../../src';
-import { itAsync, mockSingleLink } from '../../../../testing';
-import { Observable } from '../../../../utilities';
 
 describe('[queries] polling', () => {
   let error: typeof console.error;

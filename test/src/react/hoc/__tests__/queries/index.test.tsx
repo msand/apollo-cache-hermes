@@ -6,9 +6,10 @@ import gql from 'graphql-tag';
 import { DocumentNode } from 'graphql';
 import { ApolloClient, ApolloProvider, ApolloLink } from '@apollo/client';
 import { graphql, ChildProps } from '@apollo/client/react/hoc';
+import { itAsync, mockSingleLink } from '@apollo/client/testing';
+import { DataProps } from '@apollo/client/react/hoc/types';
+import { muteDeprecations } from '@apollo/client/utilities/deprecation';
 
-import { itAsync, mockSingleLink } from '../../../../testing';
-import { DataProps } from '../../types';
 import { Hermes } from '../../../../../../src';
 
 describe('queries', () => {
@@ -220,11 +221,13 @@ describe('queries', () => {
     console.warn = (str: any) => warnings.push(str);
 
     try {
-      graphql(gql`
-        query foo {
-          bar
-        }
-      `);
+      muteDeprecations('graphql', () => {
+        graphql(gql`
+          query foo {
+            bar
+          }
+        `);
+      });
       expect(warnings.length).toEqual(0);
     } finally {
       console.warn = oldWarn;

@@ -1,10 +1,9 @@
 /** @jest-environment node */
 import React from 'react';
-
-import { makeVar } from '../../../core';
-import { useReactiveVar } from '../../hooks';
-import { renderToStringWithData } from '..';
-import { spyOnConsole } from '../../../testing/internal';
+import { makeVar } from '@apollo/client/core';
+import { useReactiveVar } from '@apollo/client/react/hooks';
+import { renderToStringWithData } from '@apollo/client/react/ssr';
+import { spyOnConsole } from '@apollo/client/testing/internal';
 
 describe('useReactiveVar Hook SSR', () => {
   it('does not cause warnings', async () => {

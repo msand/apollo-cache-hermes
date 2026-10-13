@@ -4,9 +4,9 @@ import gql from 'graphql-tag';
 import { DocumentNode } from 'graphql';
 import { ApolloCache, ApolloClient, ApolloProvider, MutationFunction } from '@apollo/client';
 import { graphql, ChildProps } from '@apollo/client/react/hoc';
+import { MutationUpdaterFunction } from '@apollo/client/core';
+import { mockSingleLink } from '@apollo/client/testing';
 
-import { MutationUpdaterFunction } from '../../../../core';
-import { mockSingleLink } from '../../../../testing';
 import { Hermes } from '../../../../../../src';
 
 describe('graphql(mutation) update queries', () => {

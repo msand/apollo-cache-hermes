@@ -4,9 +4,9 @@ import gql from 'graphql-tag';
 import { DocumentNode } from 'graphql';
 import { ApolloClient, ApolloProvider, ApolloLink } from '@apollo/client';
 import { graphql, ChildProps } from '@apollo/client/react/hoc';
+import { itAsync, mockSingleLink } from '@apollo/client/testing';
 
 import { Hermes } from '../../../../../../src';
-import { itAsync, mockSingleLink } from '../../../../testing';
 
 describe('[queries] skip', () => {
   itAsync('allows you to skip a query without running it', (resolve, reject) => {

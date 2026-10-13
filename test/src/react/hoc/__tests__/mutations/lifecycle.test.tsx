@@ -3,8 +3,8 @@ import { render } from '@testing-library/react';
 import gql from 'graphql-tag';
 import { ApolloProvider } from '@apollo/client';
 import { graphql, ChildProps } from '@apollo/client/react/hoc';
-
-import { itAsync, createMockClient } from '../../../../testing/core';
+import { itAsync } from '@apollo/client/testing/core';
+import { createMockClient } from '@apollo/client/testing';
 
 const query = gql`
   mutation addPerson($id: Int) {

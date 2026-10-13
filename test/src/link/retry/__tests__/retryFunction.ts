@@ -1,5 +1,5 @@
-import { Operation } from '../../core/types';
-import { buildRetryFunction } from '../retryFunction';
+import { Operation } from '@apollo/client/link/core/types';
+import { buildRetryFunction } from '@apollo/client/link/retry/retryFunction';
 
 describe('buildRetryFunction', () => {
   const operation = { operationName: 'foo' } as Operation;

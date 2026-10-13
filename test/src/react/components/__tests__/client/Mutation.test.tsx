@@ -1,16 +1,16 @@
 import * as React from 'react';
 import gql from 'graphql-tag';
-import { ExecutionResult, GraphQLError } from 'graphql';
+import { ExecutionResult, FormattedExecutionResult, GraphQLError } from 'graphql';
 import userEvent from '@testing-library/user-event';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import { ApolloClient, ApolloProvider } from '@apollo/client';
 import { loadErrorMessages } from '@apollo/client/dev';
 import { PropsWithChildren, useState } from 'react';
 import { Mutation, Query } from '@apollo/client/react/components';
+import { ApolloError } from '@apollo/client/errors';
+import { DataProxy } from '@apollo/client/cache';
+import { itAsync, MockLink, mockSingleLink, MockedProvider } from '@apollo/client/testing';
 
-import { ApolloError } from '../../../../errors';
-import { DataProxy } from '../../../../cache';
-import { itAsync, MockedProvider, MockLink, mockSingleLink } from '../../../../testing';
 import { Hermes } from '../../../../../../src';
 
 // These tests assert the @apollo/client error text rather than its production placeholder.
@@ -293,7 +293,7 @@ describe('General Mutation testing', () => {
         {(createTodo: any) => {
           if (!called) {
             createTodo().catch((error: any) => {
-              expect(error).toEqual(new Error('Error 1'));
+              expect(error).toEqual(new ApolloError({ networkError: new Error('Error 1') }));
               done = true;
             });
           }
@@ -370,9 +370,9 @@ describe('General Mutation testing', () => {
 
     const onError = (error: Error) => {
       if (count === 1) {
-        expect(error).toEqual(new Error('Error 1'));
+        expect(error).toEqual(new ApolloError({ networkError: new Error('Error 1') }));
       } else if (count === 3) {
-        expect(error).toEqual(new Error('Error 2'));
+        expect(error).toEqual(new ApolloError({ networkError: new Error('Error 2') }));
       }
     };
     const Component = () => (
@@ -390,7 +390,7 @@ describe('General Mutation testing', () => {
             expect(result.loading).toEqual(false);
             expect(result.data).toEqual(undefined);
             expect(result.called).toEqual(true);
-            expect(result.error).toEqual(new Error('Error 2'));
+            expect(result.error).toEqual(new ApolloError({ networkError: new Error('Error 2') }));
           }
           count++;
           return <div />;
@@ -485,12 +485,12 @@ describe('General Mutation testing', () => {
         {(createTodo: any, result: any) => {
           if (count === 0) {
             createTodo().catch((err: any) => {
-              expect(err).toEqual(new Error('error occurred'));
+              expect(err).toEqual(new ApolloError({ networkError: new Error('error occurred') }));
             });
           } else if (count === 1) {
             expect(result.loading).toBeTruthy();
           } else if (count === 2) {
-            expect(result.error).toEqual(new Error('error occurred'));
+            expect(result.error).toEqual(new ApolloError({ networkError: new Error('error occurred') }));
           }
           count++;
           return <div />;
@@ -825,6 +825,7 @@ describe('General Mutation testing', () => {
           if (count === 0) {
             createTodo();
             const dataInStore = client.cache.extract(true);
+            // Hermes: extract() returns serialized nodes; the entity's fields are under `data`.
             expect(dataInStore['Todo:99'].data).toEqual(optimisticResponse.createTodo);
           } else if (count === 1) {
             expect(result.loading).toEqual(true);
@@ -875,6 +876,7 @@ describe('General Mutation testing', () => {
           if (count === 0) {
             createTodo({ optimisticResponse });
             const dataInStore = client.cache.extract(true);
+            // Hermes: extract() returns serialized nodes; the entity's fields are under `data`.
             expect(dataInStore['Todo:99'].data).toEqual(optimisticResponse.createTodo);
           } else if (count === 2) {
             expect(result.loading).toEqual(false);
@@ -1169,7 +1171,7 @@ describe('General Mutation testing', () => {
     }));
 
   it('has an update prop for updating the store after the mutation', async () => {
-    const update = (_proxy: DataProxy, response: ExecutionResult) => {
+    const update = (_proxy: DataProxy, response: FormattedExecutionResult) => {
       expect(response.data).toEqual(data);
     };
 

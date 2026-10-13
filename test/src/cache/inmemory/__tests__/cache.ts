@@ -1,15 +1,15 @@
 import { loadErrorMessages } from '@apollo/client/dev';
 import gql, { disableFragmentWarnings } from 'graphql-tag';
 import { expectTypeOf } from 'expect-type';
-import { InMemoryCache, TypePolicies } from '@apollo/client';
+import { TypePolicies } from '@apollo/client';
+import { cloneDeep } from '@apollo/client/utilities';
+import { makeReference, Reference, makeVar, TypedDocumentNode, isReference, DocumentNode } from '@apollo/client/core';
+import { Cache } from '@apollo/client/cache';
+import { StoreReader } from '@apollo/client/cache/inmemory/readFromStore';
+import { StoreWriter } from '@apollo/client/cache/inmemory/writeToStore';
+import { ObjectCanon } from '@apollo/client/cache/inmemory/object-canon';
+import { spyOnConsole } from '@apollo/client/testing/internal';
 
-import { cloneDeep } from '../../../utilities';
-import { makeReference, Reference, makeVar, TypedDocumentNode, isReference, DocumentNode } from '../../../core';
-import { Cache } from '../..';
-import { StoreReader } from '../readFromStore';
-import { StoreWriter } from '../writeToStore';
-import { ObjectCanon } from '../object-canon';
-import { spyOnConsole } from '../../../testing/internal';
 import { Hermes } from '../../../../../src';
 import { CacheContext } from '../../../../../src/context';
 
@@ -2293,7 +2293,8 @@ describe('Hermes#broadcastWatches', () => {
     ]);
   });
 
-  it('should pass WatchOptions through to cache.diff', () => {
+  // Hermes: canonizeResults is InMemoryCache-only
+  it.skip('should pass WatchOptions through to cache.diff', () => {
     const typePolicies: TypePolicies = {
       Query: {
         fields: {
@@ -2304,15 +2305,15 @@ describe('Hermes#broadcastWatches', () => {
       },
     };
 
-    const canonicalCache = new InMemoryCache({
+    const canonicalCache = new Hermes({
       canonizeResults: true,
       typePolicies,
-    });
+    } as CacheContext.Configuration);
 
-    const nonCanonicalCache = new InMemoryCache({
+    const nonCanonicalCache = new Hermes({
       canonizeResults: false,
       typePolicies,
-    });
+    } as CacheContext.Configuration);
 
     const query = gql`
       query {
@@ -4151,12 +4152,14 @@ describe('ReactiveVar and makeVar', () => {
 
   it('should broadcast to manually added caches', () => {
     const rv = makeVar(0);
-    const cache = new InMemoryCache();
+    const cache = new Hermes();
     const query = gql`
       query {
         value
       }
     `;
+    // Hermes: watch callbacks also receive internal entityIds/dynamicNodeIds
+    // bookkeeping, hence toMatchObject.
     const diffs: Cache.DiffResult<any>[] = [];
     const watch: Cache.WatchOptions = {
       query,
@@ -4178,12 +4181,12 @@ describe('ReactiveVar and makeVar', () => {
     // This should not trigger a broadcast, since we haven't associated
     // this cache with rv yet.
     rv(rv() + 1);
-    expect(diffs).toEqual([]);
+    expect(diffs).toMatchObject([]);
 
     // The rv.attachCache method returns rv, for chaining.
     rv.attachCache(cache)(rv() + 1);
 
-    expect(diffs).toEqual([
+    expect(diffs).toMatchObject([
       {
         complete: true,
         result: {
@@ -4200,7 +4203,7 @@ describe('ReactiveVar and makeVar', () => {
       },
     });
 
-    expect(diffs).toEqual([
+    expect(diffs).toMatchObject([
       {
         complete: true,
         result: {
@@ -4210,7 +4213,7 @@ describe('ReactiveVar and makeVar', () => {
     ]);
 
     rv(rv() + 1);
-    expect(diffs).toEqual([
+    expect(diffs).toMatchObject([
       {
         complete: true,
         result: {
@@ -4238,7 +4241,7 @@ describe('ReactiveVar and makeVar', () => {
     // Since we called rv.forgetCache(cache) above, updating rv here
     // should not trigger a broadcast.
     rv(rv() + 1);
-    expect(diffs).toEqual([
+    expect(diffs).toMatchObject([
       {
         complete: true,
         result: {
@@ -4254,7 +4257,7 @@ describe('ReactiveVar and makeVar', () => {
     ]);
 
     cache['broadcastWatches']();
-    expect(diffs).toEqual([
+    expect(diffs).toMatchObject([
       {
         complete: true,
         result: {

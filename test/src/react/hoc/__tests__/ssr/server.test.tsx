@@ -13,10 +13,10 @@ import {
 import gql from 'graphql-tag';
 import { ApolloClient, ApolloProvider, ApolloLink } from '@apollo/client';
 import { graphql, ChildProps } from '@apollo/client/react/hoc';
+import { Observable } from '@apollo/client/utilities';
+import { renderToStringWithData } from '@apollo/client/react/ssr';
 
 import { Hermes } from '../../../../../../src';
-import { Observable } from '../../../../utilities';
-import { renderToStringWithData } from '../../../ssr';
 
 const planetMap = new Map([['Planet:1', { id: 'Planet:1', name: 'Tatooine' }]]);
 

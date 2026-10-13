@@ -1,9 +1,7 @@
 import React, { StrictMode, useEffect } from 'react';
 import { screen, render, waitFor, act } from '@testing-library/react';
-
-import { itAsync } from '../../../testing';
-import { makeVar } from '../../../core';
-import { useReactiveVar } from '../useReactiveVar';
+import { makeVar } from '@apollo/client/core';
+import { useReactiveVar } from '@apollo/client/react/hooks/useReactiveVar';
 
 const IS_REACT_18 = React.version.startsWith('18');
 const IS_REACT_19 = React.version.startsWith('19');
@@ -47,7 +45,7 @@ describe('useReactiveVar Hook', () => {
     });
   });
 
-  itAsync('works when two components share a variable', async (resolve, reject) => {
+  it('works when two components share a variable', async () => {
     const counterVar = makeVar(0);
 
     let parentRenderCount = 0;
@@ -65,7 +63,7 @@ describe('useReactiveVar Hook', () => {
           expect(count).toBe(11);
           break;
         default:
-          reject(`too many (${parentRenderCount}) parent renders`);
+          throw new Error(`too many (${parentRenderCount}) parent renders`);
       }
 
       return <Child />;
@@ -86,7 +84,7 @@ describe('useReactiveVar Hook', () => {
           expect(count).toBe(11);
           break;
         default:
-          reject(`too many (${childRenderCount}) child renders`);
+          throw new Error(`too many (${childRenderCount}) child renders`);
       }
 
       return null;
@@ -127,8 +125,6 @@ describe('useReactiveVar Hook', () => {
     });
 
     expect(counterVar()).toBe(11);
-
-    resolve();
   });
 
   it('does not update if component has been unmounted', async () => {
@@ -249,7 +245,7 @@ describe('useReactiveVar Hook', () => {
       });
     });
 
-    itAsync('works with strict mode', async (resolve, reject) => {
+    it('works with strict mode', async () => {
       const counterVar = makeVar(0);
       const mock = jest.fn();
 
@@ -260,7 +256,7 @@ describe('useReactiveVar Hook', () => {
         }, [count]);
 
         useEffect(() => {
-          Promise.resolve().then(() => {
+          void Promise.resolve().then(() => {
             counterVar(counterVar() + 1);
           });
         }, []);
@@ -286,11 +282,9 @@ describe('useReactiveVar Hook', () => {
           expect(mock).toHaveBeenNthCalledWith(2, 1);
         }
       });
-
-      resolve();
     });
 
-    itAsync('works with multiple synchronous calls', async (resolve, reject) => {
+    it('works with multiple synchronous calls', async () => {
       const counterVar = makeVar(0);
       function Component() {
         const count = useReactiveVar(counterVar);
@@ -299,7 +293,7 @@ describe('useReactiveVar Hook', () => {
       }
 
       render(<Component />);
-      Promise.resolve().then(() => {
+      void Promise.resolve().then(() => {
         counterVar(1);
         counterVar(2);
         counterVar(3);
@@ -315,11 +309,9 @@ describe('useReactiveVar Hook', () => {
       await waitFor(() => {
         expect(screen.getAllByText('10')).toHaveLength(1);
       });
-
-      resolve();
     });
 
-    itAsync('should survive many rerenderings despite racing asynchronous updates', (resolve, reject) => {
+    it('should survive many rerenderings despite racing asynchronous updates', done => {
       const rv = makeVar(0);
 
       function App() {
@@ -346,16 +338,16 @@ describe('useReactiveVar Hook', () => {
           } else {
             stopped = true;
             expect(rv()).toBe(goalCount);
-            screen
+            void screen
               .findByText(String(goalCount))
               .then(element => {
                 expect(element.nodeName.toLowerCase()).toBe('h1');
               })
-              .then(resolve, reject);
+              .then(done);
           }
         } catch (e) {
           stopped = true;
-          reject(e);
+          throw e;
         }
       }
       spam();

@@ -1,12 +1,11 @@
 import gql from 'graphql-tag';
 import { ASTNode, print, stripIgnoredCharacters } from 'graphql';
-
-import { createOperation } from '../../utils/createOperation';
+import { createOperation } from '@apollo/client/link/utils/createOperation';
 import {
   selectHttpOptionsAndBody,
   selectHttpOptionsAndBodyInternal,
   fallbackHttpConfig,
-} from '../selectHttpOptionsAndBody';
+} from '@apollo/client/link/http/selectHttpOptionsAndBody';
 
 const query = gql`
   query SampleQuery {

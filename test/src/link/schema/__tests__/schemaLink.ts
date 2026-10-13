@@ -2,8 +2,7 @@ import { makeExecutableSchema } from '@graphql-tools/schema';
 import gql from 'graphql-tag';
 import { SchemaLink } from '@apollo/client/link/schema';
 import { execute } from '@apollo/client';
-
-import { itAsync } from '../../../testing';
+import { ObservableStream } from '@apollo/client/testing/internal';
 
 const sampleQuery = gql`
   query SampleQuery {
@@ -46,25 +45,18 @@ describe('SchemaLink', () => {
     expect(link.schema).toEqual(schema);
   });
 
-  itAsync('calls next and then complete', (resolve, reject) => {
-    const next = jest.fn();
+  it('calls next and then complete', async () => {
     const link = new SchemaLink({ schema });
     const observable = execute(link, {
       query: sampleQuery,
     });
-    observable.subscribe({
-      next,
-      error: () => {
-        throw new Error('Received error');
-      },
-      complete: () => {
-        expect(next).toHaveBeenCalledTimes(1);
-        resolve();
-      },
-    });
+    const stream = new ObservableStream(observable);
+
+    await expect(stream).toEmitNext();
+    await expect(stream).toComplete();
   });
 
-  itAsync('calls error when fetch fails', (resolve, reject) => {
+  it('calls error when fetch fails', async () => {
     const link = new SchemaLink({
       validate: true,
       schema: makeExecutableSchema({
@@ -81,16 +73,15 @@ describe('SchemaLink', () => {
     const observable = execute(link, {
       query: sampleQuery,
     });
-    observable.subscribe(result => {
-      expect(result.errors).toBeTruthy();
-      expect(result.errors!.length).toBe(1);
-      expect(result.errors![0].message).toMatch(/Unauthorized/);
-      resolve();
+    const stream = new ObservableStream(observable);
+
+    await expect(stream).toEmitValue({
+      data: { sampleQuery: null },
+      errors: [{ message: 'Unauthorized', path: ['sampleQuery'] }],
     });
   });
 
-  itAsync('supports query which is executed synchronously', (resolve, reject) => {
-    const next = jest.fn();
+  it('supports query which is executed synchronously', async () => {
     const link = new SchemaLink({ schema });
     const introspectionQuery = gql`
       query IntrospectionQuery {
@@ -104,30 +95,19 @@ describe('SchemaLink', () => {
     const observable = execute(link, {
       query: introspectionQuery,
     });
-    observable.subscribe(
-      next,
-      () => {
-        throw new Error('Received error');
-      },
-      () => {
-        expect(next).toHaveBeenCalledTimes(1);
-        resolve();
-      },
-    );
+    const stream = new ObservableStream(observable);
+
+    await expect(stream).toEmitNext();
+    await expect(stream).toComplete();
   });
 
-  itAsync('passes operation context into execute with context function', (resolve, reject) => {
-    const next = jest.fn();
+  it('passes operation context into execute with context function', async () => {
     const contextValue = { some: 'value' };
     const contextProvider = jest.fn(operation => operation.getContext());
     const resolvers = {
       Query: {
         sampleQuery: (root: any, args: any, context: any) => {
-          try {
-            expect(context).toEqual(contextValue);
-          } catch (error) {
-            reject('Should pass context into resolver');
-          }
+          expect(context).toEqual(contextValue);
         },
       },
     };
@@ -143,31 +123,17 @@ describe('SchemaLink', () => {
       query: sampleQuery,
       context: contextValue,
     });
-    observable.subscribe(
-      next,
-      // eslint-disable-next-line handle-callback-err
-      error => reject("Shouldn't call onError"),
-      () => {
-        try {
-          expect(next).toHaveBeenCalledTimes(1);
-          expect(contextProvider).toHaveBeenCalledTimes(1);
-          resolve();
-        } catch (e) {
-          reject(e);
-        }
-      },
-    );
+    const stream = new ObservableStream(observable);
+
+    await expect(stream).toEmitNext();
+    await expect(stream).toComplete();
+    expect(contextProvider).toHaveBeenCalledTimes(1);
   });
 
-  itAsync('passes static context into execute', (resolve, reject) => {
-    const next = jest.fn();
+  it('passes static context into execute', async () => {
     const contextValue = { some: 'value' };
     const resolver = jest.fn((root, args, context) => {
-      try {
-        expect(context).toEqual(contextValue);
-      } catch (error) {
-        reject('Should pass context into resolver');
-      }
+      expect(context).toEqual(contextValue);
     });
 
     const resolvers = {
@@ -186,23 +152,14 @@ describe('SchemaLink', () => {
     const observable = execute(link, {
       query: sampleQuery,
     });
-    observable.subscribe(
-      next,
-      // eslint-disable-next-line handle-callback-err
-      error => reject("Shouldn't call onError"),
-      () => {
-        try {
-          expect(next).toHaveBeenCalledTimes(1);
-          expect(resolver).toHaveBeenCalledTimes(1);
-          resolve();
-        } catch (e) {
-          reject(e);
-        }
-      },
-    );
+    const stream = new ObservableStream(observable);
+
+    await expect(stream).toEmitNext();
+    await expect(stream).toComplete();
+    expect(resolver).toHaveBeenCalledTimes(1);
   });
 
-  itAsync('reports errors for unknown queries', (resolve, reject) => {
+  it('reports errors for unknown queries', async () => {
     const link = new SchemaLink({
       validate: true,
       schema: makeExecutableSchema({
@@ -216,11 +173,9 @@ describe('SchemaLink', () => {
         }
       `,
     });
-    observable.subscribe(result => {
-      expect(result.errors).toBeTruthy();
-      expect(result.errors!.length).toBe(1);
-      expect(result.errors![0].message).toMatch(/Cannot query field "unknown"/);
-      resolve();
+    const stream = new ObservableStream(observable);
+    await expect(stream).toEmitValue({
+      errors: [{ message: 'Cannot query field "unknown" on type "Query".' }],
     });
   });
 });

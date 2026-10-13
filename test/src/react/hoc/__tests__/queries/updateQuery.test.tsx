@@ -4,9 +4,9 @@ import { DocumentNode } from 'graphql';
 import { render, waitFor } from '@testing-library/react';
 import { ApolloClient, ApolloProvider } from '@apollo/client';
 import { graphql, ChildProps } from '@apollo/client/react/hoc';
+import { itAsync, mockSingleLink } from '@apollo/client/testing';
 
 import { Hermes } from '../../../../../../src';
-import { itAsync, mockSingleLink } from '../../../../testing';
 
 describe('[queries] updateQuery', () => {
   // updateQuery

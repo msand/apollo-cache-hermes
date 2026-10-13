@@ -1,16 +1,22 @@
+import { loadErrorMessages } from '@apollo/client/dev';
 import * as React from 'react';
 import { DocumentNode } from 'graphql';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import gql from 'graphql-tag';
 import { Observable } from 'zen-observable-ts';
 import { ApolloLink } from '@apollo/client';
+import { MockedResponse, MockLink } from '@apollo/client/testing/core';
+import { useQuery } from '@apollo/client/react/hooks';
+import { QueryResult } from '@apollo/client/react/types/types';
+import { FetchResult } from '@apollo/client/link/core';
+import { ApolloError } from '@apollo/client/errors';
+import { withMutedDeprecations } from '@apollo/client/testing/internal';
+import { MockedProvider } from '@apollo/client/testing';
 
-import { itAsync, MockedResponse, MockLink } from '../../core';
-import { MockedProvider } from '../MockedProvider';
-import { useQuery } from '../../../react/hooks';
-import { QueryResult } from '../../../react/types/types';
-import { FetchResult } from '../../../link/core';
 import { Hermes } from '../../../../../src';
+
+// These tests assert the @apollo/client error text rather than its production placeholder.
+loadErrorMessages();
 
 const variables = {
   username: 'mock_username',
@@ -82,7 +88,7 @@ describe('General use', () => {
     errorThrown = false;
   });
 
-  itAsync('should mock the data', (resolve, reject) => {
+  it('should mock the data', async () => {
     let finished = false;
     function Component({ username }: Variables) {
       const { loading, data } = useQuery<Data, Variables>(query, { variables });
@@ -99,12 +105,12 @@ describe('General use', () => {
       </MockedProvider>,
     );
 
-    waitFor(() => {
+    await waitFor(() => {
       expect(finished).toBe(true);
-    }).then(resolve, reject);
+    });
   });
 
-  itAsync('should pass the variables to the result function', async (resolve, reject) => {
+  it('should pass the variables to the result function', async () => {
     function Component({ ...variables }: Variables) {
       useQuery<Data, Variables>(query, { variables });
       return null;
@@ -124,12 +130,12 @@ describe('General use', () => {
       </MockedProvider>,
     );
 
-    waitFor(() => {
+    await waitFor(() => {
       expect(mock2.result as jest.Mock).toHaveBeenCalledWith(variables);
-    }).then(resolve, reject);
+    });
   });
 
-  itAsync('should pass the variables to the variableMatcher', async (resolve, reject) => {
+  it('should pass the variables to the variableMatcher', async () => {
     function Component({ ...variables }: Variables) {
       useQuery<Data, Variables>(query, { variables });
       return null;
@@ -149,12 +155,12 @@ describe('General use', () => {
       </MockedProvider>,
     );
 
-    waitFor(() => {
+    await waitFor(() => {
       expect(mock2.variableMatcher as jest.Mock).toHaveBeenCalledWith(variables);
-    }).then(resolve, reject);
+    });
   });
 
-  itAsync('should use a mock if the variableMatcher returns true', async (resolve, reject) => {
+  it('should use a mock if the variableMatcher returns true', async () => {
     let finished = false;
 
     function Component({ username }: Variables) {
@@ -182,12 +188,12 @@ describe('General use', () => {
       </MockedProvider>,
     );
 
-    waitFor(() => {
+    await waitFor(() => {
       expect(finished).toBe(true);
-    }).then(resolve, reject);
+    });
   });
 
-  itAsync('should allow querying with the typename', (resolve, reject) => {
+  it('should allow querying with the typename', async () => {
     let finished = false;
     function Component({ username }: Variables) {
       const { loading, data } = useQuery<Data, Variables>(query, { variables });
@@ -214,12 +220,12 @@ describe('General use', () => {
       </MockedProvider>,
     );
 
-    waitFor(() => {
+    await waitFor(() => {
       expect(finished).toBe(true);
-    }).then(resolve, reject);
+    });
   });
 
-  itAsync('should allow using a custom cache', (resolve, reject) => {
+  it('should allow using a custom cache', async () => {
     let finished = false;
     const cache = new Hermes();
     cache.writeQuery({
@@ -243,12 +249,12 @@ describe('General use', () => {
       </MockedProvider>,
     );
 
-    waitFor(() => {
+    await waitFor(() => {
       expect(finished).toBe(true);
-    }).then(resolve, reject);
+    });
   });
 
-  itAsync('should error if the variables in the mock and component do not match', (resolve, reject) => {
+  it('should error if the variables in the mock and component do not match', async () => {
     let finished = false;
     function Component({ ...variables }: Variables) {
       const { loading, error } = useQuery<Data, Variables>(query, {
@@ -272,12 +278,12 @@ describe('General use', () => {
       </MockedProvider>,
     );
 
-    waitFor(() => {
+    await waitFor(() => {
       expect(finished).toBe(true);
-    }).then(resolve, reject);
+    });
   });
 
-  itAsync('should error if the variableMatcher returns false', async (resolve, reject) => {
+  it('should error if the variableMatcher returns false', async () => {
     let finished = false;
     function Component({ ...variables }: Variables) {
       const { loading, error } = useQuery<Data, Variables>(query, {
@@ -304,12 +310,12 @@ describe('General use', () => {
       </MockedProvider>,
     );
 
-    waitFor(() => {
+    await waitFor(() => {
       expect(finished).toBe(true);
-    }).then(resolve, reject);
+    });
   });
 
-  itAsync('should error if the variables do not deep equal', (resolve, reject) => {
+  it('should error if the variables do not deep equal', async () => {
     let finished = false;
     function Component({ ...variables }: Variables) {
       const { loading, error } = useQuery<Data, Variables>(query, {
@@ -346,12 +352,12 @@ describe('General use', () => {
       </MockedProvider>,
     );
 
-    waitFor(() => {
+    await waitFor(() => {
       expect(finished).toBe(true);
-    }).then(resolve, reject);
+    });
   });
 
-  itAsync('should not error if the variables match but have different order', (resolve, reject) => {
+  it('should not error if the variables match but have different order', async () => {
     let finished = false;
     function Component({ ...variables }: Variables) {
       const { loading, data } = useQuery<Data, Variables>(query, {
@@ -388,19 +394,19 @@ describe('General use', () => {
       </MockedProvider>,
     );
 
-    waitFor(() => {
+    await waitFor(() => {
       expect(finished).toBe(true);
-    }).then(resolve, reject);
+    });
   });
 
-  itAsync('should support mocking a network error', (resolve, reject) => {
+  it('should support mocking a network error', async () => {
     let finished = false;
     function Component({ ...variables }: Variables) {
       const { loading, error } = useQuery<Data, Variables>(query, {
         variables,
       });
       if (!loading) {
-        expect(error).toEqual(new Error('something went wrong'));
+        expect(error).toEqual(new ApolloError({ networkError: new Error('something went wrong') }));
         finished = true;
       }
       return null;
@@ -422,12 +428,12 @@ describe('General use', () => {
       </MockedProvider>,
     );
 
-    waitFor(() => {
+    await waitFor(() => {
       expect(finished).toBe(true);
-    }).then(resolve, reject);
+    });
   });
 
-  itAsync('should error if the query in the mock and component do not match', (resolve, reject) => {
+  it('should error if the query in the mock and component do not match', async () => {
     let finished = false;
     function Component({ ...variables }: Variables) {
       const { loading, error } = useQuery<Data, Variables>(query, {
@@ -462,9 +468,9 @@ describe('General use', () => {
       </MockedProvider>,
     );
 
-    waitFor(() => {
+    await waitFor(() => {
       expect(finished).toBe(true);
-    }).then(resolve, reject);
+    });
   });
 
   it('should pass down props prop in mock as props for the component', () => {
@@ -495,7 +501,7 @@ describe('General use', () => {
     unmount();
   });
 
-  itAsync('should support returning mocked results from a function', (resolve, reject) => {
+  it('should support returning mocked results from a function', async () => {
     let finished = false;
     let resultReturned = false;
 
@@ -553,9 +559,9 @@ describe('General use', () => {
       </MockedProvider>,
     );
 
-    waitFor(() => {
+    await waitFor(() => {
       expect(finished).toBe(true);
-    }).then(resolve, reject);
+    });
   });
 
   it('should return "No more mocked responses" errors in response', async () => {
@@ -867,6 +873,8 @@ describe('General use', () => {
 
   it('shows a warning in the console when there is no matched mock', async () => {
     const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    using _ = withMutedDeprecations();
     let finished = false;
     function Component({ ...variables }: Variables) {
       const { loading } = useQuery<Data, Variables>(query, { variables });
@@ -910,6 +918,7 @@ describe('General use', () => {
 
   it('silences console warning for unmatched mocks when `showWarnings` is `false`', async () => {
     const consoleSpy = jest.spyOn(console, 'warn');
+    using _ = withMutedDeprecations();
     let finished = false;
     function Component({ ...variables }: Variables) {
       const { loading } = useQuery<Data, Variables>(query, { variables });
@@ -952,6 +961,7 @@ describe('General use', () => {
 
   it('silences console warning for unmatched mocks when passing `showWarnings` to `MockLink` directly', async () => {
     const consoleSpy = jest.spyOn(console, 'warn');
+    using _ = withMutedDeprecations();
     let finished = false;
     function Component({ ...variables }: Variables) {
       const { loading } = useQuery<Data, Variables>(query, { variables });
@@ -996,7 +1006,7 @@ describe('General use', () => {
     consoleSpy.mockRestore();
   });
 
-  itAsync('should support custom error handling using setOnError', (resolve, reject) => {
+  it('should support custom error handling using setOnError', async () => {
     let finished = false;
     function Component({ ...variables }: Variables) {
       useQuery<Data, Variables>(query, { variables });
@@ -1016,12 +1026,12 @@ describe('General use', () => {
       </MockedProvider>,
     );
 
-    waitFor(() => {
+    await waitFor(() => {
       expect(finished).toBe(true);
-    }).then(resolve, reject);
+    });
   });
 
-  itAsync('should pipe exceptions thrown in custom onError functions through the link chain', (resolve, reject) => {
+  it('should pipe exceptions thrown in custom onError functions through the link chain', async () => {
     let finished = false;
     function Component({ ...variables }: Variables) {
       const { loading, error } = useQuery<Data, Variables>(query, {
@@ -1046,9 +1056,9 @@ describe('General use', () => {
       </MockedProvider>,
     );
 
-    waitFor(() => {
+    await waitFor(() => {
       expect(finished).toBe(true);
-    }).then(resolve, reject);
+    });
   });
 
   it('should support loading state testing with delay', async () => {
@@ -1174,7 +1184,7 @@ describe('General use', () => {
 });
 
 describe('@client testing', () => {
-  itAsync('should support @client fields with a custom cache', (resolve, reject) => {
+  it('should support @client fields with a custom cache', async () => {
     let finished = false;
     const cache = new Hermes();
 
@@ -1216,12 +1226,12 @@ describe('@client testing', () => {
       </MockedProvider>,
     );
 
-    waitFor(() => {
+    await waitFor(() => {
       expect(finished).toBe(true);
-    }).then(resolve, reject);
+    });
   });
 
-  itAsync('should support @client fields with field policies', (resolve, reject) => {
+  it('should support @client fields with field policies', async () => {
     let finished = false;
     const cache = new Hermes({
       typePolicies: {
@@ -1260,8 +1270,8 @@ describe('@client testing', () => {
       </MockedProvider>,
     );
 
-    waitFor(() => {
+    await waitFor(() => {
       expect(finished).toBe(true);
-    }).then(resolve, reject);
+    });
   });
 });

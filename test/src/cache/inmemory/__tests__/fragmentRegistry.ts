@@ -1,16 +1,18 @@
 import { loadErrorMessages } from '@apollo/client/dev';
-import { ApolloClient, ApolloLink, gql, InMemoryCache, NetworkStatus } from '@apollo/client';
+import { ApolloClient, ApolloLink, gql, NetworkStatus } from '@apollo/client';
+import { getFragmentDefinitions, Observable } from '@apollo/client/utilities';
+import { createFragmentRegistry } from '@apollo/client/cache';
+import { ObservableStream } from '@apollo/client/testing/internal';
 
-import { getFragmentDefinitions, Observable } from '../../../utilities';
-import { createFragmentRegistry } from '../../index';
-import { itAsync, subscribeAndCount } from '../../../testing';
+import { Hermes } from '../../../../../src';
+import { toNormalizedCacheObject } from '../../../../helpers';
 
 // These tests assert the @apollo/client error text rather than its production placeholder.
 loadErrorMessages();
 
 describe('FragmentRegistry', () => {
   it('can be passed to Hermes', () => {
-    const cache = new InMemoryCache({
+    const cache = new Hermes({
       fragments: createFragmentRegistry(gql`
         fragment BasicFragment on Query {
           basic
@@ -43,8 +45,8 @@ describe('FragmentRegistry', () => {
     });
   });
 
-  itAsync('influences ApolloClient and ApolloLink', (resolve, reject) => {
-    const cache = new InMemoryCache({
+  it('influences ApolloClient and ApolloLink', async () => {
+    const cache = new Hermes({
       fragments: createFragmentRegistry(gql`
         fragment SourceFragment on Query {
           source
@@ -91,46 +93,33 @@ describe('FragmentRegistry', () => {
       },
     });
 
-    subscribeAndCount(
-      reject,
-      client.watchQuery({
-        query,
-        fetchPolicy: 'cache-and-network',
-      }),
-      (count, result) => {
-        if (count === 1) {
-          expect(result).toEqual({
-            loading: true,
-            networkStatus: NetworkStatus.loading,
-            data: {
-              __typename: 'Query',
-              source: 'local',
-            },
-          });
-        } else if (count === 2) {
-          expect(result).toEqual({
-            loading: false,
-            networkStatus: NetworkStatus.ready,
-            data: {
-              __typename: 'Query',
-              source: 'link',
-            },
-          });
+    const stream = new ObservableStream(client.watchQuery({ query, fetchPolicy: 'cache-and-network' }));
 
-          expect(cache.readQuery({ query })).toEqual({
-            source: 'link',
-          });
-
-          setTimeout(resolve, 10);
-        } else {
-          reject(`Unexpectedly many results (${count})`);
-        }
+    await expect(stream).toEmitValue({
+      loading: true,
+      networkStatus: NetworkStatus.loading,
+      data: {
+        __typename: 'Query',
+        source: 'local',
       },
-    );
+    });
+
+    await expect(stream).toEmitValue({
+      loading: false,
+      networkStatus: NetworkStatus.ready,
+      data: {
+        __typename: 'Query',
+        source: 'link',
+      },
+    });
+
+    expect(cache.readQuery({ query })).toEqual({
+      source: 'link',
+    });
   });
 
   it('throws an error when not all used fragments are defined', () => {
-    const cache = new InMemoryCache({
+    const cache = new Hermes({
       fragments: createFragmentRegistry(gql`
         fragment IncompleteFragment on Person {
           __typename
@@ -188,7 +177,8 @@ describe('FragmentRegistry', () => {
       },
     });
 
-    expect(cache.extract()).toEqual({
+    // Hermes: compare in InMemoryCache's normalized shape.
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
         __typename: 'Query',
         me: { __ref: 'Person:12345' },
@@ -228,7 +218,7 @@ describe('FragmentRegistry', () => {
   });
 
   it('can register fragments with unbound ...spreads', () => {
-    const cache = new InMemoryCache({
+    const cache = new Hermes({
       fragments: createFragmentRegistry(gql`
         fragment NeedsExtra on Person {
           __typename
@@ -270,7 +260,8 @@ describe('FragmentRegistry', () => {
       },
     });
 
-    expect(cache.extract()).toEqual({
+    // Hermes: compare in InMemoryCache's normalized shape.
+    expect(toNormalizedCacheObject(cache.extract())).toEqual({
       ROOT_QUERY: {
         __typename: 'Query',
         me: { __ref: 'Person:12345' },

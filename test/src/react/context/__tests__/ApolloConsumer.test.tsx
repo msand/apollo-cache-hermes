@@ -1,11 +1,14 @@
+import { loadErrorMessages } from '@apollo/client/dev';
 import * as React from 'react';
 import { render, screen } from '@testing-library/react';
 import { ApolloClient, ApolloLink, ApolloProvider } from '@apollo/client';
+import { ApolloConsumer } from '@apollo/client/react/context/ApolloConsumer';
+import { getApolloContext } from '@apollo/client/react/context/ApolloContext';
 
-import { ApolloConsumer } from '../ApolloConsumer';
-import { getApolloContext } from '../ApolloContext';
-import { itAsync } from '../../../testing';
 import { Hermes } from '../../../../../src';
+
+// These tests assert the @apollo/client error text rather than its production placeholder.
+loadErrorMessages();
 
 const client = new ApolloClient({
   cache: new Hermes(),
@@ -13,17 +16,13 @@ const client = new ApolloClient({
 });
 
 describe('<ApolloConsumer /> component', () => {
-  itAsync('has a render prop', (resolve, reject) => {
+  it('has a render prop', done => {
     render(
       <ApolloProvider client={client}>
         <ApolloConsumer>
           {clientRender => {
-            try {
-              expect(clientRender).toBe(client);
-              resolve();
-            } catch (e) {
-              reject(e);
-            }
+            expect(clientRender).toBe(client);
+            done();
             return null;
           }}
         </ApolloConsumer>

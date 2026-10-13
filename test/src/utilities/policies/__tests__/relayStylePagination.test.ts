@@ -1,7 +1,7 @@
 import { FieldFunctionOptions, InMemoryCache } from '@apollo/client';
+import { isReference, makeReference, StoreObject } from '@apollo/client/cache';
+import { relayStylePagination, TRelayPageInfo } from '@apollo/client/utilities/policies/pagination';
 
-import { isReference, makeReference, StoreObject } from '../../../cache';
-import { relayStylePagination, TRelayPageInfo } from '../pagination';
 import { Hermes } from '../../../../../src';
 
 describe('relayStylePagination', () => {

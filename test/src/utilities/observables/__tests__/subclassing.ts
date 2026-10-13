@@ -1,5 +1,5 @@
-import { Observable } from '../Observable';
-import { Concast } from '../Concast';
+import { Observable } from '@apollo/client/utilities/observables/Observable';
+import { Concast } from '@apollo/client/utilities/observables/Concast';
 
 function toArrayPromise<T>(observable: Observable<T>): Promise<T[]> {
   return new Promise<T[]>((resolve, reject) => {

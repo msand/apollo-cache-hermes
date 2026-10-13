@@ -1,8 +1,8 @@
 import gql from 'graphql-tag';
+import { Cache } from '@apollo/client/cache/core/types/Cache';
+import { MissingFieldError } from '@apollo/client/cache/core/types/common';
+import { Reference, isReference, TypedDocumentNode } from '@apollo/client/core';
 
-import { Cache } from '../../core/types/Cache';
-import { MissingFieldError } from '../../core/types/common';
-import { Reference, isReference, TypedDocumentNode } from '../../../core';
 import { Hermes } from '../../../../../src';
 
 describe('reading from the store', () => {
