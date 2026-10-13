@@ -3631,8 +3631,7 @@ it('does not surface incomplete cached fields on a streamed item after the netwo
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: awaits the incremental diff work (@defer dataState pruning): Hermes' diff does not take the pending @defer boundaries into account, so it does not prune cached data inside pending boundaries (nor report them as "streaming").
-it.skip('prunes undelivered defer fragments from partial cached fields inside a `@defer` boundary on streamed list items with returnPartialData: false', async () => {
+it('prunes undelivered defer fragments from partial cached fields inside a `@defer` boundary on streamed list items with returnPartialData: false', async () => {
   const mock = mockDeferStreamGraphQL17Alpha9();
 
   const query = gql`
@@ -3837,8 +3836,7 @@ it.skip('prunes undelivered defer fragments from partial cached fields inside a 
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: awaits the incremental diff work (@defer dataState pruning): Hermes' diff does not take the pending @defer boundaries into account, so it does not prune cached data inside pending boundaries (nor report them as "streaming").
-it.skip("prunes each streamed list item's sibling `@defer` boundaries independently by label", async () => {
+it("prunes each streamed list item's sibling `@defer` boundaries independently by label", async () => {
   const mock = mockDeferStreamGraphQL17Alpha9();
 
   const query = gql`
@@ -4041,8 +4039,7 @@ it.skip("prunes each streamed list item's sibling `@defer` boundaries independen
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: awaits the incremental diff work (@defer dataState pruning): Hermes' diff does not take the pending @defer boundaries into account, so it does not prune cached data inside pending boundaries (nor report them as "streaming").
-it.skip('does not surface complete cached `@defer` boundaries on streamed list items with returnPartialData: false', async () => {
+it('does not surface complete cached `@defer` boundaries on streamed list items with returnPartialData: false', async () => {
   const mock = mockDeferStreamGraphQL17Alpha9();
 
   const query = gql`
