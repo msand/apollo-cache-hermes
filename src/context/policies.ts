@@ -13,11 +13,13 @@ import { invariant } from '@apollo/client/utilities/invariant';
 import type { JsonObject } from '../primitive';
 import { isObject } from '../util';
 
+import { hasOwn, isDev } from './helpers';
 import {
   isKeyFieldsSpecifierFn,
   keyArgsFnFromSpecifier,
   keyFieldsFnFromSpecifier,
   simpleKeyArgsFn,
+  TypeOrFieldNameRegExp,
 } from './storeFieldNames';
 import type { KeyFieldsContext, KeyFieldsContextWithMissing, KeyFieldsFunction } from './storeFieldNames';
 
@@ -50,15 +52,6 @@ export type DataIdFromObject = (object: JsonObject, context?: KeyFieldsContext) 
 export type RootId = 'ROOT_QUERY' | 'ROOT_MUTATION' | 'ROOT_SUBSCRIPTION';
 
 const nullKeyFieldsFn: KeyFieldsFunction = () => undefined;
-
-// Matches valid GraphQL type names (like InMemoryCache's).
-const TypeOrFieldNameRegExp = /^[_a-z][_0-9a-z]*/i;
-
-const hasOwn = Object.prototype.hasOwnProperty;
-
-function isDev() {
-  return (globalThis as { __DEV__?: boolean }).__DEV__ !== false;
-}
 
 /**
  * The type policies and possibleTypes of a cache, like InMemoryCache's

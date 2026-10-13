@@ -33,7 +33,7 @@ import * as nodes from './nodes';
 import * as util from './util';
 import { nodeIdForStoreKey } from './operations/SnapshotEditor';
 import { checkWrite, checkWriteDocument } from './operations/checkWrite';
-import { entityTypename } from './operations/fieldFunctions';
+import { fragmentMatches, identify, isDev, makeToReference, storedTypename } from './context/helpers';
 
 const isEqual = equality.equal;
 const makeRef = makeReference;
@@ -170,11 +170,11 @@ export class CacheTransaction<TSerialized> implements Queryable {
   }
 
   identify(object: StoreObject | Reference): string | undefined {
-    return this._context.entityIdForValue(object);
+    return identify(this._context.policies, object);
   }
 
   fragmentMatches(fragment: InlineFragmentNode | FragmentDefinitionNode, typename: string): boolean {
-    return operations.fragmentMatches(this._context, fragment, typename);
+    return fragmentMatches(this._context.policies, fragment, typename);
   }
 
   lookupFragment(fragmentName: string): FragmentDefinitionNode | null {
@@ -249,7 +249,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
         this._context.transformDocument(query.document),
         query.variables,
         payload,
-        this._rootTypename(query.rootId),
+        storedTypename(this._context.policies, query.rootId, this.getCurrentNodeSnapshot(query.rootId)?.data),
       );
     }
     if (this._optimisticChangeId) {
@@ -257,17 +257,6 @@ export class CacheTransaction<TSerialized> implements Queryable {
     } else {
       return this._writeBaseline(query, payload);
     }
-  }
-
-  /**
-   * The __typename of the node a write starts at, when it is known before the
-   * written data is looked at.
-   */
-  private _rootTypename(rootId: NodeId): string | undefined {
-    const rootTypename = this._context.rootTypename(rootId);
-    if (rootTypename) return rootTypename;
-    const data = this.getCurrentNodeSnapshot(rootId)?.data;
-    return isObject(data) && typeof data.__typename === 'string' ? data.__typename : undefined;
   }
 
   /**
@@ -610,7 +599,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
     // Like InMemoryCache's EntityStore#modify, warn (in development) about
     // values that will not be stored as their author probably intends.
     const warnAboutModifiedValue = (value: unknown) => {
-      if ((globalThis as { __DEV__?: boolean }).__DEV__ === false) return;
+      if (!isDev()) return;
       const checkReference = (ref: Reference) => {
         if (getSnapshot(ref.__ref)) return false;
         invariant.warn(
@@ -678,22 +667,18 @@ export class CacheTransaction<TSerialized> implements Queryable {
       // being modified (see the getter below).
       storage: undefined as any,
       storeFieldName: '',
-      toReference: (value, mergeIntoStore) => {
-        const entityId = this._context.entityIdForValue(value);
-        if (entityId && mergeIntoStore && !isReference(value) && typeof value !== 'string') {
-          const nodeSnapshot = ensureNewSnapshot(entityId);
-          nodeSnapshot.data = { ...(nodeSnapshot.data as {}), ...this._context.scalars.serializeStoreObject(value) };
-          modified = true;
-        }
-        return entityId ? makeRef(entityId) : undefined;
-      },
+      toReference: makeToReference(this._context.entityIdForValue, (entityId, value) => {
+        const nodeSnapshot = ensureNewSnapshot(entityId);
+        nodeSnapshot.data = { ...(nodeSnapshot.data as {}), ...this._context.scalars.serializeStoreObject(value) };
+        modified = true;
+      }),
     };
 
     // Like InMemoryCache (which stores them parsed), modifiers get the values
     // of custom scalar fields parsed, and the values they return are stored
     // serialized.
     const { scalars } = this._context;
-    const typename = entityTypename(this._context, id, node);
+    const typename = storedTypename(this._context.policies, id, node.data);
     const valueForModifier = (key: string, d: any, k: string | null): [current: any, parsed: boolean] => {
       const current = Array.isArray(d)
         ? copyList(d)
@@ -752,6 +737,38 @@ export class CacheTransaction<TSerialized> implements Queryable {
     let allDeleted = false;
     let invalidated = false;
 
+    // Calls a modifier with one stored variant of the field `key` (its value
+    // `d`, and its parameterized value node `k`, if any), recording the result.
+    const modifyVariant = (modifier: Modifier<any>, key: string, d: any, k: string | null) => {
+      const storeFieldName = k ?? key;
+      const useRef = k?.includes('❖');
+      const [copyOrCurrent, parsed] = valueForModifier(key, d, k);
+      details.fieldName = key;
+      details.storeFieldName = modifierStoreFieldName(storeFieldName);
+      const value = modifier(copyOrCurrent, details);
+      if (isDeleteModifier(value)) {
+        deleted.add(storeFieldName);
+        modified = true;
+      } else if (isInvalidateModifier(value)) {
+        this._editedNodeIds.add(id);
+        let dirty = this._context.dirty.get(id);
+        if (!dirty) {
+          this._context.dirty.set(id, (dirty = new Set()));
+        }
+        dirty.add(key);
+        dirty.add(storeFieldName);
+        invalidated = true;
+      } else if (isModified(key, value, copyOrCurrent, d, useRef, parsed)) {
+        warnAboutModifiedValue(value);
+        // A reference to a missing entity is written as such (and dangles).
+        const nextValue = toStoredValue(key, value);
+        if (nextValue !== undefined) {
+          payload[key] = nextValue as JsonValue;
+        }
+        modified = true;
+      }
+    };
+
     if (typeof options.fields === 'function') {
       const field = options.fields;
       if (keys.length === 0) {
@@ -769,29 +786,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
       }
       for (const key of keys) {
         for (const { d, k } of readFromSnapshot(node, key)) {
-          const storeFieldName = k ?? key;
-          const useRef = k?.includes('❖');
-          const [copyOrCurrent, parsed] = valueForModifier(key, d, k);
-          details.fieldName = key;
-          details.storeFieldName = modifierStoreFieldName(storeFieldName);
-          const value = field(copyOrCurrent, details);
-          if (isDeleteModifier(value)) {
-            deleted.add(storeFieldName);
-            modified = true;
-          } else if (isInvalidateModifier(value)) {
-            this._editedNodeIds.add(id);
-            let dirty = this._context.dirty.get(id);
-            if (!dirty) {
-              this._context.dirty.set(id, (dirty = new Set()));
-            }
-            dirty.add(key);
-            dirty.add(storeFieldName);
-            invalidated = true;
-          } else if (isModified(key, value, copyOrCurrent, d, useRef, parsed)) {
-            warnAboutModifiedValue(value);
-            payload[key] = toStoredValue(key, value) as JsonValue;
-            modified = true;
-          }
+          modifyVariant(field, key, d, k);
         }
       }
       if (keys.length !== 0 && keys.length === deleted.size && keys.every(key => deleted.has(key))) {
@@ -811,33 +806,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
           variants = variants.filter(({ k }) => k?.includes('❖') && storeFieldNameOfNode(key, k) === fieldKey);
         }
         for (const { d, k } of variants) {
-          const storeFieldName = k ?? key;
-          const useRef = k?.includes('❖');
-          const [copyOrCurrent, parsed] = valueForModifier(key, d, k);
-          details.fieldName = key;
-          details.storeFieldName = modifierStoreFieldName(storeFieldName);
-          const value = field(copyOrCurrent, details);
-          if (isDeleteModifier(value)) {
-            deleted.add(storeFieldName);
-            modified = true;
-          } else if (isInvalidateModifier(value)) {
-            this._editedNodeIds.add(id);
-            let dirty = this._context.dirty.get(id);
-            if (!dirty) {
-              this._context.dirty.set(id, (dirty = new Set()));
-            }
-            dirty.add(key);
-            dirty.add(storeFieldName);
-            invalidated = true;
-          } else if (isModified(key, value, copyOrCurrent, d, useRef, parsed)) {
-            warnAboutModifiedValue(value);
-            // A reference to a missing entity is written as such (and dangles).
-            const nextValue = toStoredValue(key, value);
-            if (nextValue !== undefined) {
-              payload[key] = nextValue as JsonValue;
-            }
-            modified = true;
-          }
+          modifyVariant(field, key, d, k);
         }
       }
       // Deleting the last fields of ROOT_QUERY keeps the node, like the
@@ -939,7 +908,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
       // The variant is identified as the field's keyArgs policy says.
       const id = options.id ?? 'ROOT_QUERY';
       const node = this._snapshot.baseline.getNodeSnapshot(id) ?? this._snapshot.optimistic.getNodeSnapshot(id);
-      const typename = entityTypename(this._context, id, node);
+      const typename = storedTypename(this._context.policies, id, node?.data);
       const storeKey = this._context.storeFieldNames.storeKey(
         typename,
         options.fieldName,

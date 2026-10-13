@@ -11,12 +11,12 @@ import {
   isField,
   resultKeyNameFromField,
   shouldInclude,
-  stringifyForDisplay,
 } from '@apollo/client/utilities/internal';
 import type { FragmentMap } from '@apollo/client/utilities/internal';
 import type { FieldNode, FragmentDefinitionNode, InlineFragmentNode, SelectionNode, SelectionSetNode } from 'graphql';
 
 import type { CacheContext } from '../context';
+import { isDev, missingKeyFieldError } from '../context/helpers';
 import type { JsonObject, JsonValue } from '../primitive';
 import type { DocumentNode } from '../util';
 
@@ -73,16 +73,6 @@ export function checkWriteDocument(document: DocumentNode): void {
 }
 
 /**
- * The error InMemoryCache throws when an object is missing one of the
- * keyFields of its type policy.
- */
-export function missingKeyFieldError(fieldName: string, object: JsonObject): InvariantError {
-  return new InvariantError(
-    `Missing field '${fieldName}' while extracting keyFields from ${stringifyForDisplay(object, 2)}`,
-  );
-}
-
-/**
  * The (path of the) first key field that `object` does not provide, if its
  * type's keyFields (a KeySpecifier array, or a function that returns one)
  * need one that is missing.
@@ -116,10 +106,10 @@ export function checkWrite<TSerialized>(
   result: JsonObject,
   rootTypename: string | undefined,
 ): void {
-  const dev = (globalThis as { __DEV__?: boolean }).__DEV__ !== false;
+  const dev = isDev();
   // In production, there is only something to check with keyFields policies (or
   // fuzzy possibleTypes subtypes to infer).
-  if (!dev && !context.hasFuzzySubtypes && !context.policies.hasKeyFields) {
+  if (!dev && !context.policies.hasFuzzySubtypes && !context.policies.hasKeyFields) {
     return;
   }
   const allVariables = { ...getDefaultValues(getOperationDefinition(document)), ...variables };

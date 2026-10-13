@@ -8,9 +8,10 @@ import type {
   StoreValue,
 } from '@apollo/client/cache';
 import type { StoreObject } from '@apollo/client/utilities';
-import type { FieldNode, FragmentDefinitionNode, InlineFragmentNode } from 'graphql';
+import type { FieldNode } from 'graphql';
 
 import type { CacheContext } from '../context';
+import { storedTypename } from '../context/helpers';
 import type { NodeSnapshot } from '../nodes';
 import type { JsonObject, PathPart } from '../primitive';
 import type { NodeId } from '../schema';
@@ -22,21 +23,6 @@ const { deepFreeze, deepGet, hasOwn, isReference, lazyImmutableDeepSet, pathBegi
 
 type ObjectOrReference = StoreObject | Reference;
 type ToReference = FieldFunctionOptions['toReference'];
-
-/**
- * Whether a fragment (or inline fragment) applies to objects of the given
- * __typename, considering possibleTypes (like InMemoryCache#fragmentMatches).
- */
-export function fragmentMatches(
-  context: CacheContext<any>,
-  fragment: InlineFragmentNode | FragmentDefinitionNode,
-  typename: string,
-): boolean {
-  if (!fragment.typeCondition) return true;
-  // A fragment with a type condition cannot match an object without __typename.
-  if (!typename) return false;
-  return context.fragmentMatches(fragment.typeCondition.name.value, typename);
-}
 
 /**
  * Returns the read function for `typename.fieldName`, if any: the one its
@@ -91,8 +77,8 @@ function isNonNullObject(value: unknown): value is object {
  * stored by InMemoryCache: with References in place of the entities that the
  * node points to.
  *
- * Hermes (unlike InMemoryCache's default dataIdFromObject) also normalizes
- * objects without a __typename; those are left as data.
+ * Objects without a __typename (which a custom dataIdFromObject may still
+ * normalize) are left as data.
  */
 export function withReferences(snapshot: Readonly<NodeSnapshot> | undefined, path: PathPart[], value: any): any {
   const outbound = snapshot?.outbound;
@@ -112,18 +98,6 @@ export function withReferences(snapshot: Readonly<NodeSnapshot> | undefined, pat
   // Like InMemoryCache's (frozen) store values, the copy is frozen if the
   // stored value is.
   return result !== value && Object.isFrozen(value) ? deepFreeze(result) : result;
-}
-
-/** The __typename of an entity (as its node holds it), like InMemoryCache's. */
-export function entityTypename(
-  context: CacheContext<any>,
-  id: NodeId,
-  snapshot: Readonly<NodeSnapshot> | undefined,
-): unknown {
-  const data = snapshot?.data;
-  const typename = data && typeof data === 'object' ? (data as JsonObject).__typename : undefined;
-  if (typename !== undefined) return typename;
-  return context.rootTypename(id);
 }
 
 function isUntypedObject(value: unknown) {
@@ -179,7 +153,8 @@ export class FieldFunctions<TSerialized> {
     this.mergeObjects = makeMergeObjects(value => this.getFieldValue(value, '__typename'), mergeIntoEntity);
   }
 
-  // Hermes nulls out references to deleted entities, so null can't be read.
+  // Like InMemoryCache: a Reference can be read if its entity exists (references
+  // to deleted entities are kept, dangling), and other values if they are objects.
   canRead = (value: StoreValue): boolean => {
     return isReference(value) ? this._getNodeSnapshot(value.__ref) !== undefined : isNonNullObject(value);
   };
@@ -236,7 +211,7 @@ export class FieldFunctions<TSerialized> {
     typename?: unknown,
     field?: FieldNode | null,
   ) {
-    if (typename === undefined) typename = entityTypename(this._context, id, snapshot);
+    if (typename === undefined) typename = storedTypename(this._context.policies, id, snapshot?.data);
     return this._context.storeFieldNames.storeKey(typename, fieldName, args, field, this._variables);
   }
 

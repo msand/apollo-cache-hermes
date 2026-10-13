@@ -224,7 +224,6 @@ export class CacheContext<TSerialized = GraphSnapshot> {
   /** Whether __typename should be injected into nodes in queries. */
   readonly addTypename: boolean;
 
-  /** All currently known & processed GraphQL documents. */
   /** Transformed documents by input; @apollo/client matches documents by identity (e.g. refetchQueries). */
   private readonly _transformedDocuments = new WeakMap<DocumentNode, DocumentNode>();
   /**
@@ -249,11 +248,6 @@ export class CacheContext<TSerialized = GraphSnapshot> {
   public readonly scalars: ScalarConfig;
 
   public readonly fragments: FragmentRegistryAPI | undefined;
-
-  /** Whether possibleTypes has (fuzzy) regular expression subtypes. */
-  get hasFuzzySubtypes(): boolean {
-    return this.policies.hasFuzzySubtypes;
-  }
 
   /** Called when type policies or possibleTypes are added to the cache. */
   private readonly _policiesListeners = new Set<() => void>();
@@ -292,14 +286,6 @@ export class CacheContext<TSerialized = GraphSnapshot> {
       this.policies.getKeyArgsFunction(typename, fieldName),
     );
     this.fragments = config.fragments;
-  }
-
-  /**
-   * Registers subtypes of abstract types (like InMemoryCache's
-   * policies.addPossibleTypes).
-   */
-  addPossibleTypes(possibleTypes: PossibleTypesMap) {
-    this.policies.addPossibleTypes(possibleTypes);
   }
 
   /** Calls `listener` whenever type policies or possibleTypes are added to the cache. */

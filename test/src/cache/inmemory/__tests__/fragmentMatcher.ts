@@ -473,8 +473,7 @@ describe('policies.fragmentMatches', () => {
     expect(toNormalizedCacheObject(cache.extract())).toMatchSnapshot();
 
     // Now add the TooLong subtype of C explicitly.
-    // Hermes: possibleTypes are added to the cache's context (InMemoryCache's policies).
-    (cache as any)._queryable._context.addPossibleTypes({
+    cache.policies.addPossibleTypes({
       C: ['TooLong'],
     });
 

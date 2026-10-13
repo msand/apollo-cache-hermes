@@ -1,5 +1,4 @@
 export { extract } from './extract';
-export { fragmentMatches } from './fieldFunctions';
 export { migrate, MigrationMap } from './migrate';
 export { prune } from './prune';
 export { QueryObserver } from './QueryObserver';

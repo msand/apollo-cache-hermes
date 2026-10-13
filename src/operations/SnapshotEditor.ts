@@ -4,6 +4,7 @@ import type { Reference } from '@apollo/client/cache';
 import type { StoreObject } from '@apollo/client/utilities';
 
 import type { CacheContext } from '../context';
+import { isRootNodeId, makeToReference, typenameOf } from '../context/helpers';
 import { argsStoreKey, storeFieldNameOf } from '../context/storeFieldNames';
 import type { GraphSnapshot as GraphSnapshotType } from '../GraphSnapshot';
 import type { NodeReference, EntitySnapshot as EntitySnapshotType, NodeSnapshot } from '../nodes';
@@ -25,7 +26,7 @@ import { defaultStreamFieldMergeFn, runStreamAwareMerge, streamInfoOf, usesDefau
 // Ensure typescript doesn't emit (0, fn)(...args)
 const isEqual = equality.equal;
 const { GraphSnapshot } = graphSnapshot;
-const { StaticNodeId, isRootNodeId } = schema;
+const { StaticNodeId } = schema;
 const { InvalidPayloadError, OperationError } = errors;
 const { cloneNodeSnapshot, EntitySnapshot, ParameterizedValueSnapshot } = nodes;
 const {
@@ -321,24 +322,13 @@ export class SnapshotEditor<TSerialized> {
     const isRoot = containerId === StaticNodeId.QueryRoot;
     // Like InMemoryCache, root objects have their root type's __typename.
     const rootTypename = path.length === 0 ? this._context.rootTypename(containerId) : undefined;
-    const typename =
-      isRoot && path.length === 0
-        ? rootTypename
-        : payload && typeof payload === 'object' && '__typename' in payload
-          ? payload.__typename
-          : previousValue && typeof previousValue === 'object' && '__typename' in previousValue
-            ? previousValue.__typename
-            : rootTypename;
-    // The type that fragments' type conditions are matched against (values
-    // nested within the root are not of the Query type).
-    const fragmentTypename =
-      payload && typeof payload === 'object' && '__typename' in payload
-        ? payload.__typename
-        : isRoot && path.length === 0
-          ? rootTypename
-          : previousValue && typeof previousValue === 'object' && '__typename' in previousValue
-            ? previousValue.__typename
-            : rootTypename;
+    const payloadTypename = typenameOf(payload);
+    const storedTypename = rootTypename ?? typenameOf(previousValue);
+    // The type whose field policies apply to the value's fields...
+    const typename = (isRoot && rootTypename) || payloadTypename || storedTypename;
+    // ...and the type that fragments' type conditions are matched against
+    // (values nested within the root are not of the Query type).
+    const fragmentTypename = payloadTypename || storedTypename || rootTypename;
 
     const typeMerge =
       typeof typename === 'string' && typename ? this._context.policies.getTypePolicy(typename).merge : undefined;
@@ -887,13 +877,7 @@ export class SnapshotEditor<TSerialized> {
       this._context,
       id => this._getNodeSnapshot(id),
       this._variables,
-      (value, mergeIntoStore) => {
-        if (typeof value === 'string') return makeRef(value);
-        if (isReference(value)) return value;
-        const entityId = this._context.entityIdForValue(value);
-        if (entityId && mergeIntoStore) this._mergeIntoEntity(entityId, value as StoreObject);
-        return entityId ? makeRef(entityId) : undefined;
-      },
+      makeToReference(this._context.entityIdForValue, (entityId, value) => this._mergeIntoEntity(entityId, value)),
       (ref, value, valueIsOlder) => this._mergeIntoEntity(ref.__ref, value, valueIsOlder),
     ));
   }
@@ -1714,13 +1698,7 @@ export class SnapshotEditor<TSerialized> {
     if (!candidates.size) return;
     const reachable = new Set<NodeId>();
     const isRoot = (id: NodeId, node: NodeSnapshot) =>
-      !node.inbound ||
-      id === writeRootId ||
-      id === StaticNodeId.QueryRoot ||
-      id === StaticNodeId.MutationRoot ||
-      id === StaticNodeId.SubscriptionRoot ||
-      this._context.rootTypename(id) !== undefined ||
-      !!this._isRetained?.(id);
+      !node.inbound || id === writeRootId || isRootNodeId(id) || !!this._isRetained?.(id);
 
     for (const candidate of candidates) {
       if (reachable.has(candidate) || !this._getNodeSnapshot(candidate)) continue;

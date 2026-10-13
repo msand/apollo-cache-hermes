@@ -2,7 +2,6 @@ import { cacheSlot } from '@apollo/client/cache';
 import type { Cache as CacheInterface } from '@apollo/client/cache';
 import type { FragmentDefinitionNode, InlineFragmentNode } from 'graphql';
 import type { Reference, StoreObject } from '@apollo/client/utilities';
-import { invariant } from '@apollo/client/utilities/invariant';
 
 import { CacheSnapshot } from './CacheSnapshot';
 import { ChangedFields, CacheTransaction, TransactionHooks } from './CacheTransaction';
@@ -10,17 +9,8 @@ import { CacheContext } from './context';
 import type { Policies } from './context/policies';
 import type { ScalarConfig } from './context/scalars';
 import { GraphSnapshot, NodeSnapshotMap } from './GraphSnapshot';
-import {
-  extract,
-  fragmentMatches,
-  migrate,
-  MigrationMap,
-  prune,
-  QueryObserver,
-  QueryResult,
-  read,
-  restore,
-} from './operations';
+import { fragmentMatches, identify } from './context/helpers';
+import { extract, migrate, MigrationMap, prune, QueryObserver, QueryResult, read, restore } from './operations';
 import { OptimisticUpdate, OptimisticUpdateQueue } from './OptimisticUpdateQueue';
 import { JsonObject, JsonValue } from './primitive';
 import { Queryable } from './Queryable';
@@ -29,7 +19,7 @@ import { addToSet, DocumentNode, hasOwn, setsHaveSomeIntersection } from './util
 import { UnsatisfiedCacheError } from './errors';
 import { Hermes } from './apollo';
 import { NodeReference } from './nodes';
-import { isUncaughtWriteError, missingKeyField, missingKeyFieldError } from './operations/checkWrite';
+import { isUncaughtWriteError } from './operations/checkWrite';
 
 type BatchOptions<TCache extends CacheInterface.Implementation> = CacheInterface.BatchOptions<TCache>;
 
@@ -143,13 +133,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
   }
 
   identify(object: StoreObject | Reference): string | undefined {
-    const id = this._context.entityIdForValue(object);
-    if (id === undefined && (globalThis as { __DEV__?: boolean }).__DEV__ !== false && object) {
-      // Like InMemoryCache, warn about objects missing their keyFields.
-      const keyField = missingKeyField(this._context, object as JsonObject);
-      if (keyField !== undefined) invariant.warn(missingKeyFieldError(keyField, object as JsonObject));
-    }
-    return id;
+    return identify(this._context.policies, object);
   }
 
   transformDocument(document: DocumentNode): DocumentNode {
@@ -161,7 +145,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
    * __typename, considering possibleTypes (like InMemoryCache#fragmentMatches).
    */
   fragmentMatches(fragment: InlineFragmentNode | FragmentDefinitionNode, typename: string): boolean {
-    return fragmentMatches(this._context, fragment, typename);
+    return fragmentMatches(this._context.policies, fragment, typename);
   }
 
   /** Custom scalar support. */

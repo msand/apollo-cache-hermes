@@ -37,7 +37,8 @@ export type KeyFieldsContext = Parameters<KeyFieldsFunction>[1];
 /** The context of a keyFields function, with the key field it found missing (see keyFieldsFnFromSpecifier). */
 export type KeyFieldsContextWithMissing = KeyFieldsContext & { missingKeyField?: string };
 
-const TypeOrFieldNameRegExp = /^[_a-z][_0-9a-z]*/i;
+/** Matches valid GraphQL type and field names (like InMemoryCache's). */
+export const TypeOrFieldNameRegExp = /^[_a-z][_0-9a-z]*/i;
 
 /** Like InMemoryCache's fieldNameFromStoreName. */
 export function fieldNameFromStoreName(storeFieldName: string): string {
@@ -57,11 +58,6 @@ export type KeyArgsFunctionLookup = (typename: string, fieldName: string) => Key
  */
 export class StoreFieldNames {
   constructor(private readonly _keyFn: KeyArgsFunctionLookup) {}
-
-  /** Like InMemoryCache's Policies#hasKeyArgs. */
-  hasKeyArgsFor(typename: unknown, fieldName: string): boolean {
-    return typeof typename === 'string' && !!this._keyFn(typename, fieldName);
-  }
 
   /**
    * The key the value of `typename.fieldName` (with `args`, selected by
@@ -239,6 +235,10 @@ function toStoreKey(fieldName: string, storeFieldName: string): StoreKey {
 
 // The rest is a port of InMemoryCache's key-extractor (for keyArgs and keyFields).
 
+// Like InMemoryCache's, this cache is module-global and unbounded: it holds an
+// entry per distinct KeySpecifier, which is fine for the specifiers of type
+// policies, but grows with keyArgs/keyFields functions that return a new
+// specifier for every call.
 const specifierInfoCache: Record<
   string,
   { paths?: string[][]; keyArgsFn?: KeyArgsFunction; keyFieldsFn?: KeyFieldsFunction }
