@@ -1,7 +1,7 @@
 import { MissingFieldError } from '@apollo/client/cache';
 import type { Cache, FieldReadFunction, MissingTree, Reference, StoreValue } from '@apollo/client/cache';
 import { makeReference } from '@apollo/client/utilities/internal';
-import { invariant } from '@apollo/client/utilities/invariant';
+import { invariant, InvariantError } from '@apollo/client/utilities/invariant';
 import type { StoreObject } from '@apollo/client/utilities';
 import { addTypenameToDocument } from '@apollo/client/utilities';
 import type { DocumentNode, SelectionSetNode } from 'graphql';
@@ -112,7 +112,25 @@ export function read<TSerialized>(
   // Retrieve the previous result (may be partially complete), or start anew.
   const queryResult = snapshot.readCache.get(operation) || ({} as Partial<QueryResultWithNodeIds>);
   snapshot.readCache.set(operation, queryResult as QueryResult);
+  try {
+    return _read(context, operation, snapshot, tempStore, includeNodeIds, queryResult, tracerContext);
+  } catch (error) {
+    // A read that throws (e.g. for a list of entities selected without a
+    // selection set) leaves no partial result behind.
+    snapshot.readCache.delete(operation);
+    throw error;
+  }
+}
 
+function _read<TSerialized>(
+  context: CacheContext<TSerialized>,
+  operation: OperationInstance<TSerialized>,
+  snapshot: GraphSnapshot,
+  tempStore: NodeSnapshotMap,
+  includeNodeIds: boolean | undefined,
+  queryResult: Partial<QueryResultWithNodeIds>,
+  tracerContext: unknown,
+) {
   let cacheHit = true;
   if (!queryResult.result) {
     cacheHit = false;
@@ -754,7 +772,13 @@ export function _visitSelection<TSerialized>(
         continue;
       }
       // Leaf fields that are present need no further work.
-      if (fieldValue !== undefined && (!node.children || fieldValue === null)) continue;
+      if (fieldValue !== undefined && (!node.children || fieldValue === null)) {
+        // Like InMemoryCache (in development), lists of entities need a selection set.
+        if (!node.children && Array.isArray(fieldValue) && snapshot && isDev()) {
+          assertSelectionSetForList(node, key, typeName, containerId, containerPath);
+        }
+        continue;
+      }
 
       const fieldName = node.schemaName ?? key;
       const fieldPath = [...containerPath, fieldName];
@@ -843,6 +867,39 @@ export function _visitSelection<TSerialized>(
       visitObject(value, parsed, entityId, [], resultPath);
     } else {
       visitObject(value, parsed, containerId, containerPath, resultPath);
+    }
+  }
+
+  /**
+   * Throws InMemoryCache's error for a list field without a selection set
+   * whose items are (or contain) entities.
+   */
+  function assertSelectionSetForList(
+    node: ParsedQueryNode,
+    key: string,
+    typeName: unknown,
+    containerId: NodeId,
+    containerPath: PathPart[],
+  ) {
+    const fieldName = node.schemaName ?? key;
+    const storeKey = context.storeFieldNames.storeKey(
+      typeName,
+      fieldName,
+      node.args as JsonObject | undefined,
+      fieldNodeOf(node),
+      query.variables,
+    );
+    const fieldPath = [...containerPath, fieldName];
+    const [fieldContainerId, path] =
+      storeKey !== undefined ? [nodeIdForStoreKey(containerId, fieldPath, storeKey), []] : [containerId, fieldPath];
+    for (const reference of getNode(fieldContainerId)?.outbound?.values() ?? []) {
+      if (reference.path.length > path.length && util.pathBeginsWith(reference.path, path)) {
+        const data = getNode(reference.id)?.data;
+        const typename = isObject(data) ? data.__typename : undefined;
+        throw new InvariantError(
+          `Missing selection set for object of type ${String(typename)} returned for query field ${fieldName}`,
+        );
+      }
     }
   }
 
