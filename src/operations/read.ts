@@ -7,6 +7,7 @@ import type { DocumentNode, SelectionSetNode } from 'graphql';
 
 import type { CacheContext, QueryInfo } from '../context';
 import type { GraphSnapshot, NodeSnapshotMap } from '../GraphSnapshot';
+import { fieldNodeOf } from '../ParsedQueryNode';
 import type { ParsedQuery, ParsedQueryNode } from '../ParsedQueryNode';
 import type { JsonObject, JsonValue, PathPart } from '../primitive';
 import type { NodeId, OperationInstance, RawOperation } from '../schema';
@@ -327,7 +328,10 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
     ) => {
       const args = (node.args as JsonObject | undefined) ?? null;
       const storageKeys = [containerId, ...path, storageFieldName(fieldName, args)];
-      const readResult = readFn(existing, fieldFunctions.options(currentObject, fieldName, key, args, storageKeys));
+      const readResult = readFn(
+        existing,
+        fieldFunctions.options(currentObject, fieldName, key, args, storageKeys, fieldNodeOf(node)),
+      );
       danglingResult =
         isReference(readResult) && !getSnapshot(readResult.__ref) && !isRootId(readResult.__ref)
           ? readResult.__ref

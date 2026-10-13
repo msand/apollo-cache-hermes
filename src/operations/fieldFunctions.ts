@@ -11,7 +11,7 @@ import type {
   TypePolicies,
 } from '@apollo/client/cache';
 import type { StoreObject } from '@apollo/client/utilities';
-import type { FragmentDefinitionNode, InlineFragmentNode } from 'graphql';
+import type { FieldNode, FragmentDefinitionNode, InlineFragmentNode } from 'graphql';
 
 import type { CacheContext } from '../context';
 import type { NodeSnapshot } from '../nodes';
@@ -272,13 +272,14 @@ export class FieldFunctions<TSerialized> {
     storeFieldName: string,
     args: JsonObject | null,
     storageKeys: unknown[],
+    field: FieldNode | null = null,
   ): FieldFunctionOptions {
     const readField = (...readFieldArgs: any[]) => this.readField(readFieldArgs, objectOrReference);
     return {
       args,
       cache: null as any,
       canRead: this.canRead,
-      field: null,
+      field,
       fieldName,
       isReference,
       mergeObjects: this.mergeObjects,
@@ -301,9 +302,10 @@ export class FieldFunctions<TSerialized> {
     storageKeys: unknown[],
     extensions: Record<string, unknown> | undefined,
     existingData: unknown,
+    field?: FieldNode | null,
   ): FieldMergeFunctionOptions {
     return {
-      ...this.options(undefined, fieldName, storeFieldName, args, storageKeys),
+      ...this.options(undefined, fieldName, storeFieldName, args, storageKeys, field),
       extensions,
       existingData,
     };

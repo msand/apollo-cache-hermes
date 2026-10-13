@@ -6,6 +6,7 @@ import type { StoreObject } from '@apollo/client/utilities';
 import type { CacheContext } from '../context';
 import type { GraphSnapshot as GraphSnapshotType } from '../GraphSnapshot';
 import type { NodeReference, EntitySnapshot as EntitySnapshotType, NodeSnapshot } from '../nodes';
+import { fieldNodeOf } from '../ParsedQueryNode';
 import type { FieldArguments, ParsedQuery } from '../ParsedQueryNode';
 import type { JsonArray, JsonObject, JsonScalar, JsonValue, NestedObject, Nil, PathPart } from '../primitive';
 import type { NodeId, OperationInstance, RawOperation } from '../schema';
@@ -573,7 +574,15 @@ export class SnapshotEditor<TSerialized> {
         fieldValue = merge(
           existing,
           incoming,
-          this._fieldFunctions().mergeOptions(schemaName, payloadName, args, storageKeys, this._extensions, existing),
+          this._fieldFunctions().mergeOptions(
+            schemaName,
+            payloadName,
+            args,
+            storageKeys,
+            this._extensions,
+            existing,
+            fieldNodeOf(node),
+          ),
         ) as JsonValue | undefined;
         fieldMode = 'replace';
 

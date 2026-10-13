@@ -1,5 +1,5 @@
 import isEqual from '@wry/equality';
-import type { DirectiveNode, FragmentSpreadNode } from 'graphql';
+import type { DirectiveNode, FieldNode, FragmentSpreadNode } from 'graphql';
 
 import { CacheContext } from './context';
 import { ConflictingFieldsError } from './errors';
@@ -54,6 +54,24 @@ export class ParsedQueryNode<TArgTypes = JsonScalar> {
      */
     public conditions?: readonly SelectionCondition[],
   ) {}
+}
+
+/** The (first) field node that selects each parsed field. */
+const fieldNodes = new WeakMap<object, FieldNode>();
+
+/**
+ * The (first) field node that selects a parsed field, for the `field` option
+ * of read and merge functions.  (Kept apart from the node's structure, which
+ * is compared and frozen.)
+ */
+export function fieldNodeOf(node: object): FieldNode | undefined {
+  return fieldNodes.get(node);
+}
+
+/** Records the field node that selects a parsed field (see fieldNodeOf). */
+function _withField<TArgTypes>(node: ParsedQueryNode<TArgTypes>, field: FieldNode | undefined) {
+  if (field) fieldNodes.set(node, field);
+  return node;
 }
 
 /**
@@ -210,13 +228,16 @@ function _buildNodeMap<TSerialized>(
 
       const hasParameterizedChildren = areChildrenDynamic(children);
 
-      const node = new ParsedQueryNode(
-        children,
-        schemaName,
-        args,
-        hasParameterizedChildren,
-        unlessEmpty(innerPropMap),
-        selectionCondition ? [selectionCondition] : undefined,
+      const node = _withField(
+        new ParsedQueryNode(
+          children,
+          schemaName,
+          args,
+          hasParameterizedChildren,
+          unlessEmpty(innerPropMap),
+          selectionCondition ? [selectionCondition] : undefined,
+        ),
+        selection,
       );
       nodeMap[name] = _mergeNodes([...path, name], node, nodeMap[name]);
       hasSelections = true;
@@ -381,6 +402,8 @@ function _mergeNodes<TArgTypes>(
   if (target.schemaName !== source.schemaName) {
     throw new ConflictingFieldsError(`alias mismatch`, path, [target, source]);
   }
+  // `source` holds the earlier selections.
+  _withField(target, fieldNodeOf(source));
   // A field is selected if any of its selections apply.
   if (!target.conditions || !source.conditions) {
     target.conditions = undefined;
@@ -437,13 +460,16 @@ export function _expandVariables(parsed?: ParsedQueryWithVariables, variables?: 
     }
 
     if (node.args || node.hasParameterizedChildren || conditions !== node.conditions) {
-      newMap[key] = new ParsedQueryNode(
-        _expandVariables(node.children, variables),
-        node.schemaName,
-        expandFieldArguments(node.args, variables),
-        node.hasParameterizedChildren,
-        node.propMap,
-        conditions,
+      newMap[key] = _withField(
+        new ParsedQueryNode(
+          _expandVariables(node.children, variables),
+          node.schemaName,
+          expandFieldArguments(node.args, variables),
+          node.hasParameterizedChildren,
+          node.propMap,
+          conditions,
+        ),
+        fieldNodeOf(node),
       );
       // No variables to substitute for this subtree.
     } else {
