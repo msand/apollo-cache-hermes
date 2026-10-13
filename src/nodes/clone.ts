@@ -1,4 +1,4 @@
-import { getParameterized, iterParameterized } from '../util';
+import { shareReferences } from '../util/references';
 
 import { EntitySnapshot } from './EntitySnapshot';
 import { NodeSnapshot } from './NodeSnapshot';
@@ -7,11 +7,13 @@ import { ParameterizedValueSnapshot } from './ParameterizedValueSnapshot';
 /**
  * Factory function for cloning nodes to their specific type signatures, while
  * preserving object shapes.
+ *
+ * The clone shares the parent's reference maps until it changes them (see
+ * shareReferences).
  */
 export function cloneNodeSnapshot(parent: NodeSnapshot) {
-  const inbound = parent.inbound ? new Map(parent.inbound) : undefined;
-  const outbound = parent.outbound ? new Map(parent.outbound) : undefined;
-  const parameterized = parent.parameterized ? getParameterized(iterParameterized(parent.parameterized)) : undefined;
+  shareReferences(parent);
+  const { inbound, outbound, parameterized } = parent;
 
   if (parent instanceof EntitySnapshot) {
     return new EntitySnapshot(parent.data, inbound, outbound, parameterized);
