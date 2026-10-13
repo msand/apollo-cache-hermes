@@ -1,19 +1,40 @@
 import type { Cache, Transaction } from '@apollo/client/cache';
 
 import { CacheTransaction } from '../CacheTransaction';
+import { fieldNameFromStoreName, isStoreFieldNameKey } from '../context/storeFieldNames';
+import { storeKeyOfNode } from '../operations/SnapshotEditor';
 import { PathPart, JsonValue } from '../primitive';
 import { NodeId } from '../schema';
 import { DocumentNode, verboseTypeof, deepGet, iterParameterized } from '../util';
 
 import { ApolloQueryable } from './Queryable';
 
-function getOriginalFieldArguments(id: NodeId): { [argName: string]: string } | undefined {
-  // Split `${containerId}❖${JSON.stringify(path)}❖${JSON.stringify(args)}`
-  const idComponents = id.split('❖');
-  if (idComponents.length < 3) {
+/**
+ * The arguments of the field whose parameterized value node `id` is at `path`
+ * within the node `containerId`: those its id was made from (see
+ * nodeIdForStoreKey). For a field stored per its keyArgs (or @connection
+ * directive), these are the arguments in its store field name (e.g. `type`
+ * of `feed:{"type":"news"}`), if it has them as JSON.
+ */
+function getOriginalFieldArguments(
+  containerId: NodeId,
+  path: PathPart[],
+  id: NodeId,
+): { [argName: string]: string } | undefined {
+  const storeKey = storeKeyOfNode(containerId, path, id);
+  if (storeKey === undefined) return undefined;
+  let json = storeKey;
+  if (isStoreFieldNameKey(storeKey)) {
+    const fieldName = fieldNameFromStoreName(storeKey);
+    if (storeKey.charAt(fieldName.length) !== ':') return undefined;
+    json = storeKey.slice(fieldName.length + 1);
+  }
+  try {
+    const args = JSON.parse(json);
+    return args !== null && typeof args === 'object' && !Array.isArray(args) ? args : undefined;
+  } catch {
     return undefined;
   }
-  return JSON.parse(idComponents[2]);
 }
 
 /**
@@ -88,7 +109,7 @@ export class ApolloTransaction<TSerialized> extends ApolloQueryable {
 
     for (const { id: outboundId, path } of iterParameterized(currentContainerNode.parameterized)) {
       if (pathToParameterizedField.every((part, i) => part === path[i])) {
-        const fieldArguments = getOriginalFieldArguments(outboundId);
+        const fieldArguments = getOriginalFieldArguments(containerId, path, outboundId);
         if (fieldArguments) {
           let cacheResult: any;
           try {
