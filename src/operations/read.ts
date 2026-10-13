@@ -41,6 +41,9 @@ export interface QueryResult {
   missing?: MissingFieldError;
 }
 
+/** The (shared, frozen) result of a complete read that selects no fields. */
+const EMPTY_RESULT: JsonObject = Object.freeze({});
+
 /**
  * The Apollo Client 4 Cache.DiffResult for a read, like InMemoryCache's: an
  * incomplete result is null unless partial data is requested (the default)
@@ -53,9 +56,16 @@ export function toDiffResult<TData = unknown>(
   // Like InMemoryCache, a complete result has a `missing: undefined` property,
   // and a read that selects no fields (they are all skipped) has an empty
   // result, even when nothing was written.
-  if (complete) return { result: (result ?? {}) as any, complete: true, missing: undefined };
+  if (complete) return { result: (result ?? EMPTY_RESULT) as any, complete: true, missing: undefined };
   const keepResult = returnPartialData && !!result && Object.keys(result).length > 0;
-  return { result: keepResult ? (result as any) : null, complete: false, missing };
+  // Like InMemoryCache, missing is a getter (which it uses to build the error lazily).
+  return {
+    result: keepResult ? (result as any) : null,
+    complete: false,
+    get missing() {
+      return missing;
+    },
+  };
 }
 
 export interface QueryResultWithNodeIds extends QueryResult {
