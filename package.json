@@ -99,6 +99,7 @@
     "symbol-observable": "^4.0.0",
     "ts-jest": "^29.4.14",
     "typescript": "~6.0.3",
+    "typescript-7": "npm:typescript@7.0.2",
     "typescript-eslint": "^8.71.2",
     "use-sync-external-store": "^1.7.0",
     "wait-for-observables": "^1.0.3",

@@ -117,6 +117,8 @@ npm run format      # format with Prettier
 ```
 
 - `src/` is the cache; `test/unit/` holds Hermes' own tests.
+- `npm run compile` uses TypeScript 7 (the native compiler, installed as `typescript-7`); the `typescript` package
+  stays on 6.x for ESLint, since typescript-eslint does not support TypeScript 7 yet.
 - `test/src/` holds Apollo Client's test suite, adapted to run against Hermes (adaptations are marked `// Hermes:`). It
   runs against the published `@apollo/client` package, with Apollo Client's unpublished test helpers vendored in
   `test/src/testing` and `test/src/config`.
