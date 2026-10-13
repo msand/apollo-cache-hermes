@@ -38,6 +38,22 @@ describe(`context.Policies`, () => {
     });
   });
 
+  it(`applies policies added for a type after the type's policy was used`, () => {
+    const policies = new Policies({ typePolicies: { User: { keyFields: ['id'] } } });
+    expect(policies.identify({ __typename: 'User', id: 1, email: 'a' })[0]).to.eq('User:{"id":1}');
+    policies.addTypePolicies({ User: { keyFields: ['email'] } });
+    expect(policies.identify({ __typename: 'User', id: 1, email: 'a' })[0]).to.eq('User:{"email":"a"}');
+    expect(policies.hasKeyFieldsFunction('User')).to.eq(false);
+  });
+
+  it(`identifies objects by __typename and id without keyFields or dataIdFromObject`, () => {
+    const policies = new Policies({ typePolicies: { Query: { fields: { feed: { keyArgs: false } } } } });
+    expect(policies.identify({ __typename: 'User', id: 1 })[0]).to.eq('User:1');
+    expect(policies.identify({ __typename: 'User', _id: 'a' })[0]).to.eq('User:a');
+    expect(policies.identify({ __typename: 'Query', id: 1 })[0]).to.eq('ROOT_QUERY');
+    expect(policies.identify({ id: 1 })[0]).to.eq(undefined);
+  });
+
   it(`reads static fields keyed by variables`, () => {
     const cache = new Hermes({ typePolicies: { Query: { fields: { feed: { keyArgs: ['$type'] } } } } });
     const query = gql`

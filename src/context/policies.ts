@@ -68,6 +68,9 @@ export class Policies {
   /** Type policies to merge into a type's policy the next time it is used. */
   private readonly _toBeAdded: Record<string, TypePolicy[]> = Object.create(null);
 
+  /** How many types have policies in _toBeAdded (which getTypePolicy must merge first). */
+  private _pendingTypes = 0;
+
   /** The (transitive, once matched) supertypes of each type in possibleTypes. */
   private readonly _supertypeMap = new Map<string, Set<string>>();
 
@@ -228,7 +231,7 @@ export class Policies {
 
   /** Whether the type's policy identifies its objects with a keyFields function. */
   hasKeyFieldsFunction(typename: unknown): boolean {
-    if (typeof typename !== 'string') return false;
+    if (!this.hasKeyFields || typeof typename !== 'string') return false;
     const { keyFn } = this.getTypePolicy(typename);
     return !!keyFn && keyFn !== nullKeyFieldsFn && !isKeyFieldsSpecifierFn(keyFn);
   }
@@ -259,9 +262,11 @@ export class Policies {
       if (incoming.merge !== undefined) this.hasMergePolicies = true;
 
       if (hasOwn.call(this._toBeAdded, typename)) {
+        if (!this._toBeAdded[typename].length) this._pendingTypes++;
         this._toBeAdded[typename].push(incoming);
       } else {
         this._toBeAdded[typename] = [incoming];
+        this._pendingTypes++;
       }
     }
   }
@@ -415,6 +420,10 @@ export class Policies {
    * any policies added for the type are merged into it.
    */
   getTypePolicy(typename: string): InternalTypePolicy {
+    // The common case: a policy that was used before, with nothing pending.
+    const used = this._typePolicies[typename];
+    if (used !== undefined && !this._pendingTypes) return used;
+
     if (!hasOwn.call(this._typePolicies, typename)) {
       const policy: InternalTypePolicy = (this._typePolicies[typename] = { fields: Object.create(null) });
 
@@ -438,6 +447,7 @@ export class Policies {
 
     const inbox = this._toBeAdded[typename];
     if (inbox && inbox.length) {
+      this._pendingTypes--;
       // Merge the pending policies in the order they were added.
       for (const policy of inbox.splice(0)) {
         this._updateTypePolicy(typename, policy, this._typePolicies[typename].fields);
