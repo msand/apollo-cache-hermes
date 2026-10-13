@@ -375,10 +375,12 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
   }
 
   private _transactionHooks(): TransactionHooks {
+    const watchedRootIds = this._observers.length ? new Set(this._observers.map(o => o.rootId)) : undefined;
     return {
       replayOptimisticUpdate: this._replayOptimisticUpdate,
-      watchedRootIds: this._observers.length ? new Set(this._observers.map(o => o.rootId)) : undefined,
+      watchedRootIds,
       changedFields: this._changedFields,
+      isRetained: id => hasOwn.call(this._rootIds, id) || !!watchedRootIds?.has(id),
     };
   }
 

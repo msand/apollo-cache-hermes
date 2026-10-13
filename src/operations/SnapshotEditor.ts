@@ -207,6 +207,12 @@ export class SnapshotEditor<TSerialized> {
     private _context: CacheContext<TSerialized>,
     /** The snapshot to base edits off of. */
     private _parent: GraphSnapshotType,
+    /**
+     * Whether a node is retained (e.g. by cache.retain, or as the root of a
+     * watch), so that it (and what it references) is kept, like root nodes,
+     * when unreachable reference cycles are removed.
+     */
+    private _isRetained?: (id: NodeId) => boolean,
   ) {}
 
   /**
@@ -254,11 +260,17 @@ export class SnapshotEditor<TSerialized> {
     // edited references to the correct nodes.
     //
     // In addition, this performs bookkeeping the inboundReferences of affected
-    // nodes, and collects all newly orphaned nodes.
-    const orphanedNodeIds = this._mergeReferenceEdits(referenceEdits);
+    // nodes, and collects all newly orphaned nodes (and the nodes that lost
+    // some, but not all, of their inbound references).
+    const unreachableCandidates = new Set<NodeId>();
+    const orphanedNodeIds = this._mergeReferenceEdits(referenceEdits, unreachableCandidates);
 
     // Remove (garbage collect) orphaned subgraphs.
-    this._removeOrphanedNodes(orphanedNodeIds);
+    this._removeOrphanedNodes(orphanedNodeIds, unreachableCandidates);
+
+    // Remove the reference cycles that are no longer reachable (whose nodes
+    // still reference each other, and so are not orphaned).
+    this._removeUnreachableNodes(unreachableCandidates, parsed.rootId);
 
     // The query should now be considered complete for future reads.
     this._writtenQueries.add(parsed);
@@ -1477,9 +1489,11 @@ export class SnapshotEditor<TSerialized> {
    * Update all nodes with edited references, and ensure that the bookkeeping of
    * the new and _past_ references are properly updated.
    *
-   * Returns the set of node ids that are newly orphaned by these edits.
+   * Returns the set of node ids that are newly orphaned by these edits, and
+   * adds the nodes that lost inbound references but still have some to
+   * `unreachableCandidates` (see _removeUnreachableNodes).
    */
-  private _mergeReferenceEdits(referenceEdits: ReferenceEdit[]) {
+  private _mergeReferenceEdits(referenceEdits: ReferenceEdit[], unreachableCandidates?: Set<NodeId>) {
     const orphanedNodeIds: Set<NodeId> = new Set();
 
     for (const { containerId, path, prevNodeId, nextNodeId, noWrite, reference } of referenceEdits) {
@@ -1507,6 +1521,8 @@ export class SnapshotEditor<TSerialized> {
         removeInboundReference(prevTarget, containerId, path);
         if (!prevTarget.inbound) {
           orphanedNodeIds.add(prevNodeId);
+        } else {
+          unreachableCandidates?.add(prevNodeId);
         }
       }
 
@@ -1609,8 +1625,11 @@ export class SnapshotEditor<TSerialized> {
 
   /**
    * Transitively removes all orphaned nodes from the graph.
+   *
+   * The nodes that lose inbound references but still have some are added to
+   * `unreachableCandidates` (see _removeUnreachableNodes).
    */
-  private _removeOrphanedNodes(nodeIds: Set<NodeId>) {
+  private _removeOrphanedNodes(nodeIds: Iterable<NodeId>, unreachableCandidates: Set<NodeId>) {
     const queue = Array.from(nodeIds);
     while (queue.length) {
       const nodeId = queue.pop()!;
@@ -1622,15 +1641,20 @@ export class SnapshotEditor<TSerialized> {
 
       const { outbound, parameterized } = node;
       if (outbound) {
-        this.removeInbound(outbound.values(), nodeId, queue);
+        this.removeInbound(outbound.values(), nodeId, queue, unreachableCandidates);
       }
       if (parameterized) {
-        this.removeInbound(iterParameterized(parameterized), nodeId, queue);
+        this.removeInbound(iterParameterized(parameterized), nodeId, queue, unreachableCandidates);
       }
     }
   }
 
-  private removeInbound(refs: Iterable<NodeReference>, nodeId: string, queue: string[]) {
+  private removeInbound(
+    refs: Iterable<NodeReference>,
+    nodeId: string,
+    queue: string[],
+    unreachableCandidates: Set<NodeId>,
+  ) {
     for (const { id, path } of refs) {
       // Dangling references have no target to update.
       if (!this._getNodeSnapshot(id)) continue;
@@ -1638,6 +1662,67 @@ export class SnapshotEditor<TSerialized> {
       removeInboundReference(reference, nodeId, path);
       if (reference.inbound === undefined) {
         queue.push(id);
+      } else {
+        unreachableCandidates.add(id);
+      }
+    }
+  }
+
+  /**
+   * Removes the nodes that lost inbound references (`candidates`), but are
+   * still referenced, if they are no longer reachable from any root: the
+   * reference cycles that orphan removal can't collect, since their nodes
+   * still reference each other.
+   *
+   * Roots are the root nodes (ROOT_QUERY etc), the nodes nothing references
+   * (which Hermes keeps, e.g. those written by writeFragment), retained nodes,
+   * and the root of the write.  Only the candidates are checked, by searching
+   * backwards (through inbound references) from each for a root: if there is
+   * none, all the nodes found are unreachable, and are removed (along with
+   * what they alone reference).
+   */
+  private _removeUnreachableNodes(candidates: Set<NodeId>, writeRootId: NodeId) {
+    if (!candidates.size) return;
+    const reachable = new Set<NodeId>();
+    const isRoot = (id: NodeId, node: NodeSnapshot) =>
+      !node.inbound ||
+      id === writeRootId ||
+      id === StaticNodeId.QueryRoot ||
+      id === StaticNodeId.MutationRoot ||
+      id === StaticNodeId.SubscriptionRoot ||
+      this._context.rootTypename(id) !== undefined ||
+      !!this._isRetained?.(id);
+
+    for (const candidate of candidates) {
+      if (reachable.has(candidate) || !this._getNodeSnapshot(candidate)) continue;
+
+      // Breadth-first, so that the nearest root is found first.
+      const found = [candidate];
+      const seen = new Set(found);
+      let isReachable = false;
+      for (let i = 0; i < found.length; i++) {
+        const id = found[i];
+        const node = this._getNodeSnapshot(id);
+        if (!node) continue;
+        if (reachable.has(id) || isRoot(id, node)) {
+          isReachable = true;
+          break;
+        }
+        for (const { id: referrerId } of node.inbound!.values()) {
+          if (!seen.has(referrerId)) {
+            seen.add(referrerId);
+            found.push(referrerId);
+          }
+        }
+      }
+
+      if (isReachable) {
+        reachable.add(candidate);
+      } else {
+        // Nothing that references these nodes (even indirectly) is reachable.
+        // Removing them may leave more candidates (e.g. a cycle that one of
+        // them referenced), which this loop visits too.
+        this._removeOrphanedNodes(seen, candidates);
       }
     }
   }

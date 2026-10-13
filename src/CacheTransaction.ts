@@ -107,6 +107,12 @@ export interface TransactionHooks {
    */
   watchedRootIds?: Set<NodeId>;
   changedFields?: ChangedFields;
+  /**
+   * Whether a node is retained (by cache.retain, or as the root of a watch),
+   * which keeps writes from removing it as part of an unreachable reference
+   * cycle.
+   */
+  isRetained?: (id: NodeId) => boolean;
 }
 
 /**
@@ -434,7 +440,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
       editedNodeIds,
       writtenQueries,
       ref,
-    } = write(this._context, current.baseline, query, payload);
+    } = write(this._context, current.baseline, query, payload, false, this._hooks.isRetained);
     addToSet(this._editedNodeIds, editedNodeIds);
     addToSet(this._writtenQueries, writtenQueries);
     this._writtenRootIds.add(query.rootId);
@@ -470,7 +476,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
       editedNodeIds,
       writtenQueries,
       ref,
-    } = write(this._context, this._snapshot.optimistic, query, payload);
+    } = write(this._context, this._snapshot.optimistic, query, payload, false, this._hooks.isRetained);
     addToSet(this._writtenQueries, writtenQueries);
     addToSet(this._editedNodeIds, editedNodeIds);
 
