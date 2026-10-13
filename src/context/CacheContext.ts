@@ -16,7 +16,7 @@ import { DocumentNode, isObject } from '../util';
 import type { SelectionSetNode } from '../util';
 import { GraphSnapshot } from '../GraphSnapshot';
 import { FieldStorage } from '../operations/fieldFunctions';
-import type { CheckedSubtrees } from '../operations/read';
+import type { CheckedSubtrees, OverlaidEntities } from '../operations/read';
 
 import { ConsoleTracer } from './ConsoleTracer';
 import { QueryInfo } from './QueryInfo';
@@ -257,6 +257,12 @@ export class CacheContext<TSerialized = GraphSnapshot> {
   /** What reads found checking entity data against static selections (see CheckedSubtree). */
   public checkedSubtrees: CheckedSubtrees = new WeakMap();
 
+  /** The ids of the objects reads identified (null for those without), by object. */
+  public storedEntityIds = new WeakMap<object, NodeId | null>();
+
+  /** What reads made of entities' data, with the values of read functions overlaid (see OverlaidEntity). */
+  public overlaidEntities: OverlaidEntities = new WeakMap();
+
   /** The options.storage objects of read and merge functions. */
   public readonly fieldStorage = new FieldStorage();
 
@@ -295,7 +301,18 @@ export class CacheContext<TSerialized = GraphSnapshot> {
     // Policies (e.g. keyFields and possibleTypes) decide what data satisfies a selection.
     this.onPoliciesChange(() => {
       this.checkedSubtrees = new WeakMap();
+      this.storedEntityIds = new WeakMap();
+      this.forgetOverlaidEntities();
     });
+  }
+
+  /**
+   * Forgets what reads made of entities with read functions' values, when
+   * those may have changed without the data they read changing (e.g. when
+   * reactive variables change).
+   */
+  forgetOverlaidEntities(): void {
+    this.overlaidEntities = new WeakMap();
   }
 
   /** Calls `listener` whenever type policies or possibleTypes are added to the cache. */

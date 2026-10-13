@@ -456,6 +456,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
     // Like InMemoryCache (whose new root store has new storage), read and
     // merge functions start over with empty storage.
     this._context.fieldStorage.clear();
+    this._context.forgetOverlaidEntities();
 
     this._fieldsUntracked = true;
     this._setSnapshot(new CacheSnapshot(baseline, optimistic, optimisticQueue), allIds);
@@ -547,6 +548,7 @@ export class Cache<TSerialized = GraphSnapshot> implements Queryable {
 
   /** Drops cached read results, and makes the next broadcast re-read every watch. */
   private _dropReadResults() {
+    this._context.forgetOverlaidEntities();
     this._snapshot.baseline.readCache.clear();
     this._snapshot.optimistic.readCache.clear();
     for (const observer of this._observers) observer.markDirty();

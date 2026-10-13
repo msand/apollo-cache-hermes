@@ -126,6 +126,8 @@ export function read<TSerialized>(
   }
 
   const operation = context.parseOperation(raw);
+  // (Reads made by read functions; see activeWalks.)
+  for (const walk of activeWalks) walk.unreusable = true;
 
   // Retrieve the previous result (may be partially complete), or start anew.
   const queryResult = snapshot.readCache.get(operation) || ({} as Partial<QueryResultWithNodeIds>);
@@ -251,8 +253,61 @@ class OverlayWalkNode {
      * hold References at any depth, and fields under their store field names).
      */
     public readonly unnormalized?: JsonObject,
+    /** Where `value` is in the result: the object or list that holds it, and its key there. */
+    public readonly holder?: JsonObject | JsonValue[],
+    public readonly holderKey?: string | number,
+    /** The frame of the (nearest) entity `value` is within. */
+    public readonly frame?: OverlayFrame,
   ) {}
 }
+
+/**
+ * What a read's walk made of an entity's data for a selection (its result,
+ * with the values of read functions and parameterized fields overlaid), and
+ * what that depended on: the data of the nodes it looked up (by id;
+ * MISSING_NODE for missing ones), and what the entities within it depended
+ * on. It is reused while those are the same, and no reactive variable
+ * changed, like InMemoryCache's per-entity result caching.
+ */
+export interface OverlaidEntity {
+  result: JsonObject;
+  /** (The entity's own data is the key the entity is remembered by.) */
+  dependencies: Map<NodeId, unknown>;
+  /**
+   * The entities within it that depend on more than their own data. (The
+   * others' data is within the entity's, or among its dependencies.)
+   */
+  children: OverlaidEntity[];
+  /** Whether it only depends on its own data (and that of the entities within it). */
+  selfContained: boolean;
+  /** The ids of the parameterized and redirected nodes read, within it too (see QueryResult#dynamicNodeIds). */
+  dynamicNodeIds: NodeId[];
+}
+
+/** Overlaid entities, by entity data object and selection. */
+export type OverlaidEntities = WeakMap<object, WeakMap<ParsedQuery, OverlaidEntity>>;
+
+const MISSING_NODE = Symbol('missing node');
+
+/** An entity being walked (see OverlaidEntity). */
+interface OverlayFrame {
+  entityId: NodeId;
+  data: object;
+  parsedMap: ParsedQuery;
+  value: JsonObject;
+  parent: OverlayFrame | undefined;
+  dependencies: Map<NodeId, unknown>;
+  children: OverlaidEntity[];
+  dynamicNodeIds: NodeId[];
+  /** Whether the walk found something that can't be reused (e.g. a dangling reference). */
+  unreusable: boolean;
+}
+
+/**
+ * The walks in progress (innermost last): reading the cache from a read
+ * function makes their results depend on more than they track.
+ */
+const activeWalks: { unreusable: boolean }[] = [];
 
 /**
  * The ids of the entities whose data (copies of it) results hold, where they
@@ -294,13 +349,65 @@ function _walkAndOverlayDynamicValues<TSerialized>(
   // w/o a schema compilation step?
   const queue = [new OverlayWalkNode(newResult, result ?? {}, id, query.parsedQuery, [])];
 
+  // Entities are remembered (see OverlaidEntity) unless something in the walk
+  // can't be: the walk's own state, and that of the entity being walked.
+  const memo = context.overlaidEntities;
+  const walk = { unreusable: false };
+  const frames: OverlayFrame[] = [];
+  let frame: OverlayFrame | undefined;
+  // The entities known to be reusable by this walk.
+  const reusable = new Set<OverlaidEntity>();
+
   function getSnapshot(nodeId: string) {
-    return tempStore[nodeId] ?? snapshot.getNodeSnapshot(nodeId);
+    const node = tempStore[nodeId] ?? snapshot.getNodeSnapshot(nodeId);
+    // (The data of a node changes whenever anything a read uses of it does.)
+    if (frame && nodeId !== frame.entityId && !frame.dependencies.has(nodeId)) {
+      frame.dependencies.set(nodeId, node ? node.data : MISSING_NODE);
+    }
+    return node;
+  }
+
+  function addDynamicNodeId(nodeId: NodeId) {
+    dynamicNodeIds.add(nodeId);
+    frame?.dynamicNodeIds.push(nodeId);
+  }
+
+  function isReusable(entity: OverlaidEntity): boolean {
+    if (entity.selfContained || reusable.has(entity)) return true;
+    for (const [nodeId, data] of entity.dependencies) {
+      const node = tempStore[nodeId] ?? snapshot.getNodeSnapshot(nodeId);
+      if ((node ? node.data : MISSING_NODE) !== data) return false;
+    }
+    for (const child of entity.children) {
+      if (!isReusable(child)) return false;
+    }
+    reusable.add(entity);
+    return true;
+  }
+
+  /**
+   * The object a walk node overlays: a copy of its object, put in its place in
+   * the result (the walk copies objects when it gets to them, so that those it
+   * reuses aren't copied).
+   */
+  function copyForWalk(walkNode: OverlayWalkNode, value = walkNode.value): JsonObject {
+    if (!walkNode.holder || value !== walkNode.value || value !== walkNode.source) return value;
+    const copy = _wrapValue(value, context);
+    (walkNode.holder as Record<string | number, JsonValue>)[walkNode.holderKey!] = copy;
+    const entityId = resultEntityIds.get(value);
+    if (entityId !== undefined) resultEntityIds.set(copy, entityId);
+    return copy;
+  }
+
+  /** Adds the dynamic node ids of a reused entity to the walk's. */
+  function reuse(entity: OverlaidEntity) {
+    for (const nodeId of entity.dynamicNodeIds) dynamicNodeIds.add(nodeId);
   }
 
   // Like InMemoryCache, a reference to a missing entity reads as an empty
   // object, reported as a dangling reference by _visitSelection.
   function markDangling(value: JsonObject, key: string, ref: NodeId) {
+    if (frame) frame.unreusable = true;
     value[key] = {};
     if (!danglingFields) return;
     let fields = danglingFields.get(value);
@@ -316,6 +423,8 @@ function _walkAndOverlayDynamicValues<TSerialized>(
     // pass a type through?
     const newSnapshot = parent ? cloneNodeSnapshot(parent) : new EntitySnapshot();
     tempStore[nodeId] = newSnapshot;
+    // (Results that merged into the store can't be reused.)
+    walk.unreusable = true;
     return newSnapshot;
   };
 
@@ -373,241 +482,309 @@ function _walkAndOverlayDynamicValues<TSerialized>(
   const { hasFieldPolicies } = context.policies;
   const isObjectOrArray = (value: unknown) => value !== null && typeof value === 'object';
 
-  // Walk breadth-first, so read functions run in the order of the results.
-  for (let q = 0; q < queue.length; q++) {
-    const walkNode = queue[q];
-    const { value, source, parsedMap, unnormalized } = walkNode;
-    let { containerId, path } = walkNode;
-    // The object read from (e.g. a root object, which may have an id field) is
-    // not identified by its data.
-    const valueId =
-      q === 0
-        ? undefined
-        : (resultEntityIds.get(value) ??
-          identifyStored(context, value, () => {
-            const reference = getSnapshot(containerId)?.outbound?.get(path.join('.'));
-            return reference && getSnapshot(reference.id) ? reference.id : undefined;
-          }));
-    if (valueId) {
-      containerId = valueId;
-      path = [];
-    }
+  // (Nodes added to the store before the walk aren't tracked.)
+  for (const _id in tempStore) {
+    walk.unreusable = true;
+    break;
+  }
+  activeWalks.push(walk);
+  try {
+    _walk();
+  } finally {
+    activeWalks.pop();
+  }
 
-    let typeName = value.__typename as string;
-    if (!typeName && path.length === 0) {
-      // Like InMemoryCache, root objects have their root type's __typename.
-      typeName = context.rootTypename(containerId)!;
+  // Remember the entities walked, innermost first (see OverlaidEntity).
+  for (let i = frames.length - 1; i >= 0; i--) {
+    const walked = frames[i];
+    if (walked.unreusable || walk.unreusable) {
+      if (walked.parent) walked.parent.unreusable = true;
+      continue;
     }
-
-    // Read functions are called on a Reference to the entity being walked, or
-    // (for unidentified objects) on the stored object itself.
-    const containerSnapshot = getSnapshot(containerId);
-    // (Objects within read function results are passed as they were returned.)
-    const currentObject: StoreObject | Reference =
-      path.length === 0 && !(containerSnapshot instanceof ParameterizedValueSnapshot)
-        ? makeRef(containerId)
-        : (unnormalized ?? withReferences(containerSnapshot, path, deepGet(containerSnapshot?.data, path)) ?? value);
-    // The value a read function returns (with its References resolved), or the
-    // missing entity its (Reference) result points to.
-    const callReadFunction = (
-      readFn: FieldReadFunction,
-      existing: StoreValue,
-      fieldName: string,
-      node: ParsedQueryNode,
-      storeKey: StoreKey,
-    ): { value: any; dangling?: undefined } | { value?: undefined; dangling: NodeId } => {
-      const args = (node.args as JsonObject | undefined) ?? null;
-      const storeFieldName = storeFieldNameOf(fieldName, storeKey, args);
-      const storageKeys = [containerId, ...path, storeFieldName];
-      const readResult = readFn(
-        existing,
-        fieldFunctions.options(currentObject, fieldName, storeFieldName, args, storageKeys, fieldNodeOf(node)),
-      );
-      if (isDangling(readResult)) return { dangling: (readResult as Reference).__ref };
-      return { value: resolveReferences(readResult, !!node.children) };
+    const children = walked.children.filter(child => !child.selfContained);
+    const ids = new Set(walked.dynamicNodeIds);
+    for (const child of walked.children) for (const nodeId of child.dynamicNodeIds) ids.add(nodeId);
+    const entity: OverlaidEntity = {
+      result: walked.value,
+      dependencies: walked.dependencies,
+      children,
+      selfContained: !walked.dependencies.size && !children.length,
+      dynamicNodeIds: Array.from(ids),
     };
-
-    for (const key in parsedMap) {
-      let node = parsedMap[key];
-      // Fields of fragments that don't match the type are not selected.
-      if (node.alternatives) {
-        // The field selected under this key for objects of this type.
-        const alternative = alternativeForType(context, node, typeName);
-        if (!alternative) continue;
-        node = alternative;
-      } else if (node.conditions && !context.conditionsMatch(node.conditions, typeName)) {
-        continue;
-      }
-      let child;
-
-      // This is an alias if we have a schemaName declared.
-      const fieldName = node.schemaName ? node.schemaName : key;
-      // Like InMemoryCache, the scalar policies of fields with selection sets
-      // are ignored.
-      const readFn = node.children
-        ? context.policies.getReadFunction(typeName, fieldName)
-        : getReadFunction(context, typeName, fieldName);
-
-      let nextContainerId = containerId;
-      let nextPath = path;
-
-      // Fields are stored under their arguments, or as their keyArgs policies
-      // (or @connection directives) say.
-      const storeKey = storeKeyOf(context, typeName, fieldName, node, query.variables);
-
-      // The field's value within an object returned by a read function: like
-      // InMemoryCache, under its store field name.
-      const storeFieldName =
-        unnormalized && storeKey !== undefined
-          ? storeFieldNameOf(fieldName, storeKey, node.args as JsonObject | undefined)
-          : undefined;
-      const hasUnnormalizedValue = storeFieldName !== undefined && hasOwn.call(unnormalized, storeFieldName);
-      if (hasUnnormalizedValue && !readFn) {
-        nextPath = [...path, storeFieldName];
-        child = unnormalized![storeFieldName];
-      } else if (storeKey !== undefined) {
-        let childId = nodeIdForStoreKey(containerId, [...path, fieldName], storeKey);
-        let childSnapshot: Readonly<NodeSnapshot> | undefined = getSnapshot(childId);
-
-        if (readFn) {
-          dynamicNodeIds.add(childId);
-          const existing = hasUnnormalizedValue
-            ? unnormalized![storeFieldName]
-            : childSnapshot && withReferences(childSnapshot, [], childSnapshot.data);
-          const read = callReadFunction(readFn, existing, fieldName, node, storeKey);
-          if (read.dangling !== undefined) {
-            markDangling(value, key, read.dangling);
-            continue;
-          }
-          child = read.value;
-        } else {
-          if (!childSnapshot) {
-            // Should we fall back to a redirect?
-            const redirect: CacheContext.ResolverRedirect | undefined = deepGet(context.resolverRedirects, [
-              typeName,
-              fieldName,
-            ]) as any;
-            if (redirect && node.args) {
-              childId = redirect(node.args);
-              if (!isNil(childId)) {
-                childSnapshot = snapshot.getNodeSnapshot(childId);
-              }
-            }
-          }
-
-          dynamicNodeIds.add(childId);
-
-          // Still no snapshot? Ok we're done here.  (The field is missing,
-          // even if its container holds a value for the field stored under
-          // its name, e.g. one written without arguments.)
-          if (!childSnapshot) {
-            delete value[key];
-            continue;
-          }
-          child = childSnapshot.data;
-        }
-
-        nextContainerId = childId;
-        nextPath = [];
-      } else {
-        nextPath = [...path, fieldName];
-        child = unnormalized ? unnormalized[fieldName] : source[fieldName];
-        if (readFn) {
-          const existing = unnormalized ? child : withReferences(containerSnapshot, nextPath, child);
-          const read = callReadFunction(readFn, existing, fieldName, node, storeKey);
-          if (read.dangling !== undefined) {
-            markDangling(value, key, read.dangling);
-            continue;
-          }
-          child = read.value;
-        }
-      }
-
-      // Whether the value is (within) one returned by a read function.
-      let childUnnormalized = !!readFn || !!unnormalized;
-      const isRef = isReference(child);
-      if (isRef) {
-        if (isDangling(child)) {
-          markDangling(value, key, child.__ref);
-          continue;
-        }
-        child = resolveReference(child);
-        childUnnormalized = false;
-      } else if (unnormalized && !readFn && node.children && Array.isArray(child)) {
-        // Lists within read function results may hold References too.
-        child = resolveReferences(child, true);
-      } else if (child === undefined) {
-        const reference = getSnapshot(nextContainerId)?.outbound?.get(nextPath.join('.'));
-        if (reference && !getSnapshot(reference.id) && !isRootNodeId(reference.id)) {
-          markDangling(value, key, reference.id);
-          continue;
-        }
-      }
-
-      if (node.children && !readFn && child != null && isDev()) {
-        const scalar = context.policies.getScalarTypeForField(typeName, fieldName);
-        if (scalar) {
-          invariant.warn(
-            "The field policy for '%s' is configured with the '%s' scalar, but the field is not a scalar field because it contains a selection set. The field value remains unchanged.",
-            `${typeName}.${fieldName}`,
-            scalar,
-          );
-        }
-      }
-
-      // Objects (at any depth) may have fields with read functions.
-      const hasPolicy = hasFieldPolicies && node.children && isObjectOrArray(child);
-
-      // Have we reached a leaf (either in the query, or in the cache)?
-      if (hasPolicy || isRef || _shouldWalkChildren(child, node)) {
-        const original = child;
-        child = _recursivelyWrapValue(child, context);
-        const allChildValues = _flattenGraphQLObject(child, nextPath);
-        // Only the child selections of fragments that match the type apply.
-        const children = childrenForType(context, node, typeName) ?? {};
-        // (Wrapping copies objects, keeping the structure of lists.)
-        const originals = _flattenGraphQLObject(original as UnknownGraphQLObject, nextPath);
-
-        for (let i = 0; i < allChildValues.length; i++) {
-          const item = allChildValues[i];
-          const originalItem = originals[i]?.value;
-          const entityId = isObject(originalItem) ? resolvedIds.get(originalItem) : undefined;
-          if (entityId !== undefined) resultEntityIds.set(item.value, entityId);
-          queue.push(
-            new OverlayWalkNode(
-              item.value,
-              isObject(originalItem) ? originalItem : item.value,
-              nextContainerId,
-              children,
-              item.path,
-              childUnnormalized && entityId === undefined && isObject(originalItem) ? originalItem : undefined,
-            ),
-          );
-        }
-      }
-
-      // Because key is already a field alias, result will be written correctly
-      // using alias as key.
-      if (child !== undefined) {
-        value[key] = child;
-      } else if (key === '__typename' && typeName && selectsRootTypename(query.info)) {
-        // Like InMemoryCache, the root __typename is only read when the document
-        // the caller passed in selects it (not when Hermes' addTypename adds it).
-        value.__typename = typeName;
-      } else if (readFn || key !== fieldName) {
-        // Like InMemoryCache, a read function returning undefined makes the
-        // field missing, even when the cache holds a value for it. (So does a
-        // missing aliased field, even when the result holds a stored field
-        // named like its alias.)
-        delete value[key];
-        // Nor is the field's stored value (under its schema name) part of the
-        // result, unless another selection's response key is that name.
-        if (readFn && key !== fieldName && !(fieldName in parsedMap)) delete value[fieldName];
-      }
-    }
+    resultEntityIds.set(walked.value, walked.entityId);
+    let bySelection = memo.get(walked.data);
+    if (!bySelection) memo.set(walked.data, (bySelection = new WeakMap()));
+    bySelection.set(walked.parsedMap, entity);
+    walked.parent?.children.push(entity);
   }
 
   return newResult;
+
+  function _walk() {
+    // Walk breadth-first, so read functions run in the order of the results.
+    for (let q = 0; q < queue.length; q++) {
+      const walkNode = queue[q];
+      const { source, parsedMap, unnormalized } = walkNode;
+      let { value, containerId, path } = walkNode;
+      frame = walkNode.frame;
+      // The object read from (e.g. a root object, which may have an id field) is
+      // not identified by its data.
+      const valueId =
+        q === 0
+          ? undefined
+          : (resultEntityIds.get(value) ??
+            identifyStored(context, value, () => {
+              const reference = getSnapshot(containerId)?.outbound?.get(path.join('.'));
+              return reference && getSnapshot(reference.id) ? reference.id : undefined;
+            }));
+      if (valueId) {
+        containerId = valueId;
+        path = [];
+        // An entity's stored data: reuse what an earlier walk made of it, or remember what this one does.
+        // (The entity's data is a dependency of the entity that holds it, or within its data.)
+        const stored = tempStore[valueId] ?? snapshot.getNodeSnapshot(valueId);
+        if (!unnormalized && walkNode.holder && source === stored?.data) {
+          const known = memo.get(source)?.get(parsedMap);
+          if (known && isReusable(known)) {
+            (walkNode.holder as Record<string | number, JsonValue>)[walkNode.holderKey!] = known.result;
+            frame?.children.push(known);
+            reuse(known);
+            continue;
+          }
+          value = copyForWalk(walkNode);
+          frame = {
+            entityId: valueId,
+            data: source,
+            parsedMap,
+            value,
+            parent: frame,
+            dependencies: new Map(),
+            children: [],
+            dynamicNodeIds: [],
+            unreusable: false,
+          };
+          frames.push(frame);
+        }
+      }
+
+      value = copyForWalk(walkNode, value);
+
+      let typeName = value.__typename as string;
+      if (!typeName && path.length === 0) {
+        // Like InMemoryCache, root objects have their root type's __typename.
+        typeName = context.rootTypename(containerId)!;
+      }
+
+      // Read functions are called on a Reference to the entity being walked, or
+      // (for unidentified objects) on the stored object itself.
+      const containerSnapshot = getSnapshot(containerId);
+      // (Objects within read function results are passed as they were returned.)
+      const currentObject: StoreObject | Reference =
+        path.length === 0 && !(containerSnapshot instanceof ParameterizedValueSnapshot)
+          ? makeRef(containerId)
+          : (unnormalized ?? withReferences(containerSnapshot, path, deepGet(containerSnapshot?.data, path)) ?? value);
+      // The value a read function returns (with its References resolved), or the
+      // missing entity its (Reference) result points to.
+      const callReadFunction = (
+        readFn: FieldReadFunction,
+        existing: StoreValue,
+        fieldName: string,
+        node: ParsedQueryNode,
+        storeKey: StoreKey,
+      ): { value: any; dangling?: undefined } | { value?: undefined; dangling: NodeId } => {
+        const args = (node.args as JsonObject | undefined) ?? null;
+        const storeFieldName = storeFieldNameOf(fieldName, storeKey, args);
+        const storageKeys = [containerId, ...path, storeFieldName];
+        const readResult = readFn(
+          existing,
+          fieldFunctions.options(currentObject, fieldName, storeFieldName, args, storageKeys, fieldNodeOf(node)),
+        );
+        if (isDangling(readResult)) return { dangling: (readResult as Reference).__ref };
+        return { value: resolveReferences(readResult, !!node.children) };
+      };
+
+      for (const key in parsedMap) {
+        let node = parsedMap[key];
+        // Fields of fragments that don't match the type are not selected.
+        if (node.alternatives) {
+          // The field selected under this key for objects of this type.
+          const alternative = alternativeForType(context, node, typeName);
+          if (!alternative) continue;
+          node = alternative;
+        } else if (node.conditions && !context.conditionsMatch(node.conditions, typeName)) {
+          continue;
+        }
+        let child;
+
+        // This is an alias if we have a schemaName declared.
+        const fieldName = node.schemaName ? node.schemaName : key;
+        // Like InMemoryCache, the scalar policies of fields with selection sets
+        // are ignored.
+        const readFn = node.children
+          ? context.policies.getReadFunction(typeName, fieldName)
+          : getReadFunction(context, typeName, fieldName);
+
+        let nextContainerId = containerId;
+        let nextPath = path;
+
+        // Fields are stored under their arguments, or as their keyArgs policies
+        // (or @connection directives) say.
+        const storeKey = storeKeyOf(context, typeName, fieldName, node, query.variables);
+
+        // The field's value within an object returned by a read function: like
+        // InMemoryCache, under its store field name.
+        const storeFieldName =
+          unnormalized && storeKey !== undefined
+            ? storeFieldNameOf(fieldName, storeKey, node.args as JsonObject | undefined)
+            : undefined;
+        const hasUnnormalizedValue = storeFieldName !== undefined && hasOwn.call(unnormalized, storeFieldName);
+        if (hasUnnormalizedValue && !readFn) {
+          nextPath = [...path, storeFieldName];
+          child = unnormalized![storeFieldName];
+        } else if (storeKey !== undefined) {
+          let childId = nodeIdForStoreKey(containerId, [...path, fieldName], storeKey);
+          let childSnapshot: Readonly<NodeSnapshot> | undefined = getSnapshot(childId);
+
+          if (readFn) {
+            addDynamicNodeId(childId);
+            const existing = hasUnnormalizedValue
+              ? unnormalized![storeFieldName]
+              : childSnapshot && withReferences(childSnapshot, [], childSnapshot.data);
+            const read = callReadFunction(readFn, existing, fieldName, node, storeKey);
+            if (read.dangling !== undefined) {
+              markDangling(value, key, read.dangling);
+              continue;
+            }
+            child = read.value;
+          } else {
+            if (!childSnapshot) {
+              // Should we fall back to a redirect?
+              const redirect: CacheContext.ResolverRedirect | undefined = deepGet(context.resolverRedirects, [
+                typeName,
+                fieldName,
+              ]) as any;
+              if (redirect && node.args) {
+                childId = redirect(node.args);
+                if (!isNil(childId)) {
+                  childSnapshot = snapshot.getNodeSnapshot(childId);
+                }
+              }
+            }
+
+            addDynamicNodeId(childId);
+
+            // Still no snapshot? Ok we're done here.  (The field is missing,
+            // even if its container holds a value for the field stored under
+            // its name, e.g. one written without arguments.)
+            if (!childSnapshot) {
+              delete value[key];
+              continue;
+            }
+            child = childSnapshot.data;
+          }
+
+          nextContainerId = childId;
+          nextPath = [];
+        } else {
+          nextPath = [...path, fieldName];
+          child = unnormalized ? unnormalized[fieldName] : source[fieldName];
+          if (readFn) {
+            const existing = unnormalized ? child : withReferences(containerSnapshot, nextPath, child);
+            const read = callReadFunction(readFn, existing, fieldName, node, storeKey);
+            if (read.dangling !== undefined) {
+              markDangling(value, key, read.dangling);
+              continue;
+            }
+            child = read.value;
+          }
+        }
+
+        // Whether the value is (within) one returned by a read function.
+        let childUnnormalized = !!readFn || !!unnormalized;
+        const isRef = isReference(child);
+        if (isRef) {
+          if (isDangling(child)) {
+            markDangling(value, key, child.__ref);
+            continue;
+          }
+          child = resolveReference(child);
+          childUnnormalized = false;
+        } else if (unnormalized && !readFn && node.children && Array.isArray(child)) {
+          // Lists within read function results may hold References too.
+          child = resolveReferences(child, true);
+        } else if (child === undefined) {
+          const reference = getSnapshot(nextContainerId)?.outbound?.get(nextPath.join('.'));
+          if (reference && !getSnapshot(reference.id) && !isRootNodeId(reference.id)) {
+            markDangling(value, key, reference.id);
+            continue;
+          }
+        }
+
+        if (node.children && !readFn && child != null && isDev()) {
+          const scalar = context.policies.getScalarTypeForField(typeName, fieldName);
+          if (scalar) {
+            invariant.warn(
+              "The field policy for '%s' is configured with the '%s' scalar, but the field is not a scalar field because it contains a selection set. The field value remains unchanged.",
+              `${typeName}.${fieldName}`,
+              scalar,
+            );
+          }
+        }
+
+        // Objects (at any depth) may have fields with read functions.
+        const hasPolicy = hasFieldPolicies && node.children && isObjectOrArray(child);
+
+        // Have we reached a leaf (either in the query, or in the cache)?
+        if (hasPolicy || isRef || _shouldWalkChildren(child, node)) {
+          const original = child;
+          // (Objects are copied when walked: see copyForWalk.)
+          child = _copyLists(child);
+          const allChildValues = _flattenGraphQLObject(child, nextPath, value, key, original);
+          // Only the child selections of fragments that match the type apply.
+          const children = childrenForType(context, node, typeName) ?? {};
+
+          for (let i = 0; i < allChildValues.length; i++) {
+            const item = allChildValues[i];
+            const originalItem = item.original;
+            const entityId = isObject(originalItem) ? resolvedIds.get(originalItem) : undefined;
+            if (entityId !== undefined) resultEntityIds.set(item.value, entityId);
+            queue.push(
+              new OverlayWalkNode(
+                item.value,
+                isObject(originalItem) ? originalItem : item.value,
+                nextContainerId,
+                children,
+                item.path,
+                childUnnormalized && entityId === undefined && isObject(originalItem) ? originalItem : undefined,
+                item.holder,
+                item.holderKey,
+                frame,
+              ),
+            );
+          }
+        }
+
+        // Because key is already a field alias, result will be written correctly
+        // using alias as key.
+        if (child !== undefined) {
+          value[key] = child;
+        } else if (key === '__typename' && typeName && selectsRootTypename(query.info)) {
+          // Like InMemoryCache, the root __typename is only read when the document
+          // the caller passed in selects it (not when Hermes' addTypename adds it).
+          value.__typename = typeName;
+        } else if (readFn || key !== fieldName) {
+          // Like InMemoryCache, a read function returning undefined makes the
+          // field missing, even when the cache holds a value for it. (So does a
+          // missing aliased field, even when the result holds a stored field
+          // named like its alias.)
+          delete value[key];
+          // Nor is the field's stored value (under its schema name) part of the
+          // result, unless another selection's response key is that name.
+          if (readFn && key !== fieldName && !(fieldName in parsedMap)) delete value[fieldName];
+        }
+      }
+    }
+  }
 }
 
 /**
@@ -634,27 +811,54 @@ function _shouldWalkChildren(value: JsonValue | undefined, node: ParsedQueryNode
  *  Private: Represents and location and value of objects discovered while
  *  flattening the value of a graphql object field.
  */
-type FlattenedGraphQLObject = { value: JsonObject; path: PathPart[] };
+type FlattenedGraphQLObject = {
+  value: JsonObject;
+  path: PathPart[];
+  /** The object or list that holds the value, and its key there. */
+  holder?: JsonObject | JsonValue[];
+  holderKey?: string | number;
+  /** The value at the same place in the value the lists were copied from (see _copyLists). */
+  original?: unknown;
+};
 
 /**
  *  Finds all of the actual objects in `value` which can be a single object, an
  *  array of objects, or a multidimensional array of objects, and returns them
  *  as a flat list.
  */
-function _flattenGraphQLObject(value: UnknownGraphQLObject, path: PathPart[]): FlattenedGraphQLObject[] {
+function _flattenGraphQLObject(
+  value: UnknownGraphQLObject,
+  path: PathPart[],
+  holder?: JsonObject | JsonValue[],
+  holderKey?: string | number,
+  original?: unknown,
+): FlattenedGraphQLObject[] {
   if (value === null) return [];
-  if (!Array.isArray(value)) return [{ value, path }];
+  if (!Array.isArray(value)) return [{ value, path, holder, holderKey, original }];
 
   const flattened: FlattenedGraphQLObject[] = [];
 
   for (let i = 0; i < value.length; i++) {
     const item = value[i];
-    const list = _flattenGraphQLObject(item, [...path, i]);
+    const list = _flattenGraphQLObject(item, [...path, i], value, i, Array.isArray(original) ? original[i] : undefined);
 
     flattened.push(...list);
   }
 
   return flattened;
+}
+
+/**
+ * Copies the lists of a value (at any depth), leaving the objects in them (or
+ * the value itself) as they are; missing items become empty objects.
+ */
+function _copyLists(value: JsonValue | undefined): JsonValue {
+  if (value === undefined) return {};
+  if (!Array.isArray(value)) return value;
+  const copy: JsonValue[] = [];
+  // (Every index, in case this is a sparse array.)
+  for (let i = 0; i < value.length; i++) copy[i] = _copyLists(value[i]);
+  return copy;
 }
 
 function _recursivelyWrapValue<T extends JsonValue, TSerialized>(
@@ -706,7 +910,10 @@ function identifyStored<TSerialized>(
 ): NodeId | undefined {
   if (!isObject(value)) return undefined;
   if (context.policies.hasKeyFieldsFunction((value as JsonObject).__typename)) return fallback?.();
-  return context.entityIdForValue(value);
+  // (Values read are stored data or results, which don't change.)
+  let id = context.storedEntityIds.get(value);
+  if (id === undefined) context.storedEntityIds.set(value, (id = context.entityIdForValue(value) ?? null));
+  return id ?? undefined;
 }
 
 /**
@@ -849,9 +1056,11 @@ function _visitSelection<TSerialized>(
   options: VisitSelectionOptions = {},
 ): { complete: boolean; missing?: MissingTree; hasSelectedData: boolean; result?: JsonObject } {
   const { snapshot, tempStore, danglingFields } = options;
-  // Without field policies that affect reads, the completeness of static
-  // selections only depends on the data (see CheckedSubtree).
-  const memo = context.policies.hasFieldPolicies ? undefined : context.checkedSubtrees;
+  // The completeness of static selections only depends on the objects checked
+  // (see CheckedSubtree): stored data, or (with field policies that affect
+  // reads) the walk's results, which reads reuse while what they depend on is
+  // the same (see OverlaidEntity).
+  const memo = context.checkedSubtrees;
   // The checked subtrees found within the entity being visited (if memoized).
   let subtrees: CheckedSubtree[] | undefined;
   // Counts the missing fields, and the findings that depend on more than the
@@ -912,6 +1121,7 @@ function _visitSelection<TSerialized>(
       if (fieldValue !== undefined && !resultPath.length) hasSelectedData = true;
 
       if (danglingId !== undefined) {
+        unmemoizable++;
         addMissing([...resultPath, key], `Dangling reference to missing ${danglingId} object`);
         continue;
       }
