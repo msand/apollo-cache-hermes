@@ -1962,3 +1962,13 @@ export function nodeIdForParameterizedValue(containerId: NodeId, path: PathPart[
 export function nodeIdForStoreKey(containerId: NodeId, path: PathPart[], storeKey: string) {
   return `${containerId}❖${JSON.stringify(path)}❖${storeKey}`;
 }
+
+/**
+ * The store key (see StoreKey) of the parameterized value node `nodeId`, which
+ * holds the field at `path` within the container: the inverse of
+ * nodeIdForStoreKey (whose keys may contain ❖ themselves).
+ */
+export function storeKeyOfNode(containerId: NodeId, path: PathPart[], nodeId: NodeId): string | undefined {
+  const prefix = nodeIdForStoreKey(containerId, path, '');
+  return nodeId.startsWith(prefix) ? nodeId.slice(prefix.length) : undefined;
+}

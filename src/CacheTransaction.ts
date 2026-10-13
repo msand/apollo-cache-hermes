@@ -15,15 +15,15 @@ import type { FragmentDefinitionNode, InlineFragmentNode } from 'graphql';
 import type { ChangeId, NodeId, OperationInstance, CacheDelta, RawOperation } from './schema';
 import type { CacheSnapshot as CacheSnapshotType } from './CacheSnapshot';
 import type { GraphSnapshot, NodeSnapshotMap } from './GraphSnapshot';
-import type { JsonObject, JsonValue } from './primitive';
+import type { JsonObject, JsonValue, PathPart } from './primitive';
 import type { CacheContext } from './context';
 import type { Policies } from './context/policies';
 import type { ScalarConfig } from './context/scalars';
-import { fieldNameFromStoreName, isStoreFieldNameKey, storeFieldNameOf } from './context/storeFieldNames';
+import { fieldNameFromStoreName, storeFieldNameOf } from './context/storeFieldNames';
 import type { OptimisticUpdate } from './OptimisticUpdateQueue';
 import { applyDeltas } from './OptimisticUpdateQueue';
 import type { Queryable } from './Queryable';
-import type { NodeSnapshot } from './nodes';
+import type { NodeReference, NodeSnapshot } from './nodes';
 import type { DocumentNode } from './util';
 import * as transaction from './apollo/Transaction';
 import * as cacheSnapshot from './CacheSnapshot';
@@ -31,7 +31,7 @@ import * as operations from './operations';
 import * as schema from './schema';
 import * as nodes from './nodes';
 import * as util from './util';
-import { nodeIdForStoreKey } from './operations/SnapshotEditor';
+import { nodeIdForStoreKey, storeKeyOfNode } from './operations/SnapshotEditor';
 import { checkWrite, checkWriteDocument } from './operations/checkWrite';
 import { fragmentMatches, identify, isDev, makeToReference, storedTypename } from './context/helpers';
 
@@ -51,18 +51,6 @@ const DELETE: DeleteModifier = Object.create(null);
 const INVALIDATE: InvalidateModifier = Object.create(null);
 
 /**
- * The storeFieldName passed to modifiers for a field stored at `storeFieldName`
- * (a field name, or a parameterized value's node id): like InMemoryCache's,
- * for fields stored per their keyArgs policies (e.g. `feed:{"type":"news"}`).
- */
-function modifierStoreFieldName(storeFieldName: string): string {
-  const index = storeFieldName.lastIndexOf('❖');
-  if (index < 0) return storeFieldName;
-  const storeKey = storeFieldName.slice(index + 1);
-  return isStoreFieldNameKey(storeKey) ? storeKey : storeFieldName;
-}
-
-/**
  * A copy of a stored list for a modifier function: frozen, like InMemoryCache's
  * store values, if the stored list is.
  */
@@ -71,9 +59,13 @@ function copyList<T>(list: readonly T[]): T[] {
   return Object.isFrozen(list) ? (Object.freeze(copy) as T[]) : copy;
 }
 
-/** The (InMemoryCache) store field name of the parameterized value node `nodeId`. */
-function storeFieldNameOfNode(fieldName: string, nodeId: string): string {
-  return storeFieldNameOf(fieldName, nodeId.slice(nodeId.lastIndexOf('❖') + 1));
+/**
+ * The (InMemoryCache) store field name of the parameterized value node `nodeId`,
+ * which holds the field `fieldName` at `path` within the node `containerId`
+ * (e.g. `feed({"a":1})`, or per its keyArgs, `feed:{"type":"news"}`).
+ */
+function storeFieldNameOfNode(fieldName: string, containerId: NodeId, path: PathPart[], nodeId: NodeId): string {
+  return storeFieldNameOf(fieldName, path.length === 1 ? storeKeyOfNode(containerId, path, nodeId) : undefined);
 }
 
 function isDeleteModifier(value: any): value is DeleteModifier {
@@ -506,7 +498,14 @@ export class CacheTransaction<TSerialized> implements Queryable {
     // reads made while they run see the latest data.
     const currentGraph = () => (optimistic ? this._snapshot.optimistic : this._snapshot.baseline);
 
-    const nodeRefToMatch = ({ id }) => ({ d: currentGraph().getNodeData(id), k: id });
+    // A stored variant of a field: its value `d`, and (for a parameterized
+    // value) its node `k`, at `p` within the node being modified.
+    type Variant = { d: any; k: string | null; p?: PathPart[] };
+    const nodeRefToMatch = ({ id, path }: NodeReference): Variant => ({
+      d: currentGraph().getNodeData(id),
+      k: id,
+      p: path,
+    });
 
     // Like InMemoryCache, a field with arguments is passed to modifiers as its stored
     // value, or as a Reference when it holds an entity.
@@ -518,10 +517,10 @@ export class CacheTransaction<TSerialized> implements Queryable {
       return data && typeof data === 'object' ? { ...data } : data;
     };
 
-    function readFromSnapshot(obj: Readonly<NodeSnapshot>, key: string) {
+    function readFromSnapshot(obj: Readonly<NodeSnapshot>, key: string): Variant[] {
       const data = obj.data;
       const datum = data && typeof data === 'object' && key in data ? (data as JsonObject)[key] : undefined;
-      const nodes: { d: any; k: string | null }[] = obj.parameterized?.get(key)?.map(nodeRefToMatch) ?? [];
+      const nodes: Variant[] = obj.parameterized?.get(key)?.map(nodeRefToMatch) ?? [];
       if (datum != null) {
         // Like InMemoryCache, each stored variant of the field (e.g. with
         // keyArgs, `field` and `field:{"arg":1}`) is modified.
@@ -710,14 +709,7 @@ export class CacheTransaction<TSerialized> implements Queryable {
     const fieldStorage = this._context.fieldStorage;
     Object.defineProperty(details, 'storage', {
       get() {
-        const { fieldName, storeFieldName } = details;
-        // Parameterized fields' node ids end with their store keys.
-        const storeKey = storeFieldName.includes('❖')
-          ? storeFieldName.slice(storeFieldName.lastIndexOf('❖') + 1)
-          : storeFieldName === fieldName
-            ? undefined
-            : storeFieldName;
-        return fieldStorage.get([id, storeFieldNameOf(fieldName, storeKey)]);
+        return fieldStorage.get([id, details.storeFieldName]);
       },
     });
 
@@ -730,6 +722,15 @@ export class CacheTransaction<TSerialized> implements Queryable {
         keys.push(key);
       }
     }
+    // So are fields stored only as parameterized values (with arguments).
+    for (const [key, references] of node.parameterized ?? []) {
+      if (!hasOwn.call(data, key) && !keys.includes(key) && references.some(({ path }) => path.length === 1)) {
+        keys.push(key);
+      }
+    }
+    // Whether the modifiers deleted every stored variant of every field.
+    const deletedAll = () =>
+      keys.length !== 0 && keys.every(key => readFromSnapshot(node, key).every(({ k }) => deleted.has(k ?? key)));
     const payload: JsonObject = {};
     const deleted = new Set<string>();
 
@@ -737,14 +738,16 @@ export class CacheTransaction<TSerialized> implements Queryable {
     let allDeleted = false;
     let invalidated = false;
 
-    // Calls a modifier with one stored variant of the field `key` (its value
-    // `d`, and its parameterized value node `k`, if any), recording the result.
-    const modifyVariant = (modifier: Modifier<any>, key: string, d: any, k: string | null) => {
+    // Calls a modifier with one stored variant of the field `key`, recording
+    // the result.
+    const modifyVariant = (modifier: Modifier<any>, key: string, { d, k, p }: Variant) => {
+      // Edits are made to the variant's node (if any), which modifiers know
+      // by its store field name, like InMemoryCache's.
       const storeFieldName = k ?? key;
       const useRef = k?.includes('❖');
       const [copyOrCurrent, parsed] = valueForModifier(key, d, k);
       details.fieldName = key;
-      details.storeFieldName = modifierStoreFieldName(storeFieldName);
+      details.storeFieldName = p && k ? storeFieldNameOfNode(key, id, p, k) : key;
       const value = modifier(copyOrCurrent, details);
       if (isDeleteModifier(value)) {
         deleted.add(storeFieldName);
@@ -785,11 +788,11 @@ export class CacheTransaction<TSerialized> implements Queryable {
         }
       }
       for (const key of keys) {
-        for (const { d, k } of readFromSnapshot(node, key)) {
-          modifyVariant(field, key, d, k);
+        for (const variant of readFromSnapshot(node, key)) {
+          modifyVariant(field, key, variant);
         }
       }
-      if (keys.length !== 0 && keys.length === deleted.size && keys.every(key => deleted.has(key))) {
+      if (deleted.size && deletedAll()) {
         allDeleted = true;
         modified = true;
       }
@@ -803,20 +806,15 @@ export class CacheTransaction<TSerialized> implements Queryable {
         const key = fieldNameFromStoreName(fieldKey);
         let variants = readFromSnapshot(node, key);
         if (key !== fieldKey) {
-          variants = variants.filter(({ k }) => k?.includes('❖') && storeFieldNameOfNode(key, k) === fieldKey);
+          variants = variants.filter(({ k, p }) => p && k && storeFieldNameOfNode(key, id, p, k) === fieldKey);
         }
-        for (const { d, k } of variants) {
-          modifyVariant(field, key, d, k);
+        for (const variant of variants) {
+          modifyVariant(field, key, variant);
         }
       }
       // Deleting the last fields of ROOT_QUERY keeps the node, like the
       // ROOT_QUERY of InMemoryCache, which keeps its __typename.
-      if (
-        id !== StaticNodeId.QueryRoot &&
-        keys.length !== 0 &&
-        keys.length === deleted.size &&
-        keys.every(key => deleted.has(key))
-      ) {
+      if (id !== StaticNodeId.QueryRoot && deleted.size && deletedAll()) {
         allDeleted = true;
         modified = true;
       }
