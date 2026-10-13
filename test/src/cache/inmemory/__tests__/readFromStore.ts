@@ -138,10 +138,7 @@ describe('reading from the store', () => {
     });
   });
 
-  // Hermes: the store is seeded with InMemoryCache storeFieldNames for
-  // parameterized fields (e.g. 'field({"arg":...})'), which Hermes stores as
-  // parameterized value nodes instead.
-  it.skip('runs a basic query with arguments', () => {
+  it('runs a basic query with arguments', () => {
     const query = gql`
       query {
         id
@@ -180,10 +177,7 @@ describe('reading from the store', () => {
     });
   });
 
-  // Hermes: the store is seeded with InMemoryCache storeFieldNames for
-  // fields with directives (e.g. 'lastName@upperCase'), which Hermes stores as
-  // parameterized value nodes instead.
-  it.skip('runs a basic query with custom directives', () => {
+  it('runs a basic query with custom directives', () => {
     const query = gql`
       query {
         id
@@ -215,10 +209,7 @@ describe('reading from the store', () => {
     });
   });
 
-  // Hermes: the store is seeded with InMemoryCache storeFieldNames for
-  // parameterized fields (e.g. 'field({"arg":...})'), which Hermes stores as
-  // parameterized value nodes instead.
-  it.skip('runs a basic query with default values for arguments', () => {
+  it('runs a basic query with default values for arguments', () => {
     const query = gql`
       query someBigQuery($stringArg: String = "This is a default string!", $intArg: Int = 0, $floatArg: Float) {
         id

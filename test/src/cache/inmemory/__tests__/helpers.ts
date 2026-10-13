@@ -3,6 +3,8 @@ import { isReference } from '@apollo/client/utilities';
 
 import { Hermes } from '../../../../../src';
 import { CacheContext } from '../../../../../src/context';
+import { parseStoreFieldName } from '../../../../../src/context/storeFieldNames';
+import { nodeIdForParameterizedValue, nodeIdForStoreKey } from '../../../../../src/operations/SnapshotEditor';
 import { toNormalizedCacheObject } from '../../../../helpers';
 
 // Hermes: these helpers stand in for InMemoryCache's StoreWriter, StoreReader
@@ -79,13 +81,27 @@ function fromNormalizedCacheObject(normalized: NormalizedCacheObject) {
       return value;
     };
     // Fields stored per their keyArgs policies (InMemoryCache's `field:...`
-    // store field names) are Hermes' parameterized value nodes.
+    // store field names) or with arguments (`field({"arg":1})`) are Hermes'
+    // parameterized value nodes. Fields with custom directives
+    // (`field@directive`) are stored like the same fields without them.
     const data = strip(entity, []);
     const parameterized: Edge[] = [];
     for (const key of Object.keys(data ?? {})) {
       const fieldName = /^[_a-z][_0-9a-z]*/i.exec(key)?.[0];
-      if (!fieldName || key.charAt(fieldName.length) !== ':') continue;
-      const nodeId = `${id}❖${JSON.stringify([fieldName])}❖${key}`;
+      if (!fieldName || fieldName === key) continue;
+      let nodeId: string;
+      if (key.charAt(fieldName.length) === ':') {
+        nodeId = nodeIdForStoreKey(id, [fieldName], key);
+      } else {
+        const storeFieldName = parseStoreFieldName(key);
+        if (!storeFieldName) continue;
+        if (!storeFieldName.args || !Object.keys(storeFieldName.args).length) {
+          data[fieldName] = data[key];
+          delete data[key];
+          continue;
+        }
+        nodeId = nodeIdForParameterizedValue(id, [fieldName], storeFieldName.args);
+      }
       serialized[nodeId] = { type: 1, data: data[key], inbound: [{ id, path: [fieldName] }] };
       parameterized.push({ id: nodeId, path: [fieldName] });
       delete data[key];

@@ -1,6 +1,6 @@
 import { CacheSnapshot } from '../CacheSnapshot';
 import { CacheContext } from '../context';
-import { fieldNameFromStoreName } from '../context/storeFieldNames';
+import { fieldNameFromStoreName, parseStoreFieldName } from '../context/storeFieldNames';
 import { GraphSnapshot, NodeSnapshotMap } from '../GraphSnapshot';
 import { EntitySnapshot, NodeReference, ParameterizedValueSnapshot } from '../nodes';
 import { OptimisticUpdateQueue } from '../OptimisticUpdateQueue';
@@ -46,6 +46,21 @@ function createGraphSnapshotNodes<TSerialized>(
   const editedNodeIds = new Set<NodeId>();
 
   const missingPointers = new Map<NodeId, NodeReference[]>();
+  // Adds a reference from (the `path` of) node `fromId` to node `id`.
+  const addReference = (fromId: NodeId, id: NodeId, path: PathPart[], outbound: NodeReference[]) => {
+    outbound.push({ id, path });
+    const reverse: NodeReference = { id: fromId, path };
+    if (id in nodesMap) {
+      nodesMap[id]?.inbound?.set(refToInKey(reverse), reverse);
+    } else {
+      const references = missingPointers.get(id);
+      if (references === undefined) {
+        missingPointers.set(id, [reverse]);
+      } else {
+        references.push(reverse);
+      }
+    }
+  };
 
   // Create entity nodes in the GraphSnapshot
   for (const nodeId in serializedState) {
@@ -91,34 +106,30 @@ function createGraphSnapshotNodes<TSerialized>(
             parsedParameterized.push({ id: fieldId, path });
             continue;
           }
-          const result = /(.+)\((.+)\)/.exec(key);
-          if (result) {
-            const fieldId = nodeIdForParameterizedValue(nodeId, [result[1]], JSON.parse(result[2]));
-            const path = [key];
+          // Other InMemoryCache store field names (from getStoreKeyName): fields
+          // with arguments are parameterized value nodes, and Hermes stores
+          // fields with custom directives (e.g. `lastName@upperCase`) like the
+          // same fields without them.
+          const storeFieldName = parseStoreFieldName(key);
+          if (storeFieldName?.args && Object.keys(storeFieldName.args).length) {
+            const path = [storeFieldName.fieldName];
+            const fieldId = nodeIdForParameterizedValue(nodeId, path, storeFieldName.args);
+            const fieldOut: NodeReference[] = [];
+            if (isReference(val)) addReference(fieldId, val.__ref, [], fieldOut);
             nodesMap[fieldId] = new ParameterizedValueSnapshot(
-              val as JsonValue,
-              [...(missingPointers.get(nodeId) ?? []), { id: nodeId, path }],
-              [],
+              isReference(val) ? null : (val as JsonValue),
+              [{ id: nodeId, path }],
+              fieldOut,
             );
             editedNodeIds.add(fieldId);
             parsedParameterized.push({ id: fieldId, path });
-          } else if (isReference(val)) {
-            const id = val.__ref;
-            const path = [key];
-            parsedOut.push({ id, path });
-            const reverse: NodeReference = { id: nodeId, path };
-            if (id in nodesMap) {
-              nodesMap[id]?.inbound?.set(refToInKey(reverse), reverse);
-            } else {
-              const references = missingPointers.get(id);
-              if (references === undefined) {
-                missingPointers.set(id, [reverse]);
-              } else {
-                references.push(reverse);
-              }
-            }
+            continue;
+          }
+          const fieldKey = storeFieldName ? storeFieldName.fieldName : key;
+          if (isReference(val)) {
+            addReference(nodeId, val.__ref, [fieldKey], parsedOut);
           } else {
-            parsed[key] = val;
+            parsed[fieldKey] = val;
           }
         }
         nodeSnapshot = new EntitySnapshot(

@@ -1,8 +1,9 @@
 import type { KeyArgsFunction, TypePolicy } from '@apollo/client/cache';
+import { canonicalStringify } from '@apollo/client/utilities';
 import { argumentsObjectFromField, DeepMerger, getStoreKeyName } from '@apollo/client/utilities/internal';
 import type { DirectiveNode, FieldNode } from 'graphql';
 
-import type { JsonObject } from '../primitive';
+import type { JsonObject, JsonValue } from '../primitive';
 
 /**
  * How a field (of a given type, with given arguments) is stored within its
@@ -10,7 +11,9 @@ import type { JsonObject } from '../primitive';
  * parameterized value node identified by `key`.
  *
  * For fields without keyArgs policies (or @connection directives), the key is
- * the JSON of the field's arguments, as Hermes has always stored them.
+ * the JSON of the field's arguments, with their keys sorted (like the
+ * arguments of InMemoryCache's store field names, so that the order of the
+ * arguments in a query doesn't matter).
  * Otherwise, it is the store field name InMemoryCache would use (e.g.
  * `feed:{"type":"news"}`), which always starts with the field name, and so
  * never with `{`.
@@ -87,7 +90,7 @@ export class StoreFieldNames {
         return toStoreKey(fieldName, storeFieldName);
       }
     }
-    return JSON.stringify(args);
+    return argsStoreKey(args!);
   }
 
   /**
@@ -128,6 +131,91 @@ export class StoreFieldNames {
     }
     return toStoreKey(fieldName, storeFieldName || fieldName);
   }
+}
+
+/**
+ * The store key of a field (without keyArgs policies) stored under its
+ * arguments: their JSON, with object keys sorted like InMemoryCache's
+ * getStoreKeyName.
+ */
+export function argsStoreKey(args: JsonObject): string {
+  return canonicalStringify(args);
+}
+
+/** An InMemoryCache store field name, as produced by getStoreKeyName. */
+export interface ParsedStoreFieldName {
+  fieldName: string;
+  /** The field's arguments (from `field({...})`), if it has any. */
+  args?: JsonObject;
+  /** Whether the store field name has (custom) directives (`field@directive(...)`). */
+  hasDirectives: boolean;
+}
+
+/**
+ * Parses an InMemoryCache store field name of a field without keyArgs policy,
+ * as made by getStoreKeyName: the field name, followed by its arguments as
+ * JSON in parentheses (`field({"arg":1})`), followed by its custom directives
+ * (`field@upperCase`, `field@dateFormat({"format":"DD-MM-YYYY"})`).
+ *
+ * Returns undefined if `storeFieldName` is not of that form.
+ */
+export function parseStoreFieldName(storeFieldName: string): ParsedStoreFieldName | undefined {
+  const fieldName = fieldNameFromStoreName(storeFieldName);
+  if (fieldName === storeFieldName || !TypeOrFieldNameRegExp.test(fieldName)) return undefined;
+
+  let index = fieldName.length;
+  let args: JsonObject | undefined;
+  const readParenthesizedJson = (): JsonValue | undefined => {
+    if (storeFieldName.charAt(index) !== '(') return undefined;
+    const end = jsonEnd(storeFieldName, index + 1);
+    if (end === undefined || storeFieldName.charAt(end) !== ')') return undefined;
+    try {
+      const value = JSON.parse(storeFieldName.slice(index + 1, end)) as JsonValue;
+      index = end + 1;
+      return value;
+    } catch {
+      return undefined;
+    }
+  };
+
+  if (storeFieldName.charAt(index) === '(') {
+    const parsed = readParenthesizedJson();
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
+    args = parsed;
+  }
+
+  let hasDirectives = false;
+  while (storeFieldName.charAt(index) === '@') {
+    const directiveName = TypeOrFieldNameRegExp.exec(storeFieldName.slice(index + 1))?.[0];
+    if (!directiveName) return undefined;
+    index += 1 + directiveName.length;
+    if (storeFieldName.charAt(index) === '(' && readParenthesizedJson() === undefined) return undefined;
+    hasDirectives = true;
+  }
+
+  if (index !== storeFieldName.length) return undefined;
+  return args ? { fieldName, args, hasDirectives } : { fieldName, hasDirectives };
+}
+
+/** The index just after the JSON object or array starting at `start`. */
+function jsonEnd(text: string, start: number): number | undefined {
+  const open = text.charAt(start);
+  if (open !== '{' && open !== '[') return undefined;
+  let depth = 0;
+  for (let i = start; i < text.length; i++) {
+    const char = text.charAt(i);
+    if (char === '"') {
+      // Skip the string, and its escaped characters.
+      for (i++; i < text.length && text.charAt(i) !== '"'; i++) {
+        if (text.charAt(i) === '\\') i++;
+      }
+    } else if (char === '{' || char === '[') {
+      depth++;
+    } else if (char === '}' || char === ']') {
+      if (--depth === 0) return i + 1;
+    }
+  }
+  return undefined;
 }
 
 /** The store field name (as InMemoryCache's) of a field stored under `key`. */

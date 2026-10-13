@@ -4,7 +4,7 @@ import type { Reference } from '@apollo/client/cache';
 import type { StoreObject } from '@apollo/client/utilities';
 
 import type { CacheContext } from '../context';
-import { storeFieldNameOf } from '../context/storeFieldNames';
+import { argsStoreKey, storeFieldNameOf } from '../context/storeFieldNames';
 import type { GraphSnapshot as GraphSnapshotType } from '../GraphSnapshot';
 import type { NodeReference, EntitySnapshot as EntitySnapshotType, NodeSnapshot } from '../nodes';
 import { fieldNodeOf, selectionSetOf } from '../ParsedQueryNode';
@@ -1726,7 +1726,7 @@ export class SnapshotEditor<TSerialized> {
  * Generate a stable id for a parameterized value.
  */
 export function nodeIdForParameterizedValue(containerId: NodeId, path: PathPart[], args?: JsonObject) {
-  return nodeIdForStoreKey(containerId, path, JSON.stringify(args));
+  return nodeIdForStoreKey(containerId, path, args ? argsStoreKey(args) : JSON.stringify(args));
 }
 
 /**
