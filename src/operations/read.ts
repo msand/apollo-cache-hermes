@@ -703,7 +703,9 @@ export function _visitSelection<TSerialized>(
         } else {
           const isEntity =
             !containerPath.length && (isRootId(containerId) || getNode(containerId) instanceof EntitySnapshot);
-          const objOrNodeId = isEntity ? `${containerId} object` : `object ${safeStringify(value)}`;
+          // Like InMemoryCache's store objects, __typename comes first.
+          const shown = '__typename' in value ? { __typename: value.__typename, ...value } : value;
+          const objOrNodeId = isEntity ? `${containerId} object` : `object ${safeStringify(shown)}`;
           message = `Can't find field '${fieldName}' on ${objOrNodeId}`;
         }
         addMissing([...resultPath, key], message);
