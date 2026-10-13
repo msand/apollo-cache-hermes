@@ -332,8 +332,7 @@ it('does not suspend streamed queries with data in the cache and using a "cache-
   await expect(takeRender).not.toRerender();
 });
 
-// Hermes: @stream incremental cache semantics (per-chunk streamFieldInfo) are not implemented, so a streamed chunk replaces the cached list instead of merging into it.
-it.skip('does not suspend streamed queries with partial data in the cache and using a "cache-first" fetch policy with `returnPartialData`', async () => {
+it('does not suspend streamed queries with partial data in the cache and using a "cache-first" fetch policy with `returnPartialData`', async () => {
   const { subject, stream } = asyncIterableSubject();
 
   const query = gql`
@@ -462,8 +461,7 @@ it.skip('does not suspend streamed queries with partial data in the cache and us
   await expect(takeRender).not.toRerender();
 });
 
-// Hermes: @stream incremental cache semantics (per-chunk streamFieldInfo) are not implemented, so a streamed chunk replaces the cached list instead of merging into it.
-it.skip('does not suspend streamed queries with data in the cache and using a "cache-and-network" fetch policy', async () => {
+it('does not suspend streamed queries with data in the cache and using a "cache-and-network" fetch policy', async () => {
   const { stream, subject } = asyncIterableSubject();
   const query = gql`
     query {
@@ -559,8 +557,7 @@ it.skip('does not suspend streamed queries with data in the cache and using a "c
   await expect(takeRender).not.toRerender();
 });
 
-// Hermes: @stream incremental cache semantics (per-chunk streamFieldInfo) are not implemented, so a streamed chunk replaces the cached list instead of merging into it.
-it.skip('incrementally rerenders data returned by a `refetch` for a streamed query', async () => {
+it('incrementally rerenders data returned by a `refetch` for a streamed query', async () => {
   let subject!: Subject<Friend>;
   const query = gql`
     query {
@@ -1304,8 +1301,7 @@ it('adds partial data and discards errors returned in incremental chunks with er
   await expect(takeRender).not.toRerender();
 });
 
-// Hermes: @stream incremental cache semantics (per-chunk streamFieldInfo) are not implemented, so a streamed chunk replaces the cached list instead of merging into it.
-it.skip('can refetch and respond to cache updates after encountering an error in an incremental chunk for a streamed query when `errorPolicy` is `all`', async () => {
+it('can refetch and respond to cache updates after encountering an error in an incremental chunk for a streamed query when `errorPolicy` is `all`', async () => {
   let subject!: Subject<Promise<Friend> | Friend>;
   const query = gql`
     query {

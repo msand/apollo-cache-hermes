@@ -1072,8 +1072,7 @@ it('can use custom merge function to combine cached and streamed lists', async (
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no per-chunk streamFieldInfo: Hermes does not pass @stream chunk information to merge functions.
-it.skip('provides streamFieldInfo to merge functions', async () => {
+it('provides streamFieldInfo to merge functions', async () => {
   const merge = createMockStreamMergeFn();
 
   const cache = new Hermes({
@@ -1181,8 +1180,7 @@ it.skip('provides streamFieldInfo to merge functions', async () => {
   );
 });
 
-// Hermes: no per-chunk streamFieldInfo: Hermes does not pass @stream chunk information to merge functions.
-it.skip('returns correct streamFieldInfo when final chunk is only hasNext: false', async () => {
+it('returns correct streamFieldInfo when final chunk is only hasNext: false', async () => {
   const merge = createMockStreamMergeFn();
   const { stream: friendStream, subject } = asyncIterableSubject<Friend>();
 
@@ -1321,8 +1319,7 @@ it.skip('returns correct streamFieldInfo when final chunk is only hasNext: false
   );
 });
 
-// Hermes: no per-chunk streamFieldInfo: Hermes does not pass @stream chunk information to merge functions.
-it.skip('provides streamFieldInfo to merge functions in nested stream fields', async () => {
+it('provides streamFieldInfo to merge functions in nested stream fields', async () => {
   const merge = createMockStreamMergeFn();
 
   const cache = new Hermes({
@@ -1441,8 +1438,7 @@ it.skip('provides streamFieldInfo to merge functions in nested stream fields', a
   );
 });
 
-// Hermes: no per-chunk streamFieldInfo: Hermes does not pass @stream chunk information to merge functions.
-it.skip('provides streamFieldInfo to merge functions in sibling stream fields', async () => {
+it('provides streamFieldInfo to merge functions in sibling stream fields', async () => {
   const friendListMerge = createMockStreamMergeFn();
   const nonNullFriendListMerge = createMockStreamMergeFn();
 
@@ -1700,8 +1696,7 @@ it('provides undefined streamFieldInfo to non-stream merge functions', async () 
   );
 });
 
-// Hermes: no per-chunk streamFieldInfo: Hermes does not pass @stream chunk information to merge functions.
-it.skip('sets correct streamFieldInfo when field name is same in different locations', async () => {
+it('sets correct streamFieldInfo when field name is same in different locations', async () => {
   const scalarListMerge = createMockStreamMergeFn();
   const nestedScalarListMerge = createMockStreamMergeFn();
 
@@ -1858,8 +1853,7 @@ it.skip('sets correct streamFieldInfo when field name is same in different locat
   );
 });
 
-// Hermes: no per-chunk streamFieldInfo: Hermes does not pass @stream chunk information to merge functions.
-it.skip('sets correct streamFieldInfo when stream field is inside another list', async () => {
+it('sets correct streamFieldInfo when stream field is inside another list', async () => {
   const merge = createMockStreamMergeFn();
 
   const cache = new Hermes({
@@ -2072,8 +2066,7 @@ it.skip('sets correct streamFieldInfo when stream field is inside another list',
   );
 });
 
-// Hermes: no @stream incremental cache semantics: Hermes has no default @stream merge (keeping cached list items until the last chunk, then truncating), so a streamed chunk replaces the cached list.
-it.skip('truncates array with default merge function on refetch when last chunk is emitted when refetched array is shorter', async () => {
+it('truncates array with default merge function on refetch when last chunk is emitted when refetched array is shorter', async () => {
   let { stream: friendStream, subject } = asyncIterableSubject<Friend>();
 
   const client = new ApolloClient({
@@ -2240,8 +2233,7 @@ it.skip('truncates array with default merge function on refetch when last chunk 
   });
 });
 
-// Hermes: no @stream incremental cache semantics: Hermes has no default @stream merge (keeping cached list items until the last chunk, then truncating), so a streamed chunk replaces the cached list.
-it.skip('truncates array when fetched array is shorter than cached array with cache-and-network fetch policy', async () => {
+it('truncates array when fetched array is shorter than cached array with cache-and-network fetch policy', async () => {
   const { stream: friendStream, subject } = asyncIterableSubject<Friend>();
 
   const client = new ApolloClient({
@@ -2337,8 +2329,7 @@ it.skip('truncates array when fetched array is shorter than cached array with ca
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @stream incremental cache semantics: Hermes has no default @stream merge (keeping cached list items until the last chunk, then truncating), so a streamed chunk replaces the cached list.
-it.skip('returns partial cached stream list data as "partial" while streaming with a "cache-first" fetch policy and returnPartialData', async () => {
+it('returns partial cached stream list data as "partial" while streaming with a "cache-first" fetch policy and returnPartialData', async () => {
   const { subject, stream: iterableStream } = asyncIterableSubject();
 
   const query = gql`
@@ -3424,8 +3415,7 @@ it('only returns streamed items from a partial array with a cache-and-network fe
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @stream incremental cache semantics: Hermes has no default @stream merge (keeping cached list items until the last chunk, then truncating), so a streamed chunk replaces the cached list.
-it.skip('keeps all cached stream items including incomplete ones until the last chunk with returnPartialData: true', async () => {
+it('keeps all cached stream items including incomplete ones until the last chunk with returnPartialData: true', async () => {
   const { subject, stream: iterableStream } = asyncIterableSubject();
 
   const query = gql`
@@ -3641,7 +3631,7 @@ it('does not surface incomplete cached fields on a streamed item after the netwo
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it does not prune cached data inside pending boundaries (nor report them as "streaming").
+// Hermes: awaits the incremental diff work (@defer dataState pruning): Hermes' diff does not take the pending @defer boundaries into account, so it does not prune cached data inside pending boundaries (nor report them as "streaming").
 it.skip('prunes undelivered defer fragments from partial cached fields inside a `@defer` boundary on streamed list items with returnPartialData: false', async () => {
   const mock = mockDeferStreamGraphQL17Alpha9();
 
@@ -3847,7 +3837,7 @@ it.skip('prunes undelivered defer fragments from partial cached fields inside a 
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it does not prune cached data inside pending boundaries (nor report them as "streaming").
+// Hermes: awaits the incremental diff work (@defer dataState pruning): Hermes' diff does not take the pending @defer boundaries into account, so it does not prune cached data inside pending boundaries (nor report them as "streaming").
 it.skip("prunes each streamed list item's sibling `@defer` boundaries independently by label", async () => {
   const mock = mockDeferStreamGraphQL17Alpha9();
 
@@ -4051,7 +4041,7 @@ it.skip("prunes each streamed list item's sibling `@defer` boundaries independen
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @defer dataState pruning: Hermes' diff does not take the pending @defer boundaries into account, so it does not prune cached data inside pending boundaries (nor report them as "streaming").
+// Hermes: awaits the incremental diff work (@defer dataState pruning): Hermes' diff does not take the pending @defer boundaries into account, so it does not prune cached data inside pending boundaries (nor report them as "streaming").
 it.skip('does not surface complete cached `@defer` boundaries on streamed list items with returnPartialData: false', async () => {
   const mock = mockDeferStreamGraphQL17Alpha9();
 
@@ -4804,8 +4794,7 @@ it('only reports streamed items from a partial stream array with a cache-and-net
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: no @stream incremental cache semantics: Hermes has no default @stream merge (keeping cached list items until the last chunk, then truncating), so a streamed chunk replaces the cached list.
-it.skip('applies field read functions to residual complete stream list items while later items are still streaming', async () => {
+it('applies field read functions to residual complete stream list items while later items are still streaming', async () => {
   const { subject, stream: iterableStream } = asyncIterableSubject<Friend>();
 
   const query = gql`
