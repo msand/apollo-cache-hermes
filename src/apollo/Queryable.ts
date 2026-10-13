@@ -13,11 +13,13 @@ import {
 import { InvariantError } from '@apollo/client/utilities/invariant';
 
 import type { Policies } from '../context/policies';
+import { incrementalDiff } from '../operations/incrementalDiff';
+import type { IncrementalDiffOperation } from '../operations/incrementalDiff';
 import { toDiffResult } from '../operations/read';
 import { JsonObject } from '../primitive';
 import { Queryable } from '../Queryable';
 import { NodeId, StaticNodeId } from '../schema';
-import { DocumentNode } from '../util';
+import { DocumentNode, getOperationOrDie, variableDefaultsInOperation } from '../util';
 
 import { buildRawOperationFromQuery, buildRawOperationFromFragment, withOverwrite } from './util';
 
@@ -28,8 +30,7 @@ export abstract class ApolloQueryable extends ApolloCache {
   /** The underlying Hermes cache. */
   protected abstract _queryable: Queryable;
 
-  // The same overloads as ApolloCache#diff. Hermes does not yet use the
-  // incremental (@defer/@stream) info, so it always returns a plain diff result.
+  // The same overloads as ApolloCache#diff.
   diff<TData = unknown, TVariables extends OperationVariables = OperationVariables>(
     options: Cache.DiffOptions<TData, TVariables> & { [handleIncrementalSymbol]: DiffIncrementalInfo | undefined },
   ): Cache.InternalDiffResultWithDataState<TData> | Cache.DiffResult<TData>;
@@ -37,12 +38,44 @@ export abstract class ApolloQueryable extends ApolloCache {
     options: Cache.DiffOptions<TData, TVariables>,
   ): Cache.DiffResult<TData>;
   diff<TData = unknown, TVariables extends OperationVariables = OperationVariables>(
-    options: Cache.DiffOptions<TData, TVariables>,
-  ): Cache.DiffResult<TData> {
+    options: Cache.DiffOptions<TData, TVariables> & { [handleIncrementalSymbol]?: DiffIncrementalInfo },
+  ): Cache.InternalDiffResultWithDataState<TData> | Cache.DiffResult<TData> {
     const rawOperation = buildRawOperationFromQuery(options.query, options.variables as JsonObject, options.id);
+    const queryResult = this._queryable.read(rawOperation, options.optimistic);
+    // Like InMemoryCache, Apollo Client's internal diffs (which pass the
+    // incremental info, even when undefined) get the result's dataState, with
+    // @defer/@stream boundaries that are still streaming taken into account.
+    if (Object.prototype.hasOwnProperty.call(options, handleIncrementalSymbol)) {
+      return incrementalDiff<TData>(
+        queryResult,
+        this._incrementalDiffOperation(rawOperation.document, options.variables as JsonObject | undefined, options.id),
+        options.returnPartialData,
+        options[handleIncrementalSymbol],
+      );
+    }
     // Like InMemoryCache, an incomplete result does not throw: it is null
     // unless partial data is requested (the default) and some was found.
-    return toDiffResult<TData>(this._queryable.read(rawOperation, options.optimistic), options.returnPartialData);
+    return toDiffResult<TData>(queryResult, options.returnPartialData);
+  }
+
+  /** What incrementalDiff needs to know about a read of `document`. */
+  private _incrementalDiffOperation(
+    document: DocumentNode,
+    variables: JsonObject | undefined,
+    rootId: string | undefined,
+  ): IncrementalDiffOperation {
+    const queryable = this._queryable;
+    const transformed = queryable.transformDocument(document);
+    // Like the read itself, custom scalar variables are serialized, and
+    // variables default to their declared default values.
+    const serialized = queryable.scalars.serializeVariables(document, variables);
+    return {
+      document: transformed,
+      variables: { ...variableDefaultsInOperation(getOperationOrDie(transformed)), ...serialized },
+      rootTypename: queryable.policies.rootTypename(rootId ?? StaticNodeId.QueryRoot),
+      fragmentMatches: (fragment, typename) => queryable.fragmentMatches(fragment, typename),
+      lookupFragment: fragmentName => queryable.lookupFragment(fragmentName),
+    };
   }
 
   read<TData = unknown, TVariables extends OperationVariables = OperationVariables>(
