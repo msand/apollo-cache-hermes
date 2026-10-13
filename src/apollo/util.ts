@@ -35,3 +35,11 @@ export function buildRawOperationFromFragment(
     fromFragmentDocument: true,
   };
 }
+
+/**
+ * Marks a write operation as overwriting existing values, when the write
+ * options ask for it (like InMemoryCache's `overwrite` option).
+ */
+export function withOverwrite(operation: RawOperation, options: { overwrite?: boolean }): RawOperation {
+  return options.overwrite ? { ...operation, overwrite: true } : operation;
+}

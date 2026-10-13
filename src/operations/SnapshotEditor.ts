@@ -162,6 +162,8 @@ export class SnapshotEditor<TSerialized> {
   private _variables: JsonObject | undefined;
   /** The extensions of the write being merged, for merge functions. */
   private _extensions: Record<string, unknown> | undefined;
+  /** Whether the write being merged overwrites existing values (for merge functions). */
+  private _overwrite = false;
   private _fieldFunctionsInstance: FieldFunctions<TSerialized> | undefined;
 
   constructor(
@@ -186,6 +188,7 @@ export class SnapshotEditor<TSerialized> {
     // Apollo's internal @stream info (kept under a symbol key).
     const extensions = query.extensions && Object.entries(query.extensions);
     this._extensions = extensions?.length ? Object.fromEntries(extensions) : undefined;
+    this._overwrite = !!query.overwrite;
     this._fieldFunctionsInstance = undefined;
 
     // We collect all warnings associated with this operation to avoid
@@ -286,7 +289,8 @@ export class SnapshotEditor<TSerialized> {
       const fieldName = String([...prefixPath, ...path].filter(part => typeof part === 'string').pop() ?? '');
       const existing = withReferences(this._getNodeSnapshot(containerId), path, previousValue);
       payload = typePolicy.merge(
-        existing,
+        // Like InMemoryCache, overwriting writes call merge functions without existing data.
+        this._overwrite ? undefined : existing,
         payload,
         this._fieldFunctions().mergeOptions(
           fieldName,
@@ -572,7 +576,8 @@ export class SnapshotEditor<TSerialized> {
         const args = (node.args as JsonObject | undefined) ?? null;
         const storageKeys = [containerId, ...path, storageFieldName(schemaName, args)];
         fieldValue = merge(
-          existing,
+          // Like InMemoryCache, overwriting writes call merge functions without existing data.
+          this._overwrite ? undefined : existing,
           incoming,
           this._fieldFunctions().mergeOptions(
             schemaName,

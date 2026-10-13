@@ -13,7 +13,7 @@ import { Queryable } from '../Queryable';
 import { NodeId, StaticNodeId } from '../schema';
 import { DocumentNode } from '../util';
 
-import { buildRawOperationFromQuery, buildRawOperationFromFragment } from './util';
+import { buildRawOperationFromQuery, buildRawOperationFromFragment, withOverwrite } from './util';
 
 /**
  * Apollo-specific interface to the cache.
@@ -78,7 +78,11 @@ export abstract class ApolloQueryable extends ApolloCache {
       options.dataId,
       options.extensions,
     );
-    const ref = this._queryable.write(rawOperation, options.result as JsonObject, options.broadcast);
+    const ref = this._queryable.write(
+      withOverwrite(rawOperation, options),
+      options.result as JsonObject,
+      options.broadcast,
+    );
     return ref ?? makeReference(rawOperation.rootId);
   }
 
@@ -91,7 +95,11 @@ export abstract class ApolloQueryable extends ApolloCache {
       options.id,
       options.extensions,
     );
-    const ref = this._queryable.write(rawOperation, options.data as JsonObject, options.broadcast);
+    const ref = this._queryable.write(
+      withOverwrite(rawOperation, options),
+      options.data as JsonObject,
+      options.broadcast,
+    );
     return ref ?? makeReference(rawOperation.rootId);
   }
 
@@ -110,7 +118,11 @@ export abstract class ApolloQueryable extends ApolloCache {
       options.variables as JsonObject | undefined,
       options.fragmentName,
     );
-    const ref = this._queryable.write(rawOperation, options.data as JsonObject, options.broadcast);
+    const ref = this._queryable.write(
+      withOverwrite(rawOperation, options),
+      options.data as JsonObject,
+      options.broadcast,
+    );
     return ref ?? makeReference(rawOperation.rootId);
   }
 

@@ -50,6 +50,12 @@ export interface RawOperation {
   readonly fromFragmentDocument?: boolean;
   /** The GraphQL extensions of a write, passed to merge functions. */
   readonly extensions?: Record<string, unknown>;
+  /**
+   * Whether a write replaces existing field values: like InMemoryCache's
+   * `overwrite` write option, merge functions are called with no existing
+   * value.
+   */
+  readonly overwrite?: boolean;
 }
 
 /**
