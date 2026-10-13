@@ -2,7 +2,8 @@
 
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import gql, { disableFragmentWarnings } from 'graphql-tag';
-import { Cache, isReference, makeReference, Reference, TypePolicies } from '@apollo/client';
+import { Cache, isReference, Reference, TypePolicies } from '@apollo/client';
+import { makeReference } from '@apollo/client/utilities/internal';
 import { expectTypeOf } from 'expect-type';
 import { DocumentNode } from 'graphql';
 
@@ -1386,7 +1387,7 @@ describe('Cache', () => {
         query,
         optimistic: true,
         callback(diff) {
-          results.push(diff.result!);
+          results.push(diff.result as QueryData);
         },
       });
 
@@ -1459,7 +1460,7 @@ describe('Cache', () => {
         name: 'Ben Newman',
       });
 
-      cache.updateFragment(
+      cache.updateFragment<any>(
         {
           id: bnId,
           fragment: usernameFragment,
@@ -2321,7 +2322,7 @@ describe('Hermes#broadcastWatches', () => {
       optimistic: true,
       immediate: true,
       callback(diff: Diff) {
-        addDiff(diff.result!.object.name, diff);
+        addDiff(diff.result!.object!.name!, diff);
       },
     };
 
@@ -2347,7 +2348,7 @@ describe('Hermes#broadcastWatches', () => {
       nonCanonicalCache.watch({
         ...commonWatchOptions,
         variables: { name: 'canonicalByChoice' },
-        canonizeResults: true, // Override the default.
+        // Apollo Client 4 removed the canonizeResults option.
       }),
     );
 
@@ -2355,7 +2356,7 @@ describe('Hermes#broadcastWatches', () => {
       canonicalCache.watch({
         ...commonWatchOptions,
         variables: { name: 'nonCanonicalByChoice' },
-        canonizeResults: false, // Override the default.
+        // Apollo Client 4 removed the canonizeResults option.
       }),
     );
 
@@ -2789,7 +2790,7 @@ describe('Hermes#modify', () => {
     });
 
     const snapshotWithoutYOB = cache.extract();
-    expect(snapshotWithoutYOB[authorId]!.yearOfBirth).toBeUndefined();
+    expect((snapshotWithoutYOB[authorId] as unknown as Record<string, unknown>).yearOfBirth).toBeUndefined();
     expect('yearOfBirth' in snapshotWithoutYOB[authorId]!).toBe(false);
     expect(snapshotWithoutYOB).toEqual({
       'Author:{"name":"Ezra Klein"}': {

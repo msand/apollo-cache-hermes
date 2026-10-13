@@ -1,0 +1,36 @@
+import type { MatcherFunction } from 'expect';
+
+import type { ObservableStream } from '@apollo/client/testing/internal';
+
+import type { TakeOptions } from '../internal/ObservableStream';
+import { EventMismatchError } from '../internal/ObservableStream';
+
+export const toEmitNext: MatcherFunction<[options?: TakeOptions]> = async function (actual, options) {
+  const stream = actual as ObservableStream<any>;
+  const hint = this.utils.matcherHint(this.isNot ? '.not.toEmitValue' : 'toEmitValue', 'stream', 'expected');
+
+  try {
+    await stream.takeNext(options);
+
+    return {
+      pass: true,
+      message: () => {
+        return `${hint}\n\nExpected stream not to emit a value but it did.`;
+      },
+    };
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Timeout waiting for next event') {
+      return {
+        pass: false,
+        message: () => `${hint}\n\nExpected stream to emit a value but it did not.`,
+      };
+    } else if (EventMismatchError.is(error)) {
+      return {
+        pass: false,
+        message: () => error.formatMessage('toEmitNext'),
+      };
+    } else {
+      throw error;
+    }
+  }
+};

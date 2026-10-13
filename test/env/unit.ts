@@ -1,26 +1,33 @@
-// Mirrors Apollo Client 3.14.1's src/config/jest/setup.ts, loading Apollo
-// Client's matchers and dev tooling from the package.
-import { TextEncoder, TextDecoder } from 'util';
+// Mirrors Apollo Client 4.3.3's src/config/jest/setup.ts as Apollo runs it in
+// CI, against the published package: Apollo Client's dev and error messages are
+// loaded, and its matchers and equality testers come from the vendored test
+// support code in test/src.
 import '@testing-library/jest-dom';
 import gql from 'graphql-tag';
-import { loadDevMessages, loadErrorMessageHandler } from '@apollo/client/dev';
-import '@apollo/client/testing/matchers';
+import { setLogVerbosity } from '@apollo/client';
+import { loadDevMessages, loadErrorMessages } from '@apollo/client/dev';
 
-import { areApolloErrorsEqual } from '../src/config/jest/areApolloErrorsEqual';
+import '../src/testing/matchers/index';
+import { areCombinedGraphQLErrorsEqual } from '../src/config/jest/areCombinedGraphQLErrorsEqual';
+import { areCombinedProtocolErrorsEqual } from '../src/config/jest/areCombinedProtocolErrorsEqual';
 import { areGraphQLErrorsEqual } from '../src/config/jest/areGraphQlErrorsEqual';
+import { areLocalStateErrorsEqual } from '../src/config/jest/areLocalStateErrorsEqual';
+import { areMissingFieldErrorsEqual } from '../src/config/jest/areMissingFieldErrorsEqual';
+import { areServerErrorsEqual } from '../src/config/jest/areServerErrorsEqual';
+import { areWeakRefsEqual } from '../src/config/jest/areWeakRefsEqual';
 
-global.TextEncoder ??= TextEncoder;
 // @ts-ignore
-global.TextDecoder ??= TextDecoder;
+globalThis.__DEV__ = true;
+
+setLogVerbosity('log');
 
 // Turn off warnings for repeated fragment names
 gql.disableFragmentWarnings();
 
 process.on('unhandledRejection', () => {});
 
-loadErrorMessageHandler();
-// Readable warnings from the @apollo/client package; Hermes tests assert its production error messages.
 loadDevMessages();
+loadErrorMessages();
 
 function fail(reason = 'fail was called in a test.') {
   expect(reason).toBe(undefined);
@@ -41,9 +48,14 @@ if (!Symbol.asyncDispose) {
 }
 
 // @ts-ignore
-expect.addEqualityTesters([areApolloErrorsEqual, areGraphQLErrorsEqual]);
-
-// not available in JSDOM 🙄
-global.structuredClone = val => JSON.parse(JSON.stringify(val));
+expect.addEqualityTesters([
+  areServerErrorsEqual,
+  areCombinedGraphQLErrorsEqual,
+  areCombinedProtocolErrorsEqual,
+  areGraphQLErrorsEqual,
+  areLocalStateErrorsEqual,
+  areMissingFieldErrorsEqual,
+  areWeakRefsEqual,
+]);
 
 import './base';
