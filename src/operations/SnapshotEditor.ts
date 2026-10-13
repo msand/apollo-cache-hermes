@@ -169,6 +169,13 @@ function toStoreValue(
   return value;
 }
 
+/** Whether two values are objects with different __typenames (like InMemoryCache's mergeObjects checks). */
+function typenamesDiffer(a: unknown, b: unknown): boolean {
+  const aTypename = typenameOf(a);
+  const bTypename = typenameOf(b);
+  return !!aTypename && !!bTypename && aTypename !== bTypename;
+}
+
 /**
  * Builds a set of changes to apply on top of an existing `GraphSnapshot`.
  *
@@ -405,9 +412,20 @@ export class SnapshotEditor<TSerialized> {
         ? containerId
         : (ifString(deepGet(this._pathToId[containerId], path)) ?? this._danglingReferenceId(containerId, path)));
 
-    // Like InMemoryCache's mergeObjects, merge:true policies merge unidentified
-    // objects and entities together.
-    if (payloadId !== previousId && mode === 'merge' && !isNil(payload) && !isNil(previousValue) && !ref) {
+    // Like InMemoryCache's mergeObjects, merge:true policies merge an
+    // unidentified object into an entity (or an entity into the unidentified
+    // object it replaces); objects whose __typenames differ are not merged.
+    // Two different entities are not merged either: the incoming one replaces
+    // the existing one.
+    if (mode === 'merge' && typenamesDiffer(payload, previousValue)) mode = 'replace';
+    if (
+      payloadId !== previousId &&
+      (!payloadId || !previousId) &&
+      mode === 'merge' &&
+      !isNil(payload) &&
+      !isNil(previousValue) &&
+      !ref
+    ) {
       if (!payloadId) {
         payloadId = previousId;
       } else {
