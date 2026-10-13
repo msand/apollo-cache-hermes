@@ -1,6 +1,6 @@
 import type { OperationVariables } from '@apollo/client';
 import { makeVar } from '@apollo/client/cache';
-import type { Cache as CacheInterface, Transaction } from '@apollo/client/cache';
+import type { Cache as CacheInterface, NormalizedCacheObject, Transaction } from '@apollo/client/cache';
 
 import { CacheContext } from '../context';
 import { Cache, MigrationMap } from '../Cache';
@@ -34,13 +34,18 @@ export class Hermes<TSerialized = GraphSnapshot> extends ApolloQueryable {
     this._queryable = new Cache<TSerialized>(configuration, this);
   }
 
+  /**
+   * Restores a snapshot from extract(), or (like InMemoryCache#restore) a
+   * normalized cache object extracted from an InMemoryCache.
+   */
   restore(
-    data: Serializable.GraphSnapshot,
+    data: Serializable.GraphSnapshot | NormalizedCacheObject,
     migrationMap?: MigrationMap,
     verifyOptions?: CacheInterface.ReadOptions,
   ): this {
     const verifyQuery = verifyOptions && buildRawOperationFromQuery(verifyOptions.query, verifyOptions.variables);
-    this._queryable.restore(data, migrationMap, verifyQuery);
+    // restore() reads nodes without a `type` as InMemoryCache store objects.
+    this._queryable.restore(data as Serializable.GraphSnapshot, migrationMap, verifyQuery);
     return this;
   }
 

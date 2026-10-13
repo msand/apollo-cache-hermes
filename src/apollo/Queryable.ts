@@ -1,10 +1,15 @@
 import type { OperationVariables, TypedDocumentNode } from '@apollo/client';
 import { ApolloCache } from '@apollo/client/cache';
-import type { Cache, Reference, ScalarType, StoreObject } from '@apollo/client/cache';
+import type { Cache, DiffIncrementalInfo, Reference, ScalarType, StoreObject } from '@apollo/client/cache';
 import { isReference } from '@apollo/client/utilities';
 import type { FragmentDefinitionNode, InlineFragmentNode, OperationTypeNode } from 'graphql';
 import type { Unmasked } from '@apollo/client/masking';
-import { makeReference, removeDirectivesFromDocument, stringifyForDisplay } from '@apollo/client/utilities/internal';
+import {
+  handleIncrementalSymbol,
+  makeReference,
+  removeDirectivesFromDocument,
+  stringifyForDisplay,
+} from '@apollo/client/utilities/internal';
 import { InvariantError } from '@apollo/client/utilities/invariant';
 
 import { toDiffResult } from '../operations/read';
@@ -22,6 +27,14 @@ export abstract class ApolloQueryable extends ApolloCache {
   /** The underlying Hermes cache. */
   protected abstract _queryable: Queryable;
 
+  // The same overloads as ApolloCache#diff. Hermes does not yet use the
+  // incremental (@defer/@stream) info, so it always returns a plain diff result.
+  diff<TData = unknown, TVariables extends OperationVariables = OperationVariables>(
+    options: Cache.DiffOptions<TData, TVariables> & { [handleIncrementalSymbol]: DiffIncrementalInfo | undefined },
+  ): Cache.InternalDiffResultWithDataState<TData> | Cache.DiffResult<TData>;
+  diff<TData = unknown, TVariables extends OperationVariables = OperationVariables>(
+    options: Cache.DiffOptions<TData, TVariables>,
+  ): Cache.DiffResult<TData>;
   diff<TData = unknown, TVariables extends OperationVariables = OperationVariables>(
     options: Cache.DiffOptions<TData, TVariables>,
   ): Cache.DiffResult<TData> {
