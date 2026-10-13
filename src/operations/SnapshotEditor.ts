@@ -7,8 +7,8 @@ import type { CacheContext } from '../context';
 import { argsStoreKey, storeFieldNameOf } from '../context/storeFieldNames';
 import type { GraphSnapshot as GraphSnapshotType } from '../GraphSnapshot';
 import type { NodeReference, EntitySnapshot as EntitySnapshotType, NodeSnapshot } from '../nodes';
-import { childrenForType, fieldNodeOf, selectionSetOf } from '../ParsedQueryNode';
-import type { ParsedQuery } from '../ParsedQueryNode';
+import { alternativeForType, childrenForType, fieldNodeOf, selectionSetOf } from '../ParsedQueryNode';
+import type { ParsedQuery, ParsedQueryNode } from '../ParsedQueryNode';
 import type { JsonArray, JsonObject, JsonScalar, JsonValue, NestedObject, Nil, PathPart } from '../primitive';
 import type { NodeId, OperationInstance, RawOperation } from '../schema';
 import * as graphSnapshot from '../GraphSnapshot';
@@ -137,15 +137,19 @@ function getPayloadProxy(value: JsonValue | undefined | null, map: { [prop: stri
  * response keys of its payload), like InMemoryCache's store objects: the
  * context.storeObject of keyFields functions.
  */
-function toStoreObject(payload: JsonObject, parsed: ParsedQuery): JsonObject {
+function toStoreObject(
+  payload: JsonObject,
+  parsed: ParsedQuery,
+  fieldForType: (node: ParsedQueryNode, typename: unknown) => ParsedQueryNode,
+): JsonObject {
   const storeObject: JsonObject = {};
   for (const key in parsed) {
     const value = payload[key];
     if (value === undefined) continue;
-    const node = parsed[key];
+    const node = fieldForType(parsed[key], payload.__typename);
     const name = node.schemaName ?? key;
     if (hasOwn.call(storeObject, name)) continue;
-    storeObject[name] = node.children ? toStoreValue(value, node.children) : value;
+    storeObject[name] = node.children ? toStoreValue(value, node.children, fieldForType) : value;
   }
   // Like InMemoryCache, fields in the payload that are not selected count too.
   for (const key of Object.keys(payload)) {
@@ -154,9 +158,13 @@ function toStoreObject(payload: JsonObject, parsed: ParsedQuery): JsonObject {
   return storeObject;
 }
 
-function toStoreValue(value: JsonValue, parsed: ParsedQuery): JsonValue {
-  if (Array.isArray(value)) return value.map(item => toStoreValue(item, parsed));
-  if (isObject(value) && !isReference(value)) return toStoreObject(value, parsed);
+function toStoreValue(
+  value: JsonValue,
+  parsed: ParsedQuery,
+  fieldForType: (node: ParsedQueryNode, typename: unknown) => ParsedQueryNode,
+): JsonValue {
+  if (Array.isArray(value)) return value.map(item => toStoreValue(item, parsed, fieldForType));
+  if (isObject(value) && !isReference(value)) return toStoreObject(value, parsed, fieldForType);
   return value;
 }
 
@@ -526,11 +534,16 @@ export class SnapshotEditor<TSerialized> {
 
     // Finally, we can walk into individual values.
     for (const payloadName in parsed) {
-      const node = parsed[payloadName];
+      let node = parsed[payloadName];
       let fieldValue = deepGet(payload, [payloadName]) as JsonValue | undefined;
       // Like InMemoryCache, skip fields of fragments that don't match the type.
       // (Fuzzy subtypes were inferred from the whole result by checkWrite.)
-      if (node.conditions && !this._context.conditionsMatch(node.conditions, fragmentTypename)) {
+      if (node.alternatives) {
+        // The field selected under this key for objects of this type.
+        const alternative = alternativeForType(this._context, node, fragmentTypename);
+        if (!alternative) continue;
+        node = alternative;
+      } else if (node.conditions && !this._context.conditionsMatch(node.conditions, fragmentTypename)) {
         continue;
       }
       // Having a schemaName on the node implies that payloadName is an alias.
@@ -775,7 +788,7 @@ export class SnapshotEditor<TSerialized> {
 
     let normalized = value;
     for (const payloadName in parsed) {
-      const { children, propMap: childPropMap, schemaName } = parsed[payloadName];
+      const { children, propMap: childPropMap, schemaName } = this._fieldForType(parsed[payloadName], value.__typename);
       const child = value[payloadName];
       if (!children || child === undefined) continue;
       const normalizedChild = this._normalizeIncoming(
@@ -810,8 +823,16 @@ export class SnapshotEditor<TSerialized> {
     return this._context.entityIdForValue(
       getPayloadProxy(payload, propMap),
       { selectionSet: selectionSetOf(parsed), fragmentMap: this._fragmentMap },
-      () => toStoreObject(payload, parsed),
+      () => toStoreObject(payload, parsed, (node, typename) => this._fieldForType(node, typename)),
     );
+  }
+
+  /**
+   * The field selected under a response key (whose node is `node`) for
+   * objects of the given type: the node, unless it has alternatives.
+   */
+  private _fieldForType(node: ParsedQueryNode, typename: unknown): ParsedQueryNode {
+    return node.alternatives ? (alternativeForType(this._context, node, typename) ?? node) : node;
   }
 
   /**

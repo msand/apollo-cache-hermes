@@ -10,7 +10,7 @@ import type { CacheContext, QueryInfo } from '../context';
 import { storeFieldNameOf } from '../context/storeFieldNames';
 import type { StoreKey } from '../context/storeFieldNames';
 import type { GraphSnapshot, NodeSnapshotMap } from '../GraphSnapshot';
-import { childrenForType, fieldNodeOf } from '../ParsedQueryNode';
+import { alternativeForType, childrenForType, fieldNodeOf } from '../ParsedQueryNode';
 import type { ParsedQuery, ParsedQueryNode } from '../ParsedQueryNode';
 import type { JsonObject, JsonValue, PathPart } from '../primitive';
 import type { NodeId, OperationInstance, RawOperation } from '../schema';
@@ -412,9 +412,16 @@ export function _walkAndOverlayDynamicValues<TSerialized>(
     };
 
     for (const key in parsedMap) {
-      const node = parsedMap[key];
+      let node = parsedMap[key];
       // Fields of fragments that don't match the type are not selected.
-      if (node.conditions && !context.conditionsMatch(node.conditions, typeName)) continue;
+      if (node.alternatives) {
+        // The field selected under this key for objects of this type.
+        const alternative = alternativeForType(context, node, typeName);
+        if (!alternative) continue;
+        node = alternative;
+      } else if (node.conditions && !context.conditionsMatch(node.conditions, typeName)) {
+        continue;
+      }
       let child;
 
       // This is an alias if we have a schemaName declared.
@@ -835,9 +842,16 @@ export function _visitSelection<TSerialized>(
       typeName = context.rootTypename(containerId) ?? typeName;
     }
     for (const key in parsed) {
-      const node = parsed[key];
+      let node = parsed[key];
       // Fields of fragments that don't match the type are not selected.
-      if (node.conditions && !context.conditionsMatch(node.conditions, typeName)) continue;
+      if (node.alternatives) {
+        // The field selected under this key for objects of this type.
+        const alternative = alternativeForType(context, node, typeName);
+        if (!alternative) continue;
+        node = alternative;
+      } else if (node.conditions && !context.conditionsMatch(node.conditions, typeName)) {
+        continue;
+      }
       const fieldValue = value[key];
       const danglingId = danglingFieldIds?.get(key);
 

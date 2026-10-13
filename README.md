@@ -86,6 +86,12 @@ parameterized variant. Ids that are not in the cache are skipped. It returns whe
   `forgetCache` / `recallCache` registry to other caches.
 - **Retain counts** (`cache.retain` / `cache.release`) are not tracked per optimistic layer, nor kept through
   `extract()` / `restore()`.
+- **Response keys that select different fields under type conditions** (e.g.
+  `... on Book { size: pages } ... on Movie { size: runtime }`, or one field with different arguments) need the type
+  conditions to be disjoint. Without a schema, Hermes takes different type conditions to be different object types, and
+  throws a `ConflictingFieldsError` when one selection's type conditions include all of the other's (or one has none).
+  When several of the fields apply to an object (through `possibleTypes`), or the object has no `__typename`, the first
+  one in the document is read and written.
 
 Apollo Client's tests that assert `InMemoryCache` internals or the behaviours above are skipped in `test/src`, each with
 a `// Hermes:` comment explaining why.

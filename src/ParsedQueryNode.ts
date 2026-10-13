@@ -26,6 +26,11 @@ export type FieldArguments<TArgTypes = JsonScalar> = NestedObject<TArgTypes>;
  * are flattened into query nodes when parsed.  Fields that are only selected
  * through fragments with type conditions (or through @skip/@include directives
  * that depend on variables) record those as `conditions`.
+ *
+ * A response key may select different fields (or the same field with different
+ * arguments) under type conditions that cannot apply to the same object, e.g.
+ * `... on Book { size: pages } ... on Movie { size: runtime }`: the node of the
+ * key is then the first of them, with the others as its `alternatives`.
  */
 export class ParsedQueryNode<TArgTypes = JsonScalar> {
   constructor(
@@ -61,6 +66,13 @@ export class ParsedQueryNode<TArgTypes = JsonScalar> {
      * `childrenForType` to get those that apply to an object's __typename.
      */
     public variants?: readonly ParsedQueryVariant<TArgTypes>[],
+    /**
+     * The other fields selected under the same response key, under type
+     * conditions disjoint from this node's (and each other's), in document
+     * order.  (Alternatives have no alternatives of their own.)  Use
+     * `alternativeForType` to get the one that applies to an object.
+     */
+    public alternatives?: readonly ParsedQueryNode<TArgTypes>[],
   ) {}
 }
 
@@ -377,6 +389,7 @@ export function areChildrenDynamic(children?: ParsedQueryWithVariables) {
     // Directive conditions are resolved per operation (see expandVariables).
     if (child.conditions?.some(condition => condition.directives)) return true;
     if (child.variants?.some(variant => variant.conditions?.some(condition => condition.directives))) return true;
+    if (child.alternatives) return true;
   }
   return undefined;
 }
@@ -425,27 +438,105 @@ function _collectDirectiveVariables(variables: Set<string>, node: SelectionNode)
 }
 
 /**
- * Merges two node definitions; mutating `target` to include children from
- * `source`.
+ * Merges two node definitions of a response key (`source` holding the earlier
+ * selections); mutating `target` to include children from `source`.
+ *
+ * Different fields (or arguments) selected under the key under disjoint type
+ * conditions become alternatives; under overlapping conditions, they are a
+ * ConflictingFieldsError, unless `lenient` (when merging the selections that
+ * apply to an object at read/write time, or to objects of unknown type), in
+ * which case the earlier field wins.
  */
 function _mergeNodes<TArgTypes>(
   path: string[],
   target: ParsedQueryNode<TArgTypes>,
   source?: ParsedQueryNode<TArgTypes>,
-) {
+  lenient = false,
+): ParsedQueryNode<TArgTypes> {
   if (!source) return target;
-  if (!isEqual(target.args, source.args)) {
-    throw new ConflictingFieldsError(`parameterization mismatch`, path, [target, source]);
+  // The common case: selections of the same field.
+  if (!target.alternatives && !source.alternatives && _isSameField(target, source)) {
+    return _mergeSameField(path, target, source, lenient);
   }
-  if (target.schemaName !== source.schemaName) {
-    throw new ConflictingFieldsError(`alias mismatch`, path, [target, source]);
+
+  const merged = _alternativesOf(source);
+  for (const alternative of _alternativesOf(target)) {
+    let same: number | undefined;
+    let conflict: ParsedQueryNode<TArgTypes> | undefined;
+    for (let i = 0; i < merged.length; i++) {
+      if (_isSameField(merged[i], alternative)) {
+        same = i;
+      } else if (!conflict && _conditionsOverlap(merged[i].conditions, alternative.conditions)) {
+        conflict = merged[i];
+      }
+    }
+    if (conflict) {
+      if (lenient) continue;
+      const message = isEqual(alternative.args, conflict.args) ? `alias mismatch` : `parameterization mismatch`;
+      throw new ConflictingFieldsError(message, path, [alternative, conflict]);
+    }
+    if (same === undefined) {
+      merged.push(alternative);
+    } else {
+      merged[same] = _mergeSameField(path, alternative, merged[same], lenient);
+    }
   }
+
+  const [first, ...rest] = merged;
+  first.alternatives = rest.length ? rest : undefined;
+  return first;
+}
+
+/** Whether two nodes select the same field, with the same arguments. */
+function _isSameField<TArgTypes>(a: ParsedQueryNode<TArgTypes>, b: ParsedQueryNode<TArgTypes>) {
+  return a.schemaName === b.schemaName && isEqual(a.args, b.args);
+}
+
+/** The alternatives of a node (being merged), starting with itself. */
+function _alternativesOf<TArgTypes>(node: ParsedQueryNode<TArgTypes>): ParsedQueryNode<TArgTypes>[] {
+  const { alternatives } = node;
+  if (!alternatives) return [node];
+  node.alternatives = undefined;
+  return [node, ...alternatives];
+}
+
+/**
+ * Whether fields selected under the conditions `a` and `b` may both apply to
+ * the same object (so that GraphQL would require them to be the same field).
+ *
+ * Without a schema, type conditions are taken to be distinct object types: the
+ * conditions only overlap when one's type conditions include all the other's
+ * (e.g. a field selected without a type condition overlaps all others).
+ * Directives are ignored, as by GraphQL's validation.
+ */
+function _conditionsOverlap(a?: readonly SelectionCondition[], b?: readonly SelectionCondition[]): boolean {
+  if (!a || !b) return true;
+  return a.some(x => b.some(y => _typeConditionsOverlap(x.typeConditions ?? [], y.typeConditions ?? [])));
+}
+
+function _typeConditionsOverlap(a: readonly string[], b: readonly string[]) {
+  return a.every(type => b.includes(type)) || b.every(type => a.includes(type));
+}
+
+/**
+ * Merges two selections of the same field; mutating `target` to include
+ * children from `source` (which holds the earlier selections).
+ */
+function _mergeSameField<TArgTypes>(
+  path: string[],
+  target: ParsedQueryNode<TArgTypes>,
+  source: ParsedQueryNode<TArgTypes>,
+  lenient: boolean,
+) {
+  // Child selections made under disjoint conditions only apply to objects
+  // of different types: for objects of unknown type, the earlier wins.
+  const lenientChildren = lenient || !_conditionsOverlap(source.conditions, target.conditions);
   // `source` holds the earlier selections.
   _withField(target, fieldNodeOf(source));
   // Child selections made under different conditions (e.g. fragments on
   // different types) only apply where their conditions do; keep them apart
   // (before the children are merged below, which mutates them).
-  const variants = _mergeVariants(path, source, target);
+  const variants = _mergeVariants(path, source, target, lenient);
   // A field is selected if any of its selections apply.
   if (!target.conditions || !source.conditions) {
     target.conditions = undefined;
@@ -464,7 +555,10 @@ function _mergeNodes<TArgTypes>(
     target.children = source.children;
   } else {
     for (const name in source.children) {
-      target.children[name] = _mergeNodes([...path, name], source.children[name], target.children[name]);
+      const later = target.children[name];
+      target.children[name] = later
+        ? _mergeNodes([...path, name], later, source.children[name], lenientChildren)
+        : source.children[name];
     }
   }
 
@@ -479,11 +573,13 @@ function _mergeNodes<TArgTypes>(
  * The variants of a field merged from the selections of `earlier` and
  * `later`: undefined if all of its child selections apply wherever the field
  * does (it has no children, or all its selections share their conditions).
+ * (See _mergeNodes for `lenient`.)
  */
 function _mergeVariants<TArgTypes>(
   path: string[],
   earlier: ParsedQueryNode<TArgTypes>,
   later: ParsedQueryNode<TArgTypes>,
+  lenient: boolean,
 ): readonly ParsedQueryVariant<TArgTypes>[] | undefined {
   // The common cases: leaf fields, and fields selected under the same conditions.
   if (!earlier.children && !later.children) return undefined;
@@ -499,7 +595,7 @@ function _mergeVariants<TArgTypes>(
     const existing = variants[index];
     variants[index] = {
       conditions: existing.conditions,
-      children: _mergeMaps(path, existing.children, variant.children),
+      children: _mergeMaps(path, existing.children, variant.children, lenient),
     };
   }
 
@@ -514,16 +610,23 @@ function _variantsOf<TArgTypes>(node: ParsedQueryNode<TArgTypes>): readonly Pars
   return [{ conditions: node.conditions, children: node.children && _cloneMap(node.children) }];
 }
 
-/** Merges two child maps of variants into a new one (leaving them intact). */
+/**
+ * Merges two child maps of variants into a new one (leaving them intact); see
+ * _mergeNodes for `lenient`.
+ */
 function _mergeMaps<TArgTypes>(
   path: string[],
   earlier: ParsedQueryNodeMap<TArgTypes> | undefined,
   later: ParsedQueryNodeMap<TArgTypes> | undefined,
+  lenient = false,
 ): ParsedQueryNodeMap<TArgTypes> | undefined {
   if (!earlier || !later) return earlier ?? later;
   const merged = _cloneMap(later);
   for (const name in earlier) {
-    merged[name] = _mergeNodes([...path, name], _cloneNode(earlier[name]), merged[name]);
+    const laterNode = merged[name];
+    merged[name] = laterNode
+      ? _mergeNodes([...path, name], laterNode, _cloneNode(earlier[name]), lenient)
+      : _cloneNode(earlier[name]);
   }
   return merged;
 }
@@ -548,6 +651,7 @@ function _cloneNode<TArgTypes>(node: ParsedQueryNode<TArgTypes>): ParsedQueryNod
     node.propMap,
     node.conditions,
     node.variants,
+    node.alternatives?.map(_cloneNode),
   );
   const field = fieldNodeOf(node);
   if (field) fieldNodes.set(clone, field);
@@ -587,11 +691,31 @@ export function childrenForType<TSerialized, TArgTypes>(
   if (!byKey.has(key)) {
     let children: ParsedQueryNodeMap<TArgTypes> | undefined;
     for (const i of matched) {
-      children = _mergeMaps([], children, variants[i].children);
+      children = _mergeMaps([], children, variants[i].children, true);
     }
     byKey.set(key, children);
   }
   return byKey.get(key);
+}
+
+/**
+ * The field selected under a response key (whose node is `node`) that applies
+ * to an object with the given __typename: the first (in document order) of
+ * the node and its alternatives whose conditions match the type, if any.
+ *
+ * Objects of unknown type (like objects of types that GraphQL would not allow
+ * several of the alternatives to apply to) get the first alternative.
+ */
+export function alternativeForType<TSerialized, TArgTypes>(
+  context: CacheContext<TSerialized>,
+  node: ParsedQueryNode<TArgTypes>,
+  typename: unknown,
+): ParsedQueryNode<TArgTypes> | undefined {
+  if (context.conditionsMatch(node.conditions, typename)) return node;
+  for (const alternative of node.alternatives ?? []) {
+    if (context.conditionsMatch(alternative.conditions, typename)) return alternative;
+  }
+  return undefined;
 }
 
 /**
@@ -613,38 +737,86 @@ export function _expandVariables(parsed?: ParsedQueryWithVariables, variables?: 
   const newMap: ParsedQuery<JsonScalar> = {};
   for (const key in parsed) {
     const node = parsed[key];
-    let conditions = node.conditions;
-    if (conditions?.some(condition => condition.directives)) {
-      const resolved = _resolveDirectives(conditions, variables);
-      // Skipped for these variables.
-      if (resolved === null) continue;
-      conditions = resolved;
-    }
-
-    const { variants } = node;
-    const hasVariantDirectives = variants?.some(variant => variant.conditions?.some(condition => condition.directives));
-    if (variants && (node.args || node.hasParameterizedChildren || hasVariantDirectives)) {
-      newMap[key] = _expandVariants(node, conditions, variables);
-    } else if (node.args || node.hasParameterizedChildren || conditions !== node.conditions) {
-      // (Not a field with variants: its conditions only have directives if its variants do.)
-      newMap[key] = _withField(
-        new ParsedQueryNode(
-          _expandVariables(node.children, variables),
-          node.schemaName,
-          expandFieldArguments(node.args, variables),
-          node.hasParameterizedChildren,
-          node.propMap,
-          conditions,
-        ),
-        fieldNodeOf(node),
-      );
-      // No variables to substitute for this subtree.
-    } else {
-      newMap[key] = node as ParsedQueryNode;
-    }
+    const expanded = node.alternatives ? _expandAlternatives(node, variables) : _expandNode(node, variables);
+    if (expanded) newMap[key] = expanded;
   }
 
   return newMap;
+}
+
+/**
+ * Expands a node (ignoring its alternatives); undefined if it is skipped for
+ * these variables.
+ */
+function _expandNode(
+  node: ParsedQueryNode<JsonAndVariables>,
+  variables: JsonObject | undefined,
+): ParsedQueryNode<JsonScalar> | undefined {
+  let conditions = node.conditions;
+  if (conditions?.some(condition => condition.directives)) {
+    const resolved = _resolveDirectives(conditions, variables);
+    // Skipped for these variables.
+    if (resolved === null) return undefined;
+    conditions = resolved;
+  }
+
+  const { variants } = node;
+  const hasVariantDirectives = variants?.some(variant => variant.conditions?.some(condition => condition.directives));
+  if (variants && (node.args || node.hasParameterizedChildren || hasVariantDirectives)) {
+    return _expandVariants(node, conditions, variables);
+  } else if (node.args || node.hasParameterizedChildren || conditions !== node.conditions) {
+    // (Not a field with variants: its conditions only have directives if its variants do.)
+    return _withField(
+      new ParsedQueryNode(
+        _expandVariables(node.children, variables),
+        node.schemaName,
+        expandFieldArguments(node.args, variables),
+        node.hasParameterizedChildren,
+        node.propMap,
+        conditions,
+      ),
+      fieldNodeOf(node),
+    );
+  }
+  // No variables to substitute for this subtree.
+  return node as ParsedQueryNode;
+}
+
+/**
+ * Expands a node with alternatives: those skipped for these variables are
+ * dropped.
+ */
+function _expandAlternatives(
+  node: ParsedQueryNode<JsonAndVariables>,
+  variables: JsonObject | undefined,
+): ParsedQueryNode<JsonScalar> | undefined {
+  const alternatives = [node, ...node.alternatives!];
+  const expanded: ParsedQueryNode<JsonScalar>[] = [];
+  let unchanged = true;
+  for (const alternative of alternatives) {
+    const expandedAlternative = _expandNode(alternative, variables);
+    if (expandedAlternative !== alternative) unchanged = false;
+    if (expandedAlternative) expanded.push(expandedAlternative);
+  }
+  if (unchanged) return node as ParsedQueryNode;
+  if (!expanded.length) return undefined;
+
+  const [first, ...rest] = expanded;
+  if (!rest.length && first !== node) return first;
+  // (A copy, as the expanded nodes may be the operation's own.)
+  return _withField(
+    new ParsedQueryNode(
+      first.children,
+      first.schemaName,
+      first.args,
+      first.hasParameterizedChildren,
+      first.propMap,
+      first.conditions,
+      first.variants,
+      rest.length ? rest : undefined,
+    ),
+    fieldNodeOf(first),
+  );
 }
 
 /**
@@ -675,7 +847,7 @@ function _expandVariants(
   if (dropped) {
     // Only the children of the remaining variants are selected.
     for (const variant of variants) {
-      children = _mergeMaps([], children, variant.children);
+      children = _mergeMaps([], children, variant.children, true);
     }
   } else {
     children = _expandVariables(node.children, variables);

@@ -178,7 +178,9 @@ export class QueryObserver<TSerialized> {
     if (!fields || !fields.size) return false;
     const { parsedQuery } = this._context.parseOperation(this._query);
     for (const key of Object.keys(parsedQuery)) {
-      if (fields.has(key) || fields.has(parsedQuery[key].schemaName!)) return true;
+      const node = parsedQuery[key];
+      if (fields.has(key) || fields.has(node.schemaName!)) return true;
+      if (node.alternatives?.some(alternative => fields.has(alternative.schemaName!))) return true;
     }
     return false;
   }
