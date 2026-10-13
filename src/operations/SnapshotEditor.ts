@@ -507,6 +507,9 @@ export class SnapshotEditor<TSerialized> {
       this._setValue(containerId, path, {});
     }
 
+    // The schema names of the selected fields (written from their response keys).
+    const selectedNames = new Set<string>();
+
     // Finally, we can walk into individual values.
     for (const payloadName in parsed) {
       const node = parsed[payloadName];
@@ -518,6 +521,7 @@ export class SnapshotEditor<TSerialized> {
       }
       // Having a schemaName on the node implies that payloadName is an alias.
       const schemaName = node.schemaName ? node.schemaName : payloadName;
+      selectedNames.add(schemaName);
       // Don't trust our inputs.
       if (fieldValue === undefined) {
         // If it was explicitly undefined, that likely indicates a malformed
@@ -702,8 +706,12 @@ export class SnapshotEditor<TSerialized> {
       }
     }
     if (payload && !prune) {
+      // Unselected fields of the payload are stored too, unless they are named
+      // like a field selected under an alias: like InMemoryCache, which only
+      // stores selected fields, the aliased value wins (e.g. when Apollo Client
+      // writes back a cache diff's result, which has both).
       for (const payloadName of Object.keys(payload)) {
-        if (!hasOwn.call(parsed, payloadName)) {
+        if (!hasOwn.call(parsed, payloadName) && !selectedNames.has(payloadName)) {
           const value = payload[payloadName];
           const fieldPath = [...path, payloadName];
           writtenFields?.add(payloadName);

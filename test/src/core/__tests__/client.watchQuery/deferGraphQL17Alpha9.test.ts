@@ -5698,11 +5698,7 @@ it('reports "streaming" when `@defer(if: false)` fields arrive in the initial pa
   await expect(stream).not.toEmitAnything();
 });
 
-// Hermes: reads return a superset of the selected fields, here the aliased field under its schema name
-// too (greeting.recipient). Apollo Client merges the deferred chunk into the cache diff's result
-// (into `user`) and writes the merged result back, and that write stores the stale `recipient`
-// object (without email) rather than `user`, so the query never completes.
-it.skip('uses response aliases when matching overlapping non-deferred and deferred fields', async () => {
+it('uses response aliases when matching overlapping non-deferred and deferred fields', async () => {
   // Suppress expected missing field write warnings since defer context is reset.
   using _ = spyOnConsole('error');
 
@@ -5763,6 +5759,8 @@ it.skip('uses response aliases when matching overlapping non-deferred and deferr
       greeting: {
         __typename: 'Greeting',
         message: 'Hello world',
+        // Hermes: results can hold extra cached fields (here the field under its unaliased name too).
+        recipient: { __typename: 'Person', name: 'Alice' },
         user: { __typename: 'Person', name: 'Alice' },
       },
     }),
@@ -5792,6 +5790,12 @@ it.skip('uses response aliases when matching overlapping non-deferred and deferr
       greeting: {
         __typename: 'Greeting',
         message: 'Hello world',
+        // Hermes: results can hold extra cached fields (here the field under its unaliased name too).
+        recipient: {
+          __typename: 'Person',
+          name: 'Alice',
+          email: 'alice@example.com',
+        },
         user: {
           __typename: 'Person',
           name: 'Alice',
