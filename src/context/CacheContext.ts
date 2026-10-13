@@ -269,7 +269,9 @@ export class CacheContext<TSerialized = GraphSnapshot> {
     this.tracer = config.tracer || new ConsoleTracer(!!config.verbose, config.logger);
 
     this.addTypename = config.addTypename ?? true;
-    this.scalars = new ScalarConfig(config.scalars, config.inputObjects, config.typePolicies);
+    this.scalars = new ScalarConfig(config.scalars, config.inputObjects, config.typePolicies, (supertype, typename) =>
+      this.fragmentMatches(supertype, typename),
+    );
     this.typePolicies = this.scalars.withScalarReads(config.typePolicies);
     this.fragments = config.fragments;
     if (config.possibleTypes) {

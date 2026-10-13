@@ -2,13 +2,16 @@ import type { OperationVariables } from '@apollo/client';
 import type { FieldPolicy, FieldReadFunction, InputObjectsOption, Scalar, TypePolicies } from '@apollo/client/cache';
 import { getOperationDefinition, isPlainObject, unwrapScalarType } from '@apollo/client/utilities/internal';
 import { invariant } from '@apollo/client/utilities/invariant';
-import type { DocumentNode, TypeNode } from 'graphql';
+import type { DocumentNode, OperationTypeNode, TypeNode } from 'graphql';
 
 type AnyScalar = Scalar<any, any>;
 type Coerce = (scalar: AnyScalar, value: unknown) => unknown;
 
 const toParsed: Coerce = (scalar, value) => scalar.coerceToParsed(value);
 const toSerialized: Coerce = (scalar, value) => scalar.coerceToSerialized(value);
+
+/** Where a scalar field's read function remembers its last parsed value, in the field's storage. */
+const lastParsed = Symbol('lastParsed');
 
 /** Matches list types, like `[Date]`, capturing the type of their items. */
 const listTypePattern = /^\[(.*)\]$/;
@@ -36,6 +39,8 @@ export class ScalarConfig {
     private readonly _scalars: Record<string, AnyScalar> | undefined,
     private readonly _inputObjects: InputObjectsOption | undefined,
     private readonly _typePolicies: TypePolicies | undefined,
+    /** Whether `typename` is `supertype` or one of its possibleTypes subtypes. */
+    private readonly _isSubtype: (supertype: string, typename: string) => boolean = (a, b) => a === b,
   ) {}
 
   /** The scalar implementation registered under `name`. */
@@ -48,10 +53,37 @@ export class ScalarConfig {
     return !!this._scalars;
   }
 
-  /** The scalar type configured for `typename.fieldName`. */
+  /**
+   * The scalar type configured for `typename.fieldName`: on the type itself,
+   * or else (like InMemoryCache) on one of its possibleTypes supertypes.
+   */
   getScalarTypeForField(typename: string, fieldName: string): string | undefined {
+    const own = this._fieldScalar(typename, fieldName);
+    if (own) return own;
+    for (const supertype of Object.keys(this._typePolicies ?? {})) {
+      const scalarType = this._fieldScalar(supertype, fieldName);
+      if (scalarType && this._isSubtype(supertype, typename)) return scalarType;
+    }
+    return undefined;
+  }
+
+  private _fieldScalar(typename: string, fieldName: string): string | undefined {
     const policy = this._typePolicies?.[typename]?.fields?.[fieldName];
     return typeof policy === 'object' ? policy.scalar : undefined;
+  }
+
+  /**
+   * The typename of an operation's root type: the type whose policy sets
+   * `queryType`/`mutationType`/`subscriptionType`, or else `Query`/`Mutation`/
+   * `Subscription` (like InMemoryCache#getRootTypename). Apollo Client uses it
+   * to find the scalar fields of root types.
+   */
+  getRootTypename(operation: OperationTypeNode): string {
+    const flag = `${operation}Type` as 'queryType' | 'mutationType' | 'subscriptionType';
+    for (const [typename, policy] of Object.entries(this._typePolicies ?? {})) {
+      if (policy?.[flag]) return typename;
+    }
+    return operation.charAt(0).toUpperCase() + operation.slice(1);
   }
 
   /**
@@ -69,7 +101,16 @@ export class ScalarConfig {
         const coordinate = `${typename}.${fieldName}`;
         const ownRead = policy.read;
         const read: FieldReadFunction = (existing, options) => {
-          const parsed = this.coerce(existing, toParsed, scalarType, coordinate);
+          // Parse a stored value once (per entity field), so every read of it
+          // returns the same parsed object, like InMemoryCache's parsed store.
+          const storage = options?.storage as { [lastParsed]?: { stored: unknown; parsed: unknown } } | undefined;
+          let parsed: unknown;
+          if (storage?.[lastParsed] && storage[lastParsed].stored === existing) {
+            parsed = storage[lastParsed].parsed;
+          } else {
+            parsed = this.coerce(existing, toParsed, scalarType, coordinate);
+            if (storage) storage[lastParsed] = { stored: existing, parsed };
+          }
           return ownRead ? ownRead(parsed, options) : parsed;
         };
         this._wrappedReads.set(read, ownRead);

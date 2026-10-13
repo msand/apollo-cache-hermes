@@ -2,7 +2,7 @@ import type { OperationVariables, TypedDocumentNode } from '@apollo/client';
 import { ApolloCache } from '@apollo/client/cache';
 import type { Cache, Reference, ScalarType, StoreObject } from '@apollo/client/cache';
 import { isReference } from '@apollo/client/utilities';
-import type { FragmentDefinitionNode, InlineFragmentNode } from 'graphql';
+import type { FragmentDefinitionNode, InlineFragmentNode, OperationTypeNode } from 'graphql';
 import type { Unmasked } from '@apollo/client/masking';
 import { makeReference, removeDirectivesFromDocument, stringifyForDisplay } from '@apollo/client/utilities/internal';
 import { InvariantError } from '@apollo/client/utilities/invariant';
@@ -157,6 +157,10 @@ export abstract class ApolloQueryable extends ApolloCache {
 
   getScalarTypeForField(typename: string, fieldName: string): ScalarType | undefined {
     return this._queryable.scalars.getScalarTypeForField(typename, fieldName) as ScalarType | undefined;
+  }
+
+  getRootTypename(operation: OperationTypeNode): string {
+    return this._queryable.scalars.getRootTypename(operation);
   }
 
   configuresScalars(): boolean {
