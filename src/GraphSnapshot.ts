@@ -8,6 +8,9 @@ export type NodeSnapshotMap = { [Key in NodeId]: NodeSnapshot };
 /** Changed nodes, by id: their new snapshot, or null if removed. */
 type NodeChanges = Map<NodeId, NodeSnapshot | null>;
 
+/** The most changes a snapshot keeps in its own (latest) level. */
+const TOP_SIZE = 32;
+
 /**
  * Maintains an identity map of all value snapshots that reference into a
  * particular version of the graph.
@@ -17,10 +20,17 @@ type NodeChanges = Map<NodeId, NodeSnapshot | null>;
  * Also provides a place to hang per-snapshot caches off of.
  *
  * Snapshots made from others (see withChanges) share their nodes: each holds
- * a base map of nodes, shared with other snapshots and never modified, and the
- * changes made on top of it. A write therefore costs a copy of the changes so
- * far rather than of the whole graph; once the changes grow past the square
- * root of the base's size, they are merged into a new base.
+ * a base map of nodes, shared with other snapshots and never modified, and two
+ * levels of changes on top of it (like a log-structured merge tree), so that a
+ * write costs a copy of some of the changes so far rather than of the whole
+ * graph:
+ *
+ * - the latest changes, copied by each write, until they outgrow TOP_SIZE;
+ * - then merged into the earlier changes (copying those), until those outgrow
+ *   the square root of 2 × the base's size × the size of the latest changes
+ *   (which balances the cost of copying them with that of merging them into a
+ *   new base);
+ * - then merged into a new base.
  */
 export class GraphSnapshot {
   /**
@@ -30,21 +40,27 @@ export class GraphSnapshot {
    * @internal
    */
   static withChanges(parent: GraphSnapshot, changes: { [Key in NodeId]: NodeSnapshot | undefined }): GraphSnapshot {
-    const merged: NodeChanges = parent._changes ? new Map(parent._changes) : new Map();
+    let top: NodeChanges | undefined = parent._top ? new Map(parent._top) : new Map();
     const fresh: NodeSnapshot[] = [];
     for (const id in changes) {
       const node = changes[id];
-      merged.set(id, node ?? null);
+      top.set(id, node ?? null);
       if (node) fresh.push(node);
     }
 
-    let snapshot;
-    if (merged.size * merged.size > parent._baseSize) {
-      const values = flatten(parent._base, merged);
-      snapshot = new GraphSnapshot(values, undefined, Object.keys(values).length);
-    } else {
-      snapshot = new GraphSnapshot(parent._base, merged, parent._baseSize);
+    let { _base: base, _mid: mid, _baseSize: baseSize } = parent;
+    if (top.size > TOP_SIZE) {
+      const merged = mergeChanges(mid, top);
+      if (merged.size * merged.size > 2 * baseSize * top.size) {
+        base = flatten(base, merged);
+        baseSize = countKeys(base);
+        mid = undefined;
+      } else {
+        mid = merged;
+      }
+      top = undefined;
     }
+    const snapshot = new GraphSnapshot(base, mid, top, baseSize);
     snapshot._fresh = fresh;
     return snapshot;
   }
@@ -59,8 +75,11 @@ export class GraphSnapshot {
   /** The nodes (shared with other snapshots: never modified). */
   declare private readonly _base: NodeSnapshotMap;
 
-  /** Changes on top of _base. */
-  declare private readonly _changes: NodeChanges | undefined;
+  /** Earlier changes on top of _base. */
+  declare private readonly _mid: NodeChanges | undefined;
+
+  /** The latest changes, on top of _mid. */
+  declare private readonly _top: NodeChanges | undefined;
 
   /** The number of nodes in _base. */
   declare private readonly _baseSize: number;
@@ -84,12 +103,14 @@ export class GraphSnapshot {
   constructor(
     // TODO: Profile Object.create(null) vs Map.
     base: NodeSnapshotMap = Object.create(null),
-    changes?: NodeChanges,
-    baseSize: number = Object.keys(base).length,
+    mid?: NodeChanges,
+    top?: NodeChanges,
+    baseSize: number = countKeys(base),
   ) {
     Object.defineProperties(this, {
       _base: { value: base },
-      _changes: { value: changes },
+      _mid: { value: mid },
+      _top: { value: top },
       _baseSize: { value: baseSize },
       _fresh: { value: undefined, writable: true },
       _flat: { value: undefined, writable: true },
@@ -103,9 +124,9 @@ export class GraphSnapshot {
    * @internal
    */
   _allValues(): NodeSnapshotMap {
-    if (!this._changes) return this._base;
+    if (!this._mid && !this._top) return this._base;
     if (!this._flat) {
-      this._flat = flatten(this._base, this._changes);
+      this._flat = flatten(this._base, this._top ? mergeChanges(this._mid, this._top) : this._mid!);
     }
     return this._flat;
   }
@@ -122,11 +143,7 @@ export class GraphSnapshot {
    * Returns whether `id` exists as an value in the graph.
    */
   has(id: NodeId): boolean {
-    if (this._changes) {
-      const node = this._changes.get(id);
-      if (node !== undefined) return node !== null;
-    }
-    return id in this._base;
+    return this.getNodeSnapshot(id) !== undefined;
   }
 
   /**
@@ -135,10 +152,12 @@ export class GraphSnapshot {
    * @internal
    */
   getNodeSnapshot(id: NodeId): Readonly<NodeSnapshot> | undefined {
-    if (this._changes) {
-      const node = this._changes.get(id);
-      if (node !== undefined) return node ?? undefined;
-    }
+    // (Like the keys of an object, ids that are not strings, e.g. numbers that
+    // resolver redirects return, are converted to strings.)
+    if (typeof id !== 'string') id = String(id);
+    let node;
+    if (this._top !== undefined && (node = this._top.get(id)) !== undefined) return node ?? undefined;
+    if (this._mid !== undefined && (node = this._mid.get(id)) !== undefined) return node ?? undefined;
     return this._base[id];
   }
 
@@ -165,7 +184,7 @@ export class GraphSnapshot {
       Object.freeze(node);
       for (const value of Object.values(node)) deepFreeze(value);
     }
-    if (!this._changes) Object.freeze(this._base);
+    if (!this._mid && !this._top) Object.freeze(this._base);
   }
 }
 
@@ -188,4 +207,17 @@ function flatten(base: NodeSnapshotMap, changes: NodeChanges): NodeSnapshotMap {
     if (node && !(id in base)) values[id] = node;
   }
   return values;
+}
+
+/** `changes` applied to `earlier` (a new map). */
+function mergeChanges(earlier: NodeChanges | undefined, changes: NodeChanges): NodeChanges {
+  const merged = new Map(earlier);
+  for (const [id, node] of changes) merged.set(id, node);
+  return merged;
+}
+
+function countKeys(values: NodeSnapshotMap): number {
+  let count = 0;
+  for (const _id in values) count++;
+  return count;
 }
