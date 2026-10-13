@@ -21,6 +21,7 @@ import type {
   SelectionSetNode,
 } from 'graphql';
 
+import { hasOwn } from '../context/helpers';
 import type { JsonObject, JsonValue, PathPart } from '../primitive';
 import { fragmentMapForDocument, isSelectedByCaller, someSelection } from '../util';
 import type { FragmentMap } from '../util';
@@ -233,7 +234,7 @@ export function incrementalDiff<TData>(
 /** Whether a result has a value for any field that the selection sets of `scope` select. */
 function selectsAnyKey(scope: Scope, result: JsonObject, context: ReadContext): boolean {
   for (const key of selectedKeys(scope, context).responseKeys) {
-    if (Object.prototype.hasOwnProperty.call(result, key)) return true;
+    if (hasOwn.call(result, key)) return true;
   }
   return false;
 }
@@ -572,7 +573,7 @@ function prunePartialBoundariesImpl(
   const keptNames = new Set<string>();
 
   // __typename might not be part of the selection set, so preserve it.
-  if (Object.prototype.hasOwnProperty.call(data, '__typename')) result.__typename = data.__typename;
+  if (hasOwn.call(data, '__typename')) result.__typename = data.__typename;
 
   const workSet = new Set(selectionSet.selections);
   for (const selection of workSet) {
@@ -581,7 +582,7 @@ function prunePartialBoundariesImpl(
     if (selection.kind === 'Field') {
       keptNames.add(selection.name.value);
       const resultName = resultKeyNameFromField(selection);
-      if (!Object.prototype.hasOwnProperty.call(data, resultName)) continue;
+      if (!hasOwn.call(data, resultName)) continue;
       const fieldValue = data[resultName];
 
       if (Array.isArray(fieldValue)) {
@@ -613,7 +614,7 @@ function prunePartialBoundariesImpl(
         dataState = mergeDataState(dataState, pruned.dataState);
         // A response key can be selected by more than one selection (e.g. a
         // field and an overlapping fragment), so merge their kept fields.
-        result[resultName] = Object.prototype.hasOwnProperty.call(result, resultName)
+        result[resultName] = hasOwn.call(result, resultName)
           ? merger.merge(result[resultName], pruned.result)
           : pruned.result;
       }

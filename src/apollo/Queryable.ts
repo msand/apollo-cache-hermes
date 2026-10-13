@@ -11,6 +11,7 @@ import {
 } from '@apollo/client/utilities/internal';
 import { InvariantError } from '@apollo/client/utilities/invariant';
 
+import { hasOwn } from '../context/helpers';
 import type { Policies } from '../context/policies';
 import { incrementalDiff } from '../operations/incrementalDiff';
 import type { IncrementalDiffOperation } from '../operations/incrementalDiff';
@@ -44,7 +45,7 @@ export abstract class ApolloQueryable extends ApolloCache {
     // Like InMemoryCache, Apollo Client's internal diffs (which pass the
     // incremental info, even when undefined) get the result's dataState, with
     // @defer/@stream boundaries that are still streaming taken into account.
-    if (Object.prototype.hasOwnProperty.call(options, handleIncrementalSymbol)) {
+    if (hasOwn.call(options, handleIncrementalSymbol)) {
       const document = this._queryable.transformDocument(rawOperation.document);
       // (Most reads need no more than the document: the operation is only
       // described for reads of @defer/@stream boundaries that are streaming.)

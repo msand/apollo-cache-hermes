@@ -5,6 +5,7 @@ import { invariant, InvariantError } from '@apollo/client/utilities/invariant';
 import type { StoreObject } from '@apollo/client/utilities';
 
 import type { CacheContext, QueryInfo } from '../context';
+import { hasOwn, isDev } from '../context/helpers';
 import { storeFieldNameOf } from '../context/storeFieldNames';
 import type { StoreKey } from '../context/storeFieldNames';
 import type { GraphSnapshot, NodeSnapshotMap } from '../GraphSnapshot';
@@ -259,8 +260,6 @@ class OverlayWalkNode {
  * which need not be at the entities' stored paths).
  */
 const resultEntityIds = new WeakMap<object, NodeId>();
-
-const hasOwn = Object.prototype.hasOwnProperty;
 
 /**
  * Walks a parameterized field map, overlaying values at those paths on top of
@@ -691,10 +690,6 @@ function _wrapValue<T extends JsonValue, TSerialized>(value: T | undefined, cont
     return newValue;
   }
   return value;
-}
-
-function isDev() {
-  return (globalThis as { __DEV__?: boolean }).__DEV__ !== false;
 }
 
 /**
