@@ -187,5 +187,14 @@ export default tseslint.config(
     },
   },
 
+  {
+    // The release scripts: plain Node scripts.
+    files: ['scripts/**/*.mjs'],
+
+    languageOptions: {
+      globals: { ...globals.node },
+    },
+  },
+
   prettier,
 );
