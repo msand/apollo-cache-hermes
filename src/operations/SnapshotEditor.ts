@@ -343,11 +343,12 @@ export class SnapshotEditor<TSerialized> {
       }
     }
 
-    // Writing the entity that a dangling reference here points to re-links them.
+    // An earlier field may already have recreated the target of a dangling reference.
+    // Inspect this slot rather than the resolved value so its inbound link is restored too.
     if (
       payloadId &&
       payloadId === previousId &&
-      previousValue === undefined &&
+      deepGet(this._getNodeSnapshot(containerId)?.data, path) === undefined &&
       !ref &&
       (containerId !== payloadId || path.length !== 0)
     ) {
