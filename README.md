@@ -23,13 +23,32 @@ to build a result payload. See [the motivation behind this cache](docs/Motivatio
 <sup>1</sup> If your query contains parameterized fields, there is some work that the cache has to perform during read,
 in order to layer those fields on top of the static values within the cache.
 
+## Performance
+
+The [benchmark](bench/README.md) runs the cache API (`writeQuery`, `readQuery`, `writeFragment`, `diff`, `watch`,
+`modify`, `gc`, `extract`, `restore`) on dashboard-sized data (about 3,300 entities), comparing Hermes with earlier
+releases and with `InMemoryCache`. Against `InMemoryCache` with Apollo Client 4.3.3, Hermes 0.12 is faster in every
+scenario; for example (median ms per operation, Node 24 on an Apple M3 Max):
+
+| Scenario                                                        | Hermes 0.12 | `InMemoryCache` |
+| --------------------------------------------------------------- | ----------: | --------------: |
+| Write the dashboard into an empty cache                         |        13.1 |            31.2 |
+| Write it again (a refetch), one field changed                   |        6.46 |            32.1 |
+| Change one entity, then read the whole dashboard                |       0.049 |           0.196 |
+| Change one entity, then read 1.5k union items through fragments |       0.068 |            1.90 |
+| Write one field read by 50 watched queries                      |       0.187 |           0.551 |
+| Read through `read` functions and a cache redirect              |       0.148 |           0.168 |
+| `restore()` an extracted snapshot, then read it                 |        6.50 |            44.9 |
+
+All scenarios, with confidence intervals and the method, are in [bench/RESULTS.md](bench/RESULTS.md).
+
 ## Apollo Client Compatibility
 
-| Hermes            | `@apollo/client` (peer dependency) | Tested against |
-| ----------------- | ---------------------------------- | -------------- |
-| 0.10.x            | `^3.10.8`                          | 3.10.8         |
-| 0.11.x            | `^3.14.1`                          | 3.14.1         |
-| 0.12.x (upcoming) | `^4.3.3`                           | 4.3.3          |
+| Hermes | `@apollo/client` (peer dependency) | Tested against |
+| ------ | ---------------------------------- | -------------- |
+| 0.10.x | `^3.10.8`                          | 3.10.8         |
+| 0.11.x | `^3.14.1`                          | 3.14.1         |
+| 0.12.x | `^4.3.3`                           | 4.3.3          |
 
 0.11 added support for Apollo Client 3.12+'s data masking. 0.12 supports Apollo Client 4, including custom scalars,
 `keyArgs`, type policy inheritance and incremental delivery (`@defer` / `@stream`); it is tested with React 19 and
@@ -115,6 +134,9 @@ npm run test-unit   # run all tests
 npm run test-style  # lint
 npm run format      # format with Prettier
 npm run test-package  # check the source maps of the files npm would publish (after compile)
+
+npm run bench:setup   # build this checkout and install the implementations the benchmark compares
+npm run bench -- --quick   # a quick benchmark run (see bench/README.md)
 ```
 
 - `src/` is the cache; `test/unit/` holds Hermes' own tests.
