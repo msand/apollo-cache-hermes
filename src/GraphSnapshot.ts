@@ -8,8 +8,8 @@ export type NodeSnapshotMap = { [Key in NodeId]: NodeSnapshot };
 /** Changed nodes, by id: their new snapshot, or null if removed. */
 type NodeChanges = Map<NodeId, NodeSnapshot | null>;
 
-/** The changes of a write: new snapshots by id, or undefined for removed nodes. */
-type NodeChangeSet = { [Key in NodeId]: NodeSnapshot | undefined };
+/** The changes of a write: new snapshots by id, or null (or undefined) for removed nodes. */
+type NodeChangeSet = { [Key in NodeId]: NodeSnapshot | null | undefined };
 
 /** The most changes a snapshot keeps in its own (latest) level. */
 const TOP_SIZE = 32;
@@ -54,7 +54,7 @@ interface SnapshotState {
 export class GraphSnapshot {
   /**
    * Returns a snapshot of `parent` with `changes` (new snapshots by id, or
-   * undefined for removed nodes) applied, sharing parent's nodes.
+   * null for removed nodes) applied, sharing parent's nodes.
    *
    * @internal
    */
@@ -237,7 +237,7 @@ function countKeys(values: NodeSnapshotMap): number {
 function flattenAll(state: SnapshotState, changes: NodeChangeSet): { values: NodeSnapshotMap; size: number } {
   const { base, mid, top } = state;
   const current = (id: NodeId): NodeSnapshot | undefined => {
-    if (id in changes) return changes[id];
+    if (id in changes) return changes[id] ?? undefined;
     let node;
     if (top !== undefined && (node = top.get(id)) !== undefined) return node ?? undefined;
     if (mid !== undefined && (node = mid.get(id)) !== undefined) return node ?? undefined;
