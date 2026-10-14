@@ -103,6 +103,9 @@ export type IsRetained = (id: NodeId) => boolean;
 // https://github.com/nzakas/eslint-plugin-typescript/issues/69
 export type NodeSnapshotMap = { [Key in NodeId]?: NodeSnapshot };
 
+/** The nodes an edit changed: their new snapshots by id, or null for those it removed. */
+type NodeChanges = { [Key in NodeId]?: NodeSnapshot | null };
+
 function forEach(parameterized: Map<string, NodeReference[]> | undefined, fn: (node: NodeReference) => void) {
   if (!parameterized) {
     return;
@@ -225,9 +228,10 @@ function typenamesDiffer(a: unknown, b: unknown): boolean {
  */
 export class SnapshotEditor<TSerialized> {
   /**
-   * Tracks all node snapshots that have changed vs the parent snapshot.
+   * Tracks all node snapshots that have changed vs the parent snapshot (null
+   * for the nodes it removed).
    */
-  private _newNodes: NodeSnapshotMap = Object.create(null);
+  private _newNodes: NodeChanges = Object.create(null);
 
   /**
    * The data objects of new node snapshots that this edit made (by node id),
@@ -562,7 +566,7 @@ export class SnapshotEditor<TSerialized> {
       !this._context.policies.hasKeyArgs &&
       !this._context.policies.hasMergePolicies &&
       !this._streamInfo &&
-      !(containerId in this._newNodes) &&
+      this._newNodes[containerId] === undefined &&
       !this._parent.getNodeSnapshot(containerId);
     let newData: JsonObject | undefined;
 
@@ -791,7 +795,7 @@ export class SnapshotEditor<TSerialized> {
         //
         // Note that we must perform a _deep_ equality check here, to cover cases
         // where a leaf value is a complex object.
-      } else if (!isEqual(fieldValue, previousFieldValue)) {
+      } else if (fieldValue !== previousFieldValue && !isEqual(fieldValue, previousFieldValue)) {
         // We intentionally do not deep copy the nodeValue as Apollo will
         // then perform Object.freeze anyway. So any change in the payload
         // value afterward will be reflect in the graph as well.
@@ -807,8 +811,10 @@ export class SnapshotEditor<TSerialized> {
       // like a field selected under an alias: like InMemoryCache, which only
       // stores selected fields, the aliased value wins (e.g. when Apollo Client
       // writes back a cache diff's result, which has both).
-      for (const payloadName of Object.keys(payload)) {
-        if (!hasOwn.call(parsed, payloadName) && !aliasedNames?.has(payloadName)) {
+      // (for...in, unlike Object.keys, allocates nothing for the usual payload
+      // without unselected fields.)
+      for (const payloadName in payload) {
+        if (!hasOwn.call(parsed, payloadName) && hasOwn.call(payload, payloadName) && !aliasedNames?.has(payloadName)) {
           const value = payload[payloadName];
           const fieldPath = [...path, payloadName];
           writtenFields?.add(payloadName);
@@ -1177,7 +1183,7 @@ export class SnapshotEditor<TSerialized> {
         ({ containerId, prevNodeId }) => !this._isDeleted(containerId) && !(prevNodeId && this._isDeleted(prevNodeId)),
       ),
     );
-    this._newNodes[nodeId] = undefined;
+    this._newNodes[nodeId] = null;
 
     // Parameterized values only exist as fields of this node, so they go with it.
     forEach(nodeSnapshot?.parameterized, ({ id }) => {
@@ -1189,7 +1195,7 @@ export class SnapshotEditor<TSerialized> {
    * Whether this editor has deleted the node.
    */
   private _isDeleted(nodeId: NodeId) {
-    return nodeId in this._newNodes && this._newNodes[nodeId] === undefined;
+    return this._newNodes[nodeId] === null;
   }
 
   /**
@@ -1750,7 +1756,7 @@ export class SnapshotEditor<TSerialized> {
 
     // When nothing changed (e.g. the same values were written again), keep the
     // snapshot, along with its cached reads (so their results keep their identity).
-    const unchanged = !this._editedNodeIds.size && !Object.keys(this._newNodes).length;
+    const unchanged = !this._editedNodeIds.size && !hasKeys(this._newNodes);
     const snapshot = unchanged ? this._parent : this._buildNewSnapshot();
     if (this._context.freezeSnapshots) {
       snapshot.freeze();
@@ -1777,7 +1783,7 @@ export class SnapshotEditor<TSerialized> {
       }
     }
 
-    // (Snapshots that were garbage collected are undefined, and dropped.)
+    // (Snapshots that were garbage collected are null, and dropped.)
     return GraphSnapshot.withChanges(this._parent, this._newNodes);
   }
 
@@ -1795,8 +1801,10 @@ export class SnapshotEditor<TSerialized> {
       if (!(snapshot instanceof EntitySnapshot)) continue;
       if (!snapshot || !snapshot.inbound) continue;
 
+      const { data } = snapshot;
       for (const { id, path } of snapshot.inbound.values()) {
-        this._setValue(id, path, snapshot.data, false);
+        // (Referrers written in this edit often hold the data already.)
+        if (data === undefined || deepGet(this._getNodeData(id), path) !== data) this._setValue(id, path, data, false);
         if (this._rebuiltNodeIds.has(id)) continue;
 
         this._rebuiltNodeIds.add(id);
@@ -1818,7 +1826,7 @@ export class SnapshotEditor<TSerialized> {
       const node = this._getNodeSnapshot(nodeId);
       if (!node) continue;
 
-      this._newNodes[nodeId] = undefined;
+      this._newNodes[nodeId] = null;
       this._editedNodeIds.add(nodeId);
 
       const { outbound, parameterized } = node;
@@ -1986,7 +1994,10 @@ export class SnapshotEditor<TSerialized> {
    * Retrieve the _latest_ version of a node snapshot.
    */
   private _getNodeSnapshot(id: NodeId) {
-    return id in this._newNodes ? this._newNodes[id] : this._parent.getNodeSnapshot(id);
+    // (One lookup in the common cases: nodes this edit changed, and those it didn't.)
+    const node = this._newNodes[id];
+    if (node !== undefined) return node ?? undefined;
+    return this._parent.getNodeSnapshot(id);
   }
 
   /**
@@ -2044,15 +2055,11 @@ export class SnapshotEditor<TSerialized> {
    * that it is referenced by `_newNodes`).
    */
   private _ensureNewSnapshot(id: NodeId): NodeSnapshot {
-    let parent;
-    if (id in this._newNodes) {
-      const existing = this._newNodes[id];
-      if (existing) return existing;
-      // The node was deleted earlier in this edit (e.g. when replaying
-      // optimistic updates), so it is written anew.
-    } else {
-      parent = this._parent.getNodeSnapshot(id);
-    }
+    const existing = this._newNodes[id];
+    if (existing) return existing;
+    // (A node deleted earlier in this edit, e.g. when replaying optimistic
+    // updates, is null: it is written anew.)
+    const parent = existing === null ? undefined : this._parent.getNodeSnapshot(id);
 
     // TODO: We're assuming that the only time we call _ensureNewSnapshot when
     // there is no parent is when the node is an entity.  Can we enforce it, or
@@ -2085,6 +2092,12 @@ export class SnapshotEditor<TSerialized> {
 
     return fieldId;
   }
+}
+
+/** Whether an object has any (enumerable) keys, without listing them. */
+function hasKeys(object: object): boolean {
+  for (const _key in object) return true;
+  return false;
 }
 
 /**

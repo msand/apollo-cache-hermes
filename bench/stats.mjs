@@ -108,18 +108,31 @@ export function mannWhitney(a, b) {
 }
 
 /**
+ * The smallest p-value mannWhitney can return for samples of these sizes
+ * (when they do not overlap at all): e.g. 0.081 for 3 and 3, 0.012 for 5 and
+ * 5, 0.0051 for 6 and 6.
+ */
+export function minMannWhitneyP(n1, n2) {
+  const n = n1 + n2;
+  const sigma = Math.sqrt(((n1 * n2) / 12) * (n + 1));
+  return Math.min(1, erfc(((n1 * n2) / 2 - 0.5) / sigma / Math.SQRT2));
+}
+
+/**
  * Compares `b` (the newer implementation) with `a`. A change counts only when
  * it is statistically significant (Mann-Whitney p < alpha) and at least
  * `threshold` (relative, on the medians). When it is not significant but the
  * ratio's confidence interval still reaches past ±threshold, the data cannot
- * rule out a change of that size: the comparison is inconclusive.
+ * rule out a change of that size: the comparison is inconclusive (or, when
+ * there are too few observations for any p-value below alpha, it says so).
  */
 export function compare(a, b, { alpha = 0.01, threshold = 0.1, minor = 0.05 } = {}) {
   const change = median(b) / median(a) - 1;
   const [lo, hi] = ratioCI(a, b);
   const { p } = mannWhitney(a, b);
   let verdict;
-  if (p < alpha && Math.abs(change) >= threshold) verdict = change > 0 ? 'regression' : 'improvement';
+  if (p >= alpha && minMannWhitneyP(a.length, b.length) >= alpha) verdict = 'too few observations';
+  else if (p < alpha && Math.abs(change) >= threshold) verdict = change > 0 ? 'regression' : 'improvement';
   else if (p < alpha && Math.abs(change) >= minor) verdict = change > 0 ? 'minor slowdown' : 'minor speedup';
   else if (p < alpha) verdict = 'within 5%';
   else if (hi - 1 >= threshold || 1 - lo >= threshold) verdict = 'inconclusive';

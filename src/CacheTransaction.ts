@@ -359,9 +359,16 @@ export class CacheTransaction<TSerialized> implements Queryable {
     this._snapshot = next;
     const { watchedRootIds, changedFields } = this._hooks;
     if (!watchedRootIds || !changedFields) return;
+    // (Without optimistic updates, both views are the baseline: compare it once.)
+    const sameViews = previous.optimistic === previous.baseline && next.optimistic === next.baseline;
     for (const id of watchedRootIds) {
-      addChangedFields(previous.baseline, next.baseline, id, changedFields.baseline);
-      addChangedFields(previous.optimistic, next.optimistic, id, changedFields.optimistic);
+      const fields = changedFieldsOf(previous.baseline, next.baseline, id);
+      addFields(changedFields.baseline, id, fields);
+      addFields(
+        changedFields.optimistic,
+        id,
+        sameViews ? fields : changedFieldsOf(previous.optimistic, next.optimistic, id),
+      );
     }
   }
 
@@ -1028,22 +1035,25 @@ export class CacheTransaction<TSerialized> implements Queryable {
   }
 }
 
+/** Adds the changed fields of a node (if it changed) to the changed fields of every node. */
+function addFields(changedFields: Map<NodeId, Set<string>>, id: NodeId, fields: Set<string> | undefined) {
+  if (!fields) return;
+  const known = changedFields.get(id);
+  if (!known) changedFields.set(id, new Set(fields));
+  else for (const field of fields) known.add(field);
+}
+
 /**
- * Records the top-level fields of a node that differ between two snapshots.
+ * The top-level fields of a node that differ between two snapshots (undefined
+ * if the node is the same in both).
  */
-function addChangedFields(
-  previous: GraphSnapshot,
-  next: GraphSnapshot,
-  id: NodeId,
-  changedFields: Map<NodeId, Set<string>>,
-) {
-  if (previous === next) return;
+function changedFieldsOf(previous: GraphSnapshot, next: GraphSnapshot, id: NodeId): Set<string> | undefined {
+  if (previous === next) return undefined;
   const prevNode = previous.getNodeSnapshot(id);
   const nextNode = next.getNodeSnapshot(id);
-  if (prevNode === nextNode) return;
+  if (prevNode === nextNode) return undefined;
 
-  let fields = changedFields.get(id);
-  if (!fields) changedFields.set(id, (fields = new Set()));
+  const fields = new Set<string>();
 
   const prevData = (isObject(prevNode?.data) ? prevNode!.data : {}) as JsonObject;
   const nextData = (isObject(nextNode?.data) ? nextNode!.data : {}) as JsonObject;
@@ -1054,7 +1064,7 @@ function addChangedFields(
   // References are stored outside of the data; parameterized fields are
   // separate nodes, which may have changed themselves (edits to those alone
   // count as edits to the parameterized nodes, not to this one).
-  if (prevNode?.outbound === nextNode?.outbound && prevNode?.parameterized === nextNode?.parameterized) return;
+  if (prevNode?.outbound === nextNode?.outbound && prevNode?.parameterized === nextNode?.parameterized) return fields;
   const prevRefs = referencesByField(previous, prevNode);
   const nextRefs = referencesByField(next, nextNode);
   for (const key of new Set([...prevRefs.keys(), ...nextRefs.keys()])) {
@@ -1069,6 +1079,7 @@ function addChangedFields(
       fields.add(key);
     }
   }
+  return fields;
 }
 
 function referencesByField(snapshot: GraphSnapshot, node: NodeSnapshot | undefined) {

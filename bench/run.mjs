@@ -4,7 +4,7 @@
 //
 //   npm run bench                         # all scenarios and implementations, 25 rounds
 //   npm run bench -- --write              # also write bench/RESULTS.md
-//   npm run bench -- --quick              # 3 rounds, for trying things out
+//   npm run bench -- --quick              # 6 rounds of shorter samples, for trying things out
 //   npm run bench -- --impls hermes-0.11.0,hermes-branch --scenarios read.hit,read.afterWrite
 //   npm run bench -- --rounds 30 --max-rounds 60   # more rounds; more for inconclusive scenarios
 //   npm run bench -- --report bench/results.json --write   # report a saved run again
@@ -38,7 +38,8 @@ const option = (name, fallback) => {
 };
 
 const quick = flag('quick');
-const rounds = Number(option('rounds', quick ? 3 : 25));
+// (6 is the fewest rounds with which the Mann-Whitney test can reach p < 0.01.)
+const rounds = Number(option('rounds', quick ? 6 : 25));
 const maxRounds = Number(option('max-rounds', quick ? rounds : 50));
 const impls = option('impls', Object.keys(IMPLS).join(',')).split(',');
 const scenarios = option('scenarios', SCENARIOS.map(s => s.name).join(',')).split(',');
@@ -59,6 +60,12 @@ const workerArgs = [
 for (const name of [...impls, ...scenarios]) {
   if (!IMPLS[name] && !SCENARIOS.some(s => s.name === name))
     throw new Error(`Unknown implementation or scenario ${name}`);
+}
+
+// The results in RESULTS.md (and the README) are for Node 24; other versions
+// can differ by more than the changes measured.
+if (!option('report') && process.versions.node.split('.')[0] !== '24') {
+  process.stderr.write(`Warning: measuring on Node ${process.version}; bench/README.md uses Node 24 (nvm use 24).\n`);
 }
 
 const sleep = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);

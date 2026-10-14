@@ -160,6 +160,20 @@ export interface ParsedQueryNodeMap<TArgTypes> {
 export interface ParsedQuery<TArgTypes = JsonScalar> extends ParsedQueryNodeMap<TArgTypes> {}
 
 /**
+ * The constructor of node maps: like Object.create(null), its objects inherit
+ * no keys (their prototype is an empty object without a prototype), but V8
+ * keeps them in fast mode (rather than as hash tables), which makes the
+ * for...in loops of reads and writes over them several times faster.
+ */
+function NodeMap() {}
+NodeMap.prototype = Object.create(null);
+
+/** A new, empty node map (see NodeMap). */
+export function createNodeMap<TArgTypes>(): ParsedQueryNodeMap<TArgTypes> {
+  return new (NodeMap as unknown as new () => ParsedQueryNodeMap<TArgTypes>)();
+}
+
+/**
  * When we first parse a query, VariableArgument placeholders can exist in node
  * args.
  *
@@ -232,7 +246,7 @@ function _buildNodeMap<TSerialized>(
 ): ParsedQueryWithVariables | undefined {
   if (!selectionSet) return undefined;
 
-  const nodeMap = Object.create(null);
+  const nodeMap = createNodeMap<JsonAndVariables>();
   // Whether the selection set selects anything (even if only skipped fields).
   let hasSelections = false;
   for (const selection of selectionSet.selections) {
@@ -640,7 +654,7 @@ function _mergeMaps<TArgTypes>(
 
 /** A deep copy of a node map (so that merging into it leaves the original intact). */
 function _cloneMap<TArgTypes>(map: ParsedQueryNodeMap<TArgTypes>): ParsedQueryNodeMap<TArgTypes> {
-  const clone: ParsedQueryNodeMap<TArgTypes> = Object.create(null);
+  const clone = createNodeMap<TArgTypes>();
   for (const name in map) {
     clone[name] = _cloneNode(map[name]);
   }
@@ -741,7 +755,7 @@ export function expandVariables(
 export function _expandVariables(parsed?: ParsedQueryWithVariables, variables?: JsonObject) {
   if (!parsed) return undefined;
 
-  const newMap: ParsedQuery<JsonScalar> = {};
+  const newMap = createNodeMap<JsonScalar>();
   for (const key in parsed) {
     const node = parsed[key];
     const expanded = node.alternatives ? _expandAlternatives(node, variables) : _expandNode(node, variables);

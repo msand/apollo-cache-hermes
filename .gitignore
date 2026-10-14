@@ -12,6 +12,7 @@
 !/scripts/*.js
 !/babel.config.js
 *.ts.map
+*.js.map
 
 # TypeScript
 !/typings/**/*.d.ts
