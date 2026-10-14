@@ -12,7 +12,7 @@ import type {
 import { addTypenameToDocument } from '@apollo/client/utilities';
 import { createFragmentMap, getFragmentDefinitions, getOperationDefinition } from '@apollo/client/utilities/internal';
 import type { FragmentMap } from '@apollo/client/utilities/internal';
-import invariant from 'ts-invariant';
+import { invariant } from '@apollo/client/utilities/invariant';
 
 import { JsonValue } from '../primitive';
 

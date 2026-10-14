@@ -1,7 +1,7 @@
 // We only depend on graphql for its types; nothing at runtime.
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { Kind, ValueNode, VariableNode } from 'graphql';
-import { InvariantError } from 'ts-invariant';
+import { InvariantError } from '@apollo/client/utilities/invariant';
 
 type VariableValue = (node: VariableNode) => any;
 

@@ -1,4 +1,4 @@
-import { invariant, InvariantError } from 'ts-invariant';
+import { invariant, InvariantError } from '@apollo/client/utilities/invariant';
 import { makeReference, stringifyForDisplay } from '@apollo/client/utilities/internal';
 import type {
   FieldFunctionOptions,
