@@ -1,0 +1,121 @@
+name: Release
+
+# Publishes a version to npm (through npm's trusted publishing, with
+# provenance) and creates its GitHub release. Either:
+#
+# - Run this workflow (Actions → Release → Run workflow) on the branch to
+#   release from: master, or a release-X.Y branch for patches to an older
+#   line. It bumps package.json's version (patch, minor, major, or an exact
+#   version), tests, then pushes the version commit and its vX.Y.Z tag, and
+#   publishes.
+# - Or push a vX.Y.Z tag of a commit whose package.json has that version
+#   (e.g. after `npm version patch && git push --follow-tags`). It tests and
+#   publishes.
+#
+# The npm dist-tag is chosen by scripts/release-dist-tag.mjs: latest for a
+# version higher than every published one, release-X.Y for patches to older
+# lines, next for prereleases.
+#
+# npm must trust this workflow: on npmjs.com, the package's Settings →
+# Trusted publishing → GitHub Actions, with repository msand/apollo-cache-hermes
+# and workflow release.yml.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version: patch, minor, major, or an exact version (e.g. 0.13.0)'
+        required: true
+        default: patch
+        type: string
+      dry-run:
+        description: 'Dry run: bump, check and test, but push, publish and release nothing'
+        type: boolean
+        default: false
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write # to push the version commit and tag, and create the GitHub release
+  id-token: write # for npm's trusted publishing (and provenance)
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check where the release runs from
+        if: github.event_name == 'workflow_dispatch' && github.ref_type != 'branch'
+        run: |
+          echo "::error::Run the release workflow on a branch (master or release-X.Y), not $GITHUB_REF_NAME"
+          exit 1
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing needs npm 11.5.1 or later.
+      - run: npm install --global npm@^11.5.1
+      - run: npm ci
+
+      - name: Bump the version
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          npm version "$VERSION" --message 'Bump version to %s'
+
+      - name: Choose the version and dist-tag
+        id: release
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::The tag $GITHUB_REF_NAME doesn't match package.json's version ($version)"
+            exit 1
+          fi
+          dist_tag=$(node scripts/release-dist-tag.mjs)
+          echo "Releasing $version under the npm dist-tag $dist_tag"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "dist-tag=$dist_tag" >> "$GITHUB_OUTPUT"
+
+      - run: npm run test-style
+      - run: npm run test-format
+      - run: npm run compile
+      - run: npm run test-unit
+        env:
+          CI: true
+
+      - name: Push the version commit and tag
+        if: github.event_name == 'workflow_dispatch' && !inputs.dry-run
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: git push --atomic origin "HEAD:refs/heads/$GITHUB_REF_NAME" "refs/tags/v$VERSION"
+
+      - name: Publish to npm
+        env:
+          DIST_TAG: ${{ steps.release.outputs.dist-tag }}
+          DRY_RUN: ${{ inputs.dry-run && '--dry-run' || '' }}
+        run: npm publish --provenance --access public --tag "$DIST_TAG" $DRY_RUN
+
+      - name: Create the GitHub release
+        if: ${{ !inputs.dry-run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+          DIST_TAG: ${{ steps.release.outputs.dist-tag }}
+        run: |
+          latest=false
+          if [ "$DIST_TAG" = latest ]; then latest=true; fi
+          # (The notes list the changes since the previous release of the same line.)
+          previous=$(git describe --tags --abbrev=0 --match 'v*' "v$VERSION^" 2>/dev/null || true)
+          gh release create "v$VERSION" --title "v$VERSION" --generate-notes \
+            ${previous:+--notes-start-tag "$previous"} --verify-tag --latest="$latest"

@@ -125,3 +125,21 @@ npm run format      # format with Prettier
 - When upgrading Apollo Client, check out its repository at the matching tag into `apollo-client/` (ignored by git) to
   compare against and bring in its tests, e.g.
   `git clone --depth 1 --branch @apollo/client@4.3.3 https://github.com/apollographql/apollo-client.git apollo-client`.
+
+### Releasing
+
+Releases are published by the [Release workflow](.github/workflows/release.yml), from `master` or, for patches to an
+older line, from its `release-X.Y` branch (e.g. `release-0.11`):
+
+- **From GitHub:** Actions → Release → Run workflow, on the branch to release, with `patch`, `minor`, `major` or an exact
+  version. It bumps `package.json`, runs the checks and tests, pushes the version commit and its `vX.Y.Z` tag,
+  publishes to npm and creates the GitHub release.
+- **From a checkout:** `npm version patch` (or `minor`, …) on the branch, then `git push --follow-tags`. The pushed tag
+  runs the same workflow, without the bump.
+
+The npm dist-tag follows from the version: `latest` for the highest version, `release-X.Y` for patches to older lines
+(so `latest` never moves back), and `next` for prereleases. Packages are published with npm's trusted publishing, so
+they carry [provenance](https://docs.npmjs.com/generating-provenance-statements) and no npm token is stored in GitHub.
+
+To start a line for patches to an older release, branch `release-X.Y` from its last tag, e.g.
+`git push origin v0.12.1:refs/heads/release-0.12`.
