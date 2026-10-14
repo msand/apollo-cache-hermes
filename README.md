@@ -141,5 +141,7 @@ The npm dist-tag follows from the version: `latest` for the highest version, `re
 (so `latest` never moves back), and `next` for prereleases. Packages are published with npm's trusted publishing, so
 they carry [provenance](https://docs.npmjs.com/generating-provenance-statements) and no npm token is stored in GitHub.
 
-To start a line for patches to an older release, branch `release-X.Y` from its last tag, e.g.
-`git push origin v0.12.1:refs/heads/release-0.12`.
+After a release from `master`, the workflow brings the `release-X.Y` branch of its line up to the release (creating the
+branch for a new line), so each line's branch holds its latest release. If the branch has its own commits and merging
+the release into it conflicts, the run warns and leaves the branch for you to merge. Releases from a `release-X.Y`
+branch leave the other branches as they are.

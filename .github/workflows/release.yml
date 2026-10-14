@@ -16,6 +16,10 @@ name: Release
 # version higher than every published one, release-X.Y for patches to older
 # lines, next for prereleases.
 #
+# After a release from master, scripts/sync-release-branch.sh brings the
+# release-X.Y branch of the version's line up to it (creating it for a new
+# line), so that patches to the line can be released from it later.
+#
 # npm must trust this workflow: on npmjs.com, the package's Settings →
 # Trusted publishing → GitHub Actions, with repository msand/apollo-cache-hermes
 # and workflow release.yml.
@@ -119,3 +123,10 @@ jobs:
           previous=$(git describe --tags --abbrev=0 --match 'v*' "v$VERSION^" 2>/dev/null || true)
           gh release create "v$VERSION" --title "v$VERSION" --generate-notes \
             ${previous:+--notes-start-tag "$previous"} --verify-tag --latest="$latest"
+
+      - name: Update the release branch of the version's line
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          DRY_RUN: ${{ inputs.dry-run && '--dry-run' || '' }}
+        run: ./scripts/sync-release-branch.sh "$VERSION" "$DEFAULT_BRANCH" $DRY_RUN
