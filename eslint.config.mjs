@@ -188,8 +188,8 @@ export default tseslint.config(
   },
 
   {
-    // The benchmark harness: plain Node scripts.
-    files: ['bench/**/*.mjs'],
+    // The benchmark harness and release scripts: plain Node scripts.
+    files: ['bench/**/*.mjs', 'scripts/**/*.mjs'],
 
     languageOptions: {
       globals: { ...globals.node },
