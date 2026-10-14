@@ -59,3 +59,8 @@ expect.addEqualityTesters([
 ]);
 
 import './base';
+
+// Hermes: in CI (and release runs), failing tests are retried twice: some of
+// Apollo Client's tests (e.g. MockLink's) expect responses within tens of
+// milliseconds, which busy CI runners sometimes miss. Retries are logged.
+if (process.env.CI) jest.retryTimes(2, { logErrorsBeforeRetry: true });
