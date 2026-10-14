@@ -114,6 +114,7 @@ npm run compile     # type-check and build (src, Hermes' tests and the vendored 
 npm run test-unit   # run all tests
 npm run test-style  # lint
 npm run format      # format with Prettier
+npm run test-package  # check the source maps of the files npm would publish (after compile)
 ```
 
 - `src/` is the cache; `test/unit/` holds Hermes' own tests.

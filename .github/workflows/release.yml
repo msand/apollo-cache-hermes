@@ -94,6 +94,7 @@ jobs:
       - run: npm run test-style
       - run: npm run test-format
       - run: npm run compile
+      - run: npm run test-package
       - run: npm run test-unit
         env:
           CI: true

@@ -1,5 +1,3 @@
-import * as makeError from 'make-error';
-
 import { PathPart } from './primitive';
 import { NodeId } from './schema';
 
@@ -24,14 +22,15 @@ function _expandMessage(messageOrDetails: MessageOrDetails, template: string) {
 
 /**
  * Base error class for all errors emitted by the cache.
- *
- * Note that we rely on make-error so that we can safely extend the built in
- * Error in a cross-platform manner.
  */
-export class HermesCacheError extends makeError.BaseError {
+export class HermesCacheError extends Error {
   constructor(messageOrDetails: MessageOrDetails) {
     const { message, infoUrl } = _toDetails(messageOrDetails);
     super(infoUrl ? `[${infoUrl}] ${message}` : message);
+    // Like the built-in errors', the name is the class's (and not enumerable);
+    // stack traces start where the error is created.
+    Object.defineProperty(this, 'name', { configurable: true, writable: true, value: new.target.name });
+    Error.captureStackTrace?.(this, new.target);
   }
 }
 

@@ -8,12 +8,16 @@
     "moduleResolution": "nodenext",
     "importHelpers": true,
     "declaration": true,
-    "declarationMap": true,
+    // (Declaration maps would point at .ts sources, which aren't published.)
+    "declarationMap": false,
     "target": "es2017",
     "module": "nodenext",
     "esModuleInterop": true,
     "experimentalDecorators": true,
-    "inlineSourceMap": true,
+    // Source maps are published next to the JavaScript, with the TypeScript
+    // sources embedded (the .ts files aren't published).
+    "sourceMap": true,
+    "inlineSources": true,
     "lib": ["dom", "dom.asynciterable", "es2023", "esnext.asynciterable", "scripthost"],
     "newLine": "LF",
     "noImplicitReturns": false,
