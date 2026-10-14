@@ -7,9 +7,21 @@ dashboard-sized data. The latest results are in [RESULTS.md](RESULTS.md).
 ```sh
 npm run bench:setup                 # build + pack this checkout, install every implementation
 npm run bench -- --write            # measure (about an hour), write bench/RESULTS.md
-npm run bench -- --quick            # 3 rounds, to try a change out
+npm run bench -- --quick            # 6 rounds of shorter samples, to try a change out
 node bench/profile.mjs hermes-branch read.afterWrite   # hottest functions in one scenario
 ```
+
+To measure a change to `src/` without re-packing, compare the working copy (`hermes-dev`) with a build of the code
+before it (`hermes-prev`, e.g. from another checkout or worktree at the base commit):
+
+```sh
+node bench/dev-sync.mjs hermes-prev ../hermes-base   # once: the base build (compiled in that checkout)
+npm run compile && node bench/dev-sync.mjs          # after each change: the working copy
+npm run bench -- --quick --impls hermes-prev,hermes-dev --scenarios write.initial,read.afterWrite
+```
+
+`dev-sync.mjs` refuses a build older than its sources, and records the commit it was built from (`+dirty` with
+uncommitted changes in `src/`).
 
 Use Node 24 (`nvm use 24`). The options are described at the top of [run.mjs](run.mjs).
 
@@ -18,15 +30,18 @@ Use Node 24 (`nvm use 24`). The options are described at the top of [run.mjs](ru
 Each one is installed in its own folder under `bench/impl/` with its own `package.json` (exact versions) and
 `node_modules` (git-ignored), so each resolves its own `@apollo/client` and `graphql` (16.14.2 everywhere):
 
-| Folder              | Cache                                                      | Apollo Client |
-| ------------------- | ---------------------------------------------------------- | ------------- |
-| `hermes-0.9.12`     | `msand-apollo-cache-hermes@0.9.12`                         | 3.10.8        |
-| `hermes-0.10.0`     | `msand-apollo-cache-hermes@0.10.0`                         | 3.10.8        |
-| `hermes-0.11.0`     | `msand-apollo-cache-hermes@0.11.0`                         | 3.14.1        |
-| `hermes-pre-review` | this repository at 4946e9c8 (before the code-review fixes) | 4.3.3         |
-| `hermes-branch`     | this checkout: `tsc` emits `src/*.js`, then `npm pack`     | 4.3.3         |
-| `inmemory-3`        | `InMemoryCache`                                            | 3.14.1        |
-| `inmemory-4`        | `InMemoryCache`                                            | 4.3.3         |
+| Folder              | Cache                                                                     | Apollo Client |
+| ------------------- | ------------------------------------------------------------------------- | ------------- |
+| `hermes-0.9.12`     | `msand-apollo-cache-hermes@0.9.12`                                        | 3.10.8        |
+| `hermes-0.10.0`     | `msand-apollo-cache-hermes@0.10.0`                                        | 3.10.8        |
+| `hermes-0.11.0`     | `msand-apollo-cache-hermes@0.11.0`                                        | 3.14.1        |
+| `hermes-pre-review` | this repository at 4946e9c8 (before the code-review fixes)                | 4.3.3         |
+| `hermes-pre-perf`   | this repository at e9e5aa27 (before the performance work)                 | 4.3.3         |
+| `hermes-branch`     | this checkout: `tsc` emits `src/*.js`, then `npm pack`                    | 4.3.3         |
+| `hermes-dev`        | a checkout's compiled `src/` (the working copy), copied by `dev-sync.mjs` | 4.3.3         |
+| `hermes-prev`       | another checkout's compiled `src/`, copied by `dev-sync.mjs`              | 4.3.3         |
+| `inmemory-3`        | `InMemoryCache`                                                           | 3.14.1        |
+| `inmemory-4`        | `InMemoryCache`                                                           | 4.3.3         |
 
 `bench/setup.mjs` packs the Hermes builds (`npm pack --ignore-scripts`) and installs the tarballs like published
 releases. Re-run it (or `npm run bench:setup -- hermes-branch`) after changing `src/`. The packed commit is recorded
@@ -61,9 +76,10 @@ moment:
 - **Interleaving.** A round runs every (scenario, implementation) pair once, in a freshly shuffled order (seeded
   with `--seed`; the seed is in RESULTS.md). Load that drifts during the run therefore affects every implementation
   alike, instead of whichever ran during the busy minutes.
-- **Rounds.** 25 rounds by default. After those, scenarios where a Hermes comparison is still _inconclusive_ (see
-  below), or that kept too few observations, get extra rounds (for the Hermes implementations only), up to
-  `--max-rounds` (50).
+- **Rounds.** 25 rounds by default (6 with `--quick`: with fewer observations per implementation, the Mann-Whitney
+  test cannot reach p < 0.01, and comparisons say _too few observations_). After those, scenarios where a Hermes
+  comparison is still _inconclusive_ (see below), or that kept too few observations, get extra rounds (for the Hermes
+  implementations only), up to `--max-rounds` (50).
 - **Load.** Every observation records the 1-minute load average (the higher of before and after the worker) and the
   worker's CPU share: (user + system CPU time) / wall time during its samples. A share below 1 means the worker was
   descheduled. Observations with a CPU share below 0.9 (`--min-cpu-share`), or taken at a load above 3 × the number

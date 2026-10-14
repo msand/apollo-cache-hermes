@@ -1,8 +1,11 @@
 // Profiles one scenario on one implementation with `node --cpu-prof`, and
 // prints the functions with the most self time and the most total (inclusive)
-// time, limited to samples taken while the timed op runs.
+// time, limited to samples taken while the timed op runs. With --lines, it
+// also prints the source lines with the most self time (of the functions with
+// the most self time, which may be large ones, like SnapshotEditor's
+// _mergeSubgraph).
 //
-//   node bench/profile.mjs <impl> <scenario> [--top 25] [--keep]
+//   node bench/profile.mjs <impl> <scenario> [--top 25] [--lines] [--keep]
 
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -12,9 +15,9 @@ import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const [impl, scenario, ...rest] = process.argv.slice(2);
-const top = Number(rest[rest.indexOf('--top') + 1]) || 25;
+const top = (rest.includes('--top') && Number(rest[rest.indexOf('--top') + 1])) || 25;
 if (!impl || !scenario) {
-  console.error('usage: node bench/profile.mjs <impl> <scenario> [--top 25] [--keep]');
+  console.error('usage: node bench/profile.mjs <impl> <scenario> [--top 25] [--lines] [--keep]');
   process.exit(1);
 }
 
@@ -74,6 +77,17 @@ const underOp = id => {
 
 const self = new Map();
 const total = new Map();
+// Self ticks by source line (V8 counts them per function node, for the whole run).
+const lines = new Map();
+for (const n of profile.nodes) {
+  if (!n.positionTicks || !underOp(n.id) || isOp(n)) continue;
+  for (const { line, ticks } of n.positionTicks) {
+    const key = `${n.callFrame.url}:${line}`;
+    const entry = lines.get(key) ?? { url: n.callFrame.url, line, ticks: 0, fn: n.callFrame.functionName };
+    entry.ticks += ticks;
+    lines.set(key, entry);
+  }
+}
 let samples = 0;
 for (const id of profile.samples) {
   if (!underOp(id)) continue;
@@ -101,5 +115,20 @@ const print = (title, map) => {
 console.log(`${impl} ${scenario}: ${samples} samples inside op`);
 print('Self time', self);
 print('Total time', total);
+if (rest.includes('--lines')) {
+  const lineTicks = [...lines.values()].reduce((sum, entry) => sum + entry.ticks, 0);
+  const sources = new Map();
+  const sourceLine = (url, line) => {
+    if (!url.startsWith('file://')) return '';
+    if (!sources.has(url)) sources.set(url, fs.readFileSync(fileURLToPath(url), 'utf8').split('\n'));
+    return sources.get(url)[line - 1]?.trim().slice(0, 100) ?? '';
+  };
+  console.log('\nSelf time by line');
+  for (const { url, line, ticks, fn } of [...lines.values()].sort((a, b) => b.ticks - a.ticks).slice(0, top)) {
+    console.log(
+      `${((ticks / lineTicks) * 100).toFixed(1).padStart(5)}%  ${fn || '(anonymous)'} ${short(url)}:${line}  ${sourceLine(url, line)}`,
+    );
+  }
+}
 if (rest.includes('--keep')) console.log(`\nProfile: ${path.join(dir, file)}`);
 else fs.rmSync(dir, { recursive: true, force: true });

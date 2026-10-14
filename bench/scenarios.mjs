@@ -51,6 +51,32 @@ export const SCENARIOS = [
     valid: c => c.entities > 1000 || 'nothing written',
   },
   {
+    name: 'write.refetch',
+    description: 'Write the dashboard again (a refetch or poll) into the cache holding it, one task changed',
+    setup(impl) {
+      const cache = dashboardCache(impl);
+      const query = impl.gql(F.DASHBOARD);
+      // Two results that differ in one task's `done` flag, written in turn
+      // (so each write changes that one field, and leaves the rest as is).
+      const results = [F.dashboardData(), F.dashboardData()];
+      const task = results[1].viewer.organization.projects[7].tasks[3];
+      task.done = !task.done;
+      const before = impl.entityCount(cache);
+      let n = 0;
+      return {
+        op() {
+          cache.writeQuery({ query, data: results[n++ % 2] });
+        },
+        check: () => ({
+          entitiesBefore: before,
+          entitiesAfter: impl.entityCount(cache),
+          tasks: countTasks(cache.readQuery({ query })),
+        }),
+      };
+    },
+    valid: c => (c.entitiesAfter === c.entitiesBefore && c.tasks === 1000) || 'unexpected cache contents',
+  },
+  {
     name: 'read.hit',
     description: 'readQuery of the unchanged dashboard (result cache hit)',
     setup(impl) {
