@@ -68,5 +68,31 @@ describe(`operations.write`, () => {
 
       jestExpect(snapshot.getNodeData('0')).toEqual({ id: 0, name: 'Foo', nickname: 'F' });
     });
+
+    // A frozen read result written back: a proxy of a frozen object may not
+    // report a different value for its own key of the schema name.
+    it(`writes a frozen payload`, () => {
+      const aliasQuery = query(`{
+        user {
+          id
+          FirstName: name
+          posts: authoredPosts {
+            title
+          }
+        }
+      }`);
+      const payload = Object.freeze({
+        user: Object.freeze({
+          id: 0,
+          name: 'Stale',
+          FirstName: 'Foo',
+          authoredPosts: Object.freeze({ title: 'Stale' }),
+          posts: Object.freeze({ title: 'Fresh' }),
+        }),
+      });
+      const { snapshot } = write(context, empty, aliasQuery, payload);
+
+      jestExpect(snapshot.getNodeData('0')).toEqual({ id: 0, name: 'Foo', authoredPosts: { title: 'Fresh' } });
+    });
   });
 });
