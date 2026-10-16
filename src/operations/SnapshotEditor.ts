@@ -140,11 +140,24 @@ function getVisibleProxy(
  * is selected under an alias is read from that alias, even if the payload
  * also has a key of the field's name (like InMemoryCache, so that a field
  * aliased as __typename or id cannot change which entity is written).
+ *
+ * The proxy wraps an empty stand-in rather than the payload: a frozen payload
+ * (e.g. a read result written back) pins what a proxy of it may report for its
+ * own keys, so its stale key of the field's name could not be read as the alias.
  */
 function getPayloadProxy(value: JsonValue | undefined | null, map: { [prop: string]: string } | undefined) {
   if (value == null || typeof value !== 'object' || !map) return getVisibleProxy(value, map);
-  return new Proxy(value, {
-    get: (target, p: string) => (hasOwn.call(map, p) ? target[map[p]] : target[p]),
+  const payload = value as JsonObject;
+  const read = (p: string | symbol) =>
+    typeof p === 'string' && hasOwn.call(map, p) ? payload[map[p]] : payload[p as string];
+  return new Proxy({} as JsonObject, {
+    get: (_target, p) => read(p),
+    has: (_target, p) => p in payload || (typeof p === 'string' && hasOwn.call(map, p)),
+    ownKeys: () => Reflect.ownKeys(payload),
+    getOwnPropertyDescriptor: (_target, p) => {
+      const descriptor = Reflect.getOwnPropertyDescriptor(payload, p);
+      return descriptor && { value: read(p), writable: true, enumerable: descriptor.enumerable, configurable: true };
+    },
   });
 }
 
